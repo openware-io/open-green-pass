@@ -896,3 +896,16 @@ export const TEST_EVIDENCE: Record<string, IEvidenceItem[]> = {
     { type: '日志', file: 'svc-auth-concurrency.log', hash: 'sha256:5c1e…ab77', ts: '10:30:05', note: '并发登录压力测试资源排队' },
   ],
 };
+
+
+// ============ 截图证据 · 服务级截图策略（普遍规范 + 服务可覆盖） ============
+export interface IScreenshotPolicy { serviceId: string; name: string; enabled: boolean; mode: 'always' | 'on-fail' | 'off'; reason: string }
+export const SCREENSHOT_POLICY: IScreenshotPolicy[] = [
+  { serviceId: 'svc-auth', name: '认证服务', enabled: true, mode: 'always', reason: '关键安全流程，关键步骤全程截图' },
+  { serviceId: 'svc-user', name: '用户服务', enabled: true, mode: 'on-fail', reason: '默认规范：失败现场自动截图' },
+  { serviceId: 'svc-payment', name: '支付服务', enabled: true, mode: 'on-fail', reason: '默认规范：失败现场自动截图（当前阻断重点）' },
+  { serviceId: 'svc-order', name: '订单服务', enabled: true, mode: 'always', reason: '状态流转需过程截图佐证' },
+  { serviceId: 'web-frontend', name: 'Web 前端', enabled: true, mode: 'always', reason: 'UI 断言需页面截图证据' },
+  { serviceId: 'mobile-ios', name: 'iOS 端', enabled: true, mode: 'on-fail', reason: '真机截图成本高，仅失败时截' },
+  { serviceId: 'mobile-android', name: 'Android 端', enabled: false, mode: 'off', reason: '真机池高负载，关闭截图防性能影响（服务级可选）' },
+];

@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { TEST_RUNS, RUN_SERVICE_REPORTS, EXEC_AUDIT_ROWS, CASE_COST_HISTORY, TEST_EVIDENCE, type ITestRun } from '@/data/mock';
+import { TEST_RUNS, RUN_SERVICE_REPORTS, EXEC_AUDIT_ROWS, CASE_COST_HISTORY, TEST_EVIDENCE, SCREENSHOT_POLICY, type ITestRun, type IScreenshotPolicy } from '@/data/mock';
 import { PageHeader, Card } from '@/components/shared';
-import { Activity, FileText, Image, FileJson, File, Video, ArrowUpRight, ArrowDownRight, Minus, ScanEye } from 'lucide-react';
+import { Activity, FileText, Image, FileJson, File, Video, ArrowUpRight, ArrowDownRight, Minus, ScanEye, Camera } from 'lucide-react';
 
 const RESULT_BADGE: Record<string, string> = {
   '通过': 'bg-emerald-50 text-emerald-600',
@@ -108,6 +108,8 @@ export default function HistoryPage() {
   const [runId, setRunId] = useState<string>('RUN-4821');
   const [tab, setTab] = useState<TabKey>('exec');
   const [caseForEvid, setCaseForEvid] = useState('TC-2024-118');
+  const [policies, setPolicies] = useState<IScreenshotPolicy[]>(SCREENSHOT_POLICY);
+  const togglePolicy = (id: string) => setPolicies((prev) => prev.map((pl) => (pl.serviceId === id ? { ...pl, enabled: !pl.enabled, mode: pl.enabled ? 'off' : 'on-fail' } : pl)));
   const [caseForCostSel, setCaseForCostSel] = useState('TC-2024-118');
   const run = TEST_RUNS.find((r) => r.id === runId) as ITestRun;
   const passRate = Math.round((run.pass / run.total) * 1000) / 10;
@@ -264,6 +266,41 @@ export default function HistoryPage() {
         {/* 测试证据 */}
         {tab === 'evidence' && (
           <div>
+            {/* 截图证据规范 */}
+            <div className="mb-4 p-4 rounded-xl bg-indigo-50 border border-indigo-200">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Camera className="w-4 h-4 text-indigo-600" />
+                <span className="text-sm font-semibold text-indigo-800">截图证据 · 普遍规范</span>
+                <span className="ml-auto text-[10px] text-indigo-500">关键流程全程 + 失败现场自动截图</span>
+              </div>
+              <p className="text-[11px] text-indigo-700">截图作为测试证据的普遍规范：关键流程执行全程截图、断言失败自动捕获失败现场，默认开启；服务可单独关闭，以避免高并发 / 大流量服务的截图性能开销。</p>
+              <div className="mt-3 rounded-lg border border-indigo-200 bg-white overflow-hidden">
+                <table className="w-full text-[11px]">
+                  <thead className="bg-indigo-50/60">
+                    <tr className="text-left text-indigo-500">
+                      <th className="px-3 py-1.5 font-medium">服务</th>
+                      <th className="px-3 py-1.5 font-medium">截图模式</th>
+                      <th className="px-3 py-1.5 font-medium">状态</th>
+                      <th className="px-3 py-1.5 font-medium">说明</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {policies.map((pl) => (
+                      <tr key={pl.serviceId}>
+                        <td className="px-3 py-1.5 font-mono text-indigo-600 font-medium">{pl.serviceId}</td>
+                        <td className="px-3 py-1.5 text-slate-600">{pl.mode === 'always' ? '全程截图' : pl.mode === 'on-fail' ? '仅失败时' : '关闭'}</td>
+                        <td className="px-3 py-1.5">
+                          <button type="button" onClick={() => togglePolicy(pl.serviceId)}
+                            className={'px-2 py-0.5 rounded-full text-[10px] ' + (pl.enabled ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400')}>{pl.enabled ? '启用' : '关闭'}</button>
+                        </td>
+                        <td className="px-3 py-1.5 text-slate-500">{pl.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-[10px] text-indigo-400">服务级策略覆盖普遍规范 · 关闭可防截图导致的性能问题 · 证据仍按「用例→Run」组织并哈希锚定</p>
+            </div>
             <div className="flex flex-wrap gap-2 mb-4">
               {evidCases.map((c) => (
                 <button key={c} type="button" onClick={() => setCaseForEvid(c)}
