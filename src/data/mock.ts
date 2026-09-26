@@ -656,3 +656,92 @@ export const ASSET_ACCESS: IAssetAccess[] = [
     ],
   },
 ];
+
+
+// ============ 成本审计：所有 AI 场景成本关联，总览/明细自洽（金额由单价表×token 派生）============
+export const MODEL_PRICE: Record<string, { in: number; out: number }> = {
+  'doubao-1.5-pro': { in: 1.5, out: 4.5 },
+  'deepseek-v3': { in: 0.4, out: 1.2 },
+  'gpt-4o': { in: 18, out: 70 },
+  'claude-3.5': { in: 25, out: 100 },
+  'self-llama3': { in: 1, out: 3 },
+};
+
+// 金额 = 输入token/1M × 输入单价 + 输出token/1M × 输出单价（¥，取整）
+export function aiCost(modelId: string, tokensIn: number, tokensOut: number): number {
+  const p = MODEL_PRICE[modelId] ?? MODEL_PRICE['doubao-1.5-pro'];
+  return Math.round((tokensIn / 1e6) * p.in + (tokensOut / 1e6) * p.out);
+}
+
+export type CostKind = 'gen' | 'exec';
+export interface ICostDetail {
+  id: string;
+  caseId: string;
+  asset: string;
+  source: string;       // 触发来源（上游源）
+  modelId: string;
+  kind: CostKind;
+  isLegacy: boolean;    // 存量用例（执行成本应持平或递减）
+  tokensIn: number;
+  tokensOut: number;
+  time: string;
+}
+
+const COST_GEN_RAW: ICostDetail[] = [
+  { id: 'GEN-2041-01', caseId: 'TC-2024-118', asset: 'svc-payment', source: 'OpenAPI /v2/refund', modelId: 'doubao-1.5-pro', kind: 'gen', isLegacy: false, tokensIn: 40000000, tokensOut: 10000000, time: '09-24 10:26' },
+  { id: 'GEN-2041-02', caseId: 'TC-2024-095', asset: 'svc-payment', source: 'OpenAPI + 缺陷报告', modelId: 'doubao-1.5-pro', kind: 'gen', isLegacy: false, tokensIn: 60000000, tokensOut: 15000000, time: '09-23 18:42' },
+  { id: 'GEN-2041-03', caseId: 'TC-2024-130', asset: 'svc-auth', source: 'ASVS L2 安全清单', modelId: 'doubao-1.5-pro', kind: 'gen', isLegacy: false, tokensIn: 80000000, tokensOut: 25000000, time: '09-22 11:20' },
+  { id: 'GEN-2041-04', caseId: 'TC-2024-131', asset: 'svc-auth', source: '生产追踪路径', modelId: 'doubao-1.5-pro', kind: 'gen', isLegacy: false, tokensIn: 100000000, tokensOut: 46000000, time: '09-21 15:05' },
+];
+
+const COST_EXEC_RAW: ICostDetail[] = [
+  { id: 'EXEC-4821-01', caseId: 'TC-2024-001', asset: 'svc-auth', source: '存量回放', modelId: 'deepseek-v3', kind: 'exec', isLegacy: true, tokensIn: 8000000, tokensOut: 500000, time: '09-24 10:25' },
+  { id: 'EXEC-4821-02', caseId: 'TC-2024-005', asset: 'svc-user', source: '存量回放', modelId: 'deepseek-v3', kind: 'exec', isLegacy: true, tokensIn: 6000000, tokensOut: 300000, time: '09-24 10:25' },
+  { id: 'EXEC-4821-03', caseId: 'TC-2024-006', asset: 'web-frontend', source: '存量回放', modelId: 'deepseek-v3', kind: 'exec', isLegacy: true, tokensIn: 10000000, tokensOut: 800000, time: '09-24 10:26' },
+  { id: 'EXEC-4821-04', caseId: 'TC-2024-125', asset: 'mobile-ios', source: '存量回放', modelId: 'deepseek-v3', kind: 'exec', isLegacy: true, tokensIn: 12000000, tokensOut: 600000, time: '09-24 10:27' },
+  { id: 'EXEC-4821-05', caseId: 'TC-2024-095', asset: 'svc-payment', source: '新增用例', modelId: 'deepseek-v3', kind: 'exec', isLegacy: false, tokensIn: 40000000, tokensOut: 2000000, time: '09-24 10:28' },
+  { id: 'EXEC-4821-06', caseId: 'TC-2024-118', asset: 'svc-payment', source: '新增用例', modelId: 'deepseek-v3', kind: 'exec', isLegacy: false, tokensIn: 50000000, tokensOut: 3000000, time: '09-24 10:29' },
+];
+
+export const COST_GEN_DETAIL = COST_GEN_RAW.map((d) => ({ ...d, amount: aiCost(d.modelId, d.tokensIn, d.tokensOut) }));
+export const COST_EXEC_DETAIL = COST_EXEC_RAW.map((d) => ({ ...d, amount: aiCost(d.modelId, d.tokensIn, d.tokensOut) }));
+
+export const COST_GEN_TOTAL = COST_GEN_DETAIL.reduce((s, d) => s + d.amount, 0);
+export const COST_EXEC_TOTAL = COST_EXEC_DETAIL.reduce((s, d) => s + d.amount, 0);
+export const COST_EXEC_LEGACY_TOTAL = COST_EXEC_DETAIL.filter((d) => d.isLegacy).reduce((s, d) => s + d.amount, 0);
+export const COST_EXEC_NEW_TOTAL = COST_EXEC_DETAIL.filter((d) => !d.isLegacy).reduce((s, d) => s + d.amount, 0);
+
+// 场景聚合（生成/执行来自明细和，其余为独立场景）→ 总览 = 场景之和，自洽
+export interface ICostScenario { scenario: string; modelId: string; amount: number; note: string; tokensIn: number; tokensOut: number }
+export const COST_SCENARIOS: ICostScenario[] = [
+  { scenario: '用例生成', modelId: 'doubao-1.5-pro', amount: COST_GEN_TOTAL, note: 'AI 生成用例种子 + 质量验证', tokensIn: COST_GEN_RAW.reduce((s, d) => s + d.tokensIn, 0), tokensOut: COST_GEN_RAW.reduce((s, d) => s + d.tokensOut, 0) },
+  { scenario: '测试执行辅助', modelId: 'deepseek-v3', amount: COST_EXEC_TOTAL, note: '存量+新增用例执行的 AI 分析', tokensIn: COST_EXEC_RAW.reduce((s, d) => s + d.tokensIn, 0), tokensOut: COST_EXEC_RAW.reduce((s, d) => s + d.tokensOut, 0) },
+  { scenario: '质量判定', modelId: 'gpt-4o', amount: aiCost('gpt-4o', 60000000, 24000000), note: '门禁重判 / 断言强度分析', tokensIn: 60000000, tokensOut: 24000000 },
+  { scenario: '契约分析', modelId: 'claude-3.5', amount: aiCost('claude-3.5', 18000000, 4000000), note: 'OpenAPI 变更 diff / 消费者影响', tokensIn: 18000000, tokensOut: 4000000 },
+  { scenario: '变异/篡改检测', modelId: 'self-llama3', amount: aiCost('self-llama3', 40000000, 12000000), note: '变体注入与篡改比对', tokensIn: 40000000, tokensOut: 12000000 },
+];
+
+export const COST_TOTAL = COST_SCENARIOS.reduce((s, c) => s + c.amount, 0);
+export const COST_TOTAL_TOKENS_IN = COST_SCENARIOS.reduce((s, c) => s + c.tokensIn, 0);
+export const COST_TOTAL_TOKENS_OUT = COST_SCENARIOS.reduce((s, c) => s + c.tokensOut, 0);
+export const COST_AICALLS = 3842;
+export const COST_MOM_CHANGE = -18; // 环比下降 %
+export const COST_PER_CASE = 1.2;   // 平均每用例成本（¥）
+
+// 近 14 天成本趋势：total 波动；exec（存量执行成本）持平或递减
+export const COST_TREND: { day: string; total: number; exec: number }[] = [
+  { day: '09-11', total: 34, exec: 9.8 },
+  { day: '09-12', total: 32, exec: 9.6 },
+  { day: '09-13', total: 38, exec: 9.5 },
+  { day: '09-14', total: 35, exec: 9.2 },
+  { day: '09-15', total: 30, exec: 9.0 },
+  { day: '09-16', total: 41, exec: 8.8 },
+  { day: '09-17', total: 36, exec: 8.6 },
+  { day: '09-18', total: 33, exec: 8.3 },
+  { day: '09-19', total: 29, exec: 8.1 },
+  { day: '09-20', total: 31, exec: 7.8 },
+  { day: '09-21', total: 28, exec: 7.4 },
+  { day: '09-22', total: 27, exec: 7.0 },
+  { day: '09-23', total: 26, exec: 6.4 },
+  { day: '09-24', total: 24, exec: 5.6 },
+];

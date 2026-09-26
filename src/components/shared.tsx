@@ -56,7 +56,7 @@ export function GhostButton({ children, onClick }: { children: React.ReactNode; 
 }
 
 export function Card({ title, children, className, extra }: {
-  title: string; children: React.ReactNode; className?: string; extra?: React.ReactNode;
+  title: React.ReactNode; children: React.ReactNode; className?: string; extra?: React.ReactNode;
 }) {
   return (
     <div className={cn('card bg-white rounded-xl border border-slate-200', className)}>
