@@ -395,6 +395,7 @@ export const NAV_GROUPS: { title: string; items: INavItem[] }[] = [
       { path: '/exec', label: '测试执行' },
       { path: '/contracts', label: '契约测试', badge: '1 告警' },
       { path: '/gate', label: '质量门禁' },
+      { path: '/history', label: '测试历史' },
     ],
   },
   {
@@ -820,3 +821,78 @@ export const OP_AUDIT_ROWS: IOpAuditRow[] = [
   { user: '系统', role: 'tamper-detector', action: '篡改检测', target: 'TC-2024-118', result: '发现弱断言 3 处', risk: '高', ts: '09-24 10:27' },
   { user: '张立', role: '工程负责人', action: '导出审计报告', target: '审计日志', result: '已完成', risk: '低', ts: '09-24 10:20' },
 ];
+
+
+// ============ 测试历史 · 测试证据 · 用例成本历史 · 服务报告 ============
+// 测试运行（时间维主键）
+export interface ITestRun { id: string; ts: string; branch: string; trigger: string; pass: number; fail: number; block: number; queue: number; total: number; duration: string; cost: number; gate: '通过' | '阻断' }
+export const TEST_RUNS: ITestRun[] = [
+  { id: 'RUN-4821', ts: '09-24 10:28', branch: 'feature/refund-v2', trigger: 'CI 提交', pass: 1192, fail: 34, block: 10, queue: 52, total: 1300, duration: '4m 22s', cost: 4599, gate: '阻断' },
+  { id: 'RUN-4805', ts: '09-23 16:40', branch: 'feature/refund-v2', trigger: 'CI 提交', pass: 1262, fail: 8, block: 6, queue: 24, total: 1300, duration: '3m 58s', cost: 4210, gate: '通过' },
+  { id: 'RUN-4792', ts: '09-22 11:12', branch: 'main', trigger: '定时', pass: 1278, fail: 2, block: 0, queue: 20, total: 1300, duration: '3m 41s', cost: 4056, gate: '通过' },
+  { id: 'RUN-4788', ts: '09-21 09:05', branch: 'feature/trace-v2', trigger: 'CI 提交', pass: 1201, fail: 48, block: 12, queue: 39, total: 1300, duration: '4m 40s', cost: 4721, gate: '阻断' },
+  { id: 'RUN-4776', ts: '09-20 18:30', branch: 'main', trigger: '定时', pass: 1279, fail: 1, block: 1, queue: 19, total: 1300, duration: '3m 36s', cost: 3980, gate: '通过' },
+  { id: 'RUN-4769', ts: '09-19 14:22', branch: 'main', trigger: '手动', pass: 1268, fail: 9, block: 2, queue: 21, total: 1300, duration: '3m 50s', cost: 4145, gate: '通过' },
+];
+
+// RUN-4821 服务级报告（工程报告的子集）
+export interface IServiceReport { service: string; name: string; pass: number; fail: number; block: number; total: number; coverage: number; cost: number; risk: '低' | '中' | '高'; risks: string[]; conclusion: string }
+export const RUN_SERVICE_REPORTS: IServiceReport[] = [
+  { service: 'svc-auth', name: '认证服务', pass: 96, fail: 1, block: 1, total: 98, coverage: 94, cost: 1100, risk: '低', risks: [], conclusion: '认证与 Token 链路稳定，通过' },
+  { service: 'svc-user', name: '用户服务', pass: 62, fail: 1, block: 0, total: 63, coverage: 91, cost: 700, risk: '低', risks: [], conclusion: '用户数据查询链路稳定，通过' },
+  { service: 'svc-payment', name: '支付服务', pass: 148, fail: 18, block: 5, total: 171, coverage: 73, cost: 1500, risk: '高', risks: ['退款金额计算错误', '支付回调幂等性冲突', '断言被弱化'], conclusion: '阻断：/v2/refund 存在破坏性变更且 3 处断言弱化' },
+  { service: 'svc-order', name: '订单服务', pass: 89, fail: 2, block: 1, total: 92, coverage: 88, cost: 600, risk: '中', risks: ['订单状态流转边界缺失用例'], conclusion: '建议补充状态机边界用例' },
+  { service: 'web-frontend', name: 'Web 前端', pass: 34, fail: 3, block: 1, total: 38, coverage: 89, cost: 400, risk: '中', risks: ['登录页 E2E 偶发超时'], conclusion: '建议增大 E2E 超时阈值' },
+  { service: 'mobile-ios', name: 'iOS 端', pass: 21, fail: 4, block: 1, total: 26, coverage: 76, cost: 180, risk: '中', risks: ['真机登录回归失败'], conclusion: '需在真机池复跑验证' },
+  { service: 'mobile-android', name: 'Android 端', pass: 19, fail: 5, block: 1, total: 25, coverage: 74, cost: 119, risk: '中', risks: ['K8s 沙箱资源抢占'], conclusion: '资源竞争导致排队延迟' },
+];
+
+// 单用例成本历史（同一用例多次 run 的成本，用于对比）
+export interface ICaseCostPoint { run: string; ts: string; result: '通过' | '失败' | '阻塞'; cost: number; kind: '存量回放' | '新增分析' }
+export const CASE_COST_HISTORY: Record<string, ICaseCostPoint[]> = {
+  'TC-2024-118': [
+    { run: 'RUN-4769', ts: '09-19', result: '通过', cost: 1.9, kind: '存量回放' },
+    { run: 'RUN-4776', ts: '09-20', result: '通过', cost: 1.8, kind: '存量回放' },
+    { run: 'RUN-4792', ts: '09-22', result: '通过', cost: 1.7, kind: '存量回放' },
+    { run: 'RUN-4805', ts: '09-23', result: '通过', cost: 1.6, kind: '存量回放' },
+    { run: 'RUN-4821', ts: '09-24', result: '失败', cost: 2.3, kind: '新增分析' },
+  ],
+  'TC-2024-095': [
+    { run: 'RUN-4805', ts: '09-23', result: '通过', cost: 1.4, kind: '存量回放' },
+    { run: 'RUN-4821', ts: '09-24', result: '失败', cost: 2.1, kind: '新增分析' },
+  ],
+  'TC-2024-001': [
+    { run: 'RUN-4769', ts: '09-19', result: '通过', cost: 0.9, kind: '存量回放' },
+    { run: 'RUN-4776', ts: '09-20', result: '通过', cost: 0.9, kind: '存量回放' },
+    { run: 'RUN-4792', ts: '09-22', result: '通过', cost: 0.8, kind: '存量回放' },
+    { run: 'RUN-4805', ts: '09-23', result: '通过', cost: 0.8, kind: '存量回放' },
+    { run: 'RUN-4821', ts: '09-24', result: '通过', cost: 0.8, kind: '存量回放' },
+  ],
+  'TC-2024-006': [
+    { run: 'RUN-4792', ts: '09-22', result: '通过', cost: 1.2, kind: '存量回放' },
+    { run: 'RUN-4805', ts: '09-23', result: '通过', cost: 1.2, kind: '存量回放' },
+    { run: 'RUN-4821', ts: '09-24', result: '通过', cost: 1.3, kind: '新增分析' },
+  ],
+};
+
+// 测试证据（用例 → 一次执行的证据集，哈希锚定）
+export interface IEvidenceItem { type: '截图' | '视频' | '日志' | '请求响应'; file: string; hash: string; ts: string; note: string }
+export const TEST_EVIDENCE: Record<string, IEvidenceItem[]> = {
+  'TC-2024-001': [
+    { type: '截图', file: 'login-flow-01.png', hash: 'sha256:a3f8…c21d', ts: '10:25:12', note: '正常登录成功页' },
+    { type: '请求响应', file: 'login-req-resp.json', hash: 'sha256:b1a7…7c2e', ts: '10:25:12', note: 'POST /v2/login 200' },
+    { type: '日志', file: 'svc-auth-stdout.log', hash: 'sha256:7c2e…9a31', ts: '10:25:13', note: 'Token 签发链路' },
+  ],
+  'TC-2024-118': [
+    { type: '截图', file: 'refund-calc-02.png', hash: 'sha256:0a1f…84bd', ts: '10:29:03', note: '退款金额计算失败现场' },
+    { type: '日志', file: 'svc-payment-refund.log', hash: 'sha256:6b2d…3e7a', ts: '10:29:04', note: '断言 assertTrue(true) 弱化检测' },
+    { type: '请求响应', file: 'refund-api.json', hash: 'sha256:9c3e…5f21', ts: '10:29:03', note: 'POST /v2/refund 响应结构' },
+  ],
+  'TC-2024-095': [
+    { type: '视频', file: 'idempotency-cb.mp4', hash: 'sha256:3e7a…0c91', ts: '10:28:40', note: '支付回调幂等性冲突录制' },
+    { type: '日志', file: 'svc-payment-callback.log', hash: 'sha256:b1a7…6d48', ts: '10:28:41', note: '重复回调事件' },
+  ],
+  'TC-2024-131': [
+    { type: '日志', file: 'svc-auth-concurrency.log', hash: 'sha256:5c1e…ab77', ts: '10:30:05', note: '并发登录压力测试资源排队' },
+  ],
+};

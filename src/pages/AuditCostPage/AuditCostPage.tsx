@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { COST_GEN_DETAIL, COST_EXEC_DETAIL, COST_SCENARIOS, COST_TOTAL, COST_TOTAL_TOKENS_IN, COST_TOTAL_TOKENS_OUT, COST_AICALLS, COST_MOM_CHANGE, COST_PER_CASE, COST_TREND, COST_EXEC_LEGACY_TOTAL, COST_EXEC_NEW_TOTAL, COST_ORGS, COST_BY_GROUP, COST_BY_SERVICE, COST_HEAT, SERVICE_ORG_MAP, AI_MODELS } from '@/data/mock';
+import { COST_GEN_DETAIL, COST_EXEC_DETAIL, COST_SCENARIOS, COST_TOTAL, COST_TOTAL_TOKENS_IN, COST_TOTAL_TOKENS_OUT, COST_AICALLS, COST_MOM_CHANGE, COST_PER_CASE, COST_TREND, COST_EXEC_LEGACY_TOTAL, COST_EXEC_NEW_TOTAL, COST_ORGS, COST_BY_GROUP, COST_BY_SERVICE, COST_HEAT, SERVICE_ORG_MAP, AI_MODELS, CASE_COST_HISTORY } from '@/data/mock';
 import { PageHeader, Card } from '@/components/shared';
-import { Wallet, TrendingDown, Cpu, Layers, ArrowDownRight, ArrowUpRight } from 'lucide-react';
+import { Wallet, TrendingDown, Cpu, Layers, ArrowDownRight, ArrowUpRight, History } from 'lucide-react';
 
 const SCEN_COLOR: Record<string, string> = {
   '用例生成': 'bg-emerald-500', '测试执行辅助': 'bg-teal-500', '质量判定': 'bg-indigo-500', '契约分析': 'bg-amber-500', '变异/篡改检测': 'bg-slate-400',
@@ -37,9 +37,11 @@ function TrendChart() {
       <div className="flex justify-between text-[10px] text-slate-400 mt-1">
         {pts.map((p) => <span key={p.day}>{p.day}</span>)}
       </div>
+
     </div>
   );
 }
+
 
 type DimKey = 'org' | 'group' | 'service';
 const DIMS: { key: DimKey; label: string }[] = [
@@ -50,6 +52,7 @@ const DIMS: { key: DimKey; label: string }[] = [
 
 export default function AuditCostPage() {
   const [dim, setDim] = useState<DimKey>('org');
+  const [costCase, setCostCase] = useState('TC-2024-118');
   const modelName = (id: string) => AI_MODELS.find((m) => m.id === id)?.name ?? id;
   const maxScen = Math.max(...COST_SCENARIOS.map((s) => s.amount));
   const fmtM = (v: number) => { const m = v / 1e6; return (Number.isInteger(m) ? m.toFixed(0) : m.toFixed(1)) + 'M'; };
@@ -274,6 +277,60 @@ export default function AuditCostPage() {
           </tfoot>
         </table>
       </div>
-    </div>
+      {/* 用例成本历史对比 */}
+      <Card title={<span className="flex items-center gap-1.5"><History className="w-4 h-4 text-emerald-500" />用例成本历史对比</span>}
+        extra={<span className="text-[11px] text-slate-400">同一用例跨 Run 成本对比 · 存量回放持平 / 新增分析回升</span>}>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {Object.keys(CASE_COST_HISTORY).map((c) => (
+            <button key={c} type="button" onClick={() => setCostCase(c)}
+              className={costCase === c ? 'px-2.5 py-1 text-[11px] bg-emerald-600 text-white rounded-lg' : 'px-2.5 py-1 text-[11px] bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200'}>{c}</button>
+          ))}
+        </div>
+        {(() => {
+          const pts = CASE_COST_HISTORY[costCase] ?? [];
+          const last = pts[pts.length - 1];
+          const prev = pts[pts.length - 2];
+          const delta = prev ? Math.round((((last?.cost ?? 0) - prev.cost) / prev.cost) * 1000) / 10 : null;
+          const max = Math.max(...pts.map((p) => p.cost), 1);
+          const W = 520, H = 130, PAD = 8;
+          const x = (i: number) => PAD + (i * (W - PAD * 2)) / (pts.length - 1);
+          const y = (v: number) => PAD + (1 - v / max) * (H - PAD * 2);
+          return (
+            <div className="grid grid-cols-3 gap-5">
+              <div className="space-y-3">
+                {[
+                  ['本次成本', `¥${last?.cost}`, `${last?.run} · ${last?.kind}`],
+                  ['上次成本', `¥${prev?.cost ?? '—'}`, prev?.run ?? ''],
+                  ['环比', delta === null ? '—' : `${delta > 0 ? '+' : ''}${delta}%`, delta === null ? '' : delta > 0 ? '本次触发新增分析' : delta < 0 ? '存量回放降本' : '持平'],
+                ].map(([lab, val, sub]) => (
+                  <div key={lab} className="rounded-lg border border-slate-200 p-3">
+                    <div className="text-[11px] text-slate-500">{lab}</div>
+                    <div className={'text-lg font-bold ' + (lab === '环比' && typeof delta === 'number' ? (delta > 0 ? 'text-amber-600' : delta < 0 ? 'text-emerald-600' : 'text-slate-700') : 'text-slate-800')}>{val}</div>
+                    <div className="text-[10px] text-slate-400">{sub}</div>
+                  </div>
+                ))}
+                <div className="rounded-lg border border-slate-200 p-3">
+                  <div className="text-[11px] text-slate-500">本次结果</div>
+                  <div><span className={'px-2 py-0.5 rounded-full text-[10px] ' + (last?.result === '通过' ? 'bg-emerald-50 text-emerald-600' : last?.result === '失败' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600')}>{last?.result}</span></div>
+                  <div className="text-[10px] text-slate-400 mt-1">{last?.kind} · {last?.ts}</div>
+                </div>
+              </div>
+              <div className="col-span-2">
+                <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-40">
+                  <path d={pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p.cost).toFixed(1)}`).join(' ')} fill="none" stroke="#6366f1" strokeWidth="2" />
+                  {pts.map((p, i) => (
+                    <g key={i}>
+                      <circle cx={x(i)} cy={y(p.cost)} r="3.5" fill={p.result === '失败' ? '#ef4444' : '#10b981'} stroke="white" strokeWidth="1.5" />
+                      <text x={x(i)} y={y(p.cost) - 7} textAnchor="middle" fontSize="9" fill="#475569">¥{p.cost}</text>
+                      <text x={x(i)} y={H - 3} textAnchor="middle" fontSize="9" fill="#94a3b8">{p.run.replace('RUN-', '')}</text>
+                    </g>
+                  ))}
+                </svg>
+                <p className="text-[10px] text-slate-400 mt-1">纵轴为该用例单次执行成本（¥）· 红点 = 失败执行 · 存量回放持平或递减，失败触发「新增分析」成本回升</p>
+              </div>
+            </div>
+          );
+        })()}
+      </Card>    </div>
   );
 }
