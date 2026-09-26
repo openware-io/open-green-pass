@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { SidebarProvider, SidebarInset, Sidebar } from '@/components/ui/sidebar';
 import { NAV_GROUPS, ASSET_TREE, CASES, REQUIREMENTS, CONTRACTS, TEAMS, CURRENT_TEAM_ID, type IAsset, type IAssetNode } from '@/data/mock';
 import { cn } from '@/lib/utils';
-import { Target, Settings2, Files, ArrowLeftRight, Play, ShieldCheck, ScrollText, GitBranch, Activity, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Cpu } from 'lucide-react';
+import { Target, Settings2, Files, ArrowLeftRight, Play, ShieldCheck, ScrollText, GitBranch, Activity, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Cpu, Wallet, UserCog } from 'lucide-react';
 
 const ICONS: Record<string, typeof Target> = {
   '/target': Target,
@@ -14,6 +14,9 @@ const ICONS: Record<string, typeof Target> = {
   '/contracts': ArrowLeftRight,
   '/gate': ShieldCheck,
   '/audit': ScrollText,
+  '/audit-cost': Wallet,
+  '/audit-exec': ScrollText,
+  '/audit-op': UserCog,
   '/trace': GitBranch,
   '/concurrency': Activity,
   '/teams': Users,
@@ -80,6 +83,7 @@ export function Layout() {
   const navigate = useNavigate();
   const [selectedAsset, setSelectedAsset] = useState<IAsset>(ASSET_TREE.children![0].children![0]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [navOpen, setNavOpen] = useState<Record<string, boolean>>({});
   const [activeLevel, setActiveLevel] = useState(0);
   const [query, setQuery] = useState('');
 
@@ -124,6 +128,38 @@ export function Layout() {
               <div key={group.title} className="mb-1">
                 <div className="px-4 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{group.title}</div>
                 {group.items.map((item) => {
+                  if (item.children) {
+                    const open = navOpen[item.path] ?? true;
+                    const groupActive = item.children.some((c) => location.pathname === c.path);
+                    const GroupIcon = ICONS[item.path] ?? ScrollText;
+                    return (
+                      <div key={item.path}>
+                        <button type="button" onClick={() => setNavOpen((p) => ({ ...p, [item.path]: !(p[item.path] ?? true) }))}
+                          className={cn('flex items-center w-full px-4 py-2.5 text-sm cursor-pointer border-l-[3px]',
+                            groupActive ? 'bg-emerald-500/15 text-emerald-200 border-emerald-500' : 'text-slate-400 border-transparent hover:bg-white/5')}>
+                          <ChevronDown className={cn('w-3.5 h-3.5 mr-2 transition-transform', !open && '-rotate-90')} />
+                          <GroupIcon className="w-4 h-4 mr-3" />
+                          <span>{item.label}</span>
+                        </button>
+                        {open && (
+                          <div className="ml-4 border-l border-white/5">
+                            {item.children.map((sub) => {
+                              const SubIcon = ICONS[sub.path] ?? ScrollText;
+                              const subActive = location.pathname === sub.path;
+                              return (
+                                <NavLink key={sub.path} to={sub.path}
+                                  className={cn('flex items-center pl-5 pr-4 py-2 text-[13px] border-l-[3px]',
+                                    subActive ? 'bg-emerald-500/10 text-emerald-200 border-emerald-500' : 'text-slate-400 border-transparent hover:bg-white/5')}>
+                                  <SubIcon className="w-3.5 h-3.5 mr-2.5" />
+                                  <span>{sub.label}</span>
+                                </NavLink>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
                   const Icon = ICONS[item.path];
                   const active = location.pathname === item.path;
                   return (
@@ -179,7 +215,7 @@ export function Layout() {
             <span className="text-emerald-600 font-medium">{selectedAsset.name}</span>
             <span className="mx-2 text-slate-300">/</span>
             <span className="text-slate-700 font-medium">
-              {NAV_GROUPS.flatMap((g) => g.items).find((i) => i.path === location.pathname)?.label ?? ''}
+              {NAV_GROUPS.flatMap((g) => g.items).flatMap((i) => (i.children ? i.children : [i])).find((i) => i.path === location.pathname)?.label ?? ''}
             </span>
           </div>
           <div className="ml-auto flex items-center gap-4">

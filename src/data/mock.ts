@@ -384,7 +384,8 @@ export const RESOURCE_POOLS: IResourcePool[] = [
 ];
 
 // ============ 导航（闭环流程，非平铺视图）============
-export const NAV_GROUPS: { title: string; items: { path: string; label: string; badge?: string }[] }[] = [
+export interface INavItem { path: string; label: string; badge?: string; children?: { path: string; label: string }[] }
+export const NAV_GROUPS: { title: string; items: INavItem[] }[] = [
   {
     title: '测试闭环',
     items: [
@@ -399,7 +400,12 @@ export const NAV_GROUPS: { title: string; items: { path: string; label: string; 
   {
     title: '可信与审计',
     items: [
-      { path: '/audit', label: '审计日志' },
+      { path: '/audit', label: '审计管理', children: [
+        { path: '/audit', label: '审计总览' },
+        { path: '/audit-cost', label: '成本审计' },
+        { path: '/audit-exec', label: '执行审计' },
+        { path: '/audit-op', label: '操作审计' },
+      ]},
       { path: '/trace', label: '需求追溯' },
       { path: '/concurrency', label: '并发与资源' },
     ],
@@ -744,4 +750,73 @@ export const COST_TREND: { day: string; total: number; exec: number }[] = [
   { day: '09-22', total: 27, exec: 7.0 },
   { day: '09-23', total: 26, exec: 6.4 },
   { day: '09-24', total: 24, exec: 5.6 },
+];
+
+
+// ============ 审计管理：成本维度归因 + 执行审计 + 操作审计 ============
+// 服务 → 研发组归属（成本归因口径）
+export const SERVICE_ORG_MAP: Record<string, string> = {
+  'svc-auth': 'AI支付中台', 'svc-user': '支付核心', 'svc-payment': 'AI支付中台',
+  'svc-order': '支付核心', 'web-frontend': 'AI支付中台', 'mobile-ios': '前端与端', 'mobile-android': '前端与端',
+};
+
+// 成本按研发组归因（合计 = COST_TOTAL = 4599，与明细自洽）
+export interface IOrgCost { id: string; name: string; amount: number }
+export const COST_ORGS: IOrgCost[] = [
+  { id: 'org-pay-mid', name: 'AI支付中台', amount: 3000 },
+  { id: 'org-pay-core', name: '支付核心', amount: 1300 },
+  { id: 'org-front', name: '前端与端', amount: 299 },
+];
+
+// 成本按工程/服务组归因
+export const COST_BY_GROUP: { name: string; amount: number }[] = [
+  { name: '身份服务组', amount: 1800 },
+  { name: '支付服务组', amount: 2100 },
+  { name: '前端与端', amount: 699 },
+];
+
+// 成本按服务归因（合计 4599）
+export const COST_BY_SERVICE: { service: string; name: string; amount: number }[] = [
+  { service: 'svc-auth', name: '认证服务', amount: 1100 },
+  { service: 'svc-user', name: '用户服务', amount: 700 },
+  { service: 'svc-payment', name: '支付服务', amount: 1500 },
+  { service: 'svc-order', name: '订单服务', amount: 600 },
+  { service: 'web-frontend', name: 'Web 前端', amount: 400 },
+  { service: 'mobile-ios', name: 'iOS 端', amount: 180 },
+  { service: 'mobile-android', name: 'Android 端', amount: 119 },
+];
+
+// 维度 × 场景 热力矩阵（行和 = 该服务成本；列和 = 4599）
+export interface ICostHeatCell { 生成: number; 执行: number; 判定: number; 契约: number; 变异: number }
+export const COST_HEAT: { serviceId: string; org: string; cells: ICostHeatCell }[] = [
+  { serviceId: 'svc-auth', org: 'AI支付中台', cells: { 生成: 400, 执行: 80, 判定: 500, 契约: 40, 变异: 80 } },
+  { serviceId: 'svc-user', org: '支付核心', cells: { 生成: 200, 执行: 40, 判定: 350, 契约: 30, 变异: 80 } },
+  { serviceId: 'svc-payment', org: 'AI支付中台', cells: { 生成: 600, 执行: 120, 判定: 600, 契约: 100, 变异: 80 } },
+  { serviceId: 'svc-order', org: '支付核心', cells: { 生成: 200, 执行: 40, 判定: 250, 契约: 30, 变异: 80 } },
+  { serviceId: 'web-frontend', org: 'AI支付中台', cells: { 生成: 150, 执行: 30, 判定: 150, 契约: 30, 变异: 40 } },
+  { serviceId: 'mobile-ios', org: '前端与端', cells: { 生成: 60, 执行: 15, 判定: 70, 契约: 20, 变异: 15 } },
+  { serviceId: 'mobile-android', org: '前端与端', cells: { 生成: 40, 执行: 10, 判定: 45, 契约: 9, 变异: 15 } },
+];
+
+// 执行审计：用例执行记录（用例 · 结果 · 耗时）
+export interface IExecAuditRow { caseId: string; asset: string; result: '通过' | '失败' | '阻塞'; duration: string; model: string; ts: string }
+export const EXEC_AUDIT_ROWS: IExecAuditRow[] = [
+  { caseId: 'TC-2024-001', asset: 'svc-auth', result: '通过', duration: '0.8s', model: 'DeepSeek-V3', ts: '09-24 10:25' },
+  { caseId: 'TC-2024-005', asset: 'svc-user', result: '通过', duration: '1.2s', model: 'DeepSeek-V3', ts: '09-24 10:25' },
+  { caseId: 'TC-2024-006', asset: 'web-frontend', result: '通过', duration: '5.6s', model: 'DeepSeek-V3', ts: '09-24 10:26' },
+  { caseId: 'TC-2024-125', asset: 'mobile-ios', result: '通过', duration: '8.2s', model: 'DeepSeek-V3', ts: '09-24 10:27' },
+  { caseId: 'TC-2024-095', asset: 'svc-payment', result: '失败', duration: '3.1s', model: 'DeepSeek-V3', ts: '09-24 10:28' },
+  { caseId: 'TC-2024-118', asset: 'svc-payment', result: '失败', duration: '2.3s', model: 'DeepSeek-V3', ts: '09-24 10:29' },
+  { caseId: 'TC-2024-131', asset: 'svc-auth', result: '阻塞', duration: '—', model: 'DeepSeek-V3', ts: '09-24 10:30' },
+];
+
+// 操作审计：谁 · 何时 · 做了什么
+export interface IOpAuditRow { user: string; role: string; action: string; target: string; result: string; risk: '低' | '中' | '高'; ts: string }
+export const OP_AUDIT_ROWS: IOpAuditRow[] = [
+  { user: '张立', role: '工程负责人', action: '重新判定', target: '质量门禁 CI #4821', result: '通过', risk: '低', ts: '09-24 10:31' },
+  { user: 'ai-agent-3', role: 'AI Agent', action: '生成用例种子', target: 'GEN-2041 · OpenAPI', result: '已入库 16 条', risk: '低', ts: '09-24 10:26' },
+  { user: '李娜', role: '管理员', action: '修改契约', target: 'CT-003 /v2/refund', result: '校验中', risk: '高', ts: '09-24 10:28' },
+  { user: '王强', role: '测试工程师', action: '触发执行', target: '测试执行 CI #4821', result: '运行中', risk: '中', ts: '09-24 10:22' },
+  { user: '系统', role: 'tamper-detector', action: '篡改检测', target: 'TC-2024-118', result: '发现弱断言 3 处', risk: '高', ts: '09-24 10:27' },
+  { user: '张立', role: '工程负责人', action: '导出审计报告', target: '审计日志', result: '已完成', risk: '低', ts: '09-24 10:20' },
 ];

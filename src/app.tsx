@@ -9,6 +9,9 @@ import ContractsPage from '@/pages/ContractsPage/ContractsPage';
 import ExecPage from '@/pages/ExecPage/ExecPage';
 import GatePage from '@/pages/GatePage/GatePage';
 import AuditPage from '@/pages/AuditPage/AuditPage';
+import AuditCostPage from '@/pages/AuditCostPage/AuditCostPage';
+import AuditExecPage from '@/pages/AuditExecPage/AuditExecPage';
+import AuditOpPage from '@/pages/AuditOpPage/AuditOpPage';
 import ConcurrencyPage from '@/pages/ConcurrencyPage/ConcurrencyPage';
 import TeamPage from '@/pages/TeamPage/TeamPage';
 import ModelPage from '@/pages/ModelPage/ModelPage';
@@ -28,6 +31,9 @@ export default function App() {
         <Route path="exec" element={<ExecPage />} />
         <Route path="gate" element={<GatePage />} />
         <Route path="audit" element={<AuditPage />} />
+        <Route path="audit-cost" element={<AuditCostPage />} />
+        <Route path="audit-exec" element={<AuditExecPage />} />
+        <Route path="audit-op" element={<AuditOpPage />} />
         <Route path="concurrency" element={<ConcurrencyPage />} />
         <Route path="teams" element={<TeamPage />} />
         <Route path="models" element={<ModelPage />} />
