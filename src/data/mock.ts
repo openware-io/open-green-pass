@@ -83,7 +83,7 @@ export const ASSET_RISKS: IAssetRisk[] = [
 export interface IAsset {
   id: string;
   name: string;
-  type: 'service' | 'service-group' | 'app' | 'end';
+  type: 'service' | 'service-group' | 'app' | 'end' | 'module';
   coverage: number;
   gateRate: number;
 }
@@ -106,7 +106,14 @@ export const ASSET_TREE: IAssetNode = {
       coverage: 100,
       gateRate: 100,
       children: [
-        { id: 'svc-auth', name: 'svc-auth', type: 'service', coverage: 100, gateRate: 100 },
+        {
+          id: 'svc-auth', name: 'svc-auth', type: 'service', coverage: 100, gateRate: 100,
+          children: [
+            { id: 'svc-auth-login', name: 'login', type: 'module', coverage: 96, gateRate: 100 },
+            { id: 'svc-auth-token', name: 'token', type: 'module', coverage: 92, gateRate: 100 },
+            { id: 'svc-auth-profile', name: 'profile', type: 'module', coverage: 78, gateRate: 75 },
+          ],
+        },
         { id: 'svc-user', name: 'svc-user', type: 'service', coverage: 100, gateRate: 100 },
       ],
     },

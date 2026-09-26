@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useAssetLevel, LEVEL_LABEL } from '@/context';
 import { REQUIREMENTS, TRACE_CHAINS } from '@/data/mock';
 import { PageHeader, GhostButton, Card } from '@/components/shared';
 import { ScanSearch, ListFilter, CircleCheckBig, CircleAlert, CircleX, Camera, Wallet, Gauge } from 'lucide-react';
@@ -21,7 +22,10 @@ function ResultIcon({ kind }: { kind: string }) {
   return <CircleAlert className="w-3.5 h-3.5" />;
 }
 
+const COLS: Record<string, number> = { system: 2, group: 3, service: 4, module: 5 };
+
 export default function TracePage() {
+  const { level } = useAssetLevel();
   const [activeReq, setActiveReq] = useState('REQ-101');
   const [activeTcId, setActiveTcId] = useState<string | null>('TC-001');
   const [gapOnly, setGapOnly] = useState(false);
@@ -44,7 +48,7 @@ export default function TracePage() {
       </PageHeader>
 
       {view === 'chain' && (
-        <Card title={<span className="flex items-center gap-1.5"><span className="text-emerald-600">⛓</span>跨服务追溯链 · {activeReq} {chain.title}</span>}
+        <Card title={<span className="flex items-center gap-1.5"><span className="text-emerald-600">⛓</span>跨服务追溯链 · {activeReq} {chain.title}<span className="ml-2 text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">当前层级 · {LEVEL_LABEL[level]}</span></span>}
           className="p-5 mb-5"
           extra={
             <div className="flex gap-3 text-[10px]">
@@ -54,24 +58,30 @@ export default function TracePage() {
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-blue-400"></span>端</span>
             </div>
           }>
-          <div className="grid grid-cols-5 gap-0">
+          <div className="grid gap-0" style={{ gridTemplateColumns: `repeat(${COLS[level]}, minmax(0, 1fr))` }}>
             <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-center">
               <div className="text-[10px] text-amber-600 font-medium">系统</div>
               <div className="text-xs text-slate-700 mt-0.5">{chain.system}</div>
             </div>
-            <div className="px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-lg text-center">
-              <div className="text-[10px] text-indigo-600 font-medium">服务组</div>
-              <div className="text-xs text-slate-700 mt-0.5">{chain.group}</div>
-            </div>
-            <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
-              <div className="text-[10px] text-emerald-600 font-medium">服务</div>
-              <div className="text-xs text-slate-700 mt-0.5">{chain.service}</div>
-              <div className="text-[10px] text-slate-500 mt-0.5">{chain.serviceTp}</div>
-            </div>
-            <div className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-center">
-              <div className="text-[10px] text-slate-500">测试点</div>
-              <div className="text-[10px] text-slate-700 mt-0.5">{chain.testPoint}</div>
-            </div>
+            {level !== 'system' && (
+              <div className="px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-lg text-center">
+                <div className="text-[10px] text-indigo-600 font-medium">服务组</div>
+                <div className="text-xs text-slate-700 mt-0.5">{chain.group}</div>
+              </div>
+            )}
+            {(level === 'service' || level === 'module') && (
+              <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
+                <div className="text-[10px] text-emerald-600 font-medium">服务</div>
+                <div className="text-xs text-slate-700 mt-0.5">{chain.service}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">{chain.serviceTp}</div>
+              </div>
+            )}
+            {level === 'module' && (
+              <div className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-center">
+                <div className="text-[10px] text-slate-500">测试点</div>
+                <div className="text-[10px] text-slate-700 mt-0.5">{chain.testPoint}</div>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               {chain.tcs.length === 0 ? (
                 <div className="px-2 py-2 bg-red-50 border border-red-200 rounded text-[10px] text-red-600 text-center">覆盖缺口 · 无用例</div>

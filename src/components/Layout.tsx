@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { SidebarProvider, SidebarInset, Sidebar } from '@/components/ui/sidebar';
 import { NAV_GROUPS, ASSET_TREE, CASES, REQUIREMENTS, CONTRACTS, TEAMS, CURRENT_TEAM_ID, type IAsset, type IAssetNode } from '@/data/mock';
 import { cn } from '@/lib/utils';
+import { AssetLevelContext, LEVEL_ORDER, LEVEL_LABEL, type AssetLevel } from '@/context';
 import { Target, Settings2, Files, ArrowLeftRight, Play, ShieldCheck, ScrollText, GitBranch, Activity, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Cpu, Wallet, UserCog, History } from 'lucide-react';
 
 const ICONS: Record<string, typeof Target> = {
@@ -24,7 +25,15 @@ const ICONS: Record<string, typeof Target> = {
   '/models': Cpu,
 };
 
-const LEVELS = ['系统', '服务组', '服务', '模块'];
+function findChain(node: IAssetNode, id: string): IAssetNode[] | null {
+  if (node.id === id) return [node];
+  if (!node.children) return null;
+  for (const ch of node.children) {
+    const r = findChain(ch, id);
+    if (r) return [node, ...r];
+  }
+  return null;
+}
 
 function AssetGroup({ node, depth, selectedId, onSelect, expanded, onToggle }: {
   node: IAssetNode; depth: number; selectedId: string;
@@ -82,11 +91,21 @@ function AssetGroup({ node, depth, selectedId, onSelect, expanded, onToggle }: {
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [selectedAsset, setSelectedAsset] = useState<IAsset>(ASSET_TREE.children![0].children![0]);
+  const [selectedAsset, setSelectedAsset] = useState<IAssetNode>(ASSET_TREE.children![0].children![0]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [navOpen, setNavOpen] = useState<Record<string, boolean>>({});
-  const [activeLevel, setActiveLevel] = useState(0);
+  const [level, setLevel] = useState<AssetLevel>('service');
   const [query, setQuery] = useState('');
+
+  const setLevelAndAsset = (l: AssetLevel) => {
+    setLevel(l);
+    if (l === 'system') setSelectedAsset(ASSET_TREE);
+    else if (l === 'group') setSelectedAsset(ASSET_TREE.children![0]);
+    else if (l === 'service') { if (selectedAsset.type !== 'service') setSelectedAsset(ASSET_TREE.children![0].children![0]); }
+    else if (l === 'module') { if (selectedAsset.type === 'service' && selectedAsset.children) setSelectedAsset(selectedAsset.children[0]); }
+  };
+  const chain = findChain(ASSET_TREE, selectedAsset.id) ?? [ASSET_TREE];
+  const crumbs = chain.slice(0, Math.min(LEVEL_ORDER.indexOf(level) + 1, chain.length));
 
   const toggle = (id: string) => setExpanded((p) => ({ ...p, [id]: !(p[id] ?? true) }));
 
@@ -111,6 +130,7 @@ export function Layout() {
   };
 
   return (
+    <AssetLevelContext.Provider value={{ level, setLevel: setLevelAndAsset }}>
     <SidebarProvider>
       <Sidebar className="!bg-[#161a23] !border-white/5" collapsible="offcanvas">
         <div className="flex flex-col h-full">
@@ -209,11 +229,12 @@ export function Layout() {
       <SidebarInset className="flex flex-col overflow-hidden !bg-slate-100">
         <header className="h-16 bg-white border-b border-slate-200 flex items-center px-6 flex-shrink-0">
           <div className="text-sm text-slate-500">
-            <span className="text-slate-400">{ASSET_TREE.name}</span>
-            <span className="mx-2 text-slate-300">/</span>
-            <span className="text-slate-400">{selectedAsset.id.startsWith('sg') ? selectedAsset.name : '身份服务组'}</span>
-            <span className="mx-2 text-slate-300">/</span>
-            <span className="text-emerald-600 font-medium">{selectedAsset.name}</span>
+            {crumbs.map((n, i) => (
+              <span key={n.id} className="inline-flex items-center">
+                {i > 0 && <span className="mx-2 text-slate-300">/</span>}
+                <span className={i === crumbs.length - 1 ? 'text-emerald-600 font-medium' : 'text-slate-400'}>{n.name}</span>
+              </span>
+            ))}
             <span className="mx-2 text-slate-300">/</span>
             <span className="text-slate-700 font-medium">
               {NAV_GROUPS.flatMap((g) => g.items).flatMap((i) => (i.children ? i.children : [i])).find((i) => i.path === location.pathname)?.label ?? ''}
@@ -221,10 +242,10 @@ export function Layout() {
           </div>
           <div className="ml-auto flex items-center gap-4">
             <div className="flex items-center bg-slate-100 rounded-lg p-0.5 text-[11px]">
-              {LEVELS.map((level, i) => (
-                <button key={level} type="button" onClick={() => setActiveLevel(i)}
-                  className={cn('px-2.5 py-1 rounded text-slate-500', activeLevel === i && 'bg-emerald-600 text-white')}>
-                  {level}
+              {LEVEL_ORDER.map((lv) => (
+                <button key={lv} type="button" onClick={() => setLevelAndAsset(lv)}
+                  className={cn('px-2.5 py-1 rounded', level === lv ? 'bg-emerald-600 text-white' : 'text-slate-500')}>
+                  {LEVEL_LABEL[lv]}
                 </button>
               ))}
             </div>
@@ -254,5 +275,6 @@ export function Layout() {
         </main>
       </SidebarInset>
     </SidebarProvider>
+    </AssetLevelContext.Provider>
   );
 }
