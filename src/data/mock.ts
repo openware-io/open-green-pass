@@ -416,7 +416,7 @@ export const NAV_GROUPS: { title: string; items: INavItem[] }[] = [
         { path: '/audit-op', label: '操作审计' },
       ]},
       { path: '/trace', label: '需求追溯' },
-      { path: '/concurrency', label: '并发与资源' },
+      { path: '/concurrency', label: '测试资源' },
     ],
   },
   {

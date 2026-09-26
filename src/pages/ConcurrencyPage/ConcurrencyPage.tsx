@@ -10,7 +10,7 @@ const CONFLICT_DOT: Record<string, string> = { danger: 'text-red-500', warning: 
 export default function ConcurrencyPage() {
   return (
     <div>
-      <PageHeader title="并发与资源" desc="全局调度 · 跨资产隔离 · 资源池 · 冲突事件">
+      <PageHeader title="测试资源" desc="全局调度 · 跨资产隔离 · 资源池 · 冲突事件">
         <div className="flex items-center gap-3 text-xs">
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400"></span>健康</span>
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400"></span>高负载</span>
