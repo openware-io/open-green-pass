@@ -589,3 +589,70 @@ export function assetToProfile(asset: IAsset): IAssetProfile {
     gateRules,
   };
 }
+
+
+// ============ 资产权限分配：工程负责人持完整权限，可对成员精细分配权限与资源 ============
+export type AssetPerm = 'full' | 'edit' | 'exec' | 'view' | 'none';
+
+export const ASSET_PERM_META: { perm: AssetPerm; label: string; desc: string; color: string }[] = [
+  { perm: 'full', label: '完整', desc: '等同于负责人，可再分配权限与资源', color: 'text-purple-600 bg-purple-50' },
+  { perm: 'edit', label: '编辑', desc: '创建/修改用例与门禁判定', color: 'text-emerald-600 bg-emerald-50' },
+  { perm: 'exec', label: '执行', desc: '运行用例、查看执行证据', color: 'text-indigo-600 bg-indigo-50' },
+  { perm: 'view', label: '只读', desc: '仅查看该资产结果与审计', color: 'text-slate-500 bg-slate-100' },
+  { perm: 'none', label: '无权限', desc: '对该资产不可见、不可操作', color: 'text-red-500 bg-red-50' },
+];
+
+export interface IAssetMemberAlloc {
+  memberId: string;
+  perm: AssetPerm;
+  quota: number;    // 并发执行配额（条）
+  sandbox: number;  // K8s 沙箱配额（个）
+}
+
+export interface IAssetAccess {
+  assetId: string;
+  assetName: string;
+  type: string;
+  ownerId: string;               // 工程负责人（完整权限）
+  members: IAssetMemberAlloc[];  // 成员分配（负责人之外的成员）
+}
+
+export const ASSET_ACCESS: IAssetAccess[] = [
+  {
+    assetId: 'svc-payment', assetName: 'svc-payment', type: '服务', ownerId: 'u-1',
+    members: [
+      { memberId: 'u-2', perm: 'edit', quota: 6, sandbox: 3 },
+      { memberId: 'u-3', perm: 'exec', quota: 4, sandbox: 2 },
+      { memberId: 'u-4', perm: 'exec', quota: 2, sandbox: 1 },
+      { memberId: 'u-5', perm: 'view', quota: 0, sandbox: 0 },
+    ],
+  },
+  {
+    assetId: 'svc-auth', assetName: 'svc-auth', type: '服务', ownerId: 'u-2',
+    members: [
+      { memberId: 'u-1', perm: 'full', quota: 8, sandbox: 4 },
+      { memberId: 'u-3', perm: 'edit', quota: 4, sandbox: 2 },
+      { memberId: 'u-5', perm: 'view', quota: 0, sandbox: 0 },
+    ],
+  },
+  {
+    assetId: 'svc-order', assetName: 'svc-order', type: '服务', ownerId: 'u-3',
+    members: [
+      { memberId: 'u-2', perm: 'edit', quota: 5, sandbox: 2 },
+      { memberId: 'u-4', perm: 'exec', quota: 3, sandbox: 1 },
+    ],
+  },
+  {
+    assetId: 'web-frontend', assetName: 'web-frontend', type: '应用', ownerId: 'u-4',
+    members: [
+      { memberId: 'u-3', perm: 'edit', quota: 6, sandbox: 3 },
+      { memberId: 'u-5', perm: 'view', quota: 0, sandbox: 0 },
+    ],
+  },
+  {
+    assetId: 'mobile-ios', assetName: 'mobile-ios', type: '端', ownerId: 'u-2',
+    members: [
+      { memberId: 'u-4', perm: 'exec', quota: 2, sandbox: 1 },
+    ],
+  },
+];
