@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { TEST_RUNS, RUN_SERVICE_REPORTS, EXEC_AUDIT_ROWS, CASE_COST_HISTORY, TEST_EVIDENCE, SCREENSHOT_POLICY, type ITestRun, type IScreenshotPolicy } from '@/data/mock';
 import { PageHeader, Card } from '@/components/shared';
-import { Activity, FileText, Image, FileJson, File, Video, ArrowUpRight, ArrowDownRight, Minus, ScanEye, Camera } from 'lucide-react';
+import { Activity, FileText, Image, FileJson, File, Video, ArrowUpRight, ArrowDownRight, Minus, ScanEye, Camera, Download, CheckCircle2 } from 'lucide-react';
 
 const RESULT_BADGE: Record<string, string> = {
   '通过': 'bg-emerald-50 text-emerald-600',
@@ -104,6 +104,127 @@ function CaseCostPanel({ caseId, cases, onSelect }: { caseId: string; cases: str
   );
 }
 
+const EXPORT_FORMATS = [
+  { k: 'html', label: 'HTML', ext: '.html' },
+  { k: 'pdf', label: 'PDF', ext: '.pdf' },
+  { k: 'docx', label: 'Word', ext: '.docx' },
+  { k: 'md', label: 'Markdown', ext: '.md' },
+];
+
+function ExportMenu({ runId, onDone }: { runId: string; onDone: (f: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative flex-shrink-0">
+      <button type="button" onClick={() => setOpen((o) => !o)}
+        className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg flex items-center gap-1"><Download className="w-3.5 h-3.5" />导出报告</button>
+      {open && (
+        <div className="absolute right-0 top-9 z-20 w-44 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+          {EXPORT_FORMATS.map((f) => (
+            <button key={f.k} type="button"
+              onClick={() => { onDone(`${runId}${f.ext}`); setOpen(false); }}
+              className="w-full text-left px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 flex items-center gap-2">
+              <FileText className="w-3.5 h-3.5 text-slate-400" />{f.label}
+              <span className="ml-auto text-[10px] text-slate-400">{f.ext}</span>
+            </button>
+          ))}
+          <div className="px-3 py-1.5 text-[9px] text-slate-400 border-t border-slate-100">原型：模拟下载 · 接入后按模板生成</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReportView({ run, onExport }: { run: ITestRun; onExport: (f: string) => void }) {
+  const passRate = Math.round((run.pass / run.total) * 1000) / 10;
+  const highRisk = RUN_SERVICE_REPORTS.filter((s) => s.risk === '高');
+  return (
+    <div className="card bg-white rounded-xl border border-indigo-200 p-6 mt-5">
+      <div className="flex items-start justify-between mb-5">
+        <div>
+          <div className="flex items-center gap-1.5 text-[10px] text-indigo-500 font-mono mb-1"><FileText className="w-3.5 h-3.5" />测试报告 · REP-{run.id.replace('RUN-', '')}</div>
+          <h2 className="text-lg font-bold text-slate-800">工程测试报告 · {run.id}</h2>
+          <p className="text-[11px] text-slate-500 mt-1">{run.ts} · 分支 {run.branch} · 触发 {run.trigger} · 工程 sys-payment-platform</p>
+        </div>
+        <ExportMenu runId={run.id} onDone={onExport} />
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+        <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200"><div className="text-[11px] text-emerald-600">通过率</div><div className="text-xl font-bold text-emerald-700">{passRate}%</div><div className="text-[10px] text-emerald-500">{run.pass}/{run.total}</div></div>
+        <div className="p-3 rounded-lg bg-red-50 border border-red-200"><div className="text-[11px] text-red-600">失败 / 阻塞</div><div className="text-xl font-bold text-red-600">{run.fail}<span className="text-sm font-normal text-red-400"> / {run.block}</span></div><div className="text-[10px] text-red-400">阻断 10</div></div>
+        <div className="p-3 rounded-lg bg-slate-50 border border-slate-200"><div className="text-[11px] text-slate-500">执行成本</div><div className="text-xl font-bold text-slate-700">¥{run.cost.toLocaleString()}</div><div className="text-[10px] text-slate-400">关联用例成本明细</div></div>
+        <div className="p-3 rounded-lg bg-slate-50 border border-slate-200"><div className="text-[11px] text-slate-500">执行时长</div><div className="text-xl font-bold text-slate-700">{run.duration}</div><div className="text-[10px] text-slate-400">12 执行器并行</div></div>
+        <div className="p-3 rounded-lg border bg-white border-slate-200"><div className="text-[11px] text-slate-500">门禁结论</div><div className={'text-xl font-bold ' + (run.gate === '通过' ? 'text-emerald-600' : 'text-red-600')}>{run.gate}</div><div className="text-[10px] text-slate-400">4 项规则判定</div></div>
+      </div>
+
+      <h3 className="font-semibold text-slate-700 text-sm mb-3">服务维度报告</h3>
+      <div className="rounded-xl border border-slate-200 overflow-hidden mb-5">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr className="text-left text-slate-500">
+              <th className="px-4 py-2.5 font-medium">服务</th>
+              <th className="px-4 py-2.5 font-medium">通过</th>
+              <th className="px-4 py-2.5 font-medium">失败</th>
+              <th className="px-4 py-2.5 font-medium">阻塞</th>
+              <th className="px-4 py-2.5 font-medium">覆盖率</th>
+              <th className="px-4 py-2.5 font-medium">成本</th>
+              <th className="px-4 py-2.5 font-medium">风险</th>
+              <th className="px-4 py-2.5 font-medium">结论</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {RUN_SERVICE_REPORTS.map((s) => (
+              <tr key={s.service} className="hover:bg-slate-50">
+                <td className="px-4 py-2.5"><span className="font-mono text-indigo-600 font-medium">{s.service}</span><span className="text-[10px] text-slate-400 ml-2">{s.name}</span></td>
+                <td className="px-4 py-2.5 text-emerald-600">{s.pass}</td>
+                <td className="px-4 py-2.5 text-red-600">{s.fail}</td>
+                <td className="px-4 py-2.5 text-amber-600">{s.block}</td>
+                <td className="px-4 py-2.5 text-slate-600">{s.coverage}%</td>
+                <td className="px-4 py-2.5 font-mono text-slate-600">¥{s.cost.toLocaleString()}</td>
+                <td className="px-4 py-2.5"><span className={`px-2 py-0.5 rounded-full text-[10px] ${RISK_BADGE[s.risk]}`}>{s.risk}</span></td>
+                <td className="px-4 py-2.5 text-slate-500 max-w-[180px]">{s.conclusion}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4 mb-5">
+        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+          <div className="text-[11px] text-slate-500 mb-1">成本汇总</div>
+          <div className="text-lg font-bold text-slate-800">¥{run.cost.toLocaleString()}</div>
+          <div className="text-[10px] text-slate-400 mt-1">总 Token {Math.round(run.cost / 0.04).toLocaleString()}K · 存量执行成本持平/递减</div>
+        </div>
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200">
+          <div className="text-[11px] text-red-600 mb-1">高风险服务</div>
+          <div className="text-lg font-bold text-red-600">{highRisk.length} 个</div>
+          <div className="text-[10px] text-red-500 mt-1">{highRisk.map((s) => s.service).join('、') || '—'}</div>
+        </div>
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200">
+          <div className="text-[11px] text-emerald-600 mb-1">治理结论</div>
+          <div className={'text-lg font-bold ' + (run.gate === '通过' ? 'text-emerald-700' : 'text-red-600')}>{run.gate === '通过' ? '放行' : '阻断'}</div>
+          <div className="text-[10px] text-emerald-500 mt-1">门禁判定 · 需解决 {run.fail} 项失败</div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 p-4 mb-5">
+        <h3 className="font-semibold text-slate-700 text-sm mb-2">结论与建议</h3>
+        <ul className="space-y-1.5 text-[11px] text-slate-600 list-disc pl-4">
+          <li>整体通过率 {passRate}%，门禁结论「{run.gate}」；svc-payment 存在 {highRisk.length} 项高风险（契约变更 + 断言弱化 + 变异分数不足），需修复后复测。</li>
+          <li>契约门禁 CT-003 /v2/refund 破坏性变更阻断，2 个消费者契约测试待更新。</li>
+          <li>存量用例回放成本持平/递减，符合治理降本逻辑；本次失败触发「新增分析」成本回升属预期。</li>
+        </ul>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[10px] text-slate-400 border-t border-slate-100 pt-3">
+        <span>报告编号 <span className="font-mono text-slate-600">REP-{run.id.replace('RUN-', '')}-{run.id.replace('RUN-', '')}</span></span>
+        <span>报告哈希 <span className="font-mono text-emerald-600">sha256:0a1f…d84b</span></span>
+        <span>审计锚定 <span className="text-slate-600">2026-09-24 10:30:00</span></span>
+        <span>可独立验证 <span className="text-emerald-600">✓ 哈希链完整</span></span>
+      </div>
+    </div>
+  );
+}
+
 export default function HistoryPage() {
   const [runId, setRunId] = useState<string>('RUN-4821');
   const [tab, setTab] = useState<TabKey>('exec');
@@ -111,6 +232,9 @@ export default function HistoryPage() {
   const [policies, setPolicies] = useState<IScreenshotPolicy[]>(SCREENSHOT_POLICY);
   const togglePolicy = (id: string) => setPolicies((prev) => prev.map((pl) => (pl.serviceId === id ? { ...pl, enabled: !pl.enabled, mode: pl.enabled ? 'off' : 'on-fail' } : pl)));
   const [caseForCostSel, setCaseForCostSel] = useState('TC-2024-118');
+  const [showReport, setShowReport] = useState(false);
+  const [toast, setToast] = useState('');
+  const onExport = (f: string) => { setToast(f); window.setTimeout(() => setToast(''), 2600); };
   const run = TEST_RUNS.find((r) => r.id === runId) as ITestRun;
   const passRate = Math.round((run.pass / run.total) * 1000) / 10;
   const cases = Object.keys(CASE_COST_HISTORY);
@@ -179,7 +303,7 @@ export default function HistoryPage() {
       <div className="card bg-white rounded-xl border border-slate-200 p-5 mt-5">
         <div className="flex items-center justify-between mb-1">
           <h3 className="font-semibold text-slate-700 text-sm">运行详情 · <span className="font-mono text-indigo-600">{run.id}</span> <span className="text-slate-400 font-normal">（{run.ts} · {run.branch}）</span></h3>
-          <button type="button" className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg flex items-center gap-1"><FileText className="w-3.5 h-3.5" />查看工程报告</button>
+          <button type="button" onClick={() => setShowReport(true)} className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg flex items-center gap-1"><FileText className="w-3.5 h-3.5" />查看工程报告</button>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
           <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200"><div className="text-[11px] text-emerald-600">通过率</div><div className="text-lg font-bold text-emerald-700">{passRate}%</div><div className="text-[10px] text-emerald-500">{run.pass}/{run.total}</div></div>
@@ -340,6 +464,14 @@ export default function HistoryPage() {
           </div>
         )}
       </div>
+
+      {showReport && <ReportView run={run} onExport={onExport} />}
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl bg-slate-800 text-white text-xs shadow-xl flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400" />已导出报告为 <span className="font-mono text-emerald-300">{toast}</span>（原型模拟下载）
+        </div>
+      )}
     </div>
   );
 }
