@@ -403,6 +403,7 @@ export const NAV_GROUPS: { title: string; items: INavItem[] }[] = [
       { path: '/contracts', label: '契约测试', badge: '1 告警' },
       { path: '/gate', label: '质量门禁' },
       { path: '/history', label: '测试历史' },
+      { path: '/report', label: '测试报告' },
     ],
   },
   {

@@ -15,6 +15,7 @@ const ICONS: Record<string, typeof Target> = {
   '/contracts': ArrowLeftRight,
   '/gate': ShieldCheck,
   '/history': History,
+  '/report': ScrollText,
   '/audit': ScrollText,
   '/audit-cost': Wallet,
   '/audit-exec': ScrollText,
@@ -180,7 +181,7 @@ export function Layout() {
                       </div>
                     );
                   }
-                  const Icon = ICONS[item.path];
+                  const Icon = ICONS[item.path] ?? ScrollText;
                   const active = location.pathname === item.path;
                   return (
                     <NavLink key={item.path} to={item.path}
