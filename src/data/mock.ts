@@ -909,3 +909,64 @@ export const SCREENSHOT_POLICY: IScreenshotPolicy[] = [
   { serviceId: 'mobile-ios', name: 'iOS 端', enabled: true, mode: 'on-fail', reason: '真机截图成本高，仅失败时截' },
   { serviceId: 'mobile-android', name: 'Android 端', enabled: false, mode: 'off', reason: '真机池高负载，关闭截图防性能影响（服务级可选）' },
 ];
+
+
+// ============ 需求追溯链（TracePage 联动） ============
+export interface ITraceTc { id: string; name: string; result: '通过' | '失败' | '阻塞'; evidence: number; cost: number; assertion: '强' | '中' | '弱'; mutation: number }
+export interface ITraceChain {
+  reqId: string; title: string;
+  system: string; group: string; service: string; serviceTp: string; testPoint: string;
+  tcs: ITraceTc[];
+  links: { dot: string; asset: string; tp: string; tc: string; status: string; color: string }[];
+}
+export const TRACE_CHAINS: Record<string, ITraceChain> = {
+  'REQ-101': {
+    reqId: 'REQ-101', title: '用户登录与鉴权',
+    system: 'sys-payment-platform', group: '身份服务组', service: 'svc-auth', serviceTp: 'TP-101-1, TP-101-2', testPoint: '密码校验 / Token签发',
+    tcs: [
+      { id: 'TC-001', name: '正常登录', result: '通过', evidence: 3, cost: 0.8, assertion: '强', mutation: 92 },
+      { id: 'TC-002', name: '密码错误', result: '通过', evidence: 2, cost: 0.6, assertion: '强', mutation: 88 },
+      { id: 'TC-003', name: 'Token刷新', result: '通过', evidence: 3, cost: 0.9, assertion: '中', mutation: 81 },
+      { id: 'TC-004', name: 'Token过期', result: '失败', evidence: 4, cost: 1.4, assertion: '强', mutation: 64 },
+    ],
+    links: [
+      { dot: 'bg-emerald-400', asset: 'svc-user', tp: 'TP-101-3', tc: 'TC-005', status: '✓ 通过', color: 'text-emerald-600' },
+      { dot: 'bg-blue-400', asset: 'web-frontend', tp: 'TP-101-4', tc: 'TC-006, TC-007', status: '✓ 通过', color: 'text-emerald-600' },
+      { dot: 'bg-purple-400', asset: 'mobile-ios', tp: 'TP-101-5', tc: 'TC-008', status: '⚠ 阻塞', color: 'text-amber-600' },
+      { dot: 'bg-purple-400', asset: 'mobile-android', tp: 'TP-101-5', tc: 'TC-009', status: '✓ 通过', color: 'text-emerald-600' },
+    ],
+  },
+  'REQ-102': {
+    reqId: 'REQ-102', title: '用户注册流程',
+    system: 'sys-payment-platform', group: '身份服务组', service: 'svc-auth', serviceTp: 'TP-102-1', testPoint: '注册校验 / 验证码',
+    tcs: [
+      { id: 'TC-010', name: '注册成功', result: '通过', evidence: 2, cost: 0.7, assertion: '强', mutation: 90 },
+      { id: 'TC-011', name: '账号已存在', result: '通过', evidence: 2, cost: 0.6, assertion: '中', mutation: 85 },
+      { id: 'TC-012', name: '验证码错误', result: '通过', evidence: 1, cost: 0.5, assertion: '强', mutation: 83 },
+    ],
+    links: [
+      { dot: 'bg-emerald-400', asset: 'svc-user', tp: 'TP-102-2', tc: 'TC-013', status: '✓ 通过', color: 'text-emerald-600' },
+      { dot: 'bg-blue-400', asset: 'web-frontend', tp: 'TP-102-3', tc: 'TC-014, TC-015', status: '✓ 通过', color: 'text-emerald-600' },
+    ],
+  },
+  'REQ-103': {
+    reqId: 'REQ-103', title: '支付订单创建',
+    system: 'sys-payment-platform', group: '支付服务组', service: 'svc-order', serviceTp: 'TP-103-1', testPoint: '订单创建 / 幂等',
+    tcs: [
+      { id: 'TC-016', name: '创建订单', result: '通过', evidence: 3, cost: 1.0, assertion: '强', mutation: 91 },
+      { id: 'TC-017', name: '幂等重放', result: '通过', evidence: 2, cost: 0.9, assertion: '强', mutation: 87 },
+      { id: 'TC-018', name: '金额校验', result: '失败', evidence: 3, cost: 1.3, assertion: '中', mutation: 62 },
+      { id: 'TC-019', name: '库存不足', result: '通过', evidence: 1, cost: 0.5, assertion: '弱', mutation: 55 },
+    ],
+    links: [
+      { dot: 'bg-emerald-400', asset: 'svc-payment', tp: 'TP-103-2', tc: 'TC-020', status: '✓ 通过', color: 'text-emerald-600' },
+      { dot: 'bg-blue-400', asset: 'web-frontend', tp: 'TP-103-3', tc: 'TC-021', status: '✓ 通过', color: 'text-emerald-600' },
+    ],
+  },
+  'REQ-104': {
+    reqId: 'REQ-104', title: '退款与对账',
+    system: 'sys-payment-platform', group: '支付服务组', service: 'svc-payment', serviceTp: '—', testPoint: '—（覆盖缺口）',
+    tcs: [],
+    links: [],
+  },
+};
