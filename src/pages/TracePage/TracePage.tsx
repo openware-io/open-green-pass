@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { useAssetLevel, LEVEL_LABEL } from '@/context';
-import { REQUIREMENTS, TRACE_CHAINS } from '@/data/mock';
+import { REQUIREMENTS, TRACE_CHAINS, type IAssetNode } from '@/data/mock';
 import { PageHeader, GhostButton, Card } from '@/components/shared';
 import { ScanSearch, ListFilter, CircleCheckBig, CircleAlert, CircleX, Camera, Wallet, Gauge } from 'lucide-react';
 
@@ -24,10 +25,33 @@ function ResultIcon({ kind }: { kind: string }) {
 
 const COLS: Record<string, number> = { system: 2, group: 3, service: 4, module: 5 };
 
+const serviceToReq = (svc: string): string => {
+  if (svc.startsWith('web-') || svc.startsWith('mobile-')) return 'REQ-101';
+  return (Object.values(TRACE_CHAINS).find((c) => c.service === svc)?.reqId
+    ?? REQUIREMENTS.find((r) => r.assets.includes(svc))?.id
+    ?? 'REQ-101');
+};
+
 export default function TracePage() {
   const { level } = useAssetLevel();
+  const { selectedAsset } = useOutletContext<{ selectedAsset: IAssetNode }>();
   const [activeReq, setActiveReq] = useState('REQ-101');
   const [activeTcId, setActiveTcId] = useState<string | null>('TC-001');
+
+  // 资产树点击联动（render 期间派生 state）：选中服务变化时切换到其相关需求链
+  const [prevAssetId, setPrevAssetId] = useState(selectedAsset.id);
+  if (prevAssetId !== selectedAsset.id) {
+    setPrevAssetId(selectedAsset.id);
+    const id = selectedAsset.id;
+    let svc: string | null = null;
+    if (id.startsWith('svc-')) svc = id.split('-').slice(0, 2).join('-');
+    else if (id.startsWith('web-') || id.startsWith('mobile-')) svc = id;
+    if (svc) {
+      const req = serviceToReq(svc);
+      setActiveReq(req);
+      setActiveTcId(TRACE_CHAINS[req]?.tcs[0]?.id ?? null);
+    }
+  }
   const [gapOnly, setGapOnly] = useState(false);
   const [view, setView] = useState<'chain' | 'matrix'>('chain');
 

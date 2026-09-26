@@ -35,12 +35,12 @@ function findChain(node: IAssetNode, id: string): IAssetNode[] | null {
   return null;
 }
 
-function AssetGroup({ node, depth, selectedId, onSelect, expanded, onToggle }: {
+function AssetGroup({ node, depth, selectedId, onSelect, expanded, onExpand }: {
   node: IAssetNode; depth: number; selectedId: string;
   onSelect: (a: IAsset) => void; expanded: Record<string, boolean>;
-  onToggle: (id: string) => void;
+  onExpand: (id: string, defaultOpen: boolean) => void;
 }) {
-  const isOpen = expanded[node.id] ?? true;
+  const isOpen = expanded[node.id] ?? (node.type === 'service' ? false : true);
   const icon = node.type === 'app' ? '▢' : node.type === 'end' ? '▢' : node.type === 'service' ? '●' : '◈';
   const iconColor =
     node.type === 'service' ? 'text-emerald-400'
@@ -53,7 +53,7 @@ function AssetGroup({ node, depth, selectedId, onSelect, expanded, onToggle }: {
       <div>
         <button
           type="button"
-          onClick={() => onToggle(node.id)}
+          onClick={() => { if (node.type === 'service') onSelect(node); onExpand(node.id, node.type === 'service' ? false : true); }}
           className="flex w-full items-center px-2 py-1.5 rounded text-slate-300 hover:bg-white/5 text-left"
         >
           <ChevronDown className={cn('w-3 h-3 text-slate-500 mr-1 transition-transform', !isOpen && '-rotate-90')} />
@@ -65,7 +65,7 @@ function AssetGroup({ node, depth, selectedId, onSelect, expanded, onToggle }: {
           <div className={cn('ml-3', depth >= 1 && 'ml-4')}>
             {node.children.map((child) => (
               <AssetGroup key={child.id} node={child} depth={depth + 1} selectedId={selectedId}
-                onSelect={onSelect} expanded={expanded} onToggle={onToggle} />
+                onSelect={onSelect} expanded={expanded} onExpand={onExpand} />
             ))}
           </div>
         )}
@@ -107,7 +107,6 @@ export function Layout() {
   const chain = findChain(ASSET_TREE, selectedAsset.id) ?? [ASSET_TREE];
   const crumbs = chain.slice(0, Math.min(LEVEL_ORDER.indexOf(level) + 1, chain.length));
 
-  const toggle = (id: string) => setExpanded((p) => ({ ...p, [id]: !(p[id] ?? true) }));
 
   // 全局搜索（原型 mock）：在用例/需求/契约/服务/页面 多类索引中模糊匹配
   const handleSearch = () => {
@@ -207,7 +206,7 @@ export function Layout() {
             </div>
             <div className="px-2 text-sm">
               <AssetGroup node={ASSET_TREE} depth={0} selectedId={selectedAsset.id}
-                onSelect={setSelectedAsset} expanded={expanded} onToggle={toggle} />
+                onSelect={setSelectedAsset} expanded={expanded} onExpand={(id, def) => setExpanded((p) => ({ ...p, [id]: !(p[id] ?? def) }))} />
             </div>
           </nav>
 
