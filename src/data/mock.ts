@@ -392,6 +392,41 @@ export const RESOURCE_POOLS: IResourcePool[] = [
 
 // ============ 导航（闭环流程，非平铺视图）============
 export interface INavItem { path: string; label: string; badge?: string; children?: { path: string; label: string }[] }
+// ============ 测试场景设计（平台覆盖场景 × 怎么测）============
+export type ScenarioForm = '服务/后端' | 'Web 前端' | '移动端' | 'AI 专项';
+export interface ITestScenario {
+  id: string;
+  name: string;
+  form: ScenarioForm;
+  resource: string;
+  icon: 'Cpu' | 'Globe' | 'Smartphone' | 'Sparkles';
+  how: string;
+  steps: string[];
+  tool: string;
+  trigger: string;
+  evidence: string;
+  gate: string;
+}
+export const TEST_SCENARIOS: ITestScenario[] = [
+  { id: 'SCEN-01', name: '单元测试', form: '服务/后端', resource: 'K8s 执行沙箱', icon: 'Cpu', how: '对函数/模块做最小断言级验证，采集行/分支覆盖率，低于阈值即阻断。', steps: ['编译注入测试桩', '执行 jest / pytest 断言', '采集行/分支覆盖率', '覆盖率 <80% 触发门禁阻断'], tool: 'Jest / pytest', trigger: 'CI 提交', evidence: '覆盖率报告', gate: '覆盖率门禁 ≥80%' },
+  { id: 'SCEN-02', name: '集成测试', form: '服务/后端', resource: 'K8s 执行沙箱', icon: 'Cpu', how: '跨服务联调，验证接口协作与数据一致性。', steps: ['拉起依赖服务(mock/真实)', '执行跨服务用例', '校验协作结果与数据一致性', '产出集成报告'], tool: 'Testcontainers', trigger: 'CI 提交 / 定时', evidence: '运行日志', gate: '集成门禁' },
+  { id: 'SCEN-03', name: '契约测试', form: '服务/后端', resource: 'K8s 执行沙箱', icon: 'Cpu', how: '基于契约注册表的消费者-提供者校验，防止破坏性变更。', steps: ['契约注册表一致性校验', '消费者 Pact 验证', '提供者 Mock 验证', '不匹配阻断发布'], tool: 'Pact / Spring Cloud Contract', trigger: 'CI 提交', evidence: '契约报告', gate: '契约门禁' },
+  { id: 'SCEN-04', name: 'API 测试', form: '服务/后端', resource: 'K8s 执行沙箱', icon: 'Cpu', how: '接口功能 / 参数 / 边界 / 鉴权用例执行。', steps: ['AI 生成接口用例', '执行功能/边界断言', '校验响应 Schema', '错误路径覆盖'], tool: 'Postman / Newman', trigger: 'CI 提交', evidence: '请求响应', gate: 'API 门禁' },
+  { id: 'SCEN-05', name: '服务压测', form: '服务/后端', resource: 'K8s 执行沙箱', icon: 'Cpu', how: '负载注入，测吞吐 / 延迟 / P99 / 错误率。', steps: ['沙箱拉起被测服务', 'k6 阶梯负载注入', '采集 TPS/延迟/P99', '超阈值触发性能门禁'], tool: 'k6 / JMeter', trigger: '定时 / 发布前', evidence: '性能指标', gate: '性能门禁 P99<200ms' },
+  { id: 'SCEN-06', name: 'Web E2E', form: 'Web 前端', resource: '浏览器实例', icon: 'Globe', how: '真实浏览器驱动主流程端到端，全链路校验。', steps: ['浏览器实例起 Headless', 'Playwright 驱动主流程', '截屏+录屏证据', '断言与视觉捕获'], tool: 'Playwright', trigger: 'CI 提交', evidence: '截图+视频', gate: '质量门禁' },
+  { id: 'SCEN-07', name: 'Web 视觉回归', form: 'Web 前端', resource: '浏览器实例', icon: 'Globe', how: '基线截图对比，AI 判定像素+语义视觉差异。', steps: ['基线截图存储', '当前渲染截图', 'AI 差异判定', '差异超阈值阻断'], tool: 'AI 视觉判定', trigger: 'CI 提交', evidence: '截图证据', gate: '视觉门禁' },
+  { id: 'SCEN-08', name: 'Web 性能压测', form: 'Web 前端', resource: '浏览器实例', icon: 'Globe', how: '采集 Web Vitals(LCP/CLS) + 虚拟用户并发压测。', steps: ['Lighthouse 采集 LCP/CLS', '虚拟用户并发', '对比性能预算基线', '超预算触发门禁'], tool: 'Lighthouse / Web Vitals', trigger: '定时', evidence: '性能指标', gate: '性能门禁 LCP<2.5s' },
+  { id: 'SCEN-09', name: '移动端 E2E', form: '移动端', resource: '真机池', icon: 'Smartphone', how: '真机驱动 UI 主流程，端原生交互真实校验。', steps: ['真机池分配设备', 'Appium/XCUITest 驱动', 'UI 主流程执行', '截图+录屏证据'], tool: 'Appium / XCUITest', trigger: 'CI 提交', evidence: '截图+视频', gate: '质量门禁' },
+  { id: 'SCEN-10', name: '真机兼容性', form: '移动端', resource: '真机池', icon: 'Smartphone', how: '多型号 / 系统版本矩阵回归。', steps: ['真机矩阵 Android/iOS 多机型', '逐机型执行冒烟', '采集兼容性结果', '覆盖关键机型/系统'], tool: '真机矩阵', trigger: '定时', evidence: '截图', gate: '兼容门禁' },
+  { id: 'SCEN-11', name: '弱网 / 稳定性', form: '移动端', resource: '真机池', icon: 'Smartphone', how: '弱网模拟，验证降级策略与崩溃恢复。', steps: ['真机弱网注入 3G/丢包', '执行关键路径', '校验降级策略', '崩溃/恢复检测'], tool: '弱网模拟', trigger: '手动 / 定时', evidence: '运行日志', gate: '稳定性门禁' },
+  { id: 'SCEN-12', name: 'AI 专项审计', form: 'AI 专项', resource: '跨形态 · AI 判定', icon: 'Sparkles', how: 'AI 生成产物可信度审计：篡改检测 / 断言强度 / 变异 / 幻觉校验。', steps: ['AI 生成代码篡改检测', '断言强度评估', '变异测试(防御力)', '幻觉/鲁棒性校验'], tool: 'AI 判定引擎', trigger: 'CI 提交', evidence: '审计报告', gate: 'AI 可信门禁' },
+];
+export const SCENARIO_GROUPS: { label: string; resource: string; scenarios: ITestScenario[] }[] = [
+  { label: '服务 / 后端', resource: 'K8s 执行沙箱', scenarios: TEST_SCENARIOS.filter((s) => s.form === '服务/后端') },
+  { label: 'Web 前端', resource: '浏览器实例', scenarios: TEST_SCENARIOS.filter((s) => s.form === 'Web 前端') },
+  { label: '移动端', resource: '真机池', scenarios: TEST_SCENARIOS.filter((s) => s.form === '移动端') },
+  { label: 'AI 专项审计', resource: '跨形态 · AI 判定', scenarios: TEST_SCENARIOS.filter((s) => s.form === 'AI 专项') },
+];
 export const NAV_GROUPS: { title: string; items: INavItem[] }[] = [
   {
     title: '测试闭环',

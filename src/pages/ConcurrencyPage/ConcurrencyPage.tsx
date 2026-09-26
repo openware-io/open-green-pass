@@ -1,5 +1,9 @@
-import { CONCURRENCY_ROWS, CONFLICT_EVENTS, RESOURCE_POOLS } from '@/data/mock';
+import { CONCURRENCY_ROWS, CONFLICT_EVENTS, RESOURCE_POOLS, SCENARIO_GROUPS } from '@/data/mock';
 import { PageHeader, Card } from '@/components/shared';
+import { Cpu, Globe, Smartphone, Sparkles } from 'lucide-react';
+
+const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
+const FORM_BADGE: Record<string, string> = { '服务/后端': 'bg-emerald-50 text-emerald-600', 'Web 前端': 'bg-sky-50 text-sky-600', '移动端': 'bg-purple-50 text-purple-600', 'AI 专项': 'bg-indigo-50 text-indigo-600' };
 
 const TYPE_BADGE: Record<string, string> = { '服务': 'bg-emerald-50 text-emerald-600', '端': 'bg-purple-50 text-purple-600' };
 const LEVEL_BAR: Record<string, string> = { success: 'bg-emerald-500', warning: 'bg-amber-500', danger: 'bg-red-500' };
@@ -10,7 +14,7 @@ const CONFLICT_DOT: Record<string, string> = { danger: 'text-red-500', warning: 
 export default function ConcurrencyPage() {
   return (
     <div>
-      <PageHeader title="测试资源" desc="全局调度 · 跨资产隔离 · 资源池 · 冲突事件">
+      <PageHeader title="测试资源" desc="资源池 · 测试场景设计 · 调度隔离 · 冲突事件">
         <div className="flex items-center gap-3 text-xs">
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400"></span>健康</span>
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400"></span>高负载</span>
@@ -35,6 +39,54 @@ export default function ConcurrencyPage() {
           </div>
         ))}
       </div>
+
+      <Card title="测试场景设计" extra={<span className="text-[11px] text-slate-400">平台覆盖测试场景 · 每个场景怎么测 · 依赖资源 / 工具链 / 触发 / 门禁</span>} className="p-5 mb-5">
+        <div className="space-y-5">
+          {SCENARIO_GROUPS.map((g) => {
+            const GIcon = SCEN_ICON[g.scenarios[0]?.icon ?? 'Cpu'];
+            return (
+              <div key={g.label}>
+                <div className="flex items-center gap-2 mb-3">
+                  <GIcon className="w-4 h-4 text-emerald-600" />
+                  <span className="font-medium text-sm text-slate-700">{g.label}</span>
+                  <span className="text-[11px] text-slate-400">· 依赖 {g.resource}</span>
+                  <span className="text-[10px] text-slate-400 ml-auto">{g.scenarios.length} 个场景</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
+                  {g.scenarios.map((s) => {
+                    const SIcon = SCEN_ICON[s.icon];
+                    return (
+                      <div key={s.id} className="border border-slate-200 rounded-xl p-4 hover:border-emerald-300 transition-colors">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <SIcon className="w-4 h-4 text-emerald-600" />
+                            <span className="font-medium text-sm text-slate-800">{s.name}</span>
+                            <span className="text-[10px] text-slate-400 font-mono">{s.id}</span>
+                          </div>
+                          <span className={'text-[10px] px-1.5 py-0.5 rounded ' + FORM_BADGE[s.form]}>{s.form}</span>
+                        </div>
+                        <p className="text-xs text-slate-500 leading-relaxed">{s.how}</p>
+                        <div className="mt-3 flex flex-wrap gap-1.5 text-[10px]">
+                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{s.resource}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{s.tool}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{s.trigger}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">{s.gate}</span>
+                        </div>
+                        <details className="mt-3">
+                          <summary className="text-[11px] text-emerald-600 cursor-pointer select-none">怎么测的步骤</summary>
+                          <ol className="mt-2 pl-4 list-decimal text-[11px] text-slate-600 space-y-1">
+                            {s.steps.map((st, i) => <li key={i}>{st}</li>)}
+                          </ol>
+                        </details>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
 
       <div className="grid grid-cols-3 gap-5">
         <div className="col-span-2 card bg-white rounded-xl border border-slate-200 overflow-hidden">
