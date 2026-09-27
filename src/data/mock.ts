@@ -522,7 +522,7 @@ export const NAV_GROUPS: { title: string; items: INavItem[] }[] = [
   {
     title: '被测对象',
     items: [
-      { path: '/target', label: '被测对象画像' },
+      { path: '/target', label: '被测对象' },
       { path: '/generation', label: '上游源与生成' },
       { path: '/trace', label: '需求追溯' },
       { path: '/resources', label: '测试资源' },
