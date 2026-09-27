@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { useCurrentUser, loginStore } from '@/context/login';
 const LOGIN_LABEL: Record<string, string> = { password: '账号密码', phone: '手机号', wechat: '微信扫码' };
 import { AssetLevelContext, LEVEL_ORDER, LEVEL_LABEL, type AssetLevel } from '@/context';
-import { Target, Settings2, Files, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes, UserCircle, LogOut, Smartphone, MessageCircle, Workflow, Zap, Plug } from 'lucide-react';
+import { Target, Settings2, Files, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, ChevronRight, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes, UserCircle, LogOut, Smartphone, MessageCircle, Workflow, Zap, Plug } from 'lucide-react';
 
 const ICONS: Record<string, typeof Target> = {
   '/target': Target,
@@ -51,18 +51,33 @@ const TYPE_LEVEL_COLOR: Record<string, string> = {
 };
 
 // 被测对象维度下拉：点击面包屑中间节点，显示同级被测对象选项，选中联动全局上下文
-function CrumbSelect({ label, siblings, currentId, onSelect }: {
-  label: string; siblings: IAssetNode[]; currentId: string; onSelect: (n: IAssetNode) => void;
+function CrumbSelect({ label, siblings, children, currentId, onSelect, active }: {
+  label: string; siblings: IAssetNode[]; children?: IAssetNode[]; currentId: string; onSelect: (n: IAssetNode) => void; active?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <span className="relative inline-flex items-center">
       <button type="button" onClick={() => setOpen(!open)}
-        className="inline-flex items-center gap-0.5 text-slate-600 hover:text-emerald-600 font-medium">
+        className={'inline-flex items-center gap-0.5 font-medium ' + (active ? 'text-emerald-600' : 'text-slate-600 hover:text-emerald-600')}>
         {label}<ChevronDown className="w-3 h-3 text-slate-400" />
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[190px] max-h-[300px] overflow-y-auto">
+        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[200px] max-h-[320px] overflow-y-auto">
+          {children && children.length > 0 && (
+            <>
+              <div className="px-3 py-1 text-[10px] text-slate-400">进入子级 · {children.length} 项</div>
+              {children.map((ch) => (
+                <button key={ch.id} type="button" onClick={() => { onSelect(ch); setOpen(false); }}
+                  className="block w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-1.5">
+                  <span className={'w-1.5 h-1.5 rounded-sm ' + (TYPE_LEVEL_COLOR[ch.type] ?? 'bg-slate-300')} />
+                  <span className="truncate">{ch.name}</span>
+                  <span className="ml-auto text-[9px] text-slate-400 flex-shrink-0">{ch.coverage}%</span>
+                  <ChevronRight className="w-3 h-3 text-slate-300 flex-shrink-0" />
+                </button>
+              ))}
+              <div className="my-1 border-t border-slate-100" />
+            </>
+          )}
           <div className="px-3 py-1 text-[10px] text-slate-400">同级被测对象 · {siblings.length} 项</div>
           {siblings.map((s) => (
             <button key={s.id} type="button" onClick={() => { onSelect(s); setOpen(false); }}
@@ -223,10 +238,10 @@ export function Layout() {
             {crumbs.map((n, i) => (
               <span key={n.id} className="inline-flex items-center">
                 {i > 0 && <span className="mx-2 text-slate-300">/</span>}
-                {i > 0 && i < crumbs.length - 1 ? (
-                  <CrumbSelect label={n.name} siblings={crumbs[i - 1]?.children ?? []} currentId={n.id} onSelect={selectCrumb} />
+                {i > 0 ? (
+                  <CrumbSelect label={n.name} siblings={crumbs[i - 1]?.children ?? []} children={n.children ?? []} currentId={n.id} onSelect={selectCrumb} active={i === crumbs.length - 1} />
                 ) : (
-                  <span className={i === crumbs.length - 1 ? 'text-emerald-600 font-medium' : 'text-slate-400'}>{n.name}</span>
+                  <span className="text-slate-400">{n.name}</span>
                 )}
               </span>
             ))}
