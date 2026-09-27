@@ -1,5 +1,10 @@
 # GreenPass · 软件工程测试治理平台（前端原型）
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![CI](https://github.com/openware-io/open-green-pass/actions/workflows/ci.yml/badge.svg)](https://github.com/openware-io/open-green-pass/actions)
+[![React](https://img.shields.io/badge/React-19-blue)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-8-purple)](https://vitejs.dev/)
 > **GreenPass**：软件工程测试治理平台 —— 站在软件工程"测试阶段"的位置，对（AI 生成 / 人写的）被测工程与系统做**质量量化、测试管控与可信治理**，系统本身由 AI 驱动。
 
 本仓库为**纯前端原型工程**（React + Vite + TypeScript + Tailwind + shadcn/ui），全部数据为本地 mock，可独立构建与运行，用于产品原型沟通与设计打磨。
@@ -84,7 +89,17 @@ npm run lint:eslint    # eslint src
 
 - 原型阶段**不做后端业务**，所有交互（重新判定、搜索、成员/模型配置、资产联动）均为前端 mock 反馈。
 - 产品需求文档见 [`docs/PRD.md`](./docs/PRD.md)。
-- 授权开源组织：**openware-io**。
+- 开源许可：[MIT](./LICENSE)。
+
+---
+
+## 参与贡献
+
+- 贡献指南：[CONTRIBUTING.md](./CONTRIBUTING.md)
+- 行为准则：[CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
+- 变更记录：[CHANGELOG.md](./CHANGELOG.md)
+- 安全政策：[SECURITY.md](./SECURITY.md)
+- Issue / PR 模板：[.github](./.github)
 
 ---
 

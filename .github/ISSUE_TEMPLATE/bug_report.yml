@@ -1,0 +1,43 @@
+name: Bug report
+description: 提交一个缺陷（建议使用中文或英文）
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: textarea
+    id: desc
+    attributes:
+      label: 问题描述
+      description: 请清晰描述你遇到的问题。
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      description: 如何复现？输入 / 页面 / 操作路径。
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本 / 提交号
+      description: 例如 v1.7.6 或 commit hash。
+    validations:
+      required: false
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      description: 你期望看到什么结果。
+    validations:
+      required: false
+  - type: dropdown
+    id: env
+    attributes:
+      label: 环境
+      options:
+        - 浏览器 file:// 打开
+        - npm run dev
+        - 其他
+    validations:
+      required: false
