@@ -5,7 +5,7 @@ import { SidebarProvider, SidebarInset, Sidebar } from '@/components/ui/sidebar'
 import { NAV_GROUPS, ASSET_TREE, CASES, REQUIREMENTS, CONTRACTS, TEAMS, CURRENT_TEAM_ID, type IAsset, type IAssetNode } from '@/data/mock';
 import { cn } from '@/lib/utils';
 import { AssetLevelContext, LEVEL_ORDER, LEVEL_LABEL, type AssetLevel } from '@/context';
-import { Target, Settings2, Files, ArrowLeftRight, Play, ShieldCheck, ScrollText, GitBranch, Activity, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Cpu, Wallet, UserCog, History } from 'lucide-react';
+import { Target, Settings2, Files, ArrowLeftRight, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain } from 'lucide-react';
 
 const ICONS: Record<string, typeof Target> = {
   '/target': Target,
@@ -15,15 +15,15 @@ const ICONS: Record<string, typeof Target> = {
   '/contracts': ArrowLeftRight,
   '/gate': ShieldCheck,
   '/history': History,
-  '/report': ScrollText,
-  '/audit': ScrollText,
+  '/report': FileText,
+  '/audit': Landmark,
   '/audit-cost': Wallet,
-  '/audit-exec': ScrollText,
+  '/audit-exec': ListChecks,
   '/audit-op': UserCog,
   '/trace': GitBranch,
-  '/concurrency': Activity,
+  '/concurrency': Server,
   '/teams': Users,
-  '/models': Cpu,
+  '/models': Brain,
 };
 
 function findChain(node: IAssetNode, id: string): IAssetNode[] | null {
@@ -60,7 +60,7 @@ function AssetGroup({ node, depth, selectedId, onSelect, expanded, onExpand }: {
           <ChevronDown className={cn('w-3 h-3 text-slate-500 mr-1 transition-transform', !isOpen && '-rotate-90')} />
           <span className={cn(iconColor, 'mr-2 text-xs')}>{icon}</span>
           <span className={cn('text-xs', depth === 0 ? 'font-medium' : '')}>{node.name}</span>
-          {node.type === 'service-group' && <span className="ml-1 text-[9px] text-slate-600">{node.children.length}</span>}
+          {(node.type === 'service-group' || node.type === 'project') && <span className="ml-1 text-[9px] text-slate-600">{node.children.length}</span>}
         </button>
         {isOpen && (
           <div className={cn('ml-3', depth >= 1 && 'ml-4')}>
@@ -92,7 +92,7 @@ function AssetGroup({ node, depth, selectedId, onSelect, expanded, onExpand }: {
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [selectedAsset, setSelectedAsset] = useState<IAssetNode>(ASSET_TREE.children![0].children![0]);
+  const [selectedAsset, setSelectedAsset] = useState<IAssetNode>(ASSET_TREE.children![0].children![0].children![0]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [navOpen, setNavOpen] = useState<Record<string, boolean>>({});
   const [level, setLevel] = useState<AssetLevel>('service');
@@ -100,9 +100,9 @@ export function Layout() {
 
   const setLevelAndAsset = (l: AssetLevel) => {
     setLevel(l);
-    if (l === 'system') setSelectedAsset(ASSET_TREE);
-    else if (l === 'group') setSelectedAsset(ASSET_TREE.children![0]);
-    else if (l === 'service') { if (selectedAsset.type !== 'service') setSelectedAsset(ASSET_TREE.children![0].children![0]); }
+    if (l === 'system') setSelectedAsset(ASSET_TREE.children![0]);
+    else if (l === 'group') setSelectedAsset(ASSET_TREE.children![0].children![0]);
+    else if (l === 'service') { if (selectedAsset.type !== 'service') setSelectedAsset(ASSET_TREE.children![0].children![0].children![0]); }
     else if (l === 'module') { if (selectedAsset.type === 'service' && selectedAsset.children) setSelectedAsset(selectedAsset.children[0]); }
   };
   const chain = findChain(ASSET_TREE, selectedAsset.id) ?? [ASSET_TREE];

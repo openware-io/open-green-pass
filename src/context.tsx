@@ -4,7 +4,7 @@ export type AssetLevel = 'system' | 'group' | 'service' | 'module';
 
 export const LEVEL_ORDER: AssetLevel[] = ['system', 'group', 'service', 'module'];
 export const LEVEL_LABEL: Record<AssetLevel, string> = {
-  system: '系统',
+  system: '工程',
   group: '服务组',
   service: '服务',
   module: '模块',

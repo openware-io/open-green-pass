@@ -1,6 +1,6 @@
 import { CONCURRENCY_ROWS, CONFLICT_EVENTS, RESOURCE_POOLS, SCENARIO_GROUPS } from '@/data/mock';
 import { PageHeader, Card } from '@/components/shared';
-import { Cpu, Globe, Smartphone, Sparkles } from 'lucide-react';
+import { Cpu, Globe, Smartphone, Sparkles, ShieldCheck } from 'lucide-react';
 
 const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
 const FORM_BADGE: Record<string, string> = { '服务/后端': 'bg-emerald-50 text-emerald-600', 'Web 前端': 'bg-sky-50 text-sky-600', '移动端': 'bg-purple-50 text-purple-600', 'AI 专项': 'bg-indigo-50 text-indigo-600' };
@@ -72,11 +72,34 @@ export default function ConcurrencyPage() {
                           <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{s.trigger}</span>
                           <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">{s.gate}</span>
                         </div>
-                        <details className="mt-3">
+                        <div className="mt-3 text-[10px] text-slate-500 bg-emerald-50/60 border border-emerald-100 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
+                          <ShieldCheck className="w-3 h-3 text-emerald-500 flex-shrink-0" />门禁规则：<span className="text-emerald-700">{s.gateRule}</span>
+                        </div>
+                        <details className="mt-2.5">
                           <summary className="text-[11px] text-emerald-600 cursor-pointer select-none">怎么测的步骤</summary>
-                          <ol className="mt-2 pl-4 list-decimal text-[11px] text-slate-600 space-y-1">
-                            {s.steps.map((st, i) => <li key={i}>{st}</li>)}
-                          </ol>
+                          <ol className="mt-2 pl-4 list-decimal text-[11px] text-slate-600 space-y-1">{s.steps.map((st, i) => <li key={i}>{st}</li>)}</ol>
+                        </details>
+                        <details className="mt-1.5">
+                          <summary className="text-[11px] text-emerald-600 cursor-pointer select-none">具体实现</summary>
+                          <p className="mt-2 text-[11px] text-slate-600 leading-relaxed">{s.impl}</p>
+                        </details>
+                        <details className="mt-1.5">
+                          <summary className="text-[11px] text-emerald-600 cursor-pointer select-none">执行历史 · 近 5 次</summary>
+                          <table className="mt-2 w-full text-[10px] text-slate-600">
+                            <thead><tr className="text-left text-slate-400"><th className="py-0.5 font-medium">日期</th><th className="py-0.5 font-medium">通过率</th><th className="py-0.5 font-medium">成本</th></tr></thead>
+                            <tbody>{s.history.map((h) => (
+                              <tr key={h.d} className="border-t border-slate-100">
+                                <td className="py-1">{h.d}</td>
+                                <td className="py-1"><span className={h.p >= 95 ? 'text-emerald-600' : h.p >= 90 ? 'text-amber-600' : 'text-red-600'}>{h.p}%</span></td>
+                                <td className="py-1">¥{h.c.toLocaleString()}</td>
+                              </tr>))}</tbody>
+                          </table>
+                        </details>
+                        <details className="mt-1.5">
+                          <summary className="text-[11px] text-emerald-600 cursor-pointer select-none">关联用例 · {s.cases.length}</summary>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {s.cases.map((cid) => <span key={cid} className="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{cid}</span>)}
+                          </div>
                         </details>
                       </div>
                     );

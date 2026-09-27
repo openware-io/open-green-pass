@@ -83,7 +83,7 @@ export const ASSET_RISKS: IAssetRisk[] = [
 export interface IAsset {
   id: string;
   name: string;
-  type: 'service' | 'service-group' | 'app' | 'end' | 'module';
+  type: 'service' | 'service-group' | 'app' | 'end' | 'module' | 'project';
   coverage: number;
   gateRate: number;
 }
@@ -93,12 +93,19 @@ export interface IAssetNode extends IAsset {
 }
 
 export const ASSET_TREE: IAssetNode = {
-  id: 'sys-payment-platform',
-  name: 'sys-payment-platform',
+  id: 'asset-root',
+  name: '资产库',
   type: 'service-group',
   coverage: 75,
   gateRate: 50,
   children: [
+    {
+      id: 'sys-payment-platform',
+      name: 'sys-payment-platform',
+      type: 'project',
+      coverage: 75,
+      gateRate: 50,
+      children: [
     {
       id: 'sg-identity',
       name: '身份服务组',
@@ -138,6 +145,28 @@ export const ASSET_TREE: IAssetNode = {
         { id: 'web-frontend', name: 'web-frontend', type: 'app', coverage: 100, gateRate: 100 },
         { id: 'mobile-ios', name: 'mobile-ios', type: 'end', coverage: 100, gateRate: 100 },
         { id: 'mobile-android', name: 'mobile-android', type: 'end', coverage: 100, gateRate: 100 },
+      ],
+    },
+    ],
+    },
+    {
+      id: 'web-ops-console',
+      name: 'web-ops-console',
+      type: 'project',
+      coverage: 88,
+      gateRate: 90,
+      children: [
+        {
+          id: 'sg-ops',
+          name: '运维服务组',
+          type: 'service-group',
+          coverage: 88,
+          gateRate: 90,
+          children: [
+            { id: 'svc-metric', name: 'svc-metric', type: 'service', coverage: 92, gateRate: 100 },
+            { id: 'svc-alert', name: 'svc-alert', type: 'service', coverage: 84, gateRate: 90 },
+          ],
+        },
       ],
     },
   ],
@@ -406,22 +435,73 @@ export interface ITestScenario {
   trigger: string;
   evidence: string;
   gate: string;
+  impl: string;
+  cases: string[];
+  history: { d: string; p: number; c: number }[];
+  gateRule: string;
 }
 export const TEST_SCENARIOS: ITestScenario[] = [
-  { id: 'SCEN-01', name: '单元测试', form: '服务/后端', resource: 'K8s 执行沙箱', icon: 'Cpu', how: '对函数/模块做最小断言级验证，采集行/分支覆盖率，低于阈值即阻断。', steps: ['编译注入测试桩', '执行 jest / pytest 断言', '采集行/分支覆盖率', '覆盖率 <80% 触发门禁阻断'], tool: 'Jest / pytest', trigger: 'CI 提交', evidence: '覆盖率报告', gate: '覆盖率门禁 ≥80%' },
-  { id: 'SCEN-02', name: '集成测试', form: '服务/后端', resource: 'K8s 执行沙箱', icon: 'Cpu', how: '跨服务联调，验证接口协作与数据一致性。', steps: ['拉起依赖服务(mock/真实)', '执行跨服务用例', '校验协作结果与数据一致性', '产出集成报告'], tool: 'Testcontainers', trigger: 'CI 提交 / 定时', evidence: '运行日志', gate: '集成门禁' },
-  { id: 'SCEN-03', name: '契约测试', form: '服务/后端', resource: 'K8s 执行沙箱', icon: 'Cpu', how: '基于契约注册表的消费者-提供者校验，防止破坏性变更。', steps: ['契约注册表一致性校验', '消费者 Pact 验证', '提供者 Mock 验证', '不匹配阻断发布'], tool: 'Pact / Spring Cloud Contract', trigger: 'CI 提交', evidence: '契约报告', gate: '契约门禁' },
-  { id: 'SCEN-04', name: 'API 测试', form: '服务/后端', resource: 'K8s 执行沙箱', icon: 'Cpu', how: '接口功能 / 参数 / 边界 / 鉴权用例执行。', steps: ['AI 生成接口用例', '执行功能/边界断言', '校验响应 Schema', '错误路径覆盖'], tool: 'Postman / Newman', trigger: 'CI 提交', evidence: '请求响应', gate: 'API 门禁' },
-  { id: 'SCEN-05', name: '服务压测', form: '服务/后端', resource: 'K8s 执行沙箱', icon: 'Cpu', how: '负载注入，测吞吐 / 延迟 / P99 / 错误率。', steps: ['沙箱拉起被测服务', 'k6 阶梯负载注入', '采集 TPS/延迟/P99', '超阈值触发性能门禁'], tool: 'k6 / JMeter', trigger: '定时 / 发布前', evidence: '性能指标', gate: '性能门禁 P99<200ms' },
-  { id: 'SCEN-06', name: 'Web E2E', form: 'Web 前端', resource: '浏览器实例', icon: 'Globe', how: '真实浏览器驱动主流程端到端，全链路校验。', steps: ['浏览器实例起 Headless', 'Playwright 驱动主流程', '截屏+录屏证据', '断言与视觉捕获'], tool: 'Playwright', trigger: 'CI 提交', evidence: '截图+视频', gate: '质量门禁' },
-  { id: 'SCEN-07', name: 'Web 视觉回归', form: 'Web 前端', resource: '浏览器实例', icon: 'Globe', how: '基线截图对比，AI 判定像素+语义视觉差异。', steps: ['基线截图存储', '当前渲染截图', 'AI 差异判定', '差异超阈值阻断'], tool: 'AI 视觉判定', trigger: 'CI 提交', evidence: '截图证据', gate: '视觉门禁' },
-  { id: 'SCEN-08', name: 'Web 性能压测', form: 'Web 前端', resource: '浏览器实例', icon: 'Globe', how: '采集 Web Vitals(LCP/CLS) + 虚拟用户并发压测。', steps: ['Lighthouse 采集 LCP/CLS', '虚拟用户并发', '对比性能预算基线', '超预算触发门禁'], tool: 'Lighthouse / Web Vitals', trigger: '定时', evidence: '性能指标', gate: '性能门禁 LCP<2.5s' },
-  { id: 'SCEN-09', name: '移动端 E2E', form: '移动端', resource: '真机池', icon: 'Smartphone', how: '真机驱动 UI 主流程，端原生交互真实校验。', steps: ['真机池分配设备', 'Appium/XCUITest 驱动', 'UI 主流程执行', '截图+录屏证据'], tool: 'Appium / XCUITest', trigger: 'CI 提交', evidence: '截图+视频', gate: '质量门禁' },
-  { id: 'SCEN-10', name: '真机兼容性', form: '移动端', resource: '真机池', icon: 'Smartphone', how: '多型号 / 系统版本矩阵回归。', steps: ['真机矩阵 Android/iOS 多机型', '逐机型执行冒烟', '采集兼容性结果', '覆盖关键机型/系统'], tool: '真机矩阵', trigger: '定时', evidence: '截图', gate: '兼容门禁' },
-  { id: 'SCEN-11', name: '弱网 / 稳定性', form: '移动端', resource: '真机池', icon: 'Smartphone', how: '弱网模拟，验证降级策略与崩溃恢复。', steps: ['真机弱网注入 3G/丢包', '执行关键路径', '校验降级策略', '崩溃/恢复检测'], tool: '弱网模拟', trigger: '手动 / 定时', evidence: '运行日志', gate: '稳定性门禁' },
-  { id: 'SCEN-12', name: 'AI 专项审计', form: 'AI 专项', resource: '跨形态 · AI 判定', icon: 'Sparkles', how: 'AI 生成产物可信度审计：篡改检测 / 断言强度 / 变异 / 幻觉校验。', steps: ['AI 生成代码篡改检测', '断言强度评估', '变异测试(防御力)', '幻觉/鲁棒性校验'], tool: 'AI 判定引擎', trigger: 'CI 提交', evidence: '审计报告', gate: 'AI 可信门禁' },
-];
-export const SCENARIO_GROUPS: { label: string; resource: string; scenarios: ITestScenario[] }[] = [
+  { id: 'SCEN-01', name: '单元测试', form: '服务/后端', resource: 'K8s 执行沙箱', icon: 'Cpu', how: '对函数/模块做最小断言级验证，采集行/分支覆盖率，低于阈值即阻断。', steps: ['编译注入测试桩', '执行 jest / pytest 断言', '采集行/分支覆盖率', '覆盖率 <80% 触发门禁阻断'], tool: 'Jest / pytest', trigger: 'CI 提交', evidence: '覆盖率报告', gate: '覆盖率门禁 ≥80%',
+    impl: 'Jest/pytest 套件在 K8s 执行沙箱内编译运行，覆盖率探针注入采集行/分支覆盖；失败用例记录堆栈并链接执行审计链；结果进入门禁判定。',
+    cases: ['TC-001', 'TC-2024-010', 'TC-2024-011', 'TC-2024-012'],
+    history: [{ d: '09-18', p: 96, c: 1180 }, { d: '09-19', p: 96, c: 1180 }, { d: '09-20', p: 95, c: 1175 }, { d: '09-21', p: 96, c: 1178 }, { d: '09-24', p: 94, c: 1165 }],
+    gateRule: '通过率 ≥95% 且 行覆盖率 ≥80%' },
+  { id: 'SCEN-02', name: '集成测试', form: '服务/后端', resource: 'K8s 执行沙箱', icon: 'Cpu', how: '跨服务联调，验证接口协作与数据一致性。', steps: ['拉起依赖服务(mock/真实)', '执行跨服务用例', '校验协作结果与数据一致性', '产出集成报告'], tool: 'Testcontainers', trigger: 'CI 提交 / 定时', evidence: '运行日志', gate: '集成门禁',
+    impl: 'Testcontainers 拉起真实依赖容器，跨服务用例在沙箱执行，校验接口协作与数据一致性；失败自动留存请求-响应证据，结果入审计链。',
+    cases: ['TC-2024-020', 'TC-2024-021', 'TC-2024-022'],
+    history: [{ d: '09-18', p: 97, c: 1420 }, { d: '09-19', p: 97, c: 1418 }, { d: '09-20', p: 96, c: 1412 }, { d: '09-21', p: 97, c: 1415 }, { d: '09-24', p: 96, c: 1408 }],
+    gateRule: '通过率 ≥92% 且 无数据一致性告警' },
+  { id: 'SCEN-03', name: '契约测试', form: '服务/后端', resource: 'K8s 执行沙箱', icon: 'Cpu', how: '基于契约注册表的消费者-提供者校验，防止破坏性变更。', steps: ['契约注册表一致性校验', '消费者 Pact 验证', '提供者 Mock 验证', '不匹配阻断发布'], tool: 'Pact / Spring Cloud Contract', trigger: 'CI 提交', evidence: '契约报告', gate: '契约门禁',
+    impl: '消费者/提供者契约注册表校验 + Pact 双端验证；AI 对比契约 diff 判定破坏性变更，不匹配即阻断发布并产出契约报告。',
+    cases: ['TC-2024-030', 'TC-2024-031'],
+    history: [{ d: '09-18', p: 100, c: 620 }, { d: '09-19', p: 100, c: 620 }, { d: '09-20', p: 98, c: 618 }, { d: '09-21', p: 100, c: 615 }, { d: '09-24', p: 88, c: 640 }],
+    gateRule: '契约匹配率 100% 且 0 破坏性变更' },
+  { id: 'SCEN-04', name: 'API 测试', form: '服务/后端', resource: 'K8s 执行沙箱', icon: 'Cpu', how: '接口功能 / 参数 / 边界 / 鉴权用例执行。', steps: ['AI 生成接口用例', '执行功能/边界断言', '校验响应 Schema', '错误路径覆盖'], tool: 'Postman / Newman', trigger: 'CI 提交', evidence: '请求响应', gate: 'API 门禁',
+    impl: 'AI 依据 OpenAPI 生成接口用例，Newman 在沙箱执行功能/边界/鉴权断言，校验响应 Schema 与错误路径；证据为请求-响应对。',
+    cases: ['TC-2024-040', 'TC-2024-041', 'TC-2024-042'],
+    history: [{ d: '09-18', p: 95, c: 890 }, { d: '09-19', p: 95, c: 890 }, { d: '09-20', p: 94, c: 885 }, { d: '09-21', p: 95, c: 888 }, { d: '09-24', p: 93, c: 882 }],
+    gateRule: '通过率 ≥90% 且 Schema 校验 100%' },
+  { id: 'SCEN-05', name: '服务压测', form: '服务/后端', resource: 'K8s 执行沙箱', icon: 'Cpu', how: '负载注入，测吞吐 / 延迟 / P99 / 错误率。', steps: ['沙箱拉起被测服务', 'k6 阶梯负载注入', '采集 TPS/延迟/P99', '超阈值触发性能门禁'], tool: 'k6 / JMeter', trigger: '定时 / 发布前', evidence: '性能指标', gate: '性能门禁 P99<200ms',
+    impl: 'k6 在沙箱对服务做阶梯负载注入，采集 TPS/延迟/P99/错误率；AI 分析瓶颈并给出弱化点，超阈值触发性能门禁。',
+    cases: ['TC-2024-050', 'TC-2024-051'],
+    history: [{ d: '09-18', p: 100, c: 3200 }, { d: '09-19', p: 100, c: 3100 }, { d: '09-20', p: 100, c: 3000 }, { d: '09-21', p: 100, c: 2980 }, { d: '09-24', p: 82, c: 3460 }],
+    gateRule: 'P99 <200ms 且 错误率 <1%' },
+  { id: 'SCEN-06', name: 'Web E2E', form: 'Web 前端', resource: '浏览器实例', icon: 'Globe', how: '真实浏览器驱动主流程端到端，全链路校验。', steps: ['浏览器实例起 Headless', 'Playwright 驱动主流程', '截屏+录屏证据', '断言与视觉捕获'], tool: 'Playwright', trigger: 'CI 提交', evidence: '截图+视频', gate: '质量门禁',
+    impl: 'Playwright 从浏览器实例池调度 Headless/真实浏览器，驱动主流程端到端；失败自动截屏+录屏，AI 定位断言失败根因，证据哈希锚定。',
+    cases: ['TC-2024-060', 'TC-2024-061', 'TC-2024-062'],
+    history: [{ d: '09-18', p: 94, c: 1150 }, { d: '09-19', p: 94, c: 1148 }, { d: '09-20', p: 95, c: 1150 }, { d: '09-21', p: 94, c: 1145 }, { d: '09-24', p: 91, c: 1180 }],
+    gateRule: '通过率 ≥90% 且 无主流程阻断' },
+  { id: 'SCEN-07', name: 'Web 视觉回归', form: 'Web 前端', resource: '浏览器实例', icon: 'Globe', how: '基线截图对比，AI 判定像素+语义视觉差异。', steps: ['基线截图存储', '当前渲染截图', 'AI 差异判定', '差异超阈值阻断'], tool: 'AI 视觉判定', trigger: 'CI 提交', evidence: '截图证据', gate: '视觉门禁',
+    impl: '浏览器实例渲染截图与基线库对比，AI 视觉引擎做像素+语义差异判定，区分真实回归与正常渲染波动，差异超阈值阻断。',
+    cases: ['TC-2024-070', 'TC-2024-071'],
+    history: [{ d: '09-18', p: 98, c: 480 }, { d: '09-19', p: 98, c: 480 }, { d: '09-20', p: 97, c: 478 }, { d: '09-21', p: 98, c: 479 }, { d: '09-24', p: 95, c: 486 }],
+    gateRule: '视觉差异 ≤5px 或 无语义变化' },
+  { id: 'SCEN-08', name: 'Web 性能压测', form: 'Web 前端', resource: '浏览器实例', icon: 'Globe', how: '采集 Web Vitals(LCP/CLS) + 虚拟用户并发压测。', steps: ['Lighthouse 采集 LCP/CLS', '虚拟用户并发', '对比性能预算基线', '超预算触发门禁'], tool: 'Lighthouse / Web Vitals', trigger: '定时', evidence: '性能指标', gate: '性能门禁 LCP<2.5s',
+    impl: 'Lighthouse 采集 LCP/CLS/TBT 等 Web Vitals，浏览器实例做虚拟用户并发压测；对比性能预算基线，超预算触发门禁。',
+    cases: ['TC-2024-080', 'TC-2024-081'],
+    history: [{ d: '09-18', p: 100, c: 620 }, { d: '09-19', p: 100, c: 610 }, { d: '09-20', p: 100, c: 600 }, { d: '09-21', p: 100, c: 598 }, { d: '09-24', p: 100, c: 602 }],
+    gateRule: 'LCP <2.5s 且 CLS <0.1 且 TBT <200ms' },
+  { id: 'SCEN-09', name: '移动端 E2E', form: '移动端', resource: '真机池', icon: 'Smartphone', how: '真机驱动 UI 主流程，端原生交互真实校验。', steps: ['真机池分配设备', 'Appium/XCUITest 驱动', 'UI 主流程执行', '截图+录屏证据'], tool: 'Appium / XCUITest', trigger: 'CI 提交', evidence: '截图+视频', gate: '质量门禁',
+    impl: '真机池分配 Android/iOS 真机，Appium/XCUITest 驱动真实 UI 主流程；失败自动截屏+录屏，AI 定位崩溃/卡顿根因，证据哈希锚定。',
+    cases: ['TC-2024-090', 'TC-2024-091', 'TC-2024-092'],
+    history: [{ d: '09-18', p: 93, c: 1280 }, { d: '09-19', p: 93, c: 1278 }, { d: '09-20', p: 92, c: 1270 }, { d: '09-21', p: 93, c: 1272 }, { d: '09-24', p: 90, c: 1290 }],
+    gateRule: '通过率 ≥88% 且 0 崩溃' },
+  { id: 'SCEN-10', name: '真机兼容性', form: '移动端', resource: '真机池', icon: 'Smartphone', how: '多型号 / 系统版本矩阵回归。', steps: ['真机矩阵 Android/iOS 多机型', '逐机型执行冒烟', '采集兼容性结果', '覆盖关键机型/系统'], tool: '真机矩阵', trigger: '定时', evidence: '截图', gate: '兼容门禁',
+    impl: '真机矩阵(多型号/多系统)逐机型执行冒烟回归，AI 汇总兼容性差异（布局/崩溃/权限），覆盖关键机型与系统版本。',
+    cases: ['TC-2024-100', 'TC-2024-101', 'TC-2024-102'],
+    history: [{ d: '09-18', p: 97, c: 2200 }, { d: '09-19', p: 97, c: 2190 }, { d: '09-20', p: 96, c: 2180 }, { d: '09-21', p: 97, c: 2178 }, { d: '09-24', p: 95, c: 2195 }],
+    gateRule: '关键机型覆盖率 ≥90% 且 0 崩溃' },
+  { id: 'SCEN-11', name: '弱网 / 稳定性', form: '移动端', resource: '真机池', icon: 'Smartphone', how: '弱网模拟，验证降级策略与崩溃恢复。', steps: ['真机弱网注入 3G/丢包', '执行关键路径', '校验降级策略', '崩溃/恢复检测'], tool: '弱网模拟', trigger: '手动 / 定时', evidence: '运行日志', gate: '稳定性门禁',
+    impl: '真机注入弱网(3G/丢包/高延迟)，执行关键路径验证降级策略与崩溃恢复；AI 分析 ANR/崩溃堆栈，结果入稳定性门禁。',
+    cases: ['TC-2024-110', 'TC-2024-111'],
+    history: [{ d: '09-18', p: 95, c: 760 }, { d: '09-19', p: 95, c: 758 }, { d: '09-20', p: 96, c: 762 }, { d: '09-21', p: 95, c: 758 }, { d: '09-24', p: 94, c: 770 }],
+    gateRule: '弱网下降级成功 且 ANR=0' },
+  { id: 'SCEN-12', name: 'AI 专项审计', form: 'AI 专项', resource: '跨形态 · AI 判定', icon: 'Sparkles', how: 'AI 生成产物可信度审计：篡改检测 / 断言强度 / 变异 / 幻觉校验。', steps: ['AI 生成代码篡改检测', '断言强度评估', '变异测试(防御力)', '幻觉/鲁棒性校验'], tool: 'AI 判定引擎', trigger: 'CI 提交', evidence: '审计报告', gate: 'AI 可信门禁',
+    impl: 'AI 判定引擎对 AI 生成代码做篡改检测、断言强度评估、变异测试(防御力)与幻觉/鲁棒性校验；产出可信审计报告并入门禁。',
+    cases: ['TC-2024-120', 'TC-2024-121', 'TC-2024-122'],
+    history: [{ d: '09-18', p: 96, c: 980 }, { d: '09-19', p: 96, c: 980 }, { d: '09-20', p: 95, c: 972 }, { d: '09-21', p: 96, c: 975 }, { d: '09-24', p: 94, c: 985 }],
+    gateRule: '可信度评分 ≥90 且 0 高危篡改' },
+];export const SCENARIO_GROUPS: { label: string; resource: string; scenarios: ITestScenario[] }[] = [
   { label: '服务 / 后端', resource: 'K8s 执行沙箱', scenarios: TEST_SCENARIOS.filter((s) => s.form === '服务/后端') },
   { label: 'Web 前端', resource: '浏览器实例', scenarios: TEST_SCENARIOS.filter((s) => s.form === 'Web 前端') },
   { label: '移动端', resource: '真机池', scenarios: TEST_SCENARIOS.filter((s) => s.form === '移动端') },
