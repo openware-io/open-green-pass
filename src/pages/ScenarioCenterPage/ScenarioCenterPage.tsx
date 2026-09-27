@@ -249,7 +249,7 @@ export default function ScenarioCenterPage() {
                     <span className="text-xs font-medium text-slate-600">按用例树范围筛选</span>
                     <select value={scopeFilter} onChange={(e) => setScopeFilter(e.target.value)}
                       className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-600">
-                      <option value="全部">全部资产范围</option>
+                      <option value="全部">全部被测对象范围</option>
                       {selScopeGroups.map((g) => <option key={g} value={g}>{g}</option>)}
                     </select>
                   </div>

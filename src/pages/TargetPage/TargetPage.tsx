@@ -65,7 +65,7 @@ export default function TargetPage() {
             </div>
             <div>
               <div className="text-xs text-emerald-100 flex items-center gap-2">
-                被测资产 · {TYPE_LABEL[selectedAsset.type] ?? selectedAsset.type}
+                被测对象 · {TYPE_LABEL[selectedAsset.type] ?? selectedAsset.type}
                 <span className="text-[9px] bg-white/15 px-1.5 py-0.5 rounded-full">覆盖率 {selectedAsset.coverage}%</span>
               </div>
               <div className="text-xl font-bold">{profile.name}</div>
@@ -109,7 +109,7 @@ export default function TargetPage() {
       <div className="card bg-white rounded-xl border border-slate-200 p-5 mb-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-slate-700 text-sm flex items-center gap-1.5"><Layers className="w-4 h-4 text-emerald-500" />{profile.name} · 测试场景覆盖</h2>
-          <span className="text-[11px] text-slate-400">资产关联的测试中心场景 · 点击进入对应场景闭环</span>
+          <span className="text-[11px] text-slate-400">被测对象关联的测试中心场景 · 点击进入对应场景闭环</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-4 gap-3">
           {assetScenarios(selectedAsset).map((s) => {
@@ -192,8 +192,8 @@ export default function TargetPage() {
 
       {/* 资产维度 KPI：与明细同源 */}
       <div className="flex items-center justify-between mb-2">
-        <h2 className="font-semibold text-slate-700 text-sm">资产库全局指标</h2>
-        <span className="text-[11px] text-slate-400">库级汇总对比 · 上方画像为当前所选资产局部维度</span>
+        <h2 className="font-semibold text-slate-700 text-sm">被测对象库全局指标</h2>
+        <span className="text-[11px] text-slate-400">库级汇总对比 · 上方画像为当前所选被测对象局部维度</span>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-5">
         {METRICS.map((m) => (
@@ -233,7 +233,7 @@ export default function TargetPage() {
           </div>
           <div className="divide-y divide-slate-100">
             {risks.length === 0 ? (
-              <div className="px-5 py-6 text-center text-[11px] text-slate-400">该资产门禁全部通过，无未决风险</div>
+              <div className="px-5 py-6 text-center text-[11px] text-slate-400">该被测对象门禁全部通过，无未决风险</div>
             ) : risks.map((r) => (
               <div key={r.name} className="px-5 py-3.5 flex items-start gap-3">
                 <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
@@ -246,10 +246,10 @@ export default function TargetPage() {
           </div>
         </div>
 
-        {/* 资产风险明细（横向对比，全局） */}
+        {/* 被测对象风险明细（横向对比，全局） */}
         <div className="card bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
-            <h2 className="font-semibold text-slate-700 text-sm">资产风险明细</h2>
+            <h2 className="font-semibold text-slate-700 text-sm">被测对象风险明细</h2>
             <span className="text-[11px] text-slate-400">{riskAssets.length} 个阻断</span>
           </div>
           <div className="divide-y divide-slate-100">

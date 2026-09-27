@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { FLOW_ITEMS, EXEC_RUN, TEST_SCENARIOS } from '@/data/mock';
-import { scenarioNav } from '@/context/scenarioNav';
 import { PageHeader, Card } from '@/components/shared';
-import { Cpu, Globe, Smartphone, Sparkles, Play, Pause, CornerDownRight } from 'lucide-react';
+import { Cpu, Globe, Smartphone, Sparkles, Play, Pause } from 'lucide-react';
 import { toast } from 'sonner';
 
 const STATUS_STYLE: Record<string, { dot: string; badge: string; text: string }> = {
@@ -14,7 +12,7 @@ const STATUS_STYLE: Record<string, { dot: string; badge: string; text: string }>
 };
 const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
 
-/** 执行流任务 → 测试场景（按标题/资产关键词映射） */
+/** 执行任务 → 所属测试场景（清单归属标注，按标题/被测对象关键词映射） */
 function flowScenario(title: string, asset: string): string {
   if (title.includes('E2E') || asset.includes('web') || asset.includes('frontend')) return 'SCEN-08';
   if (title.includes('压力测试') || title.includes('并发')) return 'SCEN-05';
@@ -23,11 +21,7 @@ function flowScenario(title: string, asset: string): string {
 }
 
 export default function ExecPage() {
-  const navigate = useNavigate();
   const [paused, setPaused] = useState(false);
-  const [scenId, setScenId] = useState(TEST_SCENARIOS[0].id);
-  const selScen = TEST_SCENARIOS.find((s) => s.id === scenId) as (typeof TEST_SCENARIOS)[number];
-
   const stats = {
     pass: EXEC_RUN.passed,
     fail: EXEC_RUN.failed,
@@ -43,7 +37,7 @@ export default function ExecPage() {
 
   return (
     <div>
-      <PageHeader title="测试执行" desc="跨资产执行 · 实时进度 · 证据捕获 · 不放水不跳过">
+      <PageHeader title="测试执行" desc="执行总览清单 · 跨被测对象执行 · 实时进度 · 证据捕获 · 不放水不跳过">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-2 text-xs text-slate-500">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 12 个执行器在线
@@ -55,22 +49,7 @@ export default function ExecPage() {
         </div>
       </PageHeader>
 
-      {/* 跨场景发起执行：全局入口 → 下钻测试中心对应场景执行闭环 */}
-      <Card title="跨场景发起执行" extra={<span className="text-[11px] text-slate-400">从全局进入测试中心 · 在场景执行闭环中配置范围并启动</span>} className="p-5 mb-5">
-        <div className="flex items-center gap-3 flex-wrap">
-          <select value={scenId} onChange={(e) => setScenId(e.target.value)}
-            className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-600">
-            {TEST_SCENARIOS.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.id}</option>)}
-          </select>
-          <button type="button"
-            onClick={() => { scenarioNav.go(scenId, 'exec'); navigate('/scenarios'); }}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-sm">
-            <CornerDownRight className="w-4 h-4" />进入「{selScen.name}」执行闭环
-          </button>
-          <span className="text-[11px] text-slate-400">默认全部执行 · 可在场景执行中按用例树范围人工选择当次用例</span>
-        </div>
-      </Card>
-
+      {/* 本次执行总览 */}
       <div className="card bg-white rounded-xl border border-slate-200 p-5 mb-5">
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -97,34 +76,49 @@ export default function ExecPage() {
       <div className="grid grid-cols-3 gap-5">
         <div className="col-span-2 card bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
-            <h2 className="font-semibold text-slate-700 text-sm">实时执行流 <span className="text-[10px] text-slate-400 font-normal">· 点击场景标签下钻测试中心</span></h2>
+            <h2 className="font-semibold text-slate-700 text-sm">执行任务清单 <span className="text-[10px] text-slate-400 font-normal">· 跨场景总览 · 每任务标注所属测试场景</span></h2>
             <div className="flex gap-2 text-xs">
               <button className="px-2 py-1 bg-slate-100 rounded text-slate-600">全部</button>
               <button className="px-2 py-1 rounded text-slate-400">失败</button>
             </div>
           </div>
-          <div className="divide-y divide-slate-100 max-h-[480px] overflow-y-auto">
-            {FLOW_ITEMS.map((item) => {
-              const s = STATUS_STYLE[item.status];
-              const scen = TEST_SCENARIOS.find((x) => x.id === flowScenario(item.title, item.asset));
-              const Icon = scen ? SCEN_ICON[scen.icon] ?? Cpu : null;
-              return (
-                <div key={item.id} className={'px-5 py-3 flex items-center gap-3 ' + (item.status === '执行中' ? 'bg-indigo-50/40' : item.status === '失败' ? 'bg-red-50/40' : item.status === '阻塞' ? 'bg-amber-50/40' : '')}>
-                  <span className={s.dot + ' w-2 h-2 rounded-full flex-shrink-0' + (item.status === '执行中' ? ' animate-pulse' : '')} />
-                  <span className="font-mono text-xs text-indigo-600 w-28 flex-shrink-0">{item.id}</span>
-                  <span className="text-xs text-slate-600 flex-1 truncate">{item.title}</span>
-                  {scen && (
-                    <button type="button" onClick={() => { scenarioNav.go(scen.id, 'exec'); navigate('/scenarios'); }}
-                      className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 flex-shrink-0">
-                      {Icon && <Icon className="w-3 h-3" />}{scen.name}
-                    </button>
-                  )}
-                  <span className={'text-[11px] px-2 py-0.5 rounded-full ' + s.badge}>{s.text}</span>
-                  <span className="text-[11px] text-slate-400 w-12 text-right">{item.duration}</span>
-                </div>
-              );
-            })}
-          </div>
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr className="text-left text-slate-500">
+                <th className="px-5 py-2.5 font-medium">任务</th>
+                <th className="px-5 py-2.5 font-medium">所属场景</th>
+                <th className="px-5 py-2.5 font-medium">状态</th>
+                <th className="px-5 py-2.5 font-medium text-right">耗时</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {FLOW_ITEMS.map((item) => {
+                const s = STATUS_STYLE[item.status];
+                const scen = TEST_SCENARIOS.find((x) => x.id === flowScenario(item.title, item.asset));
+                const Icon = scen ? SCEN_ICON[scen.icon] ?? Cpu : null;
+                return (
+                  <tr key={item.id} className={item.status === '执行中' ? 'bg-indigo-50/40' : item.status === '失败' ? 'bg-red-50/40' : item.status === '阻塞' ? 'bg-amber-50/40' : ''}>
+                    <td className="px-5 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className={s.dot + ' w-2 h-2 rounded-full' + (item.status === '执行中' ? ' animate-pulse' : '')} />
+                        <span className="font-mono text-indigo-600 w-24 flex-shrink-0">{item.id}</span>
+                        <span className="text-slate-600 truncate">{item.title}</span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-2.5">
+                      {scen ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                          {Icon && <Icon className="w-3 h-3" />}{scen.name}
+                        </span>
+                      ) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="px-5 py-2.5"><span className={'text-[11px] px-2 py-0.5 rounded-full ' + s.badge}>{s.text}</span></td>
+                    <td className="px-5 py-2.5 text-slate-400 text-right">{item.duration}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
         <div className="space-y-5">

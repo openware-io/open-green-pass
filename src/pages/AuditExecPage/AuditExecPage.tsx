@@ -18,7 +18,7 @@ export default function AuditExecPage() {
 
   return (
     <div>
-      <PageHeader title="执行审计" desc="用例 · 结果 · 耗时 · 跨资产执行（本次 CI #4821）">
+      <PageHeader title="执行审计" desc="用例 · 结果 · 耗时 · 跨被测对象执行（本次 CI #4821）">
         <span className="text-[11px] text-slate-400">统计周期：近 14 天</span>
       </PageHeader>
 

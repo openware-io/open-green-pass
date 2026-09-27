@@ -37,7 +37,7 @@ export default function CasesPage() {
             <tr className="text-left text-xs text-slate-500">
               <th className="px-4 py-3 font-medium">用例 ID</th>
               <th className="px-4 py-3 font-medium">标题</th>
-              <th className="px-4 py-3 font-medium">所属资产</th>
+              <th className="px-4 py-3 font-medium">所属被测对象</th>
               <th className="px-4 py-3 font-medium">所属场景</th>
               <th className="px-4 py-3 font-medium">上游源</th>
               <th className="px-4 py-3 font-medium">类型</th>

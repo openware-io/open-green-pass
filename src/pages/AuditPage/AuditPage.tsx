@@ -49,7 +49,7 @@ export default function AuditPage() {
         <Layers className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
         <div className="text-[11px] text-emerald-800 leading-relaxed">
           <span className="font-semibold">审计设计原则 · 一份链四视图：</span>
-          底层为<span className="font-semibold">单一哈希链日志</span>（唯一不可变数据源，跨资产 / 跨域追溯靠它），上层按业务域拆成独立视图
+          底层为<span className="font-semibold">单一哈希链日志</span>（唯一不可变数据源，跨被测对象 / 跨域追溯靠它），上层按业务域拆成独立视图
           —— <span className="font-semibold">成本审计 / 执行审计 / 操作审计 / 审计总览</span>。既满足各自管理，又不破坏"仅追加、可独立验证"的审计根基。
         </div>
       </div>
@@ -76,7 +76,7 @@ export default function AuditPage() {
       <Card title="原始日志流"
         extra={
           <select className="border border-slate-300 rounded-lg px-2 py-1 outline-none text-xs">
-            <option>全部资产</option>
+            <option>全部被测对象</option>
             <option>svc-auth</option>
             <option>svc-payment</option>
           </select>

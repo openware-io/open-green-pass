@@ -60,7 +60,7 @@ export const GEN_TRACE: IGenTrace[] = [
   { seq: 5, step: '提交验收', actor: 'ai-agent-3', time: '09-24 10:25', desc: '提交至质量门禁，进入当前验收阶段', status: 'active' },
 ];
 
-// 资产风险明细：每个服务的覆盖/门禁/风险（与 ASSET_TREE 同源）
+// 被测对象风险明细：每个服务的覆盖/门禁/风险（与 ASSET_TREE 同源）
 export interface IAssetRisk {
   name: string;
   type: '服务' | '应用' | '端';
@@ -79,7 +79,7 @@ export const ASSET_RISKS: IAssetRisk[] = [
   { name: 'mobile-android', type: '端', coverage: 100, gate: '通过', risk: null },
 ];
 
-// ============ 资产树（被测资产）============
+// ============ 被测对象树（被测对象）============
 export interface IAsset {
   id: string;
   name: string;
@@ -94,7 +94,7 @@ export interface IAssetNode extends IAsset {
 
 export const ASSET_TREE: IAssetNode = {
   id: 'asset-root',
-  name: '资产库',
+  name: '被测对象库',
   type: 'service-group',
   coverage: 75,
   gateRate: 50,
@@ -344,7 +344,7 @@ export const GATE_RULES: IGateRule[] = [
   { name: '断言强度检测', detail: '检测到 3 处断言弱化行为', status: 'block', evidence: ['TC-2024-118:42 → assertTrue(true) 替代金额校验', 'TC-2024-118:67 → 断言被 try/except 包裹', 'TC-2024-095:31 → @pytest.mark.skip 新增'] },
   { name: '契约门禁 · CT-003', detail: '/v2/refund 存在破坏性变更，2 个消费者契约测试未更新', status: 'block' },
   { name: '变异测试分数', detail: 'TC-2024-118 变异分数 31% < 阈值 70%', status: 'block' },
-  { name: '跨服务追溯完整性', detail: '涉及 4 个资产节点的用例全部绑定需求', status: 'pass' },
+  { name: '跨服务追溯完整性', detail: '涉及 4 个被测对象节点的用例全部绑定需求', status: 'pass' },
   { name: '原始测试回放', detail: '基线 42 个用例在产出代码上全部通过', status: 'pass' },
 ];
 
@@ -400,7 +400,7 @@ export interface IConflictEvent {
 
 export const CONFLICT_EVENTS: IConflictEvent[] = [
   { level: 'danger', title: '用例写-写冲突', desc: 'TC-2024-095 被两个 Agent 同时修改', meta: '10:26:12 · 已隔离待协调' },
-  { level: 'warning', title: '跨资产资源抢占', desc: 'svc-payment 抢占 mobile-android 的 K8s 配额', meta: '10:22:45 · 被抢占任务已重新排队' },
+  { level: 'warning', title: '跨被测对象资源抢占', desc: 'svc-payment 抢占 mobile-android 的 K8s 配额', meta: '10:22:45 · 被抢占任务已重新排队' },
   { level: 'info', title: '契约验证并发冲突', desc: 'CT-003 两个消费者同时验证，已串行化', meta: '10:18:30 · 无影响' },
 ];
 
@@ -520,7 +520,7 @@ export const NAV_GROUPS: { title: string; items: INavItem[] }[] = [
     ],
   },
   {
-    title: '被测与资产',
+    title: '被测对象',
     items: [
       { path: '/target', label: '被测对象画像' },
       { path: '/generation', label: '上游源与生成' },
@@ -678,7 +678,7 @@ export const PROJECT_MODELS: IProjectModel[] = [
 ];
 
 
-// ============ 资产联动画像：按所选资产实时派生（数据自洽）============
+// ============ 被测对象联动画像：按所选被测对象实时派生（数据自洽）============
 export interface IAssetProfile {
   name: string;
   qualityScore: number;
@@ -689,7 +689,7 @@ export interface IAssetProfile {
   gateRules: { name: string; detail: string; status: 'pass' | 'block'; evidence?: string[] }[];
 }
 
-// 依据资产的 coverage / gateRate 派生画像与门禁，保证加权评分、阻断数与明细自洽
+// 依据被测对象的 coverage / gateRate 派生画像与门禁，保证加权评分、阻断数与明细自洽
 export function assetToProfile(asset: IAsset): IAssetProfile {
   const C = asset.coverage;
   const G = asset.gateRate;
@@ -726,15 +726,15 @@ export function assetToProfile(asset: IAsset): IAssetProfile {
 }
 
 
-// ============ 资产权限分配：工程负责人持完整权限，可对成员精细分配权限与资源 ============
+// ============ 被测对象权限分配：工程负责人持完整权限，可对成员精细分配权限与资源 ============
 export type AssetPerm = 'full' | 'edit' | 'exec' | 'view' | 'none';
 
 export const ASSET_PERM_META: { perm: AssetPerm; label: string; desc: string; color: string }[] = [
   { perm: 'full', label: '完整', desc: '等同于负责人，可再分配权限与资源', color: 'text-purple-600 bg-purple-50' },
   { perm: 'edit', label: '编辑', desc: '创建/修改用例与门禁判定', color: 'text-emerald-600 bg-emerald-50' },
   { perm: 'exec', label: '执行', desc: '运行用例、查看执行证据', color: 'text-indigo-600 bg-indigo-50' },
-  { perm: 'view', label: '只读', desc: '仅查看该资产结果与审计', color: 'text-slate-500 bg-slate-100' },
-  { perm: 'none', label: '无权限', desc: '对该资产不可见、不可操作', color: 'text-red-500 bg-red-50' },
+  { perm: 'view', label: '只读', desc: '仅查看该被测对象结果与审计', color: 'text-slate-500 bg-slate-100' },
+  { perm: 'none', label: '无权限', desc: '对该被测对象不可见、不可操作', color: 'text-red-500 bg-red-50' },
 ];
 
 export interface IAssetMemberAlloc {

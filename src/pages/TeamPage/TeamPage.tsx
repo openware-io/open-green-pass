@@ -56,7 +56,7 @@ export default function TeamPage() {
   const permLabel = (perm: AssetPerm) => ASSET_PERM_META.find((p) => p.perm === perm)?.label ?? perm;
 
   const handleChangeAssetPerm = (m: ITeamMember, perm: AssetPerm) => {
-    toast.success(`已调整 ${m.name} 对「${activeAccess.assetName}」的权限为「${permLabel(perm)}」`, { description: '原型示意：资产级权限实时生效，负责人可精细分配' });
+    toast.success(`已调整 ${m.name} 对「${activeAccess.assetName}」的权限为「${permLabel(perm)}」`, { description: '原型示意：被测对象级权限实时生效，负责人可精细分配' });
   };
 
   return (
@@ -219,14 +219,14 @@ export default function TeamPage() {
         </div>
       </div>
 
-      {/* 资产权限分配：工程负责人完整权限，可对成员精细分配权限与资源 */}
+      {/* 被测对象权限分配：工程负责人完整权限，可对成员精细分配权限与资源 */}
       <div className="card bg-white rounded-xl border border-slate-200 overflow-hidden mt-5">
         <div className="px-5 py-4 border-b border-slate-200">
-          <h2 className="font-semibold text-slate-700 text-sm flex items-center gap-1.5"><KeyRound className="w-4 h-4 text-emerald-500" />资产权限分配 · 按资产精细管控</h2>
-          <p className="text-[11px] text-slate-500 mt-1">每个资产由「工程负责人」持有完整权限，负责人可对研发组内成员精细分配该资产的权限级别与资源配额。</p>
+          <h2 className="font-semibold text-slate-700 text-sm flex items-center gap-1.5"><KeyRound className="w-4 h-4 text-emerald-500" />被测对象权限分配 · 按被测对象精细管控</h2>
+          <p className="text-[11px] text-slate-500 mt-1">每个被测对象由「工程负责人」持有完整权限，负责人可对研发组内成员精细分配该资产的权限级别与资源配额。</p>
         </div>
 
-        {/* 资产选择 */}
+        {/* 被测对象选择 */}
         <div className="px-5 pt-4 flex flex-wrap gap-2.5">
           {ASSET_ACCESS.map((a) => {
             const o = TEAM_MEMBERS.find((m) => m.id === a.ownerId);
@@ -263,7 +263,7 @@ export default function TeamPage() {
               <tr className="text-left text-xs text-slate-500">
                 <th className="px-4 py-2.5 font-medium">成员</th>
                 <th className="px-4 py-2.5 font-medium">团队角色</th>
-                <th className="px-4 py-2.5 font-medium">资产权限</th>
+                <th className="px-4 py-2.5 font-medium">被测对象权限</th>
                 <th className="px-4 py-2.5 font-medium">并发配额</th>
                 <th className="px-4 py-2.5 font-medium">沙箱配额</th>
               </tr>

@@ -205,7 +205,7 @@ export function Layout() {
             ))}
 
             <div className="px-4 py-2 mt-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider flex items-center justify-between">
-              <span>资产树</span>
+              <span>被测对象树</span>
               <span className="text-slate-600 text-[9px]">v2.1</span>
             </div>
             <div className="px-2 text-sm">

@@ -184,7 +184,7 @@ export default function TracePage() {
             <tr className="text-left text-xs text-slate-500">
               <th className="px-4 py-3 font-medium">需求 ID</th>
               <th className="px-4 py-3 font-medium">需求标题</th>
-              <th className="px-4 py-3 font-medium">涉及资产</th>
+              <th className="px-4 py-3 font-medium">涉及被测对象</th>
               <th className="px-4 py-3 font-medium">测试点</th>
               <th className="px-4 py-3 font-medium">用例数</th>
               <th className="px-4 py-3 font-medium">执行状态</th>

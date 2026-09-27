@@ -73,12 +73,12 @@ export default function ConcurrencyPage() {
       <div className="grid grid-cols-3 gap-5">
         <div className="col-span-2 card bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-3.5 border-b border-slate-200">
-            <h2 className="font-semibold text-slate-700 text-sm">资产级并发视图</h2>
+            <h2 className="font-semibold text-slate-700 text-sm">被测对象级并发视图</h2>
           </div>
           <table className="w-full text-xs">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr className="text-left text-slate-500">
-                <th className="px-5 py-2.5 font-medium">资产节点</th>
+                <th className="px-5 py-2.5 font-medium">被测对象节点</th>
                 <th className="px-5 py-2.5 font-medium">类型</th>
                 <th className="px-5 py-2.5 font-medium">运行中</th>
                 <th className="px-5 py-2.5 font-medium">排队</th>
