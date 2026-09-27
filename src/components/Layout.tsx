@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { SidebarProvider, SidebarInset, Sidebar } from '@/components/ui/sidebar';
-import { NAV_GROUPS, ASSET_TREE, CASES, REQUIREMENTS, CONTRACTS, TEAMS, CURRENT_TEAM_ID, type IAsset, type IAssetNode } from '@/data/mock';
+import { NAV_GROUPS, ASSET_TREE, CASES, REQUIREMENTS, CONTRACTS, TEAMS, CURRENT_TEAM_ID, type IAssetNode } from '@/data/mock';
 import { cn } from '@/lib/utils';
 import { AssetLevelContext, LEVEL_ORDER, LEVEL_LABEL, type AssetLevel } from '@/context';
 import { Target, Settings2, Files, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes } from 'lucide-react';
@@ -39,56 +39,39 @@ function findChain(node: IAssetNode, id: string): IAssetNode[] | null {
   return null;
 }
 
-function AssetGroup({ node, depth, selectedId, onSelect, expanded, onExpand }: {
-  node: IAssetNode; depth: number; selectedId: string;
-  onSelect: (a: IAsset) => void; expanded: Record<string, boolean>;
-  onExpand: (id: string, defaultOpen: boolean) => void;
+
+const TYPE_LEVEL_COLOR: Record<string, string> = {
+  project: 'bg-indigo-500', 'service-group': 'bg-sky-500', service: 'bg-emerald-500',
+  module: 'bg-teal-500', app: 'bg-purple-500', end: 'bg-amber-500',
+};
+
+// 被测对象维度下拉：点击面包屑中间节点，显示同级被测对象选项，选中联动全局上下文
+function CrumbSelect({ label, siblings, currentId, onSelect }: {
+  label: string; siblings: IAssetNode[]; currentId: string; onSelect: (n: IAssetNode) => void;
 }) {
-  const isOpen = expanded[node.id] ?? (node.type === 'service' ? false : true);
-  const icon = node.type === 'app' ? '▢' : node.type === 'end' ? '▢' : node.type === 'service' ? '●' : '◈';
-  const iconColor =
-    node.type === 'service' ? 'text-emerald-400'
-    : node.type === 'app' ? 'text-blue-400'
-    : node.type === 'end' ? 'text-purple-400'
-    : 'text-amber-400';
-
-  if (node.children) {
-    return (
-      <div>
-        <button
-          type="button"
-          onClick={() => { if (node.type === 'service') onSelect(node); onExpand(node.id, node.type === 'service' ? false : true); }}
-          className="flex w-full items-center px-2 py-1.5 rounded text-slate-300 hover:bg-white/5 text-left"
-        >
-          <ChevronDown className={cn('w-3 h-3 text-slate-500 mr-1 transition-transform', !isOpen && '-rotate-90')} />
-          <span className={cn(iconColor, 'mr-2 text-xs')}>{icon}</span>
-          <span className={cn('text-xs', depth === 0 ? 'font-medium' : '')}>{node.name}</span>
-          {(node.type === 'service-group' || node.type === 'project') && <span className="ml-1 text-[9px] text-slate-600">{node.children.length}</span>}
-        </button>
-        {isOpen && (
-          <div className={cn('ml-3', depth >= 1 && 'ml-4')}>
-            {node.children.map((child) => (
-              <AssetGroup key={child.id} node={child} depth={depth + 1} selectedId={selectedId}
-                onSelect={onSelect} expanded={expanded} onExpand={onExpand} />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
+  const [open, setOpen] = useState(false);
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(node)}
-      className={cn('flex w-full items-center px-2 py-1.5 rounded text-slate-300 hover:bg-white/5 text-left',
-        selectedId === node.id && 'bg-emerald-500/20 text-emerald-200')}
-    >
-      <span className="w-3 mr-1" />
-      <span className={cn(iconColor, 'mr-2 text-xs')}>{icon}</span>
-      <span className="text-xs">{node.name}</span>
-      <span className={cn('ml-auto text-[9px]', node.coverage >= 85 ? 'text-emerald-400' : 'text-amber-400')}>{node.coverage}%</span>
-    </button>
+    <span className="relative inline-flex items-center">
+      <button type="button" onClick={() => setOpen(!open)}
+        className="inline-flex items-center gap-0.5 text-slate-600 hover:text-emerald-600 font-medium">
+        {label}<ChevronDown className="w-3 h-3 text-slate-400" />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[190px] max-h-[300px] overflow-y-auto">
+          <div className="px-3 py-1 text-[10px] text-slate-400">同级被测对象 · {siblings.length} 项</div>
+          {siblings.map((s) => (
+            <button key={s.id} type="button" onClick={() => { onSelect(s); setOpen(false); }}
+              className={'block w-full text-left px-3 py-1.5 text-xs ' + (s.id === currentId ? 'bg-emerald-50 text-emerald-600 font-medium' : 'text-slate-600 hover:bg-slate-50')}>
+              <span className="inline-flex items-center gap-1.5">
+                <span className={'w-1.5 h-1.5 rounded-sm ' + (TYPE_LEVEL_COLOR[s.type] ?? 'bg-slate-300')} />
+                {s.name}
+              </span>
+              <span className="ml-2 text-[9px] text-slate-400">{s.coverage}%</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
   );
 }
 
@@ -96,7 +79,6 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [selectedAsset, setSelectedAsset] = useState<IAssetNode>(ASSET_TREE.children![0].children![0].children![0]);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [navOpen, setNavOpen] = useState<Record<string, boolean>>({});
   const [level, setLevel] = useState<AssetLevel>('service');
   const [query, setQuery] = useState('');
@@ -110,6 +92,12 @@ export function Layout() {
   };
   const chain = findChain(ASSET_TREE, selectedAsset.id) ?? [ASSET_TREE];
   const crumbs = chain.slice(0, Math.min(LEVEL_ORDER.indexOf(level) + 1, chain.length));
+  // 面包屑选中同级被测对象：同步全局上下文 + 层次高亮（与被测对象维度/层次两筛选联动）
+  const selectCrumb = (node: IAssetNode) => {
+    setSelectedAsset(node);
+    const TYPE_LEVEL: Record<string, AssetLevel> = { project: 'system', 'service-group': 'group', service: 'service', module: 'module', app: 'module', end: 'module' };
+    setLevel(TYPE_LEVEL[node.type] ?? 'service');
+  };
 
 
   // 全局搜索（原型 mock）：在用例/需求/契约/服务/页面 多类索引中模糊匹配
@@ -204,14 +192,7 @@ export function Layout() {
               </div>
             ))}
 
-            <div className="px-4 py-2 mt-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider flex items-center justify-between">
-              <span>被测对象树</span>
-              <span className="text-slate-600 text-[9px]">v2.1</span>
-            </div>
-            <div className="px-2 text-sm">
-              <AssetGroup node={ASSET_TREE} depth={0} selectedId={selectedAsset.id}
-                onSelect={setSelectedAsset} expanded={expanded} onExpand={(id, def) => setExpanded((p) => ({ ...p, [id]: !(p[id] ?? def) }))} />
-            </div>
+
           </nav>
 
           <div className="p-4 border-t border-white/5">
@@ -231,11 +212,15 @@ export function Layout() {
 
       <SidebarInset className="flex flex-col overflow-hidden !bg-slate-100">
         <header className="h-16 bg-white border-b border-slate-200 flex items-center px-6 flex-shrink-0">
-          <div className="text-sm text-slate-500">
+          <div className="flex items-center text-sm text-slate-500 gap-0 flex-wrap">
             {crumbs.map((n, i) => (
               <span key={n.id} className="inline-flex items-center">
                 {i > 0 && <span className="mx-2 text-slate-300">/</span>}
-                <span className={i === crumbs.length - 1 ? 'text-emerald-600 font-medium' : 'text-slate-400'}>{n.name}</span>
+                {i > 0 && i < crumbs.length - 1 ? (
+                  <CrumbSelect label={n.name} siblings={crumbs[i - 1]?.children ?? []} currentId={n.id} onSelect={selectCrumb} />
+                ) : (
+                  <span className={i === crumbs.length - 1 ? 'text-emerald-600 font-medium' : 'text-slate-400'}>{n.name}</span>
+                )}
               </span>
             ))}
             <span className="mx-2 text-slate-300">/</span>

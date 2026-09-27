@@ -55,8 +55,8 @@ function TreeNode({ node, activeId, onSelect, depth }: {
       <div
         role="button"
         onClick={() => { if (hasChildren) setOpen(!open); onSelect(node); }}
-        className={'flex items-center gap-1.5 rounded-md py-1.5 cursor-pointer select-none ' + (active ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-slate-600 hover:bg-slate-50')}
-        style={{ paddingLeft: depth * 14 + 8 }}
+        className={'flex items-center gap-2 rounded-lg py-2 cursor-pointer select-none ' + (active ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-slate-600 hover:bg-slate-50')}
+        style={{ paddingLeft: depth * 18 + 10 }}
       >
         {hasChildren
           ? (open ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />)
@@ -90,7 +90,7 @@ export default function TargetPage() {
         <PrimaryButton><Link to="/gate" className="flex items-center gap-1">进入质量门禁<ChevronRight className="w-4 h-4" /></Link></PrimaryButton>
       </PageHeader>
 
-      <div className="grid grid-cols-[260px_1fr] gap-5 items-start">
+      <div className="grid grid-cols-[360px_1fr] gap-6 items-start">
         {/* ===== 左侧：被测对象树（一体化导航） ===== */}
         <aside className="space-y-5">
           <div className="card bg-white rounded-xl border border-slate-200 p-4">
