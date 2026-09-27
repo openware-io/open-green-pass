@@ -5,7 +5,7 @@ import { SidebarProvider, SidebarInset, Sidebar } from '@/components/ui/sidebar'
 import { NAV_GROUPS, ASSET_TREE, CASES, REQUIREMENTS, CONTRACTS, TEAMS, CURRENT_TEAM_ID, type IAsset, type IAssetNode } from '@/data/mock';
 import { cn } from '@/lib/utils';
 import { AssetLevelContext, LEVEL_ORDER, LEVEL_LABEL, type AssetLevel } from '@/context';
-import { Target, Settings2, Files, ArrowLeftRight, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain } from 'lucide-react';
+import { Target, Settings2, Files, ArrowLeftRight, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid } from 'lucide-react';
 
 const ICONS: Record<string, typeof Target> = {
   '/target': Target,
@@ -16,7 +16,7 @@ const ICONS: Record<string, typeof Target> = {
   '/gate': ShieldCheck,
   '/history': History,
   '/report': FileText,
-  '/audit': Landmark,
+  '/audit': LayoutGrid,
   '/audit-cost': Wallet,
   '/audit-exec': ListChecks,
   '/audit-op': UserCog,
@@ -24,6 +24,9 @@ const ICONS: Record<string, typeof Target> = {
   '/concurrency': Server,
   '/teams': Users,
   '/models': Brain,
+};
+const PARENT_ICONS: Record<string, typeof Target> = {
+  '/audit': Landmark,
 };
 
 function findChain(node: IAssetNode, id: string): IAssetNode[] | null {
@@ -152,7 +155,7 @@ export function Layout() {
                   if (item.children) {
                     const open = navOpen[item.path] ?? true;
                     const groupActive = item.children.some((c) => location.pathname === c.path);
-                    const GroupIcon = ICONS[item.path] ?? ScrollText;
+                    const GroupIcon = PARENT_ICONS[item.path] ?? ICONS[item.path] ?? ScrollText;
                     return (
                       <div key={item.path}>
                         <button type="button" onClick={() => setNavOpen((p) => ({ ...p, [item.path]: !(p[item.path] ?? true) }))}
