@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AUDIT_LOGS, COST_TOTAL, COST_MOM_CHANGE } from '@/data/mock';
 import { PageHeader, GhostButton, Card, ListFilter } from '@/components/shared';
+import { toast } from 'sonner';
 import { ShieldCheck, Wallet, Play, UserCog, ScrollText, ChevronRight, Layers } from 'lucide-react';
 
 const TYPE_BADGE: Record<string, string> = {
@@ -23,17 +24,19 @@ const DOMAINS = [
 export default function AuditPage() {
   const [q, setQ] = useState('');
   const [type, setType] = useState('');
+  const [assetFilter, setAssetFilter] = useState('');
   const kw = q.trim().toLowerCase();
   const filtered = AUDIT_LOGS.filter((log) => {
     if (type && log.type !== type) return false;
+    if (assetFilter && !log.asset.includes(assetFilter)) return false;
     if (kw && !(log.seq + log.message + log.actor + log.asset).toLowerCase().includes(kw)) return false;
     return true;
   });
   return (
     <div>
       <PageHeader title="审计总览" desc="哈希链 · 仅追加 · 可独立验证 · 一份链四视图">
-        <GhostButton><span className="flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5" />验证链完整性</span></GhostButton>
-        <GhostButton><span className="flex items-center gap-1"><ScrollText className="w-3.5 h-3.5" />导出审计报告</span></GhostButton>
+        <GhostButton onClick={() => toast.success('链完整性验证通过', { description: '12,847 条日志哈希链逐块校验一致，WORM 锚定正常（原型示意）' })}><span className="flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5" />验证链完整性</span></GhostButton>
+        <GhostButton onClick={() => toast('审计报告导出', { description: '已生成哈希链审计快照（HTML / PDF / Word，原型模拟下载）' })}><span className="flex items-center gap-1"><ScrollText className="w-3.5 h-3.5" />导出审计报告</span></GhostButton>
       </PageHeader>
 
       <div className="card bg-white rounded-xl border border-slate-200 p-5 mb-5">
@@ -84,10 +87,11 @@ export default function AuditPage() {
 
       <Card title="原始日志流"
         extra={
-          <select className="border border-slate-300 rounded-lg px-2 py-1 outline-none text-xs">
-            <option>全部被测对象</option>
-            <option>svc-auth</option>
-            <option>svc-payment</option>
+          <select value={assetFilter} onChange={(e) => setAssetFilter(e.target.value)}
+            className="border border-slate-300 rounded-lg px-2 py-1 outline-none text-xs">
+            <option value="">全部被测对象</option>
+            <option value="svc-auth">svc-auth</option>
+            <option value="svc-payment">svc-payment</option>
           </select>
         }>
         <div className="flex items-center justify-between px-5 pt-3">

@@ -220,7 +220,7 @@ export default function AuditCostPage() {
         <div className="text-[11px] text-emerald-800 leading-relaxed">
           <span className="font-semibold">存量用例执行成本逻辑：</span>
           存量用例（已稳定）执行走纯回放 + 断言缓存，AI 不重复生成/重判，成本应<span className="font-semibold">持平或递减</span>；新增/变更用例才会引入新的 AI 分析成本。
-          当前存量执行成本 ¥{COST_EXEC_LEGACY_TOTAL.toFixed(0)} 显著低于新增 ¥{COST_EXEC_NEW_TOTAL.toFixed(0)}，近 14 天从 ¥9.8 降至 ¥5.6 —— 符合治理降本预期。
+          当前存量执行成本 ¥{COST_EXEC_LEGACY_TOTAL.toFixed(0)} 显著低于新增 ¥{COST_EXEC_NEW_TOTAL.toFixed(0)}；趋势图可见存量执行成本整体持平或递减，仅失败用例触发「新增分析」时小幅回升 —— 符合治理降本预期。
         </div>
       </div>
 

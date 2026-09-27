@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import { UPSTREAM_ADAPTERS, GENERATION_STAGES, ADAPTER_SEED_TOTAL } from '@/data/mock';
 import { PageHeader, GhostButton, PrimaryButton, Card, ListFilter } from '@/components/shared';
-import { BrainCircuit, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
+import { BrainCircuit, Sparkles, Inbox, Plug, ShieldCheck, UserCheck, Database } from 'lucide-react';
 
-const STAGE_ICON: Record<string, React.ReactNode> = {
-  source: '◉',
-  adapter: '⚙',
-  seed: '◈',
-  quality: '✓',
-  review: '👤',
-  storage: '▤',
+const STAGE_ICON: Record<string, typeof BrainCircuit> = {
+  source: Inbox,
+  adapter: Plug,
+  seed: Sparkles,
+  quality: ShieldCheck,
+  review: UserCheck,
+  storage: Database,
 };
 const STAGE_COLOR: Record<string, string> = {
   source: 'bg-indigo-50 border-indigo-200 text-indigo-600',
@@ -42,8 +43,8 @@ export default function GenerationPage() {
   return (
     <div>
       <PageHeader title="用例生成管道" desc="六类上游源 · AI 理解 · 质量验证 · 人工审核">
-        <GhostButton>配置适配器</GhostButton>
-        <PrimaryButton>手动触发同步</PrimaryButton>
+        <GhostButton onClick={() => toast('配置适配器', { description: '管理六类上游源的同步规则与解析策略（原型示意）' })}>配置适配器</GhostButton>
+        <PrimaryButton onClick={() => toast.success('已发起手动同步（原型模拟）', { description: '将拉取各上游源最新变更并重跑用例生成管道' })}>手动触发同步</PrimaryButton>
       </PageHeader>
 
       <Card title="生成管道 · 当前批次 #GEN-2041" className="p-5 mb-5">
@@ -51,8 +52,8 @@ export default function GenerationPage() {
           {GENERATION_STAGES.map((s, i) => (
             <div key={s.label} className="flex flex-1">
               <div className="flex-1 text-center">
-                <div className={'w-12 h-12 rounded-full border flex items-center justify-center mx-auto mb-2 text-lg ' + STAGE_COLOR[s.icon]}>
-                  {STAGE_ICON[s.icon]}
+                <div className={'w-12 h-12 rounded-full border flex items-center justify-center mx-auto mb-2 ' + STAGE_COLOR[s.icon]}>
+                  {(() => { const I = STAGE_ICON[s.icon]; return I ? <I className="w-5 h-5" /> : null; })()}
                 </div>
                 <div className="text-xs font-medium text-slate-700">{s.label}</div>
                 <div className="text-[10px] text-slate-400 mt-0.5">{s.meta}</div>
@@ -70,7 +71,7 @@ export default function GenerationPage() {
         <div className="flex items-center gap-2 mb-4">
           <BrainCircuit className="w-5 h-5" />
           <h2 className="font-semibold text-sm">AI 决策痕迹 · 本批 {ADAPTER_SEED_TOTAL} 条种子如何产生</h2>
-          <span className="ml-auto text-[10px] bg-white/10 px-2 py-1 rounded flex items-center gap-1"><Sparkles className="w-3 h-3" />ai-agent-3</span>
+          <span className="ml-auto text-[10px] bg-white/10 px-2 py-1 rounded flex items-center gap-1"><Sparkles className="w-3 h-3" />AI 驱动 · 自动</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {AI_TRACES.map((t, i) => (

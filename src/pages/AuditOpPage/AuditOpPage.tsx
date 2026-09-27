@@ -33,12 +33,12 @@ export default function AuditOpPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
         <div className="card bg-white rounded-xl border border-slate-200 p-4">
           <div className="flex items-center justify-between mb-2"><span className="text-xs text-slate-500">操作总数</span><Fingerprint className="w-4 h-4 text-indigo-500" /></div>
-          <div className="text-2xl font-bold text-slate-800">128 <span className="text-sm font-normal text-slate-400">/ 24h</span></div>
+          <div className="text-2xl font-bold text-slate-800">{total} <span className="text-sm font-normal text-slate-400">/ 24h</span></div>
           <div className="mt-1 text-[11px] text-slate-400">全部写入哈希链</div>
         </div>
         <div className="card bg-white rounded-xl border border-slate-200 p-4">
           <div className="flex items-center justify-between mb-2"><span className="text-xs text-slate-500">高风险操作</span><ShieldAlert className="w-4 h-4 text-red-500" /></div>
-          <div className="text-2xl font-bold text-red-600">3</div>
+          <div className="text-2xl font-bold text-red-600">{high}</div>
           <div className="mt-1 text-[11px] text-slate-400">契约变更 · 篡改检测</div>
         </div>
         <div className="card bg-white rounded-xl border border-slate-200 p-4">

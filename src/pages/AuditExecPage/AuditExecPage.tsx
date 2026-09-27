@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { EXEC_AUDIT_ROWS } from '@/data/mock';
+import { EXEC_AUDIT_ROWS, TEST_RUNS } from '@/data/mock';
 import { PageHeader, Card, ListFilter } from '@/components/shared';
 import { Play, XCircle, Ban, Timer } from 'lucide-react';
 
@@ -10,6 +10,8 @@ const RESULT_BADGE: Record<string, string> = {
 };
 
 export default function AuditExecPage() {
+  const run = TEST_RUNS.find((r) => r.id === 'RUN-4821');
+  const done = run ? run.pass + run.fail + run.block : EXEC_AUDIT_ROWS.length;
   const [q, setQ] = useState('');
   const [result, setResult] = useState('');
   const kw = q.trim().toLowerCase();
@@ -34,12 +36,12 @@ export default function AuditExecPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
         <div className="card bg-white rounded-xl border border-slate-200 p-4">
           <div className="flex items-center justify-between mb-2"><span className="text-xs text-slate-500">本次执行</span><Play className="w-4 h-4 text-emerald-500" /></div>
-          <div className="text-2xl font-bold text-slate-800">1,248 <span className="text-sm font-normal text-slate-400">/ 1,300</span></div>
+          <div className="text-2xl font-bold text-slate-800">{done.toLocaleString()} <span className="text-sm font-normal text-slate-400">/ {(run?.total ?? 1300).toLocaleString()}</span></div>
           <div className="mt-1 text-[11px] text-slate-400">进度 96% · 预计剩余 4m</div>
         </div>
         <div className="card bg-white rounded-xl border border-slate-200 p-4">
           <div className="flex items-center justify-between mb-2"><span className="text-xs text-slate-500">失败用例</span><XCircle className="w-4 h-4 text-red-500" /></div>
-          <div className="text-2xl font-bold text-red-600">34</div>
+          <div className="text-2xl font-bold text-red-600">{run?.fail ?? fail}</div>
           <div className="mt-1 text-[11px] text-slate-400">关联 12 条存量用例成本</div>
         </div>
         <div className="card bg-white rounded-xl border border-slate-200 p-4">

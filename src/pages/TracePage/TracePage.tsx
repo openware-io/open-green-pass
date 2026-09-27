@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { useAssetLevel, LEVEL_LABEL } from '@/context';
 import { REQUIREMENTS, TRACE_CHAINS, type IAssetNode } from '@/data/mock';
 import { PageHeader, GhostButton, Card, ListFilter as FilterBar } from '@/components/shared';
-import { ScanSearch, ListFilter, CircleCheckBig, CircleAlert, CircleX, Camera, Wallet, Gauge } from 'lucide-react';
+import { ScanSearch, ListFilter, CircleCheckBig, CircleAlert, CircleX, Camera, Wallet, Gauge, GitBranch } from 'lucide-react';
 
 const TRACEABILITY_BADGE: Record<string, string> = {
   '完整': 'bg-emerald-50 text-emerald-600',
@@ -75,7 +75,7 @@ export default function TracePage() {
       </PageHeader>
 
       {view === 'chain' && (
-        <Card title={<span className="flex items-center gap-1.5"><span className="text-emerald-600">⛓</span>跨服务追溯链 · {activeReq} {chain.title}<span className="ml-2 text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">当前层级 · {LEVEL_LABEL[level]}</span></span>}
+        <Card title={<span className="flex items-center gap-1.5"><GitBranch className="w-4 h-4 text-emerald-600" />跨服务追溯链 · {activeReq} {chain.title}<span className="ml-2 text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">当前层级 · {LEVEL_LABEL[level]}</span></span>}
           className="p-5 mb-5"
           extra={
             <div className="flex gap-3 text-[10px]">
