@@ -15,6 +15,7 @@ import AuditCostPage from '@/pages/AuditCostPage/AuditCostPage';
 import AuditExecPage from '@/pages/AuditExecPage/AuditExecPage';
 import AuditOpPage from '@/pages/AuditOpPage/AuditOpPage';
 import ConcurrencyPage from '@/pages/ConcurrencyPage/ConcurrencyPage';
+import ScenarioCenterPage from '@/pages/ScenarioCenterPage/ScenarioCenterPage';
 import TeamPage from '@/pages/TeamPage/TeamPage';
 import ModelPage from '@/pages/ModelPage/ModelPage';
 import NotFoundPage from '@/pages/NotFoundPage/NotFoundPage';
@@ -24,7 +25,7 @@ export default function App() {
     <>
       <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Navigate to="/target" replace />} />
+        <Route index element={<Navigate to="/scenarios" replace />} />
         <Route path="target" element={<TargetPage />} />
         <Route path="trace" element={<TracePage />} />
         <Route path="generation" element={<GenerationPage />} />
@@ -38,7 +39,8 @@ export default function App() {
         <Route path="audit-cost" element={<AuditCostPage />} />
         <Route path="audit-exec" element={<AuditExecPage />} />
         <Route path="audit-op" element={<AuditOpPage />} />
-        <Route path="concurrency" element={<ConcurrencyPage />} />
+        <Route path="resources" element={<ConcurrencyPage />} />
+        <Route path="scenarios" element={<ScenarioCenterPage />} />
         <Route path="teams" element={<TeamPage />} />
         <Route path="models" element={<ModelPage />} />
         <Route path="*" element={<NotFoundPage />} />

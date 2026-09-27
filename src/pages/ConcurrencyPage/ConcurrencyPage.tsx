@@ -1,9 +1,12 @@
-import { CONCURRENCY_ROWS, CONFLICT_EVENTS, RESOURCE_POOLS, SCENARIO_GROUPS } from '@/data/mock';
+import { CONCURRENCY_ROWS, CONFLICT_EVENTS, RESOURCE_POOLS, TEST_SCENARIOS } from '@/data/mock';
 import { PageHeader, Card } from '@/components/shared';
-import { Cpu, Globe, Smartphone, Sparkles, ShieldCheck } from 'lucide-react';
 
-const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
 const FORM_BADGE: Record<string, string> = { '服务/后端': 'bg-emerald-50 text-emerald-600', 'Web 前端': 'bg-sky-50 text-sky-600', '移动端': 'bg-purple-50 text-purple-600', 'AI 专项': 'bg-indigo-50 text-indigo-600' };
+const poolRatio = (res: string): number => {
+  const kw = res.includes('K8s') ? 'K8s' : res.includes('浏览器') ? '浏览器' : res.includes('真机') ? '真机' : '';
+  if (kw) { const pp = RESOURCE_POOLS.find((x) => x.name.includes(kw)); if (pp) return Math.round((pp.used / pp.total) * 100); }
+  return 40;
+};
 
 const TYPE_BADGE: Record<string, string> = { '服务': 'bg-emerald-50 text-emerald-600', '端': 'bg-purple-50 text-purple-600' };
 const LEVEL_BAR: Record<string, string> = { success: 'bg-emerald-500', warning: 'bg-amber-500', danger: 'bg-red-500' };
@@ -14,7 +17,7 @@ const CONFLICT_DOT: Record<string, string> = { danger: 'text-red-500', warning: 
 export default function ConcurrencyPage() {
   return (
     <div>
-      <PageHeader title="测试资源" desc="资源池 · 测试场景设计 · 调度隔离 · 冲突事件">
+      <PageHeader title="测试资源" desc="资源池 · 场景资源映射 · 调度隔离 · 冲突事件">
         <div className="flex items-center gap-3 text-xs">
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400"></span>健康</span>
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400"></span>高负载</span>
@@ -40,77 +43,30 @@ export default function ConcurrencyPage() {
         ))}
       </div>
 
-      <Card title="测试场景设计" extra={<span className="text-[11px] text-slate-400">平台覆盖测试场景 · 每个场景怎么测 · 依赖资源 / 工具链 / 触发 / 门禁</span>} className="p-5 mb-5">
-        <div className="space-y-5">
-          {SCENARIO_GROUPS.map((g) => {
-            const GIcon = SCEN_ICON[g.scenarios[0]?.icon ?? 'Cpu'];
-            return (
-              <div key={g.label}>
-                <div className="flex items-center gap-2 mb-3">
-                  <GIcon className="w-4 h-4 text-emerald-600" />
-                  <span className="font-medium text-sm text-slate-700">{g.label}</span>
-                  <span className="text-[11px] text-slate-400">· 依赖 {g.resource}</span>
-                  <span className="text-[10px] text-slate-400 ml-auto">{g.scenarios.length} 个场景</span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
-                  {g.scenarios.map((s) => {
-                    const SIcon = SCEN_ICON[s.icon];
-                    return (
-                      <div key={s.id} className="border border-slate-200 rounded-xl p-4 hover:border-emerald-300 transition-colors">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <SIcon className="w-4 h-4 text-emerald-600" />
-                            <span className="font-medium text-sm text-slate-800">{s.name}</span>
-                            <span className="text-[10px] text-slate-400 font-mono">{s.id}</span>
-                          </div>
-                          <span className={'text-[10px] px-1.5 py-0.5 rounded ' + FORM_BADGE[s.form]}>{s.form}</span>
-                        </div>
-                        <p className="text-xs text-slate-500 leading-relaxed">{s.how}</p>
-                        <div className="mt-3 flex flex-wrap gap-1.5 text-[10px]">
-                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{s.resource}</span>
-                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{s.tool}</span>
-                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{s.trigger}</span>
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">{s.gate}</span>
-                        </div>
-                        <div className="mt-3 text-[10px] text-slate-500 bg-emerald-50/60 border border-emerald-100 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
-                          <ShieldCheck className="w-3 h-3 text-emerald-500 flex-shrink-0" />门禁规则：<span className="text-emerald-700">{s.gateRule}</span>
-                        </div>
-                        <details className="mt-2.5">
-                          <summary className="text-[11px] text-emerald-600 cursor-pointer select-none">怎么测的步骤</summary>
-                          <ol className="mt-2 pl-4 list-decimal text-[11px] text-slate-600 space-y-1">{s.steps.map((st, i) => <li key={i}>{st}</li>)}</ol>
-                        </details>
-                        <details className="mt-1.5">
-                          <summary className="text-[11px] text-emerald-600 cursor-pointer select-none">具体实现</summary>
-                          <p className="mt-2 text-[11px] text-slate-600 leading-relaxed">{s.impl}</p>
-                        </details>
-                        <details className="mt-1.5">
-                          <summary className="text-[11px] text-emerald-600 cursor-pointer select-none">执行历史 · 近 5 次</summary>
-                          <table className="mt-2 w-full text-[10px] text-slate-600">
-                            <thead><tr className="text-left text-slate-400"><th className="py-0.5 font-medium">日期</th><th className="py-0.5 font-medium">通过率</th><th className="py-0.5 font-medium">成本</th></tr></thead>
-                            <tbody>{s.history.map((h) => (
-                              <tr key={h.d} className="border-t border-slate-100">
-                                <td className="py-1">{h.d}</td>
-                                <td className="py-1"><span className={h.p >= 95 ? 'text-emerald-600' : h.p >= 90 ? 'text-amber-600' : 'text-red-600'}>{h.p}%</span></td>
-                                <td className="py-1">¥{h.c.toLocaleString()}</td>
-                              </tr>))}</tbody>
-                          </table>
-                        </details>
-                        <details className="mt-1.5">
-                          <summary className="text-[11px] text-emerald-600 cursor-pointer select-none">关联用例 · {s.cases.length}</summary>
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {s.cases.map((cid) => <span key={cid} className="font-mono text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{cid}</span>)}
-                          </div>
-                        </details>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      <Card title="场景 × 资源映射" extra={<span className="text-[11px] text-slate-400">每个测试场景依赖的资源与当前占用 · 完整闭环（用例 / 执行 / 门禁 / 历史 / 报告）见「测试场景中心」</span>} className="p-5 mb-5">
+        <table className="w-full text-xs">
+          <thead className="text-left text-slate-400 border-b border-slate-100">
+            <tr><th className="py-2 font-medium">场景</th><th className="py-2 font-medium">形态</th><th className="py-2 font-medium">依赖资源</th><th className="py-2 font-medium">工具链</th><th className="py-2 font-medium">关联门禁</th><th className="py-2 font-medium">资源占用</th></tr>
+          </thead>
+          <tbody>
+            {TEST_SCENARIOS.map((s) => {
+              const ratio = poolRatio(s.resource);
+              const bar = ratio >= 80 ? 'bg-red-500' : ratio >= 65 ? 'bg-amber-500' : 'bg-emerald-500';
+              return (
+                <tr key={s.id} className="border-b border-slate-50 hover:bg-slate-50">
+                  <td className="py-2"><span className="font-mono text-slate-400 mr-1">{s.id}</span><span className="text-slate-700 font-medium">{s.name}</span></td>
+                  <td className="py-2"><span className={'text-[10px] px-1.5 py-0.5 rounded ' + FORM_BADGE[s.form]}>{s.form}</span></td>
+                  <td className="py-2 text-slate-600">{s.resource}</td>
+                  <td className="py-2 text-slate-600">{s.tool}</td>
+                  <td className="py-2"><span className="text-emerald-600">{s.gate}</span></td>
+                  <td className="py-2"><div className="flex items-center gap-2"><div className="w-16 h-1.5 bg-slate-100 rounded-full"><div className={bar + ' h-full rounded-full'} style={{ width: ratio + '%' }} /></div><span className="text-slate-500">{ratio}%</span></div></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <p className="mt-3 text-[10px] text-slate-400">完整场景闭环（用例 / 执行 / 门禁 / 历史 / 报告）请前往「测试场景中心」。</p>
       </Card>
-
       <div className="grid grid-cols-3 gap-5">
         <div className="col-span-2 card bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-3.5 border-b border-slate-200">

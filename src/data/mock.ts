@@ -509,16 +509,23 @@ export const TEST_SCENARIOS: ITestScenario[] = [
 ];
 export const NAV_GROUPS: { title: string; items: INavItem[] }[] = [
   {
-    title: '测试闭环',
+    title: '测试治理',
     items: [
-      { path: '/target', label: '被测对象画像' },
-      { path: '/generation', label: '上游源与生成' },
+      { path: '/scenarios', label: '测试场景中心' },
       { path: '/cases', label: '测试用例库' },
       { path: '/exec', label: '测试执行' },
-      { path: '/contracts', label: '契约测试', badge: '1 告警' },
       { path: '/gate', label: '质量门禁' },
       { path: '/history', label: '测试历史' },
       { path: '/report', label: '测试报告' },
+    ],
+  },
+  {
+    title: '被测与资产',
+    items: [
+      { path: '/target', label: '被测对象画像' },
+      { path: '/generation', label: '上游源与生成' },
+      { path: '/trace', label: '需求追溯' },
+      { path: '/resources', label: '测试资源' },
     ],
   },
   {
@@ -530,8 +537,7 @@ export const NAV_GROUPS: { title: string; items: INavItem[] }[] = [
         { path: '/audit-exec', label: '执行审计' },
         { path: '/audit-op', label: '操作审计' },
       ]},
-      { path: '/trace', label: '需求追溯' },
-      { path: '/concurrency', label: '测试资源' },
+      { path: '/contracts', label: '契约测试', badge: '1 告警' },
     ],
   },
   {

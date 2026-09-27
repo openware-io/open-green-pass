@@ -5,7 +5,7 @@ import { SidebarProvider, SidebarInset, Sidebar } from '@/components/ui/sidebar'
 import { NAV_GROUPS, ASSET_TREE, CASES, REQUIREMENTS, CONTRACTS, TEAMS, CURRENT_TEAM_ID, type IAsset, type IAssetNode } from '@/data/mock';
 import { cn } from '@/lib/utils';
 import { AssetLevelContext, LEVEL_ORDER, LEVEL_LABEL, type AssetLevel } from '@/context';
-import { Target, Settings2, Files, ArrowLeftRight, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid } from 'lucide-react';
+import { Target, Settings2, Files, ArrowLeftRight, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes } from 'lucide-react';
 
 const ICONS: Record<string, typeof Target> = {
   '/target': Target,
@@ -16,12 +16,13 @@ const ICONS: Record<string, typeof Target> = {
   '/gate': ShieldCheck,
   '/history': History,
   '/report': FileText,
+  '/scenarios': Boxes,
   '/audit': LayoutGrid,
   '/audit-cost': Wallet,
   '/audit-exec': ListChecks,
   '/audit-op': UserCog,
   '/trace': GitBranch,
-  '/concurrency': Server,
+  '/resources': Server,
   '/teams': Users,
   '/models': Brain,
 };
