@@ -8,7 +8,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
   return (
     <button type="button" onClick={() => onChange(!on)}
       className={'w-9 h-5 rounded-full relative transition flex-shrink-0 ' + (on ? 'bg-emerald-500' : 'bg-slate-300')}>
-      <span className={'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ' + (on ? 'left-4.5' : 'left-0.5')} />
+      <span className={'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ' + (on ? 'left-[18px]' : 'left-0.5')} />
     </button>
   );
 }
@@ -143,7 +143,7 @@ export default function SettingsPage() {
             <h2 className="font-semibold text-slate-700 text-sm">{SECTION_META[5].title}</h2>
           </div>
           <div className="text-[10px] text-slate-400 mb-3">{SECTION_META[5].desc}</div>
-          <Row label="版本信息" desc="当前部署版本"><span className="text-xs text-slate-500 font-mono">v1.7.15 · 2026-09-27</span></Row>
+          <Row label="版本信息" desc="当前部署版本"><span className="text-xs text-slate-500 font-mono">v1.7.19 · 2026-09-27</span></Row>
           <Row label="数据导出" desc="导出配置 / 门禁 / 审计快照"><button type="button" onClick={() => toast('导出任务已创建（原型示意）')} className="text-[11px] text-emerald-600 border border-emerald-200 rounded-lg px-3 py-1.5">导出</button></Row>
           <Row label="备份策略"><select className={selectCls} defaultValue="每日自动"><option>每日自动</option><option>每周自动</option><option>手动</option></select></Row>
           <Row label="维护窗口" desc="允许维护的时段"><input className={inputCls} defaultValue="02:00 - 06:00" /></Row>

@@ -35,6 +35,9 @@ const PARENT_ICONS: Record<string, typeof Target> = {
   '/audit': Landmark,
 };
 
+// 平台级/全局级页面：不隶属于某个被测对象，页首不显示被测对象面包屑路径与工程层次筛选
+const PLATFORM_ROUTES = ['/settings', '/teams', '/models', '/cicd', '/cicd-trigger', '/cicd-connector', '/audit', '/audit-cost', '/audit-exec', '/audit-op'];
+
 function findChain(node: IAssetNode, id: string): IAssetNode[] | null {
   if (node.id === id) return [node];
   if (!node.children) return null;
@@ -106,6 +109,7 @@ export function Layout() {
   const isSuperAdmin = user.role === '团队所有者';
   const [level, setLevel] = useState<AssetLevel>('service');
   const [query, setQuery] = useState('');
+  const isPlatform = PLATFORM_ROUTES.includes(location.pathname);
 
   const setLevelAndAsset = (l: AssetLevel) => {
     setLevel(l);
@@ -226,30 +230,36 @@ export function Layout() {
       <SidebarInset className="flex flex-col overflow-hidden !bg-slate-100">
         <header className="h-16 bg-white border-b border-slate-200 flex items-center px-6 flex-shrink-0">
           <div className="flex items-center text-sm text-slate-500 gap-0 flex-wrap">
-            {crumbs.map((n, i) => (
-              <span key={n.id} className="inline-flex items-center">
-                {i > 0 && <span className="mx-2 text-slate-300">/</span>}
-                {i > 0 ? (
-                  <CrumbSelect label={n.name} siblings={crumbs[i - 1]?.children ?? []} children={n.children ?? []} currentId={n.id} onSelect={selectCrumb} active={i === crumbs.length - 1} />
-                ) : (
-                  <span className="text-slate-400">{n.name}</span>
-                )}
-              </span>
-            ))}
-            <span className="mx-2 text-slate-300">/</span>
+            {!isPlatform && (
+              <>
+                {crumbs.map((n, i) => (
+                  <span key={n.id} className="inline-flex items-center">
+                    {i > 0 && <span className="mx-2 text-slate-300">/</span>}
+                    {i > 0 ? (
+                      <CrumbSelect label={n.name} siblings={crumbs[i - 1]?.children ?? []} children={n.children ?? []} currentId={n.id} onSelect={selectCrumb} active={i === crumbs.length - 1} />
+                    ) : (
+                      <span className="text-slate-400">{n.name}</span>
+                    )}
+                  </span>
+                ))}
+                <span className="mx-2 text-slate-300">/</span>
+              </>
+            )}
             <span className="text-slate-700 font-medium">
               {NAV_GROUPS.flatMap((g) => g.items).flatMap((i) => (i.children ? i.children : [i])).find((i) => i.path === location.pathname)?.label ?? ''}
             </span>
           </div>
           <div className="ml-auto flex items-center gap-4">
-            <div className="flex items-center bg-slate-100 rounded-lg p-0.5 text-[11px]">
-              {LEVEL_ORDER.map((lv) => (
-                <button key={lv} type="button" onClick={() => setLevelAndAsset(lv)}
-                  className={cn('px-2.5 py-1 rounded', level === lv ? 'bg-emerald-600 text-white' : 'text-slate-500')}>
-                  {LEVEL_LABEL[lv]}
-                </button>
-              ))}
-            </div>
+            {!isPlatform && (
+              <div className="flex items-center bg-slate-100 rounded-lg p-0.5 text-[11px]">
+                {LEVEL_ORDER.map((lv) => (
+                  <button key={lv} type="button" onClick={() => setLevelAndAsset(lv)}
+                    className={cn('px-2.5 py-1 rounded', level === lv ? 'bg-emerald-600 text-white' : 'text-slate-500')}>
+                    {LEVEL_LABEL[lv]}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="relative hidden md:block">
               <Search className="absolute left-3 top-1.5 w-4 h-4 text-slate-400" />
               <input
