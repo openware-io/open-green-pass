@@ -69,8 +69,8 @@ export default function CasesPage() {
   return (
     <div>
       <PageHeader title="用例管理" desc="用例版本化 · 上游源绑定 · 断言强度 · 变异验证 · 批量启停 / 删除">
-        <GhostButton>导入用例</GhostButton>
-        <PrimaryButton>AI 生成用例</PrimaryButton>
+        <GhostButton onClick={() => toast('导入用例（原型 mock）', { description: '支持从上游 / 用例仓库批量导入，解析为版本化用例' })}>导入用例</GhostButton>
+        <PrimaryButton onClick={() => toast('AI 生成用例（原型 mock）', { description: '将由 AI 依据上游源 / 需求生成用例种子并进入待审核' })}>AI 生成用例</PrimaryButton>
       </PageHeader>
 
       <div className="flex items-center justify-between mb-3">

@@ -182,7 +182,7 @@ export default function TargetPage() {
                   <button key={s.id} type="button"
                     onClick={() => { scenarioNav.go(s.id, 'cases'); navigate('/scenarios'); }}
                     className="flex items-center gap-3 border rounded-xl p-3 text-left transition-all hover:shadow-sm hover:border-emerald-300 hover:-translate-y-0.5">
-                    <span className="w-9 h-9 rounded-lg bg-emerald-500 text-white flex items-center justify-center flex-shrink-0"><Icon className="w-4.5 h-4.5" /></span>
+                    <span className="w-9 h-9 rounded-lg bg-emerald-500 text-white flex items-center justify-center flex-shrink-0"><Icon className="w-5 h-5" /></span>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-slate-800 flex items-center gap-1.5">{s.name}<span className="text-[10px] text-slate-400 font-mono">{s.id}</span></div>
                       <div className="text-[10px] text-slate-400">通过率 <span className={lp >= 90 ? 'text-emerald-600 font-medium' : 'text-amber-600 font-medium'}>{lp}%</span> · {s.form}</div>

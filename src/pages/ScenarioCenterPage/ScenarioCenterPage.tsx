@@ -52,10 +52,14 @@ export default function ScenarioCenterPage() {
   const SIcon = SCEN_ICON[sel.icon];
 
   // ===== 从单一 mock 源派生场景闭环数据（用例/执行/门禁/历史/报告）=====
+  // 用例成本/结果与最新执行历史自洽：每用例成本=本次历史成本/用例数；通过率越高失败用例越少；失败用例触发「新增分析」成本略回升
+  const lastHist = sel.history[sel.history.length - 1];
+  const perCost = Math.max(1, Math.round(lastHist.c / sel.cases.length / 10) * 10);
+  const failCount = lastHist.p >= 98 ? 0 : lastHist.p >= 90 ? 1 : lastHist.p >= 85 ? 2 : 3;
   const selCases = sel.cases.map((cid, i) => ({
     id: cid, name: `${sel.name} · 用例${i + 1}`,
-    result: (i % 3 === 0 && sel.id !== 'SCEN-05' && sel.id !== 'SCEN-03' ? '失败' : '通过') as '通过' | '失败',
-    cost: 60 + i * 20,
+    result: (i < failCount ? '失败' : '通过') as '通过' | '失败',
+    cost: i < failCount ? perCost + Math.round(perCost * 0.35) : perCost,
     group: GROUP_POOL[sel.form][i % GROUP_POOL[sel.form].length],
   }));
   const selScopeGroups = [...new Set(selCases.map((c) => c.group))];
@@ -78,8 +82,8 @@ export default function ScenarioCenterPage() {
   const latest = sel.history[sel.history.length - 1];
   const totalCost = sel.history.reduce((a, b) => a + b.c, 0);
   const gateItems = [
-    { item: '通过率', threshold: sel.id === 'SCEN-05' ? '≥100%' : sel.id === 'SCEN-08' ? '≥100%' : '≥90%', current: `${latest.p}%`, status: latest.p >= 90 ? '通过' : '阻断' },
-    { item: '门禁阈值', threshold: sel.gateRule.split('且')[1]?.trim() ?? sel.gateRule, current: sel.gate, status: sel.gate === '通过' ? '通过' : '阻断' },
+    { item: '通过率', threshold: sel.id === 'SCEN-05' || sel.id === 'SCEN-08' ? '性能/达标 ≥100%' : '≥90%', current: `${latest.p}%`, status: latest.p >= 90 ? '通过' : '阻断' },
+    { item: '门禁规则', threshold: sel.gateRule, current: sel.gate, status: sel.gate === '通过' ? '通过' : '阻断' },
   ] as { item: string; threshold: string; current: string; status: '通过' | '阻断' }[];
   const report = {
     passRate: latest.p, execCount: sel.history.length, totalCost,
@@ -133,7 +137,6 @@ export default function ScenarioCenterPage() {
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />门禁规则：<span className="text-emerald-700">{sel.gateRule}</span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              
               {TABS.map((t) => (
                 <button key={t.key} type="button" onClick={() => setTab(t.key)}
                   className={'flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg transition-colors ' + (tab === t.key ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600')}>

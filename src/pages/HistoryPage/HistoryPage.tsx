@@ -124,6 +124,12 @@ export default function HistoryPage() {
   const navigate = useNavigate();
   const run = TEST_RUNS.find((r) => r.id === runId) as ITestRun;
   const passRate = Math.round((run.pass / run.total) * 1000) / 10;
+  // 运行要点从 mock 派生（避免硬编码与实际数据不一致）
+  const totalExec = TEST_RUNS.reduce((a, r) => a + r.total, 0);
+  const avgPass = Math.round((TEST_RUNS.reduce((a, r) => a + r.pass, 0) / totalExec) * 1000) / 10;
+  const avgCost = Math.round(TEST_RUNS.reduce((a, r) => a + r.cost, 0) / TEST_RUNS.length);
+  const lastGreen = TEST_RUNS.find((r) => r.gate === '通过')?.id ?? '—';
+  const failRegressions = Object.entries(CASE_COST_HISTORY).filter(([, pts]) => pts[pts.length - 1].result === '失败').map(([id]) => id).join(' / ') || '无';
   const cases = Object.keys(CASE_COST_HISTORY);
   const evidCases = Object.keys(TEST_EVIDENCE);
 
@@ -141,11 +147,11 @@ export default function HistoryPage() {
         <div className="card bg-white rounded-xl border border-slate-200 p-5">
           <h3 className="font-semibold text-slate-700 text-sm mb-3 flex items-center gap-1.5"><ScanEye className="w-4 h-4 text-indigo-500" />运行要点</h3>
           <div className="space-y-2.5 text-[11px]">
-            <div className="flex justify-between"><span className="text-slate-500">历史共执行</span><span className="text-slate-700 font-medium">6 次 / 7,800 用例次</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">平均通过率</span><span className="text-emerald-600 font-medium">97.2%</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">平均成本 / 次</span><span className="text-slate-700 font-medium">¥4,285</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">上次全绿运行</span><span className="text-slate-700 font-medium">RUN-4792</span></div>
-            <div className="flex justify-between"><span className="text-slate-500">失败回归数</span><span className="text-amber-600 font-medium">TC-118 / TC-095</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">历史共执行</span><span className="text-slate-700 font-medium">{TEST_RUNS.length} 次 / {totalExec.toLocaleString()} 用例次</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">平均通过率</span><span className="text-emerald-600 font-medium">{avgPass}%</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">平均成本 / 次</span><span className="text-slate-700 font-medium">¥{avgCost.toLocaleString()}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">上次全绿运行</span><span className="text-slate-700 font-medium">{lastGreen}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">失败回归数</span><span className="text-amber-600 font-medium">{failRegressions}</span></div>
           </div>
         </div>
       </div>

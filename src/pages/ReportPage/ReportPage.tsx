@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TEST_RUNS, TEST_SCENARIOS, SCENARIO_GROUPS, type ITestRun } from '@/data/mock';
 import { scenarioNav } from '@/context/scenarioNav';
+import { toast } from 'sonner';
 import { PageHeader, Card, ListFilter } from '@/components/shared';
-import { Cpu, Globe, Smartphone, Sparkles, Download, CheckCircle2, ShieldCheck, TrendingUp, CornerDownRight } from 'lucide-react';
+import { Cpu, Globe, Smartphone, Sparkles, Download, ShieldCheck, TrendingUp, CornerDownRight } from 'lucide-react';
 
 const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
 const EXPORT_FORMATS = [
@@ -13,7 +14,6 @@ const EXPORT_FORMATS = [
 export default function ReportPage() {
   const [runId, setRunId] = useState('RUN-4821');
   const navigate = useNavigate();
-  const [toast, setToast] = useState('');
   const [q, setQ] = useState('');
   const kw = q.trim().toLowerCase();
   const runs = TEST_RUNS.filter((r) => !kw || (r.id + r.branch + r.trigger).toLowerCase().includes(kw));
@@ -26,7 +26,7 @@ export default function ReportPage() {
   const highRisk = scen.filter((s) => s.history[s.history.length - 1].p < 90);
   const passCount = scen.filter((s) => s.history[s.history.length - 1].p >= 90).length;
 
-  const onExport = (name: string) => { setToast(name); window.setTimeout(() => setToast(''), 2600); };
+  const onExport = (scope: string, format: string) => toast.success(`报告已导出（原型模拟下载）`, { description: `${runId}-${scope} · ${format}` });
 
   return (
     <div>
@@ -82,7 +82,7 @@ export default function ReportPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] text-slate-400">整份合编导出：</span>
           {EXPORT_FORMATS.map((f) => (
-            <button key={f.f} type="button" onClick={() => onExport(`RUN-4821-合编${f.f}`)}
+            <button key={f.f} type="button" onClick={() => onExport('合编', f.l)}
               className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-slate-100 text-slate-600 rounded-lg hover:bg-emerald-50 hover:text-emerald-600">
               <Download className="w-3 h-3" />{f.l} 合编报告
             </button>
@@ -128,7 +128,7 @@ export default function ReportPage() {
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <button type="button" onClick={() => onExport(`RUN-4821-${s.id}${EXPORT_FORMATS[1].f}`)}
+                            <button type="button" onClick={() => onExport(s.id, EXPORT_FORMATS[1].l)}
                               className="flex items-center gap-1 px-2 py-1 text-[10px] bg-slate-100 text-slate-600 rounded-lg hover:bg-emerald-50 hover:text-emerald-600">
                               <Download className="w-3 h-3" />单独导出
                             </button>
@@ -149,11 +149,7 @@ export default function ReportPage() {
         </div>
       </Card>
 
-      {toast && (
-        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl bg-slate-800 text-white text-xs shadow-xl flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />已导出报告为 <span className="font-mono text-emerald-300">{toast}</span>（原型模拟下载）
-        </div>
-      )}
+
     </div>
   );
 }

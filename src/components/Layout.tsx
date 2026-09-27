@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { useCurrentUser, loginStore } from '@/context/login';
 const LOGIN_LABEL: Record<string, string> = { password: '账号密码', phone: '手机号', wechat: '微信扫码' };
 import { AssetLevelContext, LEVEL_ORDER, LEVEL_LABEL, type AssetLevel } from '@/context';
-import { Target, Settings2, Files, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, ChevronRight, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes, UserCircle, LogOut, Smartphone, MessageCircle, Workflow, Zap, Plug, Settings } from 'lucide-react';
+import { Target, Settings2, Files, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, ChevronRight, Search, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes, UserCircle, LogOut, Smartphone, MessageCircle, Workflow, Zap, Plug, Settings } from 'lucide-react';
 
 const ICONS: Record<string, typeof Target> = {
   '/target': Target,
@@ -219,18 +219,7 @@ export function Layout() {
 
           </nav>
 
-          <div className="p-4 border-t border-white/5">
-            <div className="flex items-center">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold">AI</div>
-              <div className="ml-2.5">
-                <div className="text-slate-300 text-xs font-medium">ai-agent-3</div>
-                <div className="text-slate-500 text-[10px] flex items-center">
-                  <Circle className="w-1.5 h-1.5 fill-emerald-400 text-emerald-400 mr-1" />
-                  执行中
-                </div>
-              </div>
-            </div>
-          </div>
+
         </div>
       </Sidebar>
 
