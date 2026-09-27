@@ -1099,3 +1099,12 @@ export const TRACE_CHAINS: Record<string, ITraceChain> = {
     links: [],
   },
 };
+
+// ===== 场景运行状态（任务进行中提示）=====
+export type ScenStatus = 'idle' | 'running' | 'queued';
+export const SCEN_STATUS: Record<string, ScenStatus> = {
+  'SCEN-01': 'running',
+  'SCEN-04': 'running',
+  'SCEN-08': 'queued',
+  'SCEN-11': 'running',
+};

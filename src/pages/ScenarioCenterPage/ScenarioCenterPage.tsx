@@ -1,12 +1,17 @@
 import { useState } from 'react';
-import { TEST_SCENARIOS, SCENARIO_GROUPS, type ITestScenario } from '@/data/mock';
+import { TEST_SCENARIOS, SCENARIO_GROUPS, SCEN_STATUS, type ITestScenario, type ScenStatus } from '@/data/mock';
 import { PageHeader, Card } from '@/components/shared';
-import { Cpu, Globe, Smartphone, Sparkles, ListChecks, Play, ShieldCheck, History, FileText, CheckCircle2, Download, CircleCheckBig } from 'lucide-react';
+import { Cpu, Globe, Smartphone, Sparkles, ListChecks, Play, ShieldCheck, History, FileText, CheckCircle2, Download, CircleCheckBig, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
 const FORM_BADGE: Record<string, string> = { '服务/后端': 'bg-emerald-50 text-emerald-600', 'Web 前端': 'bg-sky-50 text-sky-600', '移动端': 'bg-purple-50 text-purple-600', 'AI 专项': 'bg-indigo-50 text-indigo-600' };
 const RESULT_CLS: Record<string, string> = { '通过': 'text-emerald-600', '失败': 'text-red-600', '阻塞': 'text-amber-600' };
+const STATUS_META: Record<ScenStatus, { label: string; cls: string; dot: string }> = {
+  idle: { label: '空闲', cls: 'bg-slate-100 text-slate-500', dot: 'bg-slate-300' },
+  running: { label: '执行中', cls: 'bg-emerald-50 text-emerald-600', dot: 'animate-pulse bg-emerald-500' },
+  queued: { label: '排队中', cls: 'bg-amber-50 text-amber-600', dot: 'bg-amber-400' },
+};
 
 const TABS = [
   { key: 'cases', label: '场景用例', icon: ListChecks },
@@ -20,7 +25,9 @@ type TabKey = (typeof TABS)[number]['key'];
 export default function ScenarioCenterPage() {
   const [selId, setSelId] = useState('SCEN-01');
   const [tab, setTab] = useState<TabKey>('cases');
+  const [focused, setFocused] = useState(false);
   const sel = TEST_SCENARIOS.find((s) => s.id === selId) as ITestScenario;
+  const selStatus = SCEN_STATUS[sel.id] ?? 'idle';
   const SIcon = SCEN_ICON[sel.icon];
 
   // ===== 从单一 mock 源派生场景闭环数据（用例/执行/门禁/历史/报告）=====
@@ -58,54 +65,106 @@ export default function ScenarioCenterPage() {
       </PageHeader>
 
       {/* 场景 × 闭环 矩阵 */}
-      <Card title="测试场景 · 闭环矩阵" extra={<span className="text-[11px] text-slate-400">点击场景卡片或闭环入口，下钻该场景的完整测试闭环</span>} className="p-5 mb-5">
-        <div className="space-y-5">
-          {SCENARIO_GROUPS.map((g) => {
-            const GIcon = SCEN_ICON[g.scenarios[0]?.icon ?? 'Cpu'];
-            return (
-              <div key={g.label}>
-                <div className="flex items-center gap-2 mb-2.5">
-                  <GIcon className="w-4 h-4 text-emerald-600" />
-                  <span className="font-medium text-sm text-slate-700">{g.label}</span>
-                  <span className="text-[11px] text-slate-400">· 依赖 {g.resource}</span>
-                  <span className="text-[10px] text-slate-400 ml-auto">{g.scenarios.length} 场景</span>
+      <Card title="测试场景 · 闭环矩阵" extra={<span className="text-[11px] text-slate-400">{focused ? '单卡片聚焦模式 · 点击「返回全部场景」回到矩阵' : '点击卡片进入单卡片聚焦 · 绿色脉冲圆点表示该场景正在执行'}</span>} className="p-5 mb-5">
+        {focused ? (
+          <div className="animate-gp-scale-in border-2 border-emerald-300 rounded-2xl p-6 bg-white shadow-xl">
+            <button type="button" onClick={() => setFocused(false)}
+              className="flex items-center gap-1 text-xs text-slate-400 hover:text-emerald-600 mb-4 transition-colors">
+              <ArrowLeft className="w-3.5 h-3.5" />返回全部场景
+            </button>
+            <div className="flex items-center gap-4 mb-4">
+              <span className="w-14 h-14 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-md"><SIcon className="w-7 h-7" /></span>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xl font-bold text-slate-800">{sel.name}</span>
+                  <span className="text-[10px] text-slate-400 font-mono">{sel.id}</span>
+                  <span className={'text-[10px] px-1.5 py-0.5 rounded ' + FORM_BADGE[sel.form]}>{sel.form}</span>
+                  {selStatus !== 'idle' && (
+                    <span className={'flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded ' + STATUS_META[selStatus].cls}>
+                      <span className={'w-1.5 h-1.5 rounded-full ' + STATUS_META[selStatus].dot} />{STATUS_META[selStatus].label}
+                    </span>
+                  )}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
-                  {g.scenarios.map((s) => {
-                    const SIcon = SCEN_ICON[s.icon];
-                    const active = s.id === selId;
-                    return (
-                      <div key={s.id} onClick={() => { setSelId(s.id); setTab('cases'); }}
-                        className={'border rounded-xl p-4 cursor-pointer transition-colors ' + (active ? 'border-emerald-400 ring-1 ring-emerald-200 bg-emerald-50/30' : 'border-slate-200 hover:border-emerald-300')}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <div className="flex items-center gap-2">
-                            <span className={'w-7 h-7 rounded-lg flex items-center justify-center ' + (active ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500')}>
-                              <SIcon className="w-4 h-4" />
-                            </span>
-                            <div>
-                              <div className="text-sm font-medium text-slate-800 flex items-center gap-1.5">{s.name}<span className="text-[10px] text-slate-400 font-mono">{s.id}</span></div>
-                              <div className="text-[10px] text-slate-400">通过率 {s.history[s.history.length - 1].p}% · 近 5 次</div>
+                <p className="text-[11px] text-slate-500 mt-1">{sel.resource} · {sel.tool} · {sel.trigger}</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600 leading-relaxed mb-4">{sel.how}</p>
+            <div className="flex flex-wrap gap-2 mb-4">
+              <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs">{sel.resource}</span>
+              <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs">{sel.tool}</span>
+              <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs">{sel.trigger}</span>
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-600 text-xs">{sel.gate}</span>
+            </div>
+            <div className="flex items-center gap-2 bg-emerald-50/60 border border-emerald-100 rounded-xl px-3 py-2 text-xs text-slate-600 mb-4">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />门禁规则：<span className="text-emerald-700">{sel.gateRule}</span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] text-slate-400 mr-1">聚焦本场景闭环：</span>
+              {TABS.map((t) => (
+                <button key={t.key} type="button" onClick={() => setTab(t.key)}
+                  className={'flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg transition-colors ' + (tab === t.key ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600')}>
+                  <t.icon className="w-3 h-3" />{t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {SCENARIO_GROUPS.map((g) => {
+              const GIcon = SCEN_ICON[g.scenarios[0]?.icon ?? 'Cpu'];
+              return (
+                <div key={g.label}>
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <GIcon className="w-4 h-4 text-emerald-600" />
+                    <span className="font-medium text-sm text-slate-700">{g.label}</span>
+                    <span className="text-[11px] text-slate-400">· 依赖 {g.resource}</span>
+                    <span className="text-[10px] text-slate-400 ml-auto">{g.scenarios.length} 场景</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
+                    {g.scenarios.map((s) => {
+                      const SIcon = SCEN_ICON[s.icon];
+                      const st = SCEN_STATUS[s.id] ?? 'idle';
+                      const active = s.id === selId;
+                      return (
+                        <div key={s.id} onClick={() => { setSelId(s.id); setTab('cases'); setFocused(true); }}
+                          className={'border rounded-xl p-4 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ' + (active ? 'border-emerald-400 ring-1 ring-emerald-200 bg-emerald-50/30' : 'border-slate-200 hover:border-emerald-300')}>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className={'w-7 h-7 rounded-lg flex items-center justify-center ' + (active ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500')}>
+                                <SIcon className="w-4 h-4" />
+                              </span>
+                              <div>
+                                <div className="text-sm font-medium text-slate-800 flex items-center gap-1.5">{s.name}<span className="text-[10px] text-slate-400 font-mono">{s.id}</span></div>
+                                <div className="text-[10px] text-slate-400">通过率 {s.history[s.history.length - 1].p}% · 近 5 次</div>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              {st !== 'idle' && (
+                                <span className={'flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded ' + STATUS_META[st].cls}>
+                                  <span className={'w-1.5 h-1.5 rounded-full ' + STATUS_META[st].dot} />{STATUS_META[st].label}
+                                </span>
+                              )}
+                              <span className={'text-[10px] px-1.5 py-0.5 rounded ' + FORM_BADGE[s.form]}>{s.form}</span>
                             </div>
                           </div>
-                          <span className={'text-[10px] px-1.5 py-0.5 rounded ' + FORM_BADGE[s.form]}>{s.form}</span>
+                          <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2">{s.how}</p>
+                          <div className="mt-2.5 flex flex-wrap gap-1.5 text-[10px]">
+                            {TABS.map((t) => (
+                              <button key={t.key} type="button" onClick={(e) => { e.stopPropagation(); setSelId(s.id); setTab(t.key); setFocused(true); }}
+                                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600">
+                                <t.icon className="w-3 h-3" />{t.label.replace('场景', '')}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                        <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2">{s.how}</p>
-                        <div className="mt-2.5 flex flex-wrap gap-1.5 text-[10px]">
-                          {TABS.map((t) => (
-                            <button key={t.key} type="button" onClick={(e) => { e.stopPropagation(); setSelId(s.id); setTab(t.key); }}
-                              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600">
-                              <t.icon className="w-3 h-3" />{t.label.replace('场景', '')}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
 
       {/* 场景详情 · 五 tab 闭环 */}
