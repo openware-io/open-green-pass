@@ -5,7 +5,6 @@ import TargetPage from '@/pages/TargetPage/TargetPage';
 import TracePage from '@/pages/TracePage/TracePage';
 import GenerationPage from '@/pages/GenerationPage/GenerationPage';
 import CasesPage from '@/pages/CasesPage/CasesPage';
-import ContractsPage from '@/pages/ContractsPage/ContractsPage';
 import ExecPage from '@/pages/ExecPage/ExecPage';
 import GatePage from '@/pages/GatePage/GatePage';
 import HistoryPage from '@/pages/HistoryPage/HistoryPage';
@@ -30,7 +29,7 @@ export default function App() {
         <Route path="trace" element={<TracePage />} />
         <Route path="generation" element={<GenerationPage />} />
         <Route path="cases" element={<CasesPage />} />
-        <Route path="contracts" element={<ContractsPage />} />
+
         <Route path="exec" element={<ExecPage />} />
         <Route path="gate" element={<GatePage />} />
         <Route path="history" element={<HistoryPage />} />

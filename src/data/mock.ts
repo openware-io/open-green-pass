@@ -511,7 +511,7 @@ export const NAV_GROUPS: { title: string; items: INavItem[] }[] = [
   {
     title: '测试治理',
     items: [
-      { path: '/scenarios', label: '测试场景中心' },
+      { path: '/scenarios', label: '测试中心' },
       { path: '/cases', label: '测试用例库' },
       { path: '/exec', label: '测试执行' },
       { path: '/gate', label: '质量门禁' },
@@ -537,7 +537,6 @@ export const NAV_GROUPS: { title: string; items: INavItem[] }[] = [
         { path: '/audit-exec', label: '执行审计' },
         { path: '/audit-op', label: '操作审计' },
       ]},
-      { path: '/contracts', label: '契约测试', badge: '1 告警' },
     ],
   },
   {

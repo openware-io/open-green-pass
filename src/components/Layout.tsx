@@ -5,14 +5,13 @@ import { SidebarProvider, SidebarInset, Sidebar } from '@/components/ui/sidebar'
 import { NAV_GROUPS, ASSET_TREE, CASES, REQUIREMENTS, CONTRACTS, TEAMS, CURRENT_TEAM_ID, type IAsset, type IAssetNode } from '@/data/mock';
 import { cn } from '@/lib/utils';
 import { AssetLevelContext, LEVEL_ORDER, LEVEL_LABEL, type AssetLevel } from '@/context';
-import { Target, Settings2, Files, ArrowLeftRight, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes } from 'lucide-react';
+import { Target, Settings2, Files, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes } from 'lucide-react';
 
 const ICONS: Record<string, typeof Target> = {
   '/target': Target,
   '/generation': Settings2,
   '/cases': Files,
   '/exec': Play,
-  '/contracts': ArrowLeftRight,
   '/gate': ShieldCheck,
   '/history': History,
   '/report': FileText,

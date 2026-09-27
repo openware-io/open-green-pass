@@ -43,7 +43,7 @@ export default function ConcurrencyPage() {
         ))}
       </div>
 
-      <Card title="场景 × 资源映射" extra={<span className="text-[11px] text-slate-400">每个测试场景依赖的资源与当前占用 · 完整闭环（用例 / 执行 / 门禁 / 历史 / 报告）见「测试场景中心」</span>} className="p-5 mb-5">
+      <Card title="场景 × 资源映射" extra={<span className="text-[11px] text-slate-400">每个测试场景依赖的资源与当前占用 · 完整闭环（用例 / 执行 / 门禁 / 历史 / 报告）见「测试中心」</span>} className="p-5 mb-5">
         <table className="w-full text-xs">
           <thead className="text-left text-slate-400 border-b border-slate-100">
             <tr><th className="py-2 font-medium">场景</th><th className="py-2 font-medium">形态</th><th className="py-2 font-medium">依赖资源</th><th className="py-2 font-medium">工具链</th><th className="py-2 font-medium">关联门禁</th><th className="py-2 font-medium">资源占用</th></tr>
@@ -65,7 +65,7 @@ export default function ConcurrencyPage() {
             })}
           </tbody>
         </table>
-        <p className="mt-3 text-[10px] text-slate-400">完整场景闭环（用例 / 执行 / 门禁 / 历史 / 报告）请前往「测试场景中心」。</p>
+        <p className="mt-3 text-[10px] text-slate-400">完整场景闭环（用例 / 执行 / 门禁 / 历史 / 报告）请前往「测试中心」。</p>
       </Card>
       <div className="grid grid-cols-3 gap-5">
         <div className="col-span-2 card bg-white rounded-xl border border-slate-200 overflow-hidden">

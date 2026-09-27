@@ -57,7 +57,7 @@ export default function ScenarioCenterPage() {
 
   return (
     <div>
-      <PageHeader title="测试场景中心" desc="测试质量管控的核心 · 12 场景 × 完整闭环（用例 / 执行 / 门禁 / 历史 / 报告）">
+      <PageHeader title="测试中心" desc="测试质量管控的核心 · 12 场景 × 完整闭环（用例 / 执行 / 门禁 / 历史 / 报告）">
         <div className="flex items-center gap-3 text-xs text-slate-500">
           <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />12 场景全部启用</span>
           <span className="flex items-center gap-1.5"><CircleCheckBig className="w-3.5 h-3.5 text-emerald-500" />每场景一条独立闭环</span>
