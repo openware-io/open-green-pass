@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { TEST_RUNS, TEST_SCENARIOS, SCENARIO_GROUPS, type ITestRun } from '@/data/mock';
+import { scenarioNav } from '@/context/scenarioNav';
 import { PageHeader, Card } from '@/components/shared';
-import { Cpu, Globe, Smartphone, Sparkles, Download, CheckCircle2, ShieldCheck, TrendingUp } from 'lucide-react';
+import { Cpu, Globe, Smartphone, Sparkles, Download, CheckCircle2, ShieldCheck, TrendingUp, CornerDownRight } from 'lucide-react';
 
 const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
 const EXPORT_FORMATS = [
@@ -10,6 +12,7 @@ const EXPORT_FORMATS = [
 
 export default function ReportPage() {
   const [runId, setRunId] = useState('RUN-4821');
+  const navigate = useNavigate();
   const [toast, setToast] = useState('');
   const run = TEST_RUNS.find((r) => r.id === runId) as ITestRun;
 
@@ -116,11 +119,17 @@ export default function ReportPage() {
                         <div className="text-[10px] text-slate-500 bg-slate-50 rounded-lg px-2 py-1.5 mb-2 flex items-center gap-1">
                           <ShieldCheck className="w-3 h-3 text-emerald-500" />{s.gateRule}
                         </div>
-                        <div className="flex items-center justify-between">
-                          <button type="button" onClick={() => onExport(`RUN-4821-${s.id}${EXPORT_FORMATS[1].f}`)}
-                            className="flex items-center gap-1 px-2 py-1 text-[10px] bg-slate-100 text-slate-600 rounded-lg hover:bg-emerald-50 hover:text-emerald-600">
-                            <Download className="w-3 h-3" />单独导出
-                          </button>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => onExport(`RUN-4821-${s.id}${EXPORT_FORMATS[1].f}`)}
+                              className="flex items-center gap-1 px-2 py-1 text-[10px] bg-slate-100 text-slate-600 rounded-lg hover:bg-emerald-50 hover:text-emerald-600">
+                              <Download className="w-3 h-3" />单独导出
+                            </button>
+                            <button type="button" onClick={() => { scenarioNav.go(s.id, 'report'); navigate('/scenarios'); }}
+                              className="flex items-center gap-1 px-2 py-1 text-[10px] bg-slate-100 text-slate-600 rounded-lg hover:bg-emerald-50 hover:text-emerald-600">
+                              <CornerDownRight className="w-3 h-3" />进入场景闭环
+                            </button>
+                          </div>
                           <span className="text-[10px] text-slate-400">近5次 {s.history.map((h) => `${h.p}%`).join(' → ')}</span>
                         </div>
                       </div>

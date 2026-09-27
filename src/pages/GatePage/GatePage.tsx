@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
+import { scenarioNav } from '@/context/scenarioNav';
 import { toast } from 'sonner';
-import { assetToProfile, type IAsset } from '@/data/mock';
+import { assetToProfile, TEST_SCENARIOS, type IAsset } from '@/data/mock';
 import { PageHeader, GhostButton, PrimaryButton, Card } from '@/components/shared';
-import { BrainCircuit, Loader2 } from 'lucide-react';
+import { BrainCircuit, Cpu, Globe, Smartphone, Sparkles, Loader2 } from 'lucide-react';
 
 const RULE_ICON = { pass: <span className="text-emerald-600">✓</span>, block: <span className="text-red-600">✕</span> };
 const RULE_BG = { pass: 'bg-emerald-100 text-emerald-600', block: 'bg-red-100 text-red-600' };
@@ -18,7 +19,10 @@ const AI_NOTES: Record<string, string> = {
   '原始测试回放': 'AI 在产出代码上回放基线用例，比对断言结果',
 };
 
+const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
+
 export default function GatePage() {
+  const navigate = useNavigate();
   const { selectedAsset } = useOutletContext<{ selectedAsset: IAsset }>();
   const profile = assetToProfile(selectedAsset);
   const gateRules = profile.gateRules;
@@ -94,7 +98,33 @@ export default function GatePage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-5">
+              <Card title="场景门禁规则总览" extra={<span className="text-[11px] text-slate-400">测试中心 12 场景各自门禁阈值 · 点击卡片下钻该场景门禁闭环</span>} className="p-5 mb-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
+            {TEST_SCENARIOS.map((s) => {
+              const Icon = SCEN_ICON[s.icon] ?? Cpu;
+              const lp = s.history[s.history.length - 1].p;
+              const blocked = lp < 90;
+              return (
+                <button key={s.id} type="button"
+                  onClick={() => { scenarioNav.go(s.id, 'gate'); navigate('/scenarios'); }}
+                  className={'text-left border rounded-xl p-3 transition-all hover:shadow-sm ' + (blocked ? 'border-red-200 bg-red-50/30 hover:border-red-300' : 'border-slate-200 hover:border-emerald-300 hover:-translate-y-0.5')}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className={'w-7 h-7 rounded-lg flex items-center justify-center ' + (blocked ? 'bg-red-500 text-white' : 'bg-emerald-500 text-white')}><Icon className="w-4 h-4" /></span>
+                      <div>
+                        <div className="text-sm font-medium text-slate-800 flex items-center gap-1.5">{s.name}<span className="text-[10px] text-slate-400 font-mono">{s.id}</span></div>
+                        <div className="text-[10px] text-slate-400">{s.form} · 门禁 {s.gate}</div>
+                      </div>
+                    </div>
+                    <span className={'text-[10px] px-1.5 py-0.5 rounded ' + (blocked ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600')}>{lp >= 90 ? '通过' : '阻断'}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-600 bg-white rounded-lg px-2 py-1.5 border border-slate-100">门禁规则：{s.gateRule}</div>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+<div className="grid grid-cols-3 gap-5">
         <div className="col-span-2 card bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
             <h2 className="font-semibold text-slate-700 text-sm">门禁规则判定结果 · {profile.name}</h2>

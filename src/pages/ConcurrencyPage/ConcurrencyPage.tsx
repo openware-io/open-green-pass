@@ -1,4 +1,6 @@
+import { useNavigate } from 'react-router-dom';
 import { CONCURRENCY_ROWS, CONFLICT_EVENTS, RESOURCE_POOLS, TEST_SCENARIOS } from '@/data/mock';
+import { scenarioNav } from '@/context/scenarioNav';
 import { PageHeader, Card } from '@/components/shared';
 
 const FORM_BADGE: Record<string, string> = { '服务/后端': 'bg-emerald-50 text-emerald-600', 'Web 前端': 'bg-sky-50 text-sky-600', '移动端': 'bg-purple-50 text-purple-600', 'AI 专项': 'bg-indigo-50 text-indigo-600' };
@@ -15,6 +17,7 @@ const CONFLICT: Record<string, string> = { danger: 'bg-red-50 border-red-100', w
 const CONFLICT_DOT: Record<string, string> = { danger: 'text-red-500', warning: 'text-amber-500', info: 'text-slate-400' };
 
 export default function ConcurrencyPage() {
+  const navigate = useNavigate();
   return (
     <div>
       <PageHeader title="测试资源" desc="资源池 · 场景资源映射 · 调度隔离 · 冲突事件">
@@ -43,7 +46,7 @@ export default function ConcurrencyPage() {
         ))}
       </div>
 
-      <Card title="场景 × 资源映射" extra={<span className="text-[11px] text-slate-400">每个测试场景依赖的资源与当前占用 · 完整闭环（用例 / 执行 / 门禁 / 历史 / 报告）见「测试中心」</span>} className="p-5 mb-5">
+      <Card title="场景 × 资源映射" extra={<span className="text-[11px] text-slate-400">每个测试场景依赖的资源与当前占用 · 点击场景行进入「测试中心」该场景闭环</span>} className="p-5 mb-5">
         <table className="w-full text-xs">
           <thead className="text-left text-slate-400 border-b border-slate-100">
             <tr><th className="py-2 font-medium">场景</th><th className="py-2 font-medium">形态</th><th className="py-2 font-medium">依赖资源</th><th className="py-2 font-medium">工具链</th><th className="py-2 font-medium">关联门禁</th><th className="py-2 font-medium">资源占用</th></tr>
@@ -53,7 +56,7 @@ export default function ConcurrencyPage() {
               const ratio = poolRatio(s.resource);
               const bar = ratio >= 80 ? 'bg-red-500' : ratio >= 65 ? 'bg-amber-500' : 'bg-emerald-500';
               return (
-                <tr key={s.id} className="border-b border-slate-50 hover:bg-slate-50">
+                <tr key={s.id} onClick={() => { scenarioNav.go(s.id, "cases"); navigate("/scenarios"); }} className="border-b border-slate-50 hover:bg-emerald-50/40 cursor-pointer">
                   <td className="py-2"><span className="font-mono text-slate-400 mr-1">{s.id}</span><span className="text-slate-700 font-medium">{s.name}</span></td>
                   <td className="py-2"><span className={'text-[10px] px-1.5 py-0.5 rounded ' + FORM_BADGE[s.form]}>{s.form}</span></td>
                   <td className="py-2 text-slate-600">{s.resource}</td>
@@ -65,7 +68,7 @@ export default function ConcurrencyPage() {
             })}
           </tbody>
         </table>
-        <p className="mt-3 text-[10px] text-slate-400">完整场景闭环（用例 / 执行 / 门禁 / 历史 / 报告）请前往「测试中心」。</p>
+        <p className="mt-3 text-[10px] text-slate-400">点击任一场景行，进入「测试中心」该场景完整闭环（用例 / 执行 / 门禁 / 历史 / 报告）。</p>
       </Card>
       <div className="grid grid-cols-3 gap-5">
         <div className="col-span-2 card bg-white rounded-xl border border-slate-200 overflow-hidden">

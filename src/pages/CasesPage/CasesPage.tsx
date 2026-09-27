@@ -1,4 +1,7 @@
-import { CASES } from '@/data/mock';
+import { CASES, TEST_SCENARIOS } from '@/data/mock';
+import { useNavigate } from 'react-router-dom';
+import { scenarioNav } from '@/context/scenarioNav';
+import { Cpu, Globe, Smartphone, Sparkles, ShieldCheck } from 'lucide-react';
 import { PageHeader, GhostButton, PrimaryButton } from '@/components/shared';
 
 const TYPE_BADGE: Record<string, string> = {
@@ -15,7 +18,12 @@ const STATUS_BADGE: Record<string, string> = {
   '待审核': 'bg-red-50 text-red-600',
 };
 
+const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles, ShieldCheck };
+const SCEN_OF: Record<string, string> = { '单元': 'SCEN-01', '集成': 'SCEN-02', '契约': 'SCEN-03', '安全': 'SCEN-07', 'Web': 'SCEN-08', '移动': 'SCEN-09' };
+
 export default function CasesPage() {
+  const navigate = useNavigate();
+
   return (
     <div>
       <PageHeader title="测试用例库" desc="用例版本化 · 上游源绑定 · 断言强度 · 变异验证">
@@ -30,6 +38,7 @@ export default function CasesPage() {
               <th className="px-4 py-3 font-medium">用例 ID</th>
               <th className="px-4 py-3 font-medium">标题</th>
               <th className="px-4 py-3 font-medium">所属资产</th>
+              <th className="px-4 py-3 font-medium">所属场景</th>
               <th className="px-4 py-3 font-medium">上游源</th>
               <th className="px-4 py-3 font-medium">类型</th>
               <th className="px-4 py-3 font-medium">断言强度</th>
@@ -45,6 +54,19 @@ export default function CasesPage() {
                 <td className="px-4 py-3 text-slate-700">{c.title}</td>
                 <td className="px-4 py-3">
                   <span className="bg-slate-50 text-slate-600 px-1.5 py-0.5 rounded text-[10px]">{c.asset}</span>
+                </td>
+                <td className="px-4 py-3">
+                  {(() => {
+                    const sc = TEST_SCENARIOS.find((s) => s.id === SCEN_OF[c.type]);
+                    if (!sc) return <span className="text-[10px] text-slate-300">—</span>;
+                    const Icon = SCEN_ICON[sc.icon] ?? Cpu;
+                    return (
+                      <button type="button" onClick={() => { scenarioNav.go(sc.id, 'cases'); navigate('/scenarios'); }}
+                        className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-50 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600">
+                        <Icon className="w-3 h-3" />{sc.name}
+                      </button>
+                    );
+                  })()}
                 </td>
                 <td className="px-4 py-3"><span className="text-[10px] text-slate-500">{c.source}</span></td>
                 <td className="px-4 py-3"><span className={TYPE_BADGE[c.type] + ' px-2 py-0.5 rounded-full text-[10px]'}>{c.type}</span></td>

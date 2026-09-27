@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useScenarioNav } from '@/context/scenarioNav';
 import { TEST_SCENARIOS, SCENARIO_GROUPS, SCEN_STATUS, type ITestScenario, type ScenStatus } from '@/data/mock';
 import { PageHeader, Card } from '@/components/shared';
 import { Cpu, Globe, Smartphone, Sparkles, ListChecks, Play, ShieldCheck, History, FileText, CheckCircle2, Download, CircleCheckBig, ArrowLeft } from 'lucide-react';
@@ -35,6 +36,17 @@ export default function ScenarioCenterPage() {
   const [runAll, setRunAll] = useState(true);
   const [scopeFilter, setScopeFilter] = useState('全部');
   const [checked, setChecked] = useState<string[]>([]);
+  const nav = useScenarioNav();
+  // 从全局各页下钻而来：聚焦 store 指定场景与闭环 tab（外部状态同步，非内部状态循环）
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (nav.focus && TEST_SCENARIOS.some((s) => s.id === nav.focus)) {
+      setSelId(nav.focus);
+      if (nav.tab) setTab(nav.tab);
+      setFocused(true);
+    }
+  }, [nav]);
+  /* eslint-enable react-hooks/set-state-in-effect */
   const sel = TEST_SCENARIOS.find((s) => s.id === selId) as ITestScenario;
   const selStatus = SCEN_STATUS[sel.id] ?? 'idle';
   const SIcon = SCEN_ICON[sel.icon];
