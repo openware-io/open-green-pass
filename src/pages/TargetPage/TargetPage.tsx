@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { METRICS, GEN_TRACE, ASSET_RISKS, AI_MODELS, PROJECT_MODELS, TEST_SCENARIOS, assetToProfile, type IAsset } from '@/data/mock';
 import { scenarioNav } from '@/context/scenarioNav';
-import { KpiCard, PageHeader, PrimaryButton } from '@/components/shared';
+import { KpiCard, PageHeader, PrimaryButton, ListFilter } from '@/components/shared';
 import { Brain, ShieldAlert, ChevronRight, Sparkles, GitBranch, CircleDot, FileSearch, History, CheckCircle2, AlertTriangle, XCircle, Layers, Cpu, Globe, Smartphone } from 'lucide-react';
 
 const STAGE_FLOW = [
@@ -46,6 +47,9 @@ export default function TargetPage() {
   const { selectedAsset } = useOutletContext<{ selectedAsset: IAsset }>();
   const profile = assetToProfile(selectedAsset);
   const risks = profile.gateRules.filter((r) => r.status === 'block');
+  const [q, setQ] = useState('');
+  const kw = q.trim().toLowerCase();
+  const riskFiltered = ASSET_RISKS.filter((a) => !kw || (a.name + a.type).toLowerCase().includes(kw));
   const riskAssets = ASSET_RISKS.filter((a) => a.gate === '阻断');
   const modelBound = PROJECT_MODELS.find((p) => p.projectId === profile.name);
   const model = modelBound && AI_MODELS.find((m) => m.id === modelBound.modelId);
@@ -252,8 +256,12 @@ export default function TargetPage() {
             <h2 className="font-semibold text-slate-700 text-sm">被测对象风险明细</h2>
             <span className="text-[11px] text-slate-400">{riskAssets.length} 个阻断</span>
           </div>
+          <div className="flex items-center justify-between px-5 pt-3">
+            <ListFilter search={q} onSearch={setQ} />
+            <span className="text-[11px] text-slate-400">共 {riskFiltered.length} / {ASSET_RISKS.length} 项</span>
+          </div>
           <div className="divide-y divide-slate-100">
-            {ASSET_RISKS.map((a) => (
+            {riskFiltered.map((a) => (
               <div key={a.name} className="px-5 py-3 flex items-center gap-3">
                 <div className="flex-1">
                   <div className="text-xs font-medium text-slate-700 flex items-center gap-2">

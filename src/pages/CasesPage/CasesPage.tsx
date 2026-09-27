@@ -1,8 +1,9 @@
+import { useState } from 'react';
 import { CASES, TEST_SCENARIOS } from '@/data/mock';
 import { useNavigate } from 'react-router-dom';
 import { scenarioNav } from '@/context/scenarioNav';
 import { Cpu, Globe, Smartphone, Sparkles, ShieldCheck } from 'lucide-react';
-import { PageHeader, GhostButton, PrimaryButton } from '@/components/shared';
+import { PageHeader, GhostButton, PrimaryButton, ListFilter } from '@/components/shared';
 
 const TYPE_BADGE: Record<string, string> = {
   '单元': 'bg-blue-50 text-blue-600',
@@ -23,6 +24,16 @@ const SCEN_OF: Record<string, string> = { '单元': 'SCEN-01', '集成': 'SCEN-0
 
 export default function CasesPage() {
   const navigate = useNavigate();
+  const [q, setQ] = useState('');
+  const [type, setType] = useState('');
+  const [status, setStatus] = useState('');
+  const kw = q.trim().toLowerCase();
+  const filtered = CASES.filter((c) => {
+    if (type && c.type !== type) return false;
+    if (status && c.status !== status) return false;
+    if (kw && !(c.id + c.title + c.asset + c.source).toLowerCase().includes(kw)) return false;
+    return true;
+  });
 
   return (
     <div>
@@ -30,6 +41,15 @@ export default function CasesPage() {
         <GhostButton>导入用例</GhostButton>
         <PrimaryButton>AI 生成用例</PrimaryButton>
       </PageHeader>
+
+      <div className="flex items-center justify-between mb-3">
+        <ListFilter search={q} onSearch={setQ}
+          selects={[
+            { key: 'type', label: '用例类型', options: ['单元', '集成', 'Web', '移动', '安全'], value: type, onChange: setType },
+            { key: 'status', label: '状态', options: ['已激活', '冲突', '待审核'], value: status, onChange: setStatus },
+          ]} />
+        <span className="text-[11px] text-slate-400">共 {filtered.length} / {CASES.length} 条</span>
+      </div>
 
       <div className="card bg-white rounded-xl border border-slate-200 overflow-hidden">
         <table className="w-full text-sm">
@@ -47,7 +67,7 @@ export default function CasesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-xs">
-            {CASES.map((c) => (
+            {filtered.map((c) => (
               <tr key={c.id}
                 className={c.status === '冲突' ? 'bg-amber-50/30' : c.status === '待审核' ? 'bg-red-50/30' : 'hover:bg-slate-50'}>
                 <td className="px-4 py-3 font-mono text-indigo-600 font-medium">{c.id}</td>

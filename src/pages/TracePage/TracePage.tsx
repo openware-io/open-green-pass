@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useAssetLevel, LEVEL_LABEL } from '@/context';
 import { REQUIREMENTS, TRACE_CHAINS, type IAssetNode } from '@/data/mock';
-import { PageHeader, GhostButton, Card } from '@/components/shared';
+import { PageHeader, GhostButton, Card, ListFilter as FilterBar } from '@/components/shared';
 import { ScanSearch, ListFilter, CircleCheckBig, CircleAlert, CircleX, Camera, Wallet, Gauge } from 'lucide-react';
 
 const TRACEABILITY_BADGE: Record<string, string> = {
@@ -58,7 +58,10 @@ export default function TracePage() {
   const chain = TRACE_CHAINS[activeReq];
   const activeTc = activeTcId ? chain.tcs.find((t) => t.id === activeTcId) ?? null : null;
 
-  const rows = gapOnly ? REQUIREMENTS.filter((r) => r.traceability !== '完整') : REQUIREMENTS;
+  const [q, setQ] = useState('');
+  const kw = q.trim().toLowerCase();
+  const rows = (gapOnly ? REQUIREMENTS.filter((r) => r.traceability !== '完整') : REQUIREMENTS)
+    .filter((r) => !kw || (r.id + r.title).toLowerCase().includes(kw));
 
   return (
     <div>
@@ -178,6 +181,10 @@ export default function TracePage() {
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-100 border border-amber-300"></span>部分</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-100 border border-red-300"></span>缺口</span>
           </div>
+        </div>
+        <div className="flex items-center justify-between px-5 pt-3">
+          <FilterBar search={q} onSearch={setQ} />
+          <span className="text-[11px] text-slate-400">共 {rows.length} / {REQUIREMENTS.length} 条需求</span>
         </div>
         <table className="w-full text-sm">
           <thead className="bg-slate-50 border-b border-slate-200">

@@ -3,7 +3,7 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 import { scenarioNav } from '@/context/scenarioNav';
 import { toast } from 'sonner';
 import { assetToProfile, TEST_SCENARIOS, type IAsset } from '@/data/mock';
-import { PageHeader, GhostButton, PrimaryButton, Card } from '@/components/shared';
+import { PageHeader, GhostButton, PrimaryButton, Card, ListFilter } from '@/components/shared';
 import { BrainCircuit, Cpu, Globe, Smartphone, Sparkles, Loader2 } from 'lucide-react';
 
 const RULE_ICON = { pass: <span className="text-emerald-600">✓</span>, block: <span className="text-red-600">✕</span> };
@@ -33,6 +33,14 @@ export default function GatePage() {
   // 判定过程状态：idle=初始 · running=AI 重新判定中 · done=刚完成一轮判定
   const [phase, setPhase] = useState<'idle' | 'running' | 'done'>('idle');
   const [note, setNote] = useState('');
+  const [q, setQ] = useState('');
+  const [form, setForm] = useState('');
+  const kw = q.trim().toLowerCase();
+  const scenFiltered = TEST_SCENARIOS.filter((s) => {
+    if (form && s.form !== form) return false;
+    if (kw && !(s.name + s.id + s.form + s.gate).toLowerCase().includes(kw)) return false;
+    return true;
+  });
 
   const handleRejudge = () => {
     if (phase === 'running') return;
@@ -99,8 +107,13 @@ export default function GatePage() {
       </div>
 
               <Card title="场景门禁规则总览" extra={<span className="text-[11px] text-slate-400">测试中心 12 场景各自门禁阈值 · 点击卡片下钻该场景门禁闭环</span>} className="p-5 mb-5">
+          <div className="flex items-center justify-between mb-3">
+            <ListFilter search={q} onSearch={setQ}
+              selects={[{ key: 'form', label: '形态', options: ['静态分析', '动态测试', '契约测试', '安全测试', '端到端', '非功能'], value: form, onChange: setForm }]} />
+            <span className="text-[11px] text-slate-400">共 {scenFiltered.length} / {TEST_SCENARIOS.length} 场景</span>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
-            {TEST_SCENARIOS.map((s) => {
+            {scenFiltered.map((s) => {
               const Icon = SCEN_ICON[s.icon] ?? Cpu;
               const lp = s.history[s.history.length - 1].p;
               const blocked = lp < 90;

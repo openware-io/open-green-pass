@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { AI_MODELS, PROJECT_MODELS, type IAIModel } from '@/data/mock';
-import { PageHeader, PrimaryButton, GhostButton } from '@/components/shared';
+import { PageHeader, PrimaryButton, GhostButton, ListFilter } from '@/components/shared';
 import { Sparkles, Boxes, Cpu, Star, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -15,6 +15,9 @@ const MODEL_COLOR: Record<string, string> = {
 
 export default function ModelPage() {
   const [selectedModel, setSelectedModel] = useState<IAIModel>(AI_MODELS[0]);
+  const [q, setQ] = useState('');
+  const kw = q.trim().toLowerCase();
+  const modelsFiltered = AI_MODELS.filter((m) => !kw || (m.name + m.vendor + (m.tags ?? []).join(' ')).toLowerCase().includes(kw));
 
   const handleBind = (projectId: string, modelId: string) => {
     const m = AI_MODELS.find((x) => x.id === modelId);
@@ -39,8 +42,12 @@ export default function ModelPage() {
           <h2 className="font-semibold text-slate-700 text-sm flex items-center gap-1.5"><Cpu className="w-4 h-4 text-emerald-500" />模型池（团队可用）</h2>
           <span className="text-[11px] text-slate-400">{AI_MODELS.length} 个模型</span>
         </div>
+        <div className="flex items-center justify-between mb-3">
+          <ListFilter search={q} onSearch={setQ} />
+          <span className="text-[11px] text-slate-400">共 {modelsFiltered.length} / {AI_MODELS.length} 个</span>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          {AI_MODELS.map((m) => {
+          {modelsFiltered.map((m) => {
             const selected = selectedModel.id === m.id;
             return (
               <button key={m.id} type="button" onClick={() => setSelectedModel(m)}

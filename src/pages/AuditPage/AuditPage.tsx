@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AUDIT_LOGS, COST_TOTAL, COST_MOM_CHANGE } from '@/data/mock';
-import { PageHeader, GhostButton, Card } from '@/components/shared';
+import { PageHeader, GhostButton, Card, ListFilter } from '@/components/shared';
 import { ShieldCheck, Wallet, Play, UserCog, ScrollText, ChevronRight, Layers } from 'lucide-react';
 
 const TYPE_BADGE: Record<string, string> = {
@@ -20,6 +21,14 @@ const DOMAINS = [
 ];
 
 export default function AuditPage() {
+  const [q, setQ] = useState('');
+  const [type, setType] = useState('');
+  const kw = q.trim().toLowerCase();
+  const filtered = AUDIT_LOGS.filter((log) => {
+    if (type && log.type !== type) return false;
+    if (kw && !(log.seq + log.message + log.actor + log.asset).toLowerCase().includes(kw)) return false;
+    return true;
+  });
   return (
     <div>
       <PageHeader title="审计总览" desc="哈希链 · 仅追加 · 可独立验证 · 一份链四视图">
@@ -81,8 +90,13 @@ export default function AuditPage() {
             <option>svc-payment</option>
           </select>
         }>
+        <div className="flex items-center justify-between px-5 pt-3">
+          <ListFilter search={q} onSearch={setQ}
+            selects={[{ key: 'type', label: '类型', options: ['门禁阻断', '契约告警', '篡改检测', '种子生成', '冲突检测', '执行通过'], value: type, onChange: setType }]} />
+          <span className="text-[11px] text-slate-400">共 {filtered.length} / {AUDIT_LOGS.length} 条</span>
+        </div>
         <div className="divide-y divide-slate-100">
-          {AUDIT_LOGS.map((log) => (
+          {filtered.map((log) => (
             <div key={log.seq} className="px-5 py-3.5 hover:bg-slate-50">
               <div className="flex items-center gap-4">
                 <span className="font-mono text-slate-400 w-12 text-xs">{log.seq}</span>

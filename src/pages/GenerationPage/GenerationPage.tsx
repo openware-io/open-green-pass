@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { UPSTREAM_ADAPTERS, GENERATION_STAGES, ADAPTER_SEED_TOTAL } from '@/data/mock';
-import { PageHeader, GhostButton, PrimaryButton, Card } from '@/components/shared';
+import { PageHeader, GhostButton, PrimaryButton, Card, ListFilter } from '@/components/shared';
 import { BrainCircuit, Sparkles } from 'lucide-react';
 
 const STAGE_ICON: Record<string, React.ReactNode> = {
@@ -35,6 +36,9 @@ const AI_TRACES = [
 ];
 
 export default function GenerationPage() {
+  const [q, setQ] = useState('');
+  const kw = q.trim().toLowerCase();
+  const upFiltered = UPSTREAM_ADAPTERS.filter((a) => !kw || (a.source + a.status).toLowerCase().includes(kw));
   return (
     <div>
       <PageHeader title="用例生成管道" desc="六类上游源 · AI 理解 · 质量验证 · 人工审核">
@@ -89,6 +93,10 @@ export default function GenerationPage() {
           <div className="px-5 py-3.5 border-b border-slate-200">
             <h2 className="font-semibold text-slate-700 text-sm">上游源适配器</h2>
           </div>
+          <div className="flex items-center justify-between px-5 pt-3">
+            <ListFilter search={q} onSearch={setQ} />
+            <span className="text-[11px] text-slate-400">共 {upFiltered.length} / {UPSTREAM_ADAPTERS.length} 个上游源</span>
+          </div>
           <table className="w-full text-xs">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr className="text-left text-slate-500">
@@ -100,7 +108,7 @@ export default function GenerationPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {UPSTREAM_ADAPTERS.map((a) => (
+              {upFiltered.map((a) => (
                 <tr key={a.source} className={a.status === '验证中' ? 'bg-indigo-50/30 hover:bg-indigo-50' : 'hover:bg-slate-50'}>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { TEAMS, TEAM_MEMBERS, ROLE_META, ROLE_MATRIX, CURRENT_TEAM_ID, ASSET_ACCESS, ASSET_PERM_META, type Role, type ITeamMember, type AssetPerm } from '@/data/mock';
-import { PageHeader, PrimaryButton } from '@/components/shared';
+import { PageHeader, PrimaryButton, ListFilter } from '@/components/shared';
 import { Building2, Users, ShieldCheck, Plus, Check, X, UserPlus, Circle, KeyRound, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -37,9 +37,13 @@ export default function TeamPage() {
   const activeTeam = TEAMS.find((t) => t.id === activeTeamId) ?? TEAMS[0];
   const color = TEAM_COLOR[activeTeam.color];
 
+  const [q, setQ] = useState('');
+  const kw = q.trim().toLowerCase();
   const members = TEAM_MEMBERS.filter((m) => {
     // 原型示意：按团队切分，当前团队展示固定成员集合
-    return activeTeamId === 'team-1' ? m.role !== 'viewer' || m.id !== 'u-5' : m;
+    if (activeTeamId === 'team-1' && m.role === 'viewer' && m.id === 'u-5') return false;
+    if (kw && !(m.name + m.email + m.role + m.status).toLowerCase().includes(kw)) return false;
+    return true;
   });
 
   const handleChangeRole = (m: ITeamMember, role: Role) => {
@@ -130,6 +134,10 @@ export default function TeamPage() {
           <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
             <h2 className="font-semibold text-slate-700 text-sm flex items-center gap-1.5"><Users className="w-4 h-4 text-emerald-500" />团队成员 · {activeTeam.name}</h2>
             <button type="button" onClick={handleAddMember} className="text-[11px] text-emerald-600 flex items-center gap-1"><Plus className="w-3.5 h-3.5" />添加成员</button>
+          </div>
+          <div className="flex items-center justify-between px-5 pt-3">
+            <ListFilter search={q} onSearch={setQ} />
+            <span className="text-[11px] text-slate-400">共 {members.length} 位成员</span>
           </div>
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">

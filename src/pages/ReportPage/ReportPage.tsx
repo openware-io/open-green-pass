@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TEST_RUNS, TEST_SCENARIOS, SCENARIO_GROUPS, type ITestRun } from '@/data/mock';
 import { scenarioNav } from '@/context/scenarioNav';
-import { PageHeader, Card } from '@/components/shared';
+import { PageHeader, Card, ListFilter } from '@/components/shared';
 import { Cpu, Globe, Smartphone, Sparkles, Download, CheckCircle2, ShieldCheck, TrendingUp, CornerDownRight } from 'lucide-react';
 
 const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
@@ -14,6 +14,9 @@ export default function ReportPage() {
   const [runId, setRunId] = useState('RUN-4821');
   const navigate = useNavigate();
   const [toast, setToast] = useState('');
+  const [q, setQ] = useState('');
+  const kw = q.trim().toLowerCase();
+  const runs = TEST_RUNS.filter((r) => !kw || (r.id + r.branch + r.trigger).toLowerCase().includes(kw));
   const run = TEST_RUNS.find((r) => r.id === runId) as ITestRun;
 
   // ===== 跨场景汇总（从场景历史派生）=====
@@ -32,8 +35,12 @@ export default function ReportPage() {
       </PageHeader>
 
       <Card title="选择运行 · 生成报告" extra={<span className="text-[11px] text-slate-400">点击运行生成对应跨场景合编报告</span>} className="mb-5 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <ListFilter search={q} onSearch={setQ} />
+          <span className="text-[11px] text-slate-400">共 {runs.length} / {TEST_RUNS.length} 个运行</span>
+        </div>
         <div className="flex flex-wrap gap-2">
-          {TEST_RUNS.map((r) => (
+          {runs.map((r) => (
             <button key={r.id} type="button" onClick={() => setRunId(r.id)}
               className={runId === r.id ? 'px-3 py-1.5 text-xs bg-emerald-600 text-white rounded-lg' : 'px-3 py-1.5 text-xs bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200'}>
               <span className="font-mono">{r.id}</span>

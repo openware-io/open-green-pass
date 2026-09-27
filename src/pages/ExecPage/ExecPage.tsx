@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FLOW_ITEMS, EXEC_RUN, TEST_SCENARIOS } from '@/data/mock';
-import { PageHeader, Card } from '@/components/shared';
+import { PageHeader, Card, ListFilter } from '@/components/shared';
 import { Cpu, Globe, Smartphone, Sparkles, Play, Pause } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -22,6 +22,14 @@ function flowScenario(title: string, asset: string): string {
 
 export default function ExecPage() {
   const [paused, setPaused] = useState(false);
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState('');
+  const kw = q.trim().toLowerCase();
+  const filtered = FLOW_ITEMS.filter((it) => {
+    if (status && it.status !== status) return false;
+    if (kw && !(it.id + it.title + it.asset).toLowerCase().includes(kw)) return false;
+    return true;
+  });
   const stats = {
     pass: EXEC_RUN.passed,
     fail: EXEC_RUN.failed,
@@ -77,10 +85,8 @@ export default function ExecPage() {
         <div className="col-span-2 card bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
             <h2 className="font-semibold text-slate-700 text-sm">执行任务清单 <span className="text-[10px] text-slate-400 font-normal">· 跨场景总览 · 每任务标注所属测试场景</span></h2>
-            <div className="flex gap-2 text-xs">
-              <button className="px-2 py-1 bg-slate-100 rounded text-slate-600">全部</button>
-              <button className="px-2 py-1 rounded text-slate-400">失败</button>
-            </div>
+            <ListFilter search={q} onSearch={setQ}
+              selects={[{ key: 'status', label: '状态', options: ['通过', '失败', '执行中', '阻塞'], value: status, onChange: setStatus }]} />
           </div>
           <table className="w-full text-xs">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -92,7 +98,7 @@ export default function ExecPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {FLOW_ITEMS.map((item) => {
+              {filtered.map((item) => {
                 const s = STATUS_STYLE[item.status];
                 const scen = TEST_SCENARIOS.find((x) => x.id === flowScenario(item.title, item.asset));
                 const Icon = scen ? SCEN_ICON[scen.icon] ?? Cpu : null;

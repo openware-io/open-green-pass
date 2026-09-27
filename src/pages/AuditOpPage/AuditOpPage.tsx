@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { OP_AUDIT_ROWS } from '@/data/mock';
-import { PageHeader, Card } from '@/components/shared';
+import { PageHeader, Card, ListFilter } from '@/components/shared';
 import { UserCog, ShieldAlert, Bot, Fingerprint } from 'lucide-react';
 
 const RISK_BADGE: Record<string, string> = {
@@ -9,6 +10,14 @@ const RISK_BADGE: Record<string, string> = {
 };
 
 export default function AuditOpPage() {
+  const [q, setQ] = useState('');
+  const [risk, setRisk] = useState('');
+  const kw = q.trim().toLowerCase();
+  const filtered = OP_AUDIT_ROWS.filter((r) => {
+    if (risk && r.risk !== risk) return false;
+    if (kw && !(r.user + r.action + r.target + r.role).toLowerCase().includes(kw)) return false;
+    return true;
+  });
   const total = OP_AUDIT_ROWS.length;
   const high = OP_AUDIT_ROWS.filter((r) => r.risk === '高').length;
   const med = OP_AUDIT_ROWS.filter((r) => r.risk === '中').length;
@@ -73,6 +82,10 @@ export default function AuditOpPage() {
       </div>
 
       <Card title="操作审计明细" extra={<span className="text-[11px] text-slate-400">一条操作 = 一条哈希链日志（仅追加）</span>}>
+        <div className="flex items-center justify-between px-5 pt-3">
+          <ListFilter search={q} onSearch={setQ} selects={[{ key: 'risk', label: '风险', options: ['低', '中', '高'], value: risk, onChange: setRisk }]} />
+          <span className="text-[11px] text-slate-400">共 {filtered.length} / {OP_AUDIT_ROWS.length} 条</span>
+        </div>
         <table className="w-full text-xs">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr className="text-left text-slate-500">
@@ -86,7 +99,7 @@ export default function AuditOpPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {OP_AUDIT_ROWS.map((r) => (
+            {filtered.map((r) => (
               <tr key={r.user + r.action + r.ts} className="hover:bg-slate-50">
                 <td className="px-4 py-3"><span className="font-medium text-slate-700">{r.user}</span> <span className="text-[10px] text-slate-400">{r.role}</span></td>
                 <td className="px-4 py-3 text-slate-500">{r.role}</td>

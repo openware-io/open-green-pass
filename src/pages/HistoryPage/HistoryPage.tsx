@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TEST_RUNS, RUN_SERVICE_REPORTS, EXEC_AUDIT_ROWS, CASE_COST_HISTORY, TEST_EVIDENCE, SCREENSHOT_POLICY, type ITestRun, type IScreenshotPolicy } from '@/data/mock';
-import { PageHeader, Card } from '@/components/shared';
+import { PageHeader, Card, ListFilter } from '@/components/shared';
 import { Activity, FileText, Image, FileJson, File, Video, ArrowUpRight, ArrowDownRight, Minus, ScanEye, Camera } from 'lucide-react';
 
 const RESULT_BADGE: Record<string, string> = {
@@ -107,6 +107,14 @@ function CaseCostPanel({ caseId, cases, onSelect }: { caseId: string; cases: str
 
 export default function HistoryPage() {
   const [runId, setRunId] = useState<string>('RUN-4821');
+  const [q, setQ] = useState('');
+  const [gate, setGate] = useState('');
+  const kw = q.trim().toLowerCase();
+  const runs = TEST_RUNS.filter((r) => {
+    if (gate && r.gate !== gate) return false;
+    if (kw && !(r.id + r.branch + r.trigger + r.ts).toLowerCase().includes(kw)) return false;
+    return true;
+  });
   const [tab, setTab] = useState<TabKey>('exec');
   const [caseForEvid, setCaseForEvid] = useState('TC-2024-118');
   const [policies, setPolicies] = useState<IScreenshotPolicy[]>(SCREENSHOT_POLICY);
@@ -144,6 +152,11 @@ export default function HistoryPage() {
 
       {/* 运行列表 */}
       <Card title="运行列表" extra={<span className="text-[11px] text-slate-400">点击行查看运行详情（报告 / 证据 / 成本）</span>}>
+        <div className="px-5 pt-3 flex items-center justify-between">
+          <ListFilter search={q} onSearch={setQ}
+            selects={[{ key: 'gate', label: '门禁', options: ['通过', '阻断'], value: gate, onChange: setGate }]} />
+          <span className="text-[11px] text-slate-400">共 {runs.length} / {TEST_RUNS.length} 条</span>
+        </div>
         <table className="w-full text-xs">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr className="text-left text-slate-500">
@@ -157,7 +170,7 @@ export default function HistoryPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {TEST_RUNS.map((r) => (
+            {runs.map((r) => (
               <tr key={r.id} onClick={() => setRunId(r.id)}
                 className={'cursor-pointer ' + (runId === r.id ? 'bg-emerald-50/50' : 'hover:bg-slate-50')}>
                 <td className="px-4 py-2.5 font-mono text-indigo-600 font-medium">{r.id}</td>

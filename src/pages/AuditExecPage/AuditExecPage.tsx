@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { EXEC_AUDIT_ROWS } from '@/data/mock';
-import { PageHeader, Card } from '@/components/shared';
+import { PageHeader, Card, ListFilter } from '@/components/shared';
 import { Play, XCircle, Ban, Timer } from 'lucide-react';
 
 const RESULT_BADGE: Record<string, string> = {
@@ -9,6 +10,14 @@ const RESULT_BADGE: Record<string, string> = {
 };
 
 export default function AuditExecPage() {
+  const [q, setQ] = useState('');
+  const [result, setResult] = useState('');
+  const kw = q.trim().toLowerCase();
+  const filtered = EXEC_AUDIT_ROWS.filter((r) => {
+    if (result && r.result !== result) return false;
+    if (kw && !(r.caseId + r.asset + r.model).toLowerCase().includes(kw)) return false;
+    return true;
+  });
   const total = EXEC_AUDIT_ROWS.length;
   const pass = EXEC_AUDIT_ROWS.filter((r) => r.result === '通过').length;
   const fail = EXEC_AUDIT_ROWS.filter((r) => r.result === '失败').length;
@@ -74,6 +83,10 @@ export default function AuditExecPage() {
       </div>
 
       <Card title="执行审计明细" extra={<span className="text-[11px] text-slate-400">关联：用例生成成本 → 执行成本 → 门禁判定</span>}>
+        <div className="flex items-center justify-between px-5 pt-3">
+          <ListFilter search={q} onSearch={setQ} selects={[{ key: 'result', label: '结果', options: ['通过', '失败', '阻塞'], value: result, onChange: setResult }]} />
+          <span className="text-[11px] text-slate-400">共 {filtered.length} / {EXEC_AUDIT_ROWS.length} 条</span>
+        </div>
         <table className="w-full text-xs">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr className="text-left text-slate-500">
@@ -86,7 +99,7 @@ export default function AuditExecPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {EXEC_AUDIT_ROWS.map((r) => (
+            {filtered.map((r) => (
               <tr key={r.caseId + r.ts} className="hover:bg-slate-50">
                 <td className="px-4 py-3 font-mono text-indigo-600 font-medium">{r.caseId}</td>
                 <td className="px-4 py-3"><span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">{r.asset}</span></td>

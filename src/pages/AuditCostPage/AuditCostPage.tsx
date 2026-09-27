@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { COST_GEN_DETAIL, COST_EXEC_DETAIL, COST_SCENARIOS, COST_TOTAL, COST_TOTAL_TOKENS_IN, COST_TOTAL_TOKENS_OUT, COST_AICALLS, COST_MOM_CHANGE, COST_PER_CASE, COST_TREND, COST_EXEC_LEGACY_TOTAL, COST_EXEC_NEW_TOTAL, COST_ORGS, COST_BY_GROUP, COST_BY_SERVICE, COST_HEAT, SERVICE_ORG_MAP, AI_MODELS, CASE_COST_HISTORY } from '@/data/mock';
-import { PageHeader, Card } from '@/components/shared';
+import { PageHeader, Card, ListFilter } from '@/components/shared';
 import { Wallet, TrendingDown, Cpu, Layers, ArrowDownRight, ArrowUpRight, History } from 'lucide-react';
 
 const SCEN_COLOR: Record<string, string> = {
@@ -52,6 +52,18 @@ const DIMS: { key: DimKey; label: string }[] = [
 
 export default function AuditCostPage() {
   const [dim, setDim] = useState<DimKey>('org');
+  const [genQ, setGenQ] = useState('');
+  const [execQ, setExecQ] = useState('');
+  const [execKind, setExecKind] = useState('');
+  const gkw = genQ.trim().toLowerCase();
+  const ekw = execQ.trim().toLowerCase();
+  const genFiltered = COST_GEN_DETAIL.filter((d) => !gkw || (d.id + d.caseId + d.source + d.asset).toLowerCase().includes(gkw));
+  const execFiltered = COST_EXEC_DETAIL.filter((d) => {
+    if (execKind === '存量' && !d.isLegacy) return false;
+    if (execKind === '新增' && d.isLegacy) return false;
+    if (ekw && !(d.caseId + d.asset + d.id).toLowerCase().includes(ekw)) return false;
+    return true;
+  });
   const [costCase, setCostCase] = useState('TC-2024-118');
   const modelName = (id: string) => AI_MODELS.find((m) => m.id === id)?.name ?? id;
   const maxScen = Math.max(...COST_SCENARIOS.map((s) => s.amount));
@@ -214,6 +226,10 @@ export default function AuditCostPage() {
 
       {/* 明细：用例生成成本 */}
       <h3 className="font-semibold text-slate-700 text-sm mb-3 flex items-center gap-1.5"><ArrowUpRight className="w-4 h-4 text-emerald-500" />用例生成成本明细</h3>
+      <div className="flex items-center justify-between mb-3">
+        <ListFilter search={genQ} onSearch={setGenQ} />
+        <span className="text-[11px] text-slate-400">共 {genFiltered.length} / {COST_GEN_DETAIL.length} 条</span>
+      </div>
       <div className="rounded-xl border border-slate-200 overflow-hidden mb-5">
         <table className="w-full text-xs">
           <thead className="bg-slate-50 border-b border-slate-200">
@@ -228,7 +244,7 @@ export default function AuditCostPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {COST_GEN_DETAIL.map((d) => (
+            {genFiltered.map((d) => (
               <tr key={d.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3 font-mono text-slate-500">{d.id}</td>
                 <td className="px-4 py-3 font-mono text-indigo-600 font-medium">{d.caseId}</td>
@@ -241,13 +257,18 @@ export default function AuditCostPage() {
             ))}
           </tbody>
           <tfoot className="bg-slate-50 border-t border-slate-200">
-            <tr><td colSpan={6} className="px-4 py-2.5 text-[11px] text-slate-500 font-medium text-right">小计 · {COST_GEN_DETAIL.length} 条</td><td className="px-4 py-2.5 text-right font-semibold text-emerald-600">¥{COST_GEN_DETAIL.reduce((s, d) => s + d.amount, 0).toLocaleString()}</td></tr>
+            <tr><td colSpan={6} className="px-4 py-2.5 text-[11px] text-slate-500 font-medium text-right">小计 · {genFiltered.length} 条</td><td className="px-4 py-2.5 text-right font-semibold text-emerald-600">¥{genFiltered.reduce((s, d) => s + d.amount, 0).toLocaleString()}</td></tr>
           </tfoot>
         </table>
       </div>
 
       {/* 明细：测试用例执行成本 */}
       <h3 className="font-semibold text-slate-700 text-sm mb-3 flex items-center gap-1.5"><ArrowDownRight className="w-4 h-4 text-emerald-500" />测试用例执行成本明细</h3>
+      <div className="flex items-center justify-between mb-3">
+        <ListFilter search={execQ} onSearch={setExecQ}
+          selects={[{ key: 'kind', label: '类别', options: ['存量', '新增'], value: execKind, onChange: setExecKind }]} />
+        <span className="text-[11px] text-slate-400">共 {execFiltered.length} / {COST_EXEC_DETAIL.length} 条</span>
+      </div>
       <div className="rounded-xl border border-slate-200 overflow-hidden">
         <table className="w-full text-xs">
           <thead className="bg-slate-50 border-b border-slate-200">
@@ -261,7 +282,7 @@ export default function AuditCostPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {COST_EXEC_DETAIL.map((d) => (
+            {execFiltered.map((d) => (
               <tr key={d.id} className={'hover:bg-slate-50 ' + (d.isLegacy ? '' : 'bg-amber-50/30')}>
                 <td className="px-4 py-3 font-mono text-indigo-600 font-medium">{d.caseId}</td>
                 <td className="px-4 py-3"><span className="text-[10px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded">{genOrg(d)}</span> <span className="text-[10px] text-slate-400 font-mono">{d.asset}</span></td>
@@ -273,7 +294,7 @@ export default function AuditCostPage() {
             ))}
           </tbody>
           <tfoot className="bg-slate-50 border-t border-slate-200">
-            <tr><td colSpan={5} className="px-4 py-2.5 text-[11px] text-slate-500 font-medium text-right">小计 ¥{COST_EXEC_DETAIL.reduce((s, d) => s + d.amount, 0).toFixed(1)} · 存量 ¥{COST_EXEC_LEGACY_TOTAL.toFixed(1)} / 新增 ¥{COST_EXEC_NEW_TOTAL.toFixed(1)}</td><td className="px-4 py-2.5 text-right font-semibold text-emerald-600">¥{COST_EXEC_DETAIL.reduce((s, d) => s + d.amount, 0).toFixed(1)}</td></tr>
+            <tr><td colSpan={5} className="px-4 py-2.5 text-[11px] text-slate-500 font-medium text-right">小计 ¥{execFiltered.reduce((s, d) => s + d.amount, 0).toFixed(1)} · 存量 ¥{COST_EXEC_LEGACY_TOTAL.toFixed(1)} / 新增 ¥{COST_EXEC_NEW_TOTAL.toFixed(1)}</td><td className="px-4 py-2.5 text-right font-semibold text-emerald-600">¥{execFiltered.reduce((s, d) => s + d.amount, 0).toFixed(1)}</td></tr>
           </tfoot>
         </table>
       </div>

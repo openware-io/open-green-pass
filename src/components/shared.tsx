@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { Search } from 'lucide-react';
 
 export interface IKpiCardProps {
   label: string;
@@ -64,6 +65,31 @@ export function Card({ title, children, className, extra }: {
         <h2 className="font-semibold text-slate-700 text-sm">{title}</h2>
         {extra}
       </div>
+      {children}
+    </div>
+  );
+}
+
+
+export interface IListSelect { key: string; label: string; options: string[]; value: string; onChange: (v: string) => void }
+
+export function ListFilter({ search, onSearch, selects, children }: {
+  search: string; onSearch: (v: string) => void; selects?: IListSelect[]; children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap mb-3">
+      <div className="relative">
+        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="搜索…"
+          className="pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-slate-600 w-52 focus:border-emerald-400 focus:outline-none" />
+      </div>
+      {(selects ?? []).map((f) => (
+        <select key={f.key} value={f.value} onChange={(e) => f.onChange(e.target.value)}
+          className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-slate-600 focus:border-emerald-400 focus:outline-none">
+          <option value="">{f.label}：全部</option>
+          {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ))}
       {children}
     </div>
   );
