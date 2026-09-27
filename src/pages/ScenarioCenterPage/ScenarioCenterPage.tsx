@@ -12,6 +12,12 @@ const STATUS_META: Record<ScenStatus, { label: string; cls: string; dot: string 
   running: { label: '执行中', cls: 'bg-emerald-50 text-emerald-600', dot: 'animate-pulse bg-emerald-500' },
   queued: { label: '排队中', cls: 'bg-amber-50 text-amber-600', dot: 'bg-amber-400' },
 };
+const GROUP_POOL: Record<string, string[]> = {
+  '服务/后端': ['身份服务组', '支付服务组'],
+  'Web 前端': ['前端与端'],
+  '移动端': ['前端与端'],
+  'AI 专项': ['AI 专项'],
+};
 
 const TABS = [
   { key: 'cases', label: '场景用例', icon: ListChecks },
@@ -26,6 +32,9 @@ export default function ScenarioCenterPage() {
   const [selId, setSelId] = useState('SCEN-01');
   const [tab, setTab] = useState<TabKey>('cases');
   const [focused, setFocused] = useState(false);
+  const [runAll, setRunAll] = useState(true);
+  const [scopeFilter, setScopeFilter] = useState('全部');
+  const [checked, setChecked] = useState<string[]>([]);
   const sel = TEST_SCENARIOS.find((s) => s.id === selId) as ITestScenario;
   const selStatus = SCEN_STATUS[sel.id] ?? 'idle';
   const SIcon = SCEN_ICON[sel.icon];
@@ -35,7 +44,20 @@ export default function ScenarioCenterPage() {
     id: cid, name: `${sel.name} · 用例${i + 1}`,
     result: (i % 3 === 0 && sel.id !== 'SCEN-05' && sel.id !== 'SCEN-03' ? '失败' : '通过') as '通过' | '失败',
     cost: 60 + i * 20,
+    group: GROUP_POOL[sel.form][i % GROUP_POOL[sel.form].length],
   }));
+  const selScopeGroups = [...new Set(selCases.map((c) => c.group))];
+  const filteredCases = scopeFilter === '全部' ? selCases : selCases.filter((c) => c.group === scopeFilter);
+  const toggle = (id: string) => setChecked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const toggleAll = () => {
+    if (filteredCases.every((c) => checked.includes(c.id))) setChecked((p) => p.filter((x) => !filteredCases.some((c) => c.id === x)));
+    else setChecked((p) => [...new Set([...p, ...filteredCases.map((c) => c.id)])]);
+  };
+  const onLaunch = () => {
+    if (!runAll && checked.length === 0) { toast.warning('请先勾选要执行的用例'); return; }
+    const n = runAll ? selCases.length : checked.length;
+    toast.success(`已发起执行：${runAll ? `全部 ${selCases.length} 个用例` : `自定义 ${n} 个用例`}（原型模拟）`);
+  };
   const execs = sel.history.map((h, i) => ({
     run: `RUN-482${i + 1}`, ts: h.d,
     result: h.p >= 95 ? '通过' : h.p >= 85 ? '失败' : '阻塞' as string,
@@ -195,22 +217,75 @@ export default function ScenarioCenterPage() {
           </div>
         )}
 
-        {tab === 'exec' && (
-          <table className="w-full text-xs">
-            <thead><tr className="text-left text-slate-400 border-b border-slate-100"><th className="py-1.5 font-medium">运行</th><th className="py-1.5 font-medium">日期</th><th className="py-1.5 font-medium">结果</th><th className="py-1.5 font-medium">通过率</th><th className="py-1.5 font-medium">资源</th><th className="py-1.5 font-medium">成本</th></tr></thead>
-            <tbody>{execs.map((e) => (
-              <tr key={e.run} className="border-b border-slate-50">
-                <td className="py-2 font-mono text-slate-600">{e.run}</td>
-                <td className="py-2 text-slate-600">{e.ts}</td>
-                <td className="py-2"><span className={RESULT_CLS[e.result]}>{e.result}</span></td>
-                <td className="py-2 text-slate-700">{e.pass}%</td>
-                <td className="py-2 text-slate-600">{e.resource}</td>
-                <td className="py-2 text-slate-600">¥{e.cost.toLocaleString()}</td>
-              </tr>))}</tbody>
-          </table>
-        )}
+                {tab === 'exec' && (
+          <div>
+            <div className="border border-emerald-200 bg-emerald-50/40 rounded-xl p-4 mb-4">
+              <div className="flex items-center flex-wrap gap-3 mb-3">
+                <span className="flex items-center gap-1.5 text-sm font-medium text-slate-700"><Play className="w-4 h-4 text-emerald-600" />启动本次执行</span>
+                <div className="flex items-center gap-1 text-xs bg-white rounded-lg border border-emerald-200 p-0.5">
+                  <button type="button" onClick={() => setRunAll(true)}
+                    className={'px-3 py-1 rounded-md transition-colors ' + (runAll ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:text-emerald-600')}>全部执行</button>
+                  <button type="button" onClick={() => setRunAll(false)}
+                    className={'px-3 py-1 rounded-md transition-colors ' + (!runAll ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:text-emerald-600')}>自定义选择</button>
+                </div>
+                <span className="text-[11px] text-slate-500">默认全部执行；特殊场景可人工选择当次执行的用例</span>
+              </div>
 
-        {tab === 'gate' && (
+              {!runAll && (
+                <div className="bg-white rounded-xl border border-slate-200 p-3 mb-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-slate-600">按用例树范围筛选</span>
+                    <select value={scopeFilter} onChange={(e) => setScopeFilter(e.target.value)}
+                      className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-600">
+                      <option value="全部">全部资产范围</option>
+                      {selScopeGroups.map((g) => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <button type="button" onClick={toggleAll}
+                      className="text-[11px] text-emerald-600 hover:text-emerald-700">{(filteredCases.length > 0 && filteredCases.every((c) => checked.includes(c.id))) ? '取消全选' : '全选当前范围'}</button>
+                    <span className="text-[11px] text-slate-400">已选 {checked.length} / {selCases.length} 个用例</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 max-h-52 overflow-auto pr-1">
+                    {filteredCases.map((c) => {
+                      const on = checked.includes(c.id);
+                      return (
+                        <label key={c.id} className={'flex items-center gap-2 px-2 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors ' + (on ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 hover:border-emerald-200')}>
+                          <input type="checkbox" checked={on} onChange={() => toggle(c.id)} className="accent-emerald-500" />
+                          <span className="font-mono text-slate-500">{c.id}</span>
+                          <span className="text-slate-600 truncate">{c.name}</span>
+                          <span className="ml-auto text-[10px] text-slate-400">{c.group}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 flex-wrap">
+                <button type="button" onClick={onLaunch}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-sm">
+                  <Play className="w-4 h-4" />启动执行{runAll ? `（全部 ${selCases.length} 个用例）` : `（${checked.length} 个用例）`}
+                </button>
+                <span className="text-[11px] text-slate-400">执行将占用 {sel.resource}，完成后自动过门禁并生成场景报告</span>
+              </div>
+            </div>
+
+            <div className="text-xs font-medium text-slate-500 mb-2">近 5 次执行历史</div>
+            <table className="w-full text-xs">
+              <thead><tr className="text-left text-slate-400 border-b border-slate-100"><th className="py-1.5 font-medium">运行</th><th className="py-1.5 font-medium">日期</th><th className="py-1.5 font-medium">结果</th><th className="py-1.5 font-medium">通过率</th><th className="py-1.5 font-medium">资源</th><th className="py-1.5 font-medium">成本</th></tr></thead>
+              <tbody>{execs.map((e) => (
+                <tr key={e.run} className="border-b border-slate-50">
+                  <td className="py-2 font-mono text-slate-600">{e.run}</td>
+                  <td className="py-2 text-slate-600">{e.ts}</td>
+                  <td className="py-2"><span className={RESULT_CLS[e.result]}>{e.result}</span></td>
+                  <td className="py-2 text-slate-700">{e.pass}%</td>
+                  <td className="py-2 text-slate-600">{e.resource}</td>
+                  <td className="py-2 text-slate-600">¥{e.cost.toLocaleString()}</td>
+                </tr>))}</tbody>
+            </table>
+          </div>
+        )}{tab === 'gate' && (
           <div>
             <div className="flex items-center gap-2 mb-3"><ShieldCheck className="w-4 h-4 text-emerald-500" /><span className="text-sm font-medium text-slate-700">门禁规则</span></div>
             <div className="mb-3 text-xs text-slate-600 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">{sel.gateRule}</div>
