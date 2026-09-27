@@ -1,7 +1,8 @@
-import { Link, useOutletContext } from 'react-router-dom';
-import { METRICS, GEN_TRACE, ASSET_RISKS, AI_MODELS, PROJECT_MODELS, assetToProfile, type IAsset } from '@/data/mock';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
+import { METRICS, GEN_TRACE, ASSET_RISKS, AI_MODELS, PROJECT_MODELS, TEST_SCENARIOS, assetToProfile, type IAsset } from '@/data/mock';
+import { scenarioNav } from '@/context/scenarioNav';
 import { KpiCard, PageHeader, PrimaryButton } from '@/components/shared';
-import { Brain, ShieldAlert, ChevronRight, Sparkles, GitBranch, CircleDot, FileSearch, History, CheckCircle2, AlertTriangle, XCircle, Layers, Cpu } from 'lucide-react';
+import { Brain, ShieldAlert, ChevronRight, Sparkles, GitBranch, CircleDot, FileSearch, History, CheckCircle2, AlertTriangle, XCircle, Layers, Cpu, Globe, Smartphone } from 'lucide-react';
 
 const STAGE_FLOW = [
   { path: '/generation', label: '接收与理解', icon: FileSearch, desc: 'AI 解析六类上游源' },
@@ -22,9 +23,26 @@ const DIM_BAR: Record<string, string> = {
 
 const GEN_ICON: Record<string, typeof History> = { '规格解析': FileSearch, '架构生成': Layers, '代码生成': Sparkles, '自检回放': CheckCircle2, '提交验收': ShieldAlert };
 
-const TYPE_LABEL: Record<string, string> = { service: '服务', 'service-group': '服务组', app: '应用', end: '端' };
+const TYPE_LABEL: Record<string, string> = { service: '服务', 'service-group': '服务组', app: '应用', end: '端', project: '工程', module: '模块' };
+const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
+const ASSET_SCEN: Record<string, string[]> = {
+  auth: ['SCEN-01', 'SCEN-02', 'SCEN-04'],
+  payment: ['SCEN-02', 'SCEN-03', 'SCEN-05'],
+  order: ['SCEN-02', 'SCEN-03'],
+  user: ['SCEN-01', 'SCEN-02'],
+  web: ['SCEN-06', 'SCEN-07', 'SCEN-08'],
+  mobile: ['SCEN-09', 'SCEN-10', 'SCEN-11'],
+  metric: ['SCEN-01', 'SCEN-02', 'SCEN-04'],
+  alert: ['SCEN-01', 'SCEN-02'],
+};
+function assetScenarios(asset: IAsset) {
+  const hits = Object.entries(ASSET_SCEN).filter(([k]) => asset.name.includes(k)).flatMap(([, v]) => v);
+  const pool = hits.length ? hits : (asset.type === 'app' || asset.type === 'end' ? ['SCEN-06', 'SCEN-09'] : ['SCEN-02']);
+  return [...new Set(pool)].map((id) => TEST_SCENARIOS.find((s) => s.id === id)).filter((s): s is NonNullable<typeof s> => !!s);
+}
 
 export default function TargetPage() {
+  const navigate = useNavigate();
   const { selectedAsset } = useOutletContext<{ selectedAsset: IAsset }>();
   const profile = assetToProfile(selectedAsset);
   const risks = profile.gateRules.filter((r) => r.status === 'block');
@@ -87,6 +105,30 @@ export default function TargetPage() {
         )}
       </div>
 
+      {/* 该资产涉及的测试场景：打通 资产画像 ↔ 测试中心 */}
+      <div className="card bg-white rounded-xl border border-slate-200 p-5 mb-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-slate-700 text-sm flex items-center gap-1.5"><Layers className="w-4 h-4 text-emerald-500" />{profile.name} · 测试场景覆盖</h2>
+          <span className="text-[11px] text-slate-400">资产关联的测试中心场景 · 点击进入对应场景闭环</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 2xl:grid-cols-4 gap-3">
+          {assetScenarios(selectedAsset).map((s) => {
+            const Icon = SCEN_ICON[s.icon] ?? Cpu;
+            const lp = s.history[s.history.length - 1].p;
+            return (
+              <button key={s.id} type="button"
+                onClick={() => { scenarioNav.go(s.id, 'cases'); navigate('/scenarios'); }}
+                className="flex items-center gap-3 border rounded-xl p-3 text-left transition-all hover:shadow-sm hover:border-emerald-300 hover:-translate-y-0.5">
+                <span className="w-9 h-9 rounded-lg bg-emerald-500 text-white flex items-center justify-center flex-shrink-0"><Icon className="w-4.5 h-4.5" /></span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-slate-800 flex items-center gap-1.5">{s.name}<span className="text-[10px] text-slate-400 font-mono">{s.id}</span></div>
+                  <div className="text-[10px] text-slate-400">通过率 <span className={lp >= 90 ? 'text-emerald-600 font-medium' : 'text-amber-600 font-medium'}>{lp}%</span> · {s.form}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
       {/* AI 生成过程还原：被测对象如何由 AI 产出 */}
       <div className="card bg-white rounded-xl border border-slate-200 p-5 mb-5">
         <div className="flex items-center justify-between mb-5">
@@ -149,6 +191,10 @@ export default function TargetPage() {
       </div>
 
       {/* 资产维度 KPI：与明细同源 */}
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="font-semibold text-slate-700 text-sm">资产库全局指标</h2>
+        <span className="text-[11px] text-slate-400">库级汇总对比 · 上方画像为当前所选资产局部维度</span>
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-5">
         {METRICS.map((m) => (
           <KpiCard key={m.label} label={m.label} value={`${m.value}%`} color={m.color} note={m.note} />
