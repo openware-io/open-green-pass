@@ -19,6 +19,9 @@ import TeamPage from '@/pages/TeamPage/TeamPage';
 import ModelPage from '@/pages/ModelPage/ModelPage';
 import NotFoundPage from '@/pages/NotFoundPage/NotFoundPage';
 import LoginPage from '@/pages/LoginPage/LoginPage';
+import CicdPage from '@/pages/CicdPage/CicdPage';
+import CicdTriggerPage from '@/pages/CicdTriggerPage/CicdTriggerPage';
+import CicdConnectorPage from '@/pages/CicdConnectorPage/CicdConnectorPage';
 
 export default function App() {
   return (
@@ -44,6 +47,9 @@ export default function App() {
         <Route path="scenarios" element={<ScenarioCenterPage />} />
         <Route path="teams" element={<TeamPage />} />
         <Route path="models" element={<ModelPage />} />
+        <Route path="cicd" element={<CicdPage />} />
+        <Route path="cicd-trigger" element={<CicdTriggerPage />} />
+        <Route path="cicd-connector" element={<CicdConnectorPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
       </Routes>

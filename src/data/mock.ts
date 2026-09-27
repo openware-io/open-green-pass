@@ -540,12 +540,56 @@ export const NAV_GROUPS: { title: string; items: INavItem[] }[] = [
     ],
   },
   {
+    title: 'CI/CD 与自动化',
+    items: [
+      { path: '/cicd', label: 'CI/CD 对接' },
+      { path: '/cicd-trigger', label: '触发与回写' },
+      { path: '/cicd-connector', label: '连接器与契约' },
+    ],
+  },
+  {
     title: '组织与模型',
     items: [
       { path: '/teams', label: '团队与权限' },
       { path: '/models', label: 'AI 模型配置' },
     ],
   },
+];
+
+// ============ CI/CD 与自动化对接 ============
+export interface ICicdConnector {
+  id: string; name: string; vendor: string; mode: string;
+  status: 'connected' | 'disabled'; projects: number; lastSync: string; runs7d: number;
+}
+export const CICD_CONNECTORS: ICicdConnector[] = [
+  { id: 'c-jenkins', name: 'Jenkins', vendor: 'CloudBees', mode: 'Webhook + API', status: 'connected', projects: 6, lastSync: '2 分钟前', runs7d: 128 },
+  { id: 'c-gitlab', name: 'GitLab CI', vendor: 'GitLab', mode: 'Webhook + 触发', status: 'connected', projects: 3, lastSync: '5 分钟前', runs7d: 64 },
+  { id: 'c-github', name: 'GitHub Actions', vendor: 'GitHub', mode: 'Webhook + CLI', status: 'connected', projects: 2, lastSync: '1 小时前', runs7d: 35 },
+  { id: 'c-argo', name: 'Argo / 自研流水线', vendor: '自研平台', mode: 'CLI + API', status: 'disabled', projects: 0, lastSync: '—', runs7d: 0 },
+];
+
+export interface ICicdTrigger {
+  id: string; asset: string; scenarios: string; event: string; env: string; branch: string;
+  enabled: boolean; lastRun: string; gateBlock: number;
+}
+export const CICD_TRIGGERS: ICicdTrigger[] = [
+  { id: 'TRG-01', asset: 'sys-payment-platform', scenarios: '单元/集成/API', event: 'Push to main', env: 'staging', branch: 'main', enabled: true, lastRun: '09-27 10:12', gateBlock: 0 },
+  { id: 'TRG-02', asset: 'sys-payment-platform', scenarios: '契约/服务压测', event: 'Merge Request', env: 'staging', branch: 'release/*', enabled: true, lastRun: '09-26 18:40', gateBlock: 1 },
+  { id: 'TRG-03', asset: 'web-ops-console', scenarios: 'Web E2E/视觉', event: 'Merge Request', env: 'staging', branch: 'main', enabled: true, lastRun: '09-26 15:03', gateBlock: 0 },
+  { id: 'TRG-04', asset: 'mobile-app', scenarios: '移动端 E2E/兼容', event: 'Tag push', env: 'prod', branch: 'v*', enabled: true, lastRun: '09-25 11:20', gateBlock: 0 },
+  { id: 'TRG-05', asset: 'risk-engine', scenarios: 'AI 专项审计', event: 'Push to main', env: 'staging', branch: 'main', enabled: false, lastRun: '09-20 09:00', gateBlock: 2 },
+];
+
+export interface ICicdRun {
+  id: string; asset: string; commit: string; branch: string; env: string; scenarios: string;
+  status: 'success' | 'blocked' | 'running' | 'failed'; gate: string; duration: string; time: string;
+}
+export const CICD_RUNS: ICicdRun[] = [
+  { id: 'RUN-2024-4821', asset: 'sys-payment-platform', commit: '9f6a553', branch: 'main', env: 'staging', scenarios: '单元/集成/API', status: 'success', gate: '通过', duration: '4m 12s', time: '09-27 10:12' },
+  { id: 'RUN-2024-4820', asset: 'web-ops-console', commit: 'e974398', branch: 'main', env: 'staging', scenarios: 'Web E2E/视觉', status: 'blocked', gate: '阻断', duration: '6m 40s', time: '09-26 15:03' },
+  { id: 'RUN-2024-4819', asset: 'sys-payment-platform', commit: '6638bc0', branch: 'release/1.4', env: 'staging', scenarios: '契约/服务压测', status: 'running', gate: '判定中', duration: '…', time: '09-26 18:40' },
+  { id: 'RUN-2024-4818', asset: 'mobile-app', commit: '0fdad4b', branch: 'v1.2.0', env: 'prod', scenarios: '移动端 E2E/兼容', status: 'success', gate: '通过', duration: '12m 05s', time: '09-25 11:20' },
+  { id: 'RUN-2024-4817', asset: 'risk-engine', commit: '3e5648b', branch: 'main', env: 'staging', scenarios: 'AI 专项审计', status: 'failed', gate: '失败', duration: '2m 30s', time: '09-20 09:00' },
 ];
 
 // ============ 派生仪表盘指标（全部从明细计算）============

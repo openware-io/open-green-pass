@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { useCurrentUser, loginStore } from '@/context/login';
 const LOGIN_LABEL: Record<string, string> = { password: '账号密码', phone: '手机号', wechat: '微信扫码' };
 import { AssetLevelContext, LEVEL_ORDER, LEVEL_LABEL, type AssetLevel } from '@/context';
-import { Target, Settings2, Files, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes, UserCircle, LogOut, Smartphone, MessageCircle } from 'lucide-react';
+import { Target, Settings2, Files, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes, UserCircle, LogOut, Smartphone, MessageCircle, Workflow, Zap, Plug } from 'lucide-react';
 
 const ICONS: Record<string, typeof Target> = {
   '/target': Target,
@@ -24,6 +24,9 @@ const ICONS: Record<string, typeof Target> = {
   '/audit-op': UserCog,
   '/trace': GitBranch,
   '/resources': Server,
+  '/cicd': Workflow,
+  '/cicd-trigger': Zap,
+  '/cicd-connector': Plug,
   '/teams': Users,
   '/models': Brain,
 };
