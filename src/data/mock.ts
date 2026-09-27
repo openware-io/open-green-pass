@@ -641,6 +641,26 @@ export const TEAM_MEMBERS: ITeamMember[] = [
   { id: 'u-7', name: '孙浩', email: 'sun.hao@corp.com', role: 'viewer', status: 'disabled', lastActive: '10 天前' },
 ];
 
+// ============ 登录与账号体系（账号密码 / 手机号 / 微信扫码 / 绑定） ============
+export interface IAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  username: string;
+  phone: string;      // 已绑定手机号（'' = 未绑定）
+  wechat: string;     // 已绑定微信号（'' = 未绑定）
+  avatarColor: string;
+  via: 'password' | 'phone' | 'wechat'; // 最近登录方式
+}
+
+export const ACCOUNTS: IAccount[] = [
+  { id: 'u-1', name: '张立', email: 'zhang.li@corp.com', role: '团队所有者', username: 'zhangli', phone: '138****2101', wechat: 'zhangli_wx', avatarColor: 'from-emerald-500 to-teal-600', via: 'password' },
+  { id: 'u-2', name: '李娜', email: 'li.na@corp.com', role: '管理员', username: 'lina', phone: '139****7732', wechat: '', avatarColor: 'from-indigo-400 to-purple-500', via: 'wechat' },
+  { id: 'u-3', name: '王强', email: 'wang.qiang@corp.com', role: '测试工程师', username: 'wangqiang', phone: '', wechat: 'wangqiang_wx', avatarColor: 'from-amber-400 to-orange-500', via: 'phone' },
+  { id: 'u-4', name: '陈晨', email: 'chen.chen@corp.com', role: '测试工程师', username: 'chenchen', phone: '137****8819', wechat: '', avatarColor: 'from-sky-400 to-blue-500', via: 'password' },
+];
+
 // ============ AI 模型池 + 每工程模型绑定 ============
 export interface IAIModel {
   id: string;

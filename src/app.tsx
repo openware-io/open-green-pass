@@ -18,11 +18,13 @@ import ScenarioCenterPage from '@/pages/ScenarioCenterPage/ScenarioCenterPage';
 import TeamPage from '@/pages/TeamPage/TeamPage';
 import ModelPage from '@/pages/ModelPage/ModelPage';
 import NotFoundPage from '@/pages/NotFoundPage/NotFoundPage';
+import LoginPage from '@/pages/LoginPage/LoginPage';
 
 export default function App() {
   return (
     <>
       <Routes>
+      <Route path="login" element={<LoginPage />} />
       <Route element={<Layout />}>
         <Route index element={<Navigate to="/scenarios" replace />} />
         <Route path="target" element={<TargetPage />} />

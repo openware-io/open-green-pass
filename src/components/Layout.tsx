@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { SidebarProvider, SidebarInset, Sidebar } from '@/components/ui/sidebar';
-import { NAV_GROUPS, ASSET_TREE, CASES, REQUIREMENTS, CONTRACTS, TEAMS, CURRENT_TEAM_ID, type IAssetNode } from '@/data/mock';
+import { NAV_GROUPS, ASSET_TREE, CASES, REQUIREMENTS, CONTRACTS, TEAMS, CURRENT_TEAM_ID, ACCOUNTS, type IAssetNode } from '@/data/mock';
 import { cn } from '@/lib/utils';
+import { useCurrentUser, loginStore } from '@/context/login';
+const LOGIN_LABEL: Record<string, string> = { password: '账号密码', phone: '手机号', wechat: '微信扫码' };
 import { AssetLevelContext, LEVEL_ORDER, LEVEL_LABEL, type AssetLevel } from '@/context';
-import { Target, Settings2, Files, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes } from 'lucide-react';
+import { Target, Settings2, Files, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes, UserCircle, LogOut, Smartphone, MessageCircle } from 'lucide-react';
 
 const ICONS: Record<string, typeof Target> = {
   '/target': Target,
@@ -80,6 +82,8 @@ export function Layout() {
   const navigate = useNavigate();
   const [selectedAsset, setSelectedAsset] = useState<IAssetNode>(ASSET_TREE.children![0].children![0].children![0]);
   const [navOpen, setNavOpen] = useState<Record<string, boolean>>({});
+  const [userMenu, setUserMenu] = useState(false);
+  const user = useCurrentUser();
   const [level, setLevel] = useState<AssetLevel>('service');
   const [query, setQuery] = useState('');
 
@@ -255,6 +259,45 @@ export function Layout() {
               <span className="text-[11px] bg-emerald-50 text-emerald-600 px-2 py-1 rounded flex items-center gap-1"><Users className="w-3 h-3" />{TEAMS.find((t) => t.id === CURRENT_TEAM_ID)?.name}</span>
               <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">CI #4821</span>
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
+            </div>
+            <div className="h-8 w-px bg-slate-200" />
+            <div className="relative">
+              <button type="button" onClick={() => setUserMenu(!userMenu)} className="flex items-center gap-2 hover:opacity-90">
+                <div className={'w-8 h-8 rounded-full bg-gradient-to-br ' + user.avatarColor + ' flex items-center justify-center text-white text-xs font-bold'}>{user.name.slice(0, 1)}</div>
+                <div className="text-left">
+                  <div className="text-xs font-medium text-slate-700 leading-tight">{user.name}</div>
+                  <div className="text-[9px] text-slate-400 leading-tight">{user.role}</div>
+                </div>
+              </button>
+              {userMenu && (
+                <div className="absolute right-0 top-full mt-2 w-72 z-50 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                  <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <div className={'w-10 h-10 rounded-full bg-gradient-to-br ' + user.avatarColor + ' flex items-center justify-center text-white text-sm font-bold'}>{user.name.slice(0, 1)}</div>
+                      <div>
+                        <div className="text-sm font-medium text-slate-800">{user.name} · {user.role}</div>
+                        <div className="text-[10px] text-slate-400">{user.email}</div>
+                        <div className="text-[9px] text-emerald-600 mt-0.5">最近登录：{LOGIN_LABEL[user.via]}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="px-4 py-3 space-y-2.5">
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase">账号绑定</div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 text-slate-600"><Smartphone className="w-3.5 h-3.5" />手机号</span>
+                      <span>{user.phone ? <span className="text-slate-500">{user.phone}</span> : <button type="button" onClick={() => toast.success('绑定手机号（原型示意）', { description: '将向当前账号发送短信验证并完成绑定' })} className="text-emerald-600 hover:underline">去绑定</button>}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 text-slate-600"><MessageCircle className="w-3.5 h-3.5" />微信号</span>
+                      <span>{user.wechat ? <span className="text-slate-500">{user.wechat}</span> : <button type="button" onClick={() => toast.success('绑定微信（原型示意）', { description: '将跳转微信授权并关联当前账号' })} className="text-emerald-600 hover:underline">去绑定</button>}</span>
+                    </div>
+                  </div>
+                  <div className="px-4 py-3 border-t border-slate-100 space-y-1">
+                    <button type="button" onClick={() => { setUserMenu(false); navigate('/login'); }} className="w-full text-left text-xs text-slate-600 hover:text-emerald-600 py-1.5 flex items-center gap-2"><UserCircle className="w-3.5 h-3.5" />切换账号</button>
+                    <button type="button" onClick={() => { loginStore.setCurrent(ACCOUNTS[0]); setUserMenu(false); toast('已退出登录', { description: '请重新登录' }); navigate('/login'); }} className="w-full text-left text-xs text-red-500 hover:text-red-600 py-1.5 flex items-center gap-2"><LogOut className="w-3.5 h-3.5" />退出登录</button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
