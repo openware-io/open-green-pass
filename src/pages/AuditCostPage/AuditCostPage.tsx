@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { COST_GEN_DETAIL, COST_EXEC_DETAIL, COST_SCENARIOS, COST_TOTAL, COST_TOTAL_TOKENS_IN, COST_TOTAL_TOKENS_OUT, COST_AICALLS, COST_MOM_CHANGE, COST_PER_CASE, COST_TREND, COST_EXEC_LEGACY_TOTAL, COST_EXEC_NEW_TOTAL, COST_ORGS, COST_BY_GROUP, COST_BY_SERVICE, COST_HEAT, SERVICE_ORG_MAP, AI_MODELS, CASE_COST_HISTORY } from '@/data/mock';
+import { COST_GEN_DETAIL, COST_EXEC_DETAIL, COST_GEN_TOTAL, COST_EXEC_TOTAL, COST_SCENARIOS, COST_TOTAL, COST_TOTAL_TOKENS_IN, COST_TOTAL_TOKENS_OUT, COST_AICALLS, COST_MOM_CHANGE, COST_PER_CASE, COST_TREND, COST_EXEC_LEGACY_TOTAL, COST_EXEC_NEW_TOTAL, COST_ORGS, COST_BY_GROUP, COST_BY_SERVICE, COST_HEAT, SERVICE_ORG_MAP, AI_MODELS, CASE_COST_HISTORY } from '@/data/mock';
 import { PageHeader, Card, ListFilter } from '@/components/shared';
-import { Wallet, TrendingDown, Cpu, Layers, ArrowDownRight, ArrowUpRight, History } from 'lucide-react';
+import { Wallet, TrendingDown, Cpu, Layers, ArrowDownRight, ArrowUpRight, History, PenTool, Rocket } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const SCEN_COLOR: Record<string, string> = {
   '用例生成': 'bg-emerald-500', '测试执行辅助': 'bg-teal-500', '质量判定': 'bg-indigo-500', '契约分析': 'bg-amber-500', '变异/篡改检测': 'bg-slate-400',
@@ -52,6 +53,7 @@ const DIMS: { key: DimKey; label: string }[] = [
 
 export default function AuditCostPage() {
   const [dim, setDim] = useState<DimKey>('org');
+  const [activeKind, setActiveKind] = useState<'gen' | 'exec'>('gen');
   const [genQ, setGenQ] = useState('');
   const [execQ, setExecQ] = useState('');
   const [execKind, setExecKind] = useState('');
@@ -64,6 +66,13 @@ export default function AuditCostPage() {
     if (ekw && !(d.caseId + d.asset + d.id).toLowerCase().includes(ekw)) return false;
     return true;
   });
+  // 大类别：生成测试用例成本 / 执行测试成本（AI 成本的两个主要动作类别，合计不含质量判定/契约/变异）
+  const genPct = Math.round((COST_GEN_TOTAL / COST_TOTAL) * 100);
+  const execPct = Math.round((COST_EXEC_TOTAL / COST_TOTAL) * 100);
+  const genTokIn = COST_GEN_DETAIL.reduce((s, d) => s + d.tokensIn, 0);
+  const genTokOut = COST_GEN_DETAIL.reduce((s, d) => s + d.tokensOut, 0);
+  const execTokIn = COST_EXEC_DETAIL.reduce((s, d) => s + d.tokensIn, 0);
+  const execTokOut = COST_EXEC_DETAIL.reduce((s, d) => s + d.tokensOut, 0);
   const [costCase, setCostCase] = useState('TC-2024-118');
   const modelName = (id: string) => AI_MODELS.find((m) => m.id === id)?.name ?? id;
   const maxScen = Math.max(...COST_SCENARIOS.map((s) => s.amount));
@@ -108,6 +117,34 @@ export default function AuditCostPage() {
           <div className="text-2xl font-bold text-slate-800">¥{COST_PER_CASE}</div>
           <div className="mt-1 text-[11px] text-slate-400">存量用例成本趋稳</div>
         </div>
+      </div>
+
+      {/* 成本分类总览：生成测试用例成本 / 执行测试成本（点击聚焦对应类别明细） */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+        <button type="button" onClick={() => setActiveKind('gen')}
+          className={cn('card bg-white rounded-xl border p-5 text-left transition', activeKind === 'gen' ? 'border-emerald-400 ring-2 ring-emerald-100' : 'border-slate-200 hover:border-emerald-300')}>
+          <div className="flex items-center justify-between mb-3">
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-700"><span className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><PenTool className="w-4 h-4" /></span>生成测试用例成本</span>
+            {activeKind === 'gen' && <span className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">当前查看</span>}
+          </div>
+          <div className="text-2xl font-bold text-slate-800">¥{COST_GEN_TOTAL.toLocaleString()} <span className="text-xs font-normal text-slate-400">占 AI 成本 {genPct}%</span></div>
+          <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-500">
+            <span>Token {fmtM(genTokIn)} 入 / {fmtM(genTokOut)} 出</span>
+            <span className="ml-auto">种子生成 · 质量验证</span>
+          </div>
+        </button>
+        <button type="button" onClick={() => setActiveKind('exec')}
+          className={cn('card bg-white rounded-xl border p-5 text-left transition', activeKind === 'exec' ? 'border-emerald-400 ring-2 ring-emerald-100' : 'border-slate-200 hover:border-emerald-300')}>
+          <div className="flex items-center justify-between mb-3">
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-700"><span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><Rocket className="w-4 h-4" /></span>执行测试成本</span>
+            {activeKind === 'exec' && <span className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">当前查看</span>}
+          </div>
+          <div className="text-2xl font-bold text-slate-800">¥{COST_EXEC_TOTAL.toLocaleString()} <span className="text-xs font-normal text-slate-400">占 AI 成本 {execPct}%</span></div>
+          <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-500">
+            <span>Token {fmtM(execTokIn)} 入 / {fmtM(execTokOut)} 出</span>
+            <span className="ml-auto">存量回放 ¥{COST_EXEC_LEGACY_TOTAL} · 新增 ¥{COST_EXEC_NEW_TOTAL}</span>
+          </div>
+        </button>
       </div>
 
       {/* 维度归因 */}
@@ -224,8 +261,19 @@ export default function AuditCostPage() {
         </div>
       </div>
 
-      {/* 明细：用例生成成本 */}
-      <h3 className="font-semibold text-slate-700 text-sm mb-3 flex items-center gap-1.5"><ArrowUpRight className="w-4 h-4 text-emerald-500" />用例生成成本明细</h3>
+      {/* 明细：按大类别切换展示 */}
+      <div className="flex items-center gap-2 mb-3">
+        <button type="button" onClick={() => setActiveKind('gen')}
+          className={cn('px-3 py-1.5 text-xs rounded-lg transition', activeKind === 'gen' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200')}>
+          <span className="flex items-center gap-1"><PenTool className="w-3.5 h-3.5" />用例生成成本</span>
+        </button>
+        <button type="button" onClick={() => setActiveKind('exec')}
+          className={cn('px-3 py-1.5 text-xs rounded-lg transition', activeKind === 'exec' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200')}>
+          <span className="flex items-center gap-1"><Rocket className="w-3.5 h-3.5" />测试用例执行成本</span>
+        </button>
+      </div>
+      {activeKind === 'gen' && (
+      <div>
       <div className="flex items-center justify-between mb-3">
         <ListFilter search={genQ} onSearch={setGenQ} />
         <span className="text-[11px] text-slate-400">共 {genFiltered.length} / {COST_GEN_DETAIL.length} 条</span>
@@ -262,8 +310,10 @@ export default function AuditCostPage() {
         </table>
       </div>
 
-      {/* 明细：测试用例执行成本 */}
-      <h3 className="font-semibold text-slate-700 text-sm mb-3 flex items-center gap-1.5"><ArrowDownRight className="w-4 h-4 text-emerald-500" />测试用例执行成本明细</h3>
+      </div>
+      )}
+      {activeKind === 'exec' && (
+      <div>
       <div className="flex items-center justify-between mb-3">
         <ListFilter search={execQ} onSearch={setExecQ}
           selects={[{ key: 'kind', label: '类别', options: ['存量', '新增'], value: execKind, onChange: setExecKind }]} />
@@ -352,6 +402,9 @@ export default function AuditCostPage() {
             </div>
           );
         })()}
-      </Card>    </div>
+      </Card>
+      </div>
+      )}
+    </div>
   );
 }
