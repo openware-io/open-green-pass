@@ -214,7 +214,7 @@ export interface ICase {
   type: '单元' | '集成' | 'Web' | '移动' | '安全';
   assertion: '强' | '中' | '弱';
   mutation: number | null;
-  status: '已激活' | '冲突' | '待审核';
+  status: '已激活' | '冲突' | '待审核' | '已禁用';
 }
 
 export const CASES: ICase[] = [
@@ -512,7 +512,7 @@ export const NAV_GROUPS: { title: string; items: INavItem[] }[] = [
     title: '测试治理',
     items: [
       { path: '/scenarios', label: '测试中心' },
-      { path: '/cases', label: '测试用例库' },
+      { path: '/cases', label: '用例管理' },
       { path: '/exec', label: '测试执行' },
       { path: '/gate', label: '质量门禁' },
       { path: '/history', label: '测试历史' },
