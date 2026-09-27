@@ -22,6 +22,7 @@ import LoginPage from '@/pages/LoginPage/LoginPage';
 import CicdPage from '@/pages/CicdPage/CicdPage';
 import CicdTriggerPage from '@/pages/CicdTriggerPage/CicdTriggerPage';
 import CicdConnectorPage from '@/pages/CicdConnectorPage/CicdConnectorPage';
+import SettingsPage from '@/pages/SettingsPage/SettingsPage';
 
 export default function App() {
   return (
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="cicd" element={<CicdPage />} />
         <Route path="cicd-trigger" element={<CicdTriggerPage />} />
         <Route path="cicd-connector" element={<CicdConnectorPage />} />
+        <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
       </Routes>

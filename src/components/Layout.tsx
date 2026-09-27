@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { useCurrentUser, loginStore } from '@/context/login';
 const LOGIN_LABEL: Record<string, string> = { password: '账号密码', phone: '手机号', wechat: '微信扫码' };
 import { AssetLevelContext, LEVEL_ORDER, LEVEL_LABEL, type AssetLevel } from '@/context';
-import { Target, Settings2, Files, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, ChevronRight, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes, UserCircle, LogOut, Smartphone, MessageCircle, Workflow, Zap, Plug } from 'lucide-react';
+import { Target, Settings2, Files, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, ChevronRight, Search, Circle, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes, UserCircle, LogOut, Smartphone, MessageCircle, Workflow, Zap, Plug, Settings } from 'lucide-react';
 
 const ICONS: Record<string, typeof Target> = {
   '/target': Target,
@@ -27,6 +27,7 @@ const ICONS: Record<string, typeof Target> = {
   '/cicd': Workflow,
   '/cicd-trigger': Zap,
   '/cicd-connector': Plug,
+  '/settings': Settings,
   '/teams': Users,
   '/models': Brain,
 };
@@ -102,6 +103,7 @@ export function Layout() {
   const [navOpen, setNavOpen] = useState<Record<string, boolean>>({});
   const [userMenu, setUserMenu] = useState(false);
   const user = useCurrentUser();
+  const isSuperAdmin = user.role === '团队所有者';
   const [level, setLevel] = useState<AssetLevel>('service');
   const [query, setQuery] = useState('');
 
@@ -158,7 +160,7 @@ export function Layout() {
           </div>
 
           <nav className="flex-1 py-3 overflow-y-auto">
-            {NAV_GROUPS.map((group) => (
+            {NAV_GROUPS.filter((g) => !g.adminOnly || isSuperAdmin).map((group) => (
               <div key={group.title} className="mb-1">
                 <div className="px-4 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{group.title}</div>
                 {group.items.map((item) => {

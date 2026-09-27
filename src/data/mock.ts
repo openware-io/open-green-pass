@@ -507,7 +507,7 @@ export const TEST_SCENARIOS: ITestScenario[] = [
   { label: '移动端', resource: '真机池', scenarios: TEST_SCENARIOS.filter((s) => s.form === '移动端') },
   { label: 'AI 专项审计', resource: '跨形态 · AI 判定', scenarios: TEST_SCENARIOS.filter((s) => s.form === 'AI 专项') },
 ];
-export const NAV_GROUPS: { title: string; items: INavItem[] }[] = [
+export const NAV_GROUPS: { title: string; items: INavItem[]; adminOnly?: boolean }[] = [
   {
     title: '测试治理',
     items: [
@@ -552,6 +552,13 @@ export const NAV_GROUPS: { title: string; items: INavItem[] }[] = [
     items: [
       { path: '/teams', label: '团队与权限' },
       { path: '/models', label: 'AI 模型配置' },
+    ],
+  },
+  {
+    title: '系统设置',
+    adminOnly: true,
+    items: [
+      { path: '/settings', label: '系统设置' },
     ],
   },
 ];
