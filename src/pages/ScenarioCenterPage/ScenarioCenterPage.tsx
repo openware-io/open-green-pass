@@ -99,7 +99,7 @@ export default function ScenarioCenterPage() {
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />门禁规则：<span className="text-emerald-700">{sel.gateRule}</span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] text-slate-400 mr-1">聚焦本场景闭环：</span>
+              
               {TABS.map((t) => (
                 <button key={t.key} type="button" onClick={() => setTab(t.key)}
                   className={'flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg transition-colors ' + (tab === t.key ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600')}>
