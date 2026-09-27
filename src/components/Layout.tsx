@@ -91,7 +91,7 @@ export function Layout() {
     else if (l === 'module') { if (selectedAsset.type === 'service' && selectedAsset.children) setSelectedAsset(selectedAsset.children[0]); }
   };
   const chain = findChain(ASSET_TREE, selectedAsset.id) ?? [ASSET_TREE];
-  const crumbs = chain.slice(0, Math.min(LEVEL_ORDER.indexOf(level) + 1, chain.length));
+  const crumbs = chain;
   // 面包屑选中同级被测对象：同步全局上下文 + 层次高亮（与被测对象维度/层次两筛选联动）
   const selectCrumb = (node: IAssetNode) => {
     setSelectedAsset(node);

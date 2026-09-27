@@ -43,18 +43,25 @@ function assetScenarios(asset: IAsset) {
   return [...new Set(pool)].map((id) => TEST_SCENARIOS.find((s) => s.id === id)).filter((s): s is NonNullable<typeof s> => !!s);
 }
 
-// 被测对象树节点（点击联动画像与全局上下文）
-function TreeNode({ node, activeId, onSelect, depth }: {
+// 子树是否包含目标节点（用于默认展开当前链路）
+function containsNode(n: IAssetNode, id: string): boolean {
+  if (n.id === id) return true;
+  return (n.children ?? []).some((c) => containsNode(c, id));
+}
+
+// 被测对象树节点（受控展开：默认折叠非当前链路，点击节点联动画像与全局上下文）
+function TreeNode({ node, activeId, onSelect, depth, openMap, onToggle }: {
   node: IAssetNode; activeId: string; onSelect: (n: IAssetNode) => void; depth: number;
+  openMap: Record<string, boolean>; onToggle: (n: IAssetNode) => void;
 }) {
-  const [open, setOpen] = useState(depth < 1);
   const hasChildren = !!node.children && node.children.length > 0;
   const active = node.id === activeId;
+  const open = openMap[node.id] ?? (hasChildren && containsNode(node, activeId));
   return (
     <div>
       <div
         role="button"
-        onClick={() => { if (hasChildren) setOpen(!open); onSelect(node); }}
+        onClick={() => { if (hasChildren) onToggle(node); onSelect(node); }}
         className={'flex items-center gap-2 rounded-lg py-2 cursor-pointer select-none ' + (active ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-slate-600 hover:bg-slate-50')}
         style={{ paddingLeft: depth * 18 + 10 }}
       >
@@ -66,7 +73,7 @@ function TreeNode({ node, activeId, onSelect, depth }: {
         <span className={'ml-auto text-[9px] font-normal flex-shrink-0 ' + (node.coverage >= 85 ? 'text-emerald-500' : 'text-amber-500')}>{node.coverage}%</span>
       </div>
       {hasChildren && open && node.children!.map((c) => (
-        <TreeNode key={c.id} node={c} activeId={activeId} onSelect={onSelect} depth={depth + 1} />
+        <TreeNode key={c.id} node={c} activeId={activeId} onSelect={onSelect} depth={depth + 1} openMap={openMap} onToggle={onToggle} />
       ))}
     </div>
   );
@@ -77,6 +84,7 @@ export default function TargetPage() {
   const { selectedAsset, setSelectedAsset } = useOutletContext<{ selectedAsset: IAssetNode; setSelectedAsset: (n: IAssetNode) => void }>();
   const profile = assetToProfile(selectedAsset);
   const risks = profile.gateRules.filter((r) => r.status === 'block');
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
   const [q, setQ] = useState('');
   const kw = q.trim().toLowerCase();
   const riskFiltered = ASSET_RISKS.filter((a) => !kw || (a.name + a.type).toLowerCase().includes(kw));
@@ -96,12 +104,13 @@ export default function TargetPage() {
           <div className="card bg-white rounded-xl border border-slate-200 p-4">
             <h2 className="font-semibold text-slate-700 text-sm mb-1 flex items-center gap-1.5"><Layers className="w-4 h-4 text-emerald-500" />被测对象树</h2>
             <p className="text-[10px] text-slate-400 mb-3">四级层级：工程 → 服务组/服务 → 模块 → 应用/端 · 点击节点联动画像</p>
-            <TreeNode node={ASSET_TREE} activeId={selectedAsset.id} onSelect={setSelectedAsset} depth={0} />
+            <TreeNode node={ASSET_TREE} activeId={selectedAsset.id} onSelect={setSelectedAsset} depth={0}
+              openMap={openMap} onToggle={(n) => setOpenMap((p) => ({ ...p, [n.id]: !(p[n.id] ?? (n.children ? containsNode(n, selectedAsset.id) : false)) }))} />
           </div>
           <div>
             <h2 className="font-semibold text-slate-700 text-sm mb-2">被测对象库全局指标</h2>
             <span className="text-[10px] text-slate-400 mb-2 block">库级汇总 · 右侧画像为当前所选节点</span>
-            <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               {METRICS.map((m) => (
                 <KpiCard key={m.label} label={m.label} value={`${m.value}%`} color={m.color} note={m.note} />
               ))}
