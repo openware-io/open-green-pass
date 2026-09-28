@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { useAssetLevel, LEVEL_LABEL } from '@/context';
 import { REQUIREMENTS, TRACE_CHAINS, type IAssetNode } from '@/data/mock';
 import { PageHeader, GhostButton, Card, ListFilter as FilterBar } from '@/components/shared';
-import { ScanSearch, ListFilter, CircleCheckBig, CircleAlert, CircleX, Camera, Wallet, Gauge, GitBranch } from 'lucide-react';
+import { ScanSearch, ListFilter, Info, CircleCheckBig, CircleAlert, CircleX, Camera, Wallet, Gauge, GitBranch } from 'lucide-react';
 
 const TRACEABILITY_BADGE: Record<string, string> = {
   '完整': 'bg-emerald-50 text-emerald-600',
@@ -14,7 +14,7 @@ const TRACEABILITY_BADGE: Record<string, string> = {
 const RESULT_BADGE: Record<string, { cls: string; icon: 'pass' | 'fail' | 'block' }> = {
   '通过': { cls: 'bg-emerald-50 text-emerald-600', icon: 'pass' },
   '失败': { cls: 'bg-red-50 text-red-600', icon: 'fail' },
-  '阻塞': { cls: 'bg-amber-50 text-amber-600', icon: 'block' },
+  '阻塞': { cls: 'bg-red-50 text-red-600', icon: 'block' },
 };
 
 function ResultIcon({ kind }: { kind: string }) {
@@ -78,14 +78,18 @@ export default function TracePage() {
         <GhostButton onClick={() => setView((v) => (v === 'chain' ? 'matrix' : 'chain'))}>
           <ListFilter className="w-4 h-4 mr-1.5" />{view === 'chain' ? '矩阵视图' : '链路视图'}
         </GhostButton>
-        <GhostButton onClick={() => setBatch((b) => GEN_BATCHES[(GEN_BATCHES.indexOf(b) + 1) % GEN_BATCHES.length])}>
-          <ScanSearch className="w-4 h-4 mr-1.5" />生成批次 · {batch}
-        </GhostButton>
+        <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 border border-slate-200 rounded-lg bg-white pl-2.5 pr-1 py-1">
+          <ScanSearch className="w-3.5 h-3.5 text-emerald-600" />生成批次
+          <select value={batch} onChange={(e) => setBatch(e.target.value)}
+            className="bg-transparent text-[11px] font-medium text-slate-600 outline-none cursor-pointer py-0.5">
+            {GEN_BATCHES.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </span>
       </PageHeader>
 
       {/* 生成产出追溯说明：追溯链由生成用例的 AI 生成种子自动建立 */}
-      <div className="mb-5 flex items-start gap-2 text-[11px] text-slate-500 bg-emerald-50/60 border border-emerald-200 rounded-xl px-4 py-2.5">
-        <CircleCheckBig className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+      <div className="mb-5 flex items-start gap-2 text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5">
+        <Info className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
         <span>本页是<b>生成产出的追溯矩阵</b>：AI 在生成用例页为每条用例种子建立 <b>REQ → 测试点 → 用例</b> 追溯链，此处即该产出的消费视图；可<b>按被测对象</b>（左侧树联动 / 页首层次筛选）与<b>按生成批次</b>（#GEN-2041 / #GEN-2038）过滤，追踪每批 AI 生成的用例覆盖与缺口。</span>
       </div>
 
@@ -94,33 +98,32 @@ export default function TracePage() {
           className="p-5 mb-5"
           extra={
             <div className="flex gap-3 text-[10px]">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-amber-400"></span>系统</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-500"></span>服务组</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-400"></span>服务</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-blue-400"></span>端</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-slate-300"></span>层级节点</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-500"></span>当前层级</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-white border border-emerald-400"></span>选中用例</span>
             </div>
           }>
           <div className="grid gap-0" style={{ gridTemplateColumns: `repeat(${COLS[level]}, minmax(0, 1fr))` }}>
-            <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-center">
-              <div className="text-[10px] text-amber-600 font-medium">系统</div>
+            <div className={'px-3 py-2 rounded-lg text-center ' + (level === 'system' ? 'bg-emerald-50 border border-emerald-200' : 'bg-white border border-slate-200')}>
+              <div className={'text-[10px] font-medium ' + (level === 'system' ? 'text-emerald-700' : 'text-slate-500')}>系统</div>
               <div className="text-xs text-slate-700 mt-0.5">{chain.system}</div>
             </div>
             {level !== 'system' && (
-              <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
-                <div className="text-[10px] text-emerald-700 font-medium">服务组</div>
+              <div className={'px-3 py-2 rounded-lg text-center ' + (level === 'group' ? 'bg-emerald-50 border border-emerald-200' : 'bg-white border border-slate-200')}>
+                <div className={'text-[10px] font-medium ' + (level === 'group' ? 'text-emerald-700' : 'text-slate-500')}>服务组</div>
                 <div className="text-xs text-slate-700 mt-0.5">{chain.group}</div>
               </div>
             )}
             {(level === 'service' || level === 'module') && (
-              <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
-                <div className="text-[10px] text-emerald-600 font-medium">服务</div>
+              <div className={'px-3 py-2 rounded-lg text-center ' + (level === 'service' ? 'bg-emerald-50 border border-emerald-200' : 'bg-white border border-slate-200')}>
+                <div className={'text-[10px] font-medium ' + (level === 'service' ? 'text-emerald-600' : 'text-slate-500')}>服务</div>
                 <div className="text-xs text-slate-700 mt-0.5">{chain.service}</div>
                 <div className="text-[10px] text-slate-500 mt-0.5">{chain.serviceTp}</div>
               </div>
             )}
             {level === 'module' && (
-              <div className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-center">
-                <div className="text-[10px] text-slate-500">测试点</div>
+              <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
+                <div className="text-[10px] text-emerald-600 font-medium">测试点</div>
                 <div className="text-[10px] text-slate-700 mt-0.5">{chain.testPoint}</div>
               </div>
             )}
@@ -143,7 +146,7 @@ export default function TracePage() {
                 <ResultIcon kind={RESULT_BADGE[activeTc.result]?.icon ?? 'pass'} />
                 <div>
                   <div className="text-[10px] text-slate-500">执行结果</div>
-                  <div className={'text-xs font-semibold ' + (activeTc.result === '失败' ? 'text-red-600' : activeTc.result === '阻塞' ? 'text-amber-600' : 'text-emerald-600')}>{activeTc.result}</div>
+                  <div className={'text-xs font-semibold ' + (activeTc.result === '失败' || activeTc.result === '阻塞' ? 'text-red-600' : 'text-emerald-600')}>{activeTc.result}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -188,6 +191,7 @@ export default function TracePage() {
         </Card>
       )}
 
+      {view === 'matrix' && (
       <div className="card bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
           <h2 className="font-semibold text-slate-700 text-sm">需求追溯矩阵</h2>
@@ -253,6 +257,7 @@ export default function TracePage() {
           <div className="px-5 py-3 text-[11px] text-amber-600 bg-amber-50/40 border-t border-amber-200">已筛选为「检测覆盖缺口」视图：仅显示未完全覆盖的需求（缺口 + 部分）。</div>
         )}
       </div>
+      )}
     </div>
   );
 }
