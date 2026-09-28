@@ -7,11 +7,11 @@ import { Cpu, Globe, Smartphone, Sparkles, ShieldCheck, Pencil, Trash2, Power, C
 import { PageHeader, GhostButton, PrimaryButton, ListFilter } from '@/components/shared';
 
 const TYPE_BADGE: Record<string, string> = {
-  '单元': 'bg-blue-50 text-blue-600',
-  '集成': 'bg-purple-50 text-purple-600',
-  'Web': 'bg-pink-50 text-pink-600',
-  '移动': 'bg-teal-50 text-teal-600',
-  '安全': 'bg-orange-50 text-orange-600',
+  '单元': 'bg-emerald-50 text-emerald-700',
+  '集成': 'bg-emerald-50 text-emerald-700',
+  'Web': 'bg-emerald-50 text-emerald-700',
+  '移动': 'bg-emerald-50 text-emerald-700',
+  '安全': 'bg-emerald-50 text-emerald-700',
 };
 const ASSERTION_COLOR: Record<string, string> = { '强': 'text-emerald-600', '中': 'text-amber-600', '弱': 'text-red-600' };
 const STATUS_BADGE: Record<string, string> = {
@@ -30,10 +30,10 @@ const CHANGE_ORDER: CaseChange[] = ['新增', '更新', '删除', '稳定'];
 const CHANGE_ICON: Record<string, typeof GitBranch> = { '新增': GitBranch, '更新': RefreshCcw, '删除': Trash2, '稳定': History };
 const EXEC_ICON: Record<string, typeof Code2> = { '脚本': Braces, 'HTTP': Globe, '规则': ShieldCheck, '压测': Activity };
 const EXEC_BADGE: Record<ExecCarrierType, string> = {
-  '脚本': 'bg-blue-50 text-blue-600',
-  'HTTP': 'bg-purple-50 text-purple-600',
-  '规则': 'bg-orange-50 text-orange-600',
-  '压测': 'bg-teal-50 text-teal-600',
+  '脚本': 'bg-slate-100 text-slate-600',
+  'HTTP': 'bg-slate-100 text-slate-600',
+  '规则': 'bg-slate-100 text-slate-600',
+  '压测': 'bg-slate-100 text-slate-600',
 };
 const SOURCE_BADGE: Record<string, string> = {
   '固定脚本': 'bg-slate-100 text-slate-500',
