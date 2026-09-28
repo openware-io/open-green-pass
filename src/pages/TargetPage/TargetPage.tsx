@@ -4,16 +4,20 @@ import { toast } from 'sonner';
 import { ASSET_TREE, METRICS, GEN_TRACE, ASSET_RISKS, AI_MODELS, PROJECT_MODELS, TEST_SCENARIOS, TESTED_REPOS, assetToProfile, type IAsset, type IAssetNode, type ITestedRepo } from '@/data/mock';
 import { scenarioNav } from '@/context/scenarioNav';
 import { KpiCard, PageHeader, PrimaryButton, GhostButton, ListFilter } from '@/components/shared';
-import { Brain, ShieldAlert, ChevronRight, ChevronDown, Sparkles, GitBranch, CircleDot, FileSearch, History, CheckCircle2, AlertTriangle, XCircle, Layers, Cpu, Globe, Smartphone, X, Plus, ExternalLink, Check, Plug } from 'lucide-react';
+import { Brain, ShieldAlert, ChevronRight, ChevronDown, Sparkles, GitBranch, CircleDot, FileSearch, History, CheckCircle2, AlertTriangle, XCircle, Layers, Cpu, Globe, Smartphone, X, Plus, ExternalLink, Check, Plug, Files, FileText, Wallet } from 'lucide-react';
 
 const ADD_STEPS = ['基本信息', '代码源接入', '上游源', '确认'];
 
+// 围绕当前被测对象的测试治理环节全景：被测对象为轴心，每个环节都针对该对象
 const STAGE_FLOW = [
-  { path: '/generation', label: '接收与理解', icon: FileSearch, desc: 'AI 解析六类上游源' },
-  { path: '/cases', label: '用例生成', icon: Sparkles, desc: 'AI 生成用例种子并验证' },
-  { path: '/exec', label: '测试执行', icon: CircleDot, desc: '跨资产执行与证据捕获' },
-  { path: '/gate', label: '质量门禁', icon: ShieldAlert, desc: '防 AI 自放水的判定' },
-  { path: '/audit', label: '审计留痕', icon: GitBranch, desc: '哈希链可信审计' },
+  { path: '/generation', label: '用例生成', icon: Sparkles, desc: 'AI 生成流程 · 针对当前对象', core: true },
+  { path: '/trace', label: '需求追溯', icon: GitBranch, desc: '生成产出的追溯矩阵', core: false },
+  { path: '/cases', label: '用例管理', icon: Files, desc: '版本化用例库', core: false },
+  { path: '/exec', label: '测试执行', icon: CircleDot, desc: '执行总览清单', core: false },
+  { path: '/gate', label: '质量门禁', icon: ShieldAlert, desc: '防 AI 自放水的判定', core: true },
+  { path: '/history', label: '测试历史', icon: History, desc: '时间维运行记录', core: false },
+  { path: '/report', label: '测试报告', icon: FileText, desc: '跨场景汇总合编', core: false },
+  { path: '/audit-cost', label: '成本审计', icon: Wallet, desc: '生成 / 执行成本', core: false },
 ];
 
 const DIM_BAR: Record<string, string> = {
@@ -314,28 +318,26 @@ export default function TargetPage() {
             </div>
           </div>
 
-          {/* 测试闭环 */}
+          {/* 被测对象 = 轴心：围绕当前被测对象的测试治理环节全景 */}
           <div className="card bg-white rounded-xl border border-slate-200 p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-slate-700 text-sm">测试闭环 · 从接收 AI 产物到放行/拒绝</h2>
-              <span className="text-[11px] text-slate-400">当前位于「{profile.stage}」阶段</span>
+              <h2 className="font-semibold text-slate-700 text-sm flex items-center gap-1.5"><Layers className="w-4 h-4 text-emerald-500" />围绕 {profile.name} 的测试治理环节</h2>
+              <span className="text-[11px] text-slate-400">被测对象为轴心 · 每个环节均针对该对象 · 点击进入对应页</span>
             </div>
-            <div className="flex flex-wrap gap-3 items-stretch">
-              {STAGE_FLOW.map((s, i) => {
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {STAGE_FLOW.map((s) => {
                 const Icon = s.icon;
-                const current = s.label.includes('门禁');
+                const current = s.core;
                 return (
-                  <div key={s.path} className="flex items-center gap-3 flex-1 min-w-[140px]">
-                    <Link to={s.path}
-                      className={`flex-1 p-3 rounded-xl border transition ${current ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-200 hover:border-emerald-300 bg-white'}`}>
-                      <div className="flex items-center gap-2">
-                        <Icon className={`w-4 h-4 ${current ? 'text-white' : 'text-emerald-500'}`} />
-                        <span className={`text-sm font-medium ${current ? 'text-white' : 'text-slate-700'}`}>{s.label}</span>
-                      </div>
-                      <div className={`text-[10px] mt-1 ${current ? 'text-emerald-100' : 'text-slate-400'}`}>{s.desc}</div>
-                    </Link>
-                    {i < STAGE_FLOW.length - 1 && <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />}
-                  </div>
+                  <Link key={s.path} to={s.path}
+                    className={'p-3 rounded-xl border transition ' + (current ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm' : 'border-slate-200 bg-white hover:border-emerald-300 hover:-translate-y-0.5 hover:shadow-sm')}>
+                    <div className="flex items-center gap-2">
+                      <span className={'w-7 h-7 rounded-lg flex items-center justify-center ' + (current ? 'bg-white/15 text-white' : 'bg-emerald-50 text-emerald-600')}><Icon className="w-4 h-4" /></span>
+                      <span className={'text-sm font-medium ' + (current ? 'text-white' : 'text-slate-700')}>{s.label}</span>
+                      {current && <span className="ml-auto text-[9px] bg-white/20 text-emerald-50 px-1.5 py-0.5 rounded-full">核心</span>}
+                    </div>
+                    <div className={'text-[10px] mt-1.5 ' + (current ? 'text-emerald-100' : 'text-slate-400')}>{s.desc}</div>
+                  </Link>
                 );
               })}
             </div>
