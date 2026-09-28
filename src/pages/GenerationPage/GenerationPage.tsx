@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { UPSTREAM_ADAPTERS } from '@/data/mock';
 import { PageHeader, GhostButton, PrimaryButton, Card, ListFilter } from '@/components/shared';
 import { toast } from 'sonner';
-import { Sparkles, Plug, ShieldCheck, UserCheck, Database, GitBranch, BookOpen, PlusCircle, CloudDownload, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { Sparkles, Plug, ShieldCheck, UserCheck, Database, GitBranch, BookOpen, PlusCircle, CloudDownload, ChevronLeft, ChevronRight, Check, X, Link2, KeyRound, CheckCircle2 } from 'lucide-react';
 
 const QUALITY = [
   { label: '变异测试验证', val: '38 / 48', width: 79, color: 'bg-emerald-500', note: '10 条未通过，无法杀死代码变体' },
@@ -21,7 +21,7 @@ const AI_TRACES = [
 
 // ============ 被测仓库：AI 生成用例的输入（仓库 + 分支 + 版本） ============
 interface IRepo { name: string; source: string; branch: string; branches: string[]; versions: string[]; synced: string; owner: string; src: string[] }
-const REPOS: IRepo[] = [
+const INITIAL_REPOS: IRepo[] = [
   { name: 'svc-payment', source: 'GitLab', branch: 'main', branches: ['main', 'release', 'feature-refund-v2'], versions: ['v2.4.1', 'v2.4.0'], synced: '2026-09-27', owner: '张立', src: ['需求文档', '设计文档', 'API 契约', '代码变更', '生产追踪', '缺陷报告'] },
   { name: 'svc-auth', source: 'GitLab', branch: 'main', branches: ['main', 'develop'], versions: ['v2.3.0'], synced: '2026-09-25', owner: '张立', src: ['需求文档', 'API 契约', '代码变更'] },
   { name: 'svc-user', source: 'GitHub', branch: 'main', branches: ['main'], versions: ['v2.1.2'], synced: '2026-09-22', owner: '张立', src: ['需求文档', 'API 契约'] },
@@ -58,10 +58,16 @@ const SOURCE_CHIPS = [
   { label: '历史缺陷', from: '缺陷库', ok: true },
 ];
 
+// 添加仓库流程步骤
+const ADD_STEPS = ['基本信息', '代码源接入', '上游源', '确认'];
+
 export default function GenerationPage() {
   const [q, setQ] = useState('');
   const kw = q.trim().toLowerCase();
   const upFiltered = UPSTREAM_ADAPTERS.filter((a) => !kw || (a.source + a.status).toLowerCase().includes(kw));
+
+  // 被测仓库列表（可增长）
+  const [repos, setRepos] = useState<IRepo[]>(INITIAL_REPOS);
 
   // 生成流程向导状态
   const [step, setStep] = useState(1);
@@ -71,9 +77,41 @@ export default function GenerationPage() {
   const [stored, setStored] = useState(false);
   const [audit, setAudit] = useState<Record<string, string>>({});
 
+  // 添加仓库弹窗状态
+  const [showAdd, setShowAdd] = useState(false);
+  const [addStep, setAddStep] = useState(1);
+  const [addForm, setAddForm] = useState({ name: '', type: 'GitLab', url: '', node: '服务', owner: '张立', ver: 'v1.0.0', auth: 'token', token: '' });
+  const [addBranches, setAddBranches] = useState<string[]>(['main']);
+  const [addBrInput, setAddBrInput] = useState('');
+  const [connected, setConnected] = useState(false);
+  const [addSrc, setAddSrc] = useState<string[]>(['需求文档', 'API 契约']);
+
   const cur = FLOW_STEPS[step - 1];
 
   const pickRepo = (r: IRepo) => { setGenRepo(r.name); setGenBranch(r.branches[0]); setGenVer(r.versions[0]); setStep(1); toast.success('已关联仓库', { description: `${r.name} 已选择为生成输入，进入「关联仓库」步骤` }); };
+
+  // 添加仓库：下一步校验
+  const addNext = () => {
+    if (addStep === 1 && (!addForm.name.trim() || !addForm.url.trim())) { toast.error('请填写仓库名与仓库地址'); return; }
+    if (addStep === 2 && !connected) { toast.error('请先检测代码源连接'); return; }
+    if (addStep === 3 && addSrc.length === 0) { toast.error('请至少接入一个上游源'); return; }
+    setAddStep(addStep + 1);
+  };
+  const addPrev = () => setAddStep(Math.max(1, addStep - 1));
+
+  // 确认添加 → 仓库入库并联动选中
+  const submitAdd = () => {
+    const nr: IRepo = {
+      name: addForm.name.trim(), source: addForm.type, branch: addBranches[0] || 'main', branches: addBranches,
+      versions: [addForm.ver.trim() || 'v1.0.0'], synced: '2026-09-28', owner: addForm.owner || '张立', src: addSrc,
+    };
+    setRepos([...repos, nr]);
+    setGenRepo(nr.name); setGenBranch(nr.branches[0]); setGenVer(nr.versions[0]); setStep(1);
+    setShowAdd(false); setAddStep(1); setConnected(false); setAddBranches(['main']); setAddSrc(['需求文档', 'API 契约']); setAddForm({ ...addForm, name: '', url: '', token: '' });
+    toast.success('仓库已添加', { description: `${nr.name}@${nr.branches[0]}@${nr.versions[0]} 已加入被测仓库，并关联为生成输入` });
+  };
+
+  const urlPrefix = addForm.type === 'GitHub' ? 'https://github.com/org/' : 'https://gitlab.example.com/';
 
   return (
     <div>
@@ -88,9 +126,9 @@ export default function GenerationPage() {
           <p className="text-[11px] text-slate-500 leading-relaxed max-w-xl">
             研发团队管理者在此<b>添加代码仓库</b>并获取<b>仓库代码与版本</b>。关联仓库是生成流程的第一步——点某仓库「发起生成」即进入下方流程向导并预选该仓库；用错分支/版本可在用例管理回退。
           </p>
-          <GhostButton onClick={() => toast('添加仓库', { description: '研发团队管理者添加被测代码仓库，获取代码与版本（原型示意）' })}>
+          <PrimaryButton onClick={() => setShowAdd(true)}>
             <PlusCircle className="w-3.5 h-3.5" />添加仓库
-          </GhostButton>
+          </PrimaryButton>
         </div>
         <div className="flex items-center gap-2 mb-4 text-[11px] bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
           <span className="font-medium text-emerald-700">当前关联仓库</span>
@@ -110,7 +148,7 @@ export default function GenerationPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {REPOS.map((r) => (
+            {repos.map((r) => (
               <tr key={r.name} onClick={() => pickRepo(r)}
                 className={'cursor-pointer transition ' + (r.name === genRepo ? 'bg-emerald-50/60' : 'hover:bg-slate-50')}>
                 <td className="px-4 py-3">
@@ -178,23 +216,23 @@ export default function GenerationPage() {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <div className="text-[11px] text-slate-500 mb-1">被测仓库</div>
-                  <select value={genRepo} onChange={(e) => { const r = e.target.value; const repo = REPOS.find((x) => x.name === r); setGenRepo(r); setGenBranch(repo?.branches?.[0] ?? 'main'); setGenVer((repo?.versions ?? ['v2.4.1'])[0]); }}
+                  <select value={genRepo} onChange={(e) => { const r = e.target.value; const repo = repos.find((x) => x.name === r); setGenRepo(r); setGenBranch(repo?.branches?.[0] ?? 'main'); setGenVer((repo?.versions ?? ['v2.4.1'])[0]); }}
                     className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:border-emerald-400">
-                    {REPOS.map((r) => <option key={r.name} value={r.name}>{r.name}</option>)}
+                    {repos.map((r) => <option key={r.name} value={r.name}>{r.name}</option>)}
                   </select>
                 </div>
                 <div>
                   <div className="text-[11px] text-slate-500 mb-1">分支</div>
                   <select value={genBranch} onChange={(e) => setGenBranch(e.target.value)}
                     className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:border-emerald-400">
-                    {(REPOS.find((r) => r.name === genRepo)?.branches ?? ['main']).map((b) => <option key={b} value={b}>{b}</option>)}
+                    {(repos.find((r) => r.name === genRepo)?.branches ?? ['main']).map((b) => <option key={b} value={b}>{b}</option>)}
                   </select>
                 </div>
                 <div>
                   <div className="text-[11px] text-slate-500 mb-1">目标版本</div>
                   <select value={genVer} onChange={(e) => setGenVer(e.target.value)}
                     className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:border-emerald-400">
-                    {(REPOS.find((r) => r.name === genRepo)?.versions ?? []).map((v) => <option key={v} value={v}>{v}</option>)}
+                    {(repos.find((r) => r.name === genRepo)?.versions ?? []).map((v) => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </div>
               </div>
@@ -365,7 +403,7 @@ export default function GenerationPage() {
         <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
             <h2 className="font-semibold text-slate-700 text-sm">上游源适配器 · 明细</h2>
-            <span className="text-[11px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-medium">关联仓库 {genRepo} · 已接入 {REPOS.find((r) => r.name === genRepo)?.src.length ?? 0}/{UPSTREAM_ADAPTERS.length}</span>
+            <span className="text-[11px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-medium">关联仓库 {genRepo} · 已接入 {repos.find((r) => r.name === genRepo)?.src.length ?? 0}/{UPSTREAM_ADAPTERS.length}</span>
           </div>
           <span className="text-[11px] text-slate-400">共 {upFiltered.length} / {UPSTREAM_ADAPTERS.length} 个上游源</span>
         </div>
@@ -389,7 +427,7 @@ export default function GenerationPage() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {upFiltered.map((a) => {
-              const attached = (REPOS.find((r) => r.name === genRepo)?.src ?? []).includes(a.source);
+              const attached = (repos.find((r) => r.name === genRepo)?.src ?? []).includes(a.source);
               return (
                 <tr key={a.source} className={(attached ? (a.status === '验证中' ? 'bg-indigo-50/30 hover:bg-indigo-50' : 'hover:bg-slate-50') : 'opacity-45 hover:opacity-70 hover:bg-slate-50')}>
                   <td className="px-5 py-3">
@@ -423,6 +461,207 @@ export default function GenerationPage() {
           </tbody>
         </table>
       </div>
+
+      {/* ============ 添加仓库弹窗（四步分步录入） ============ */}
+      {showAdd && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setShowAdd(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            {/* 头部 */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2"><PlusCircle className="w-4 h-4 text-emerald-600" />添加被测仓库</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">纳入被测对象，作为 AI 生成用例的代码源输入</p>
+              </div>
+              <button type="button" onClick={() => setShowAdd(false)} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100"><X className="w-4 h-4" /></button>
+            </div>
+
+            {/* 分步导航 */}
+            <div className="px-6 py-3 flex items-center gap-1">
+              {ADD_STEPS.map((s, i) => {
+                const n = i + 1;
+                const done = n < addStep; const active = n === addStep;
+                return (
+                  <div key={s} className="flex flex-1 items-center">
+                    <span className={'flex-1 flex items-center justify-center gap-1.5 text-[11px] py-1 rounded-lg ' + (active ? 'bg-emerald-50 text-emerald-700 font-semibold' : done ? 'text-emerald-600' : 'text-slate-400')}>
+                      <span className={'w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ' + (active ? 'bg-emerald-600 text-white' : done ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400')}>
+                        {done ? <Check className="w-2.5 h-2.5" /> : n}
+                      </span>{s}
+                    </span>
+                    {n < ADD_STEPS.length && <ChevronRight className="w-3 h-3 text-slate-200" />}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 步骤内容 */}
+            <div className="px-6 py-5 min-h-[240px]">
+              {/* ① 基本信息 */}
+              {addStep === 1 && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="text-[11px] text-slate-500 mb-1">仓库名 <span className="text-red-400">*</span></div>
+                      <input value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} placeholder="如 svc-notify"
+                        className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-400" />
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-slate-500 mb-1">代码源类型</div>
+                      <select value={addForm.type} onChange={(e) => setAddForm({ ...addForm, type: e.target.value })}
+                        className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:border-emerald-400">
+                        <option>GitLab</option><option>GitHub</option><option>Gitee</option>
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <div className="text-[11px] text-slate-500 mb-1">仓库地址 <span className="text-red-400">*</span></div>
+                      <div className="flex items-center gap-1.5">
+                        <Link2 className="w-4 h-4 text-slate-300 shrink-0" />
+                        <input value={addForm.url} onChange={(e) => setAddForm({ ...addForm, url: e.target.value })} placeholder={urlPrefix + 'svc-notify'}
+                          className="flex-1 text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-400" />
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-1">代码源类型切换将联动仓库地址前缀</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-slate-500 mb-1">所属被测对象</div>
+                      <select value={addForm.node} onChange={(e) => setAddForm({ ...addForm, node: e.target.value })}
+                        className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:border-emerald-400">
+                        <option>工程</option><option>服务组</option><option>服务</option><option>模块</option>
+                      </select>
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-slate-500 mb-1">负责人</div>
+                      <input value={addForm.owner} onChange={(e) => setAddForm({ ...addForm, owner: e.target.value })}
+                        className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-400" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ② 代码源接入 */}
+              {addStep === 2 && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                    <KeyRound className="w-3.5 h-3.5 text-emerald-500" />接入方式
+                    <span className="flex gap-1">
+                      {['token', 'ssh'].map((m) => (
+                        <button key={m} type="button" onClick={() => setAddForm({ ...addForm, auth: m })}
+                          className={'text-[10px] px-2 py-0.5 rounded-md border ' + (addForm.auth === m ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'border-slate-200 text-slate-400')}>
+                          {m === 'token' ? 'Access Token' : 'SSH Key'}
+                        </button>
+                      ))}
+                    </span>
+                  </div>
+                  {addForm.auth === 'token' ? (
+                    <input value={addForm.token} onChange={(e) => setAddForm({ ...addForm, token: e.target.value })} placeholder={'粘贴 ' + addForm.type + ' Access Token（只读）'}
+                      className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-400" />
+                  ) : (
+                    <input placeholder="ssh-rsa AAAAB3...（只读）" className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-400" />
+                  )}
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => { setConnected(true); toast.success('连接成功', { description: '已读取 ' + addForm.type + ' 仓库 ' + addForm.url + ' 的分支列表与默认分支' }); }}
+                      className="text-[11px] px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200">检测连接</button>
+                    {connected && (
+                      <span className="flex items-center gap-1 text-[11px] text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5" />连接成功 · 已获取分支列表</span>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-[11px] text-slate-500 mb-1">默认分支</div>
+                    <select value={addBranches[0]} onChange={(e) => { const nb = [...addBranches]; nb[0] = e.target.value; setAddBranches(nb); }}
+                      className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:border-emerald-400">
+                      {addBranches.map((b) => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <div className="text-[11px] text-slate-500 mb-1">维护分支（测试环境可能测试在指定分支）</div>
+                    <div className="flex items-center gap-1.5">
+                      <input value={addBrInput} onChange={(e) => setAddBrInput(e.target.value)} placeholder="分支名，如 release / feature-x"
+                        className="flex-1 text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-400" />
+                      <button type="button" onClick={() => { if (addBrInput.trim() && !addBranches.includes(addBrInput.trim())) { setAddBranches([...addBranches, addBrInput.trim()]); setAddBrInput(''); } }}
+                        className="text-[11px] px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">添加</button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {addBranches.map((b) => (
+                        <span key={b} className="flex items-center gap-1 text-[10px] bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md text-slate-600">
+                          {b}
+                          <button type="button" onClick={() => setAddBranches(addBranches.filter((x) => x !== b))} className="text-slate-300 hover:text-red-400"><X className="w-2.5 h-2.5" /></button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] text-slate-500 mb-1">目标版本</div>
+                    <input value={addForm.ver} onChange={(e) => setAddForm({ ...addForm, ver: e.target.value })} placeholder="如 v1.0.0"
+                      className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:border-emerald-400" />
+                  </div>
+                </div>
+              )}
+
+              {/* ③ 上游源接入 */}
+              {addStep === 3 && (
+                <div className="space-y-3">
+                  <p className="text-[11px] text-slate-500">选择本仓库要接入的上游源（接入后适配器将从中提取规格参与 AI 生成用例）：</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {UPSTREAM_ADAPTERS.map((a) => {
+                      const on = addSrc.includes(a.source);
+                      return (
+                        <button key={a.source} type="button" onClick={() => setAddSrc(on ? addSrc.filter((s) => s !== a.source) : [...addSrc, a.source])}
+                          className={'text-left px-3 py-2.5 rounded-lg border text-[11px] transition ' + (on ? 'border-emerald-300 bg-emerald-50/60' : 'border-slate-200 bg-white hover:border-slate-300')}>
+                          <div className="flex items-center gap-2">
+                            <span className={'w-4 h-4 rounded flex items-center justify-center ' + (on ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-transparent')}><Check className="w-2.5 h-2.5" /></span>
+                            <span className="font-medium text-slate-700">{a.source}</span>
+                            <span className="text-slate-400 ml-auto">{a.system}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-1 pl-6">{a.extract}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="text-[11px] text-emerald-600">已选 {addSrc.length} 类上游源</div>
+                </div>
+              )}
+
+              {/* ④ 确认 */}
+              {addStep === 4 && (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+                    <div className="text-[11px] font-semibold text-emerald-700 mb-2">仓库将纳入被测对象</div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[11px]">
+                      <div className="flex justify-between"><span className="text-slate-400">仓库</span><span className="font-mono text-slate-700">{addForm.name || '-'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">代码源</span><span className="text-slate-700">{addForm.type}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">默认分支</span><span className="font-mono text-slate-700">{addBranches[0] || '-'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">目标版本</span><span className="font-mono text-slate-700">{addForm.ver || '-'}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">所属对象</span><span className="text-slate-700">{addForm.node}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-400">负责人</span><span className="text-slate-700">{addForm.owner}</span></div>
+                      <div className="col-span-2 flex justify-between"><span className="text-slate-400">接入上游源</span><span className="text-emerald-600">{addSrc.length} 类 · {addSrc.join('、')}</span></div>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-400">添加后立即关联为生成输入，可在流程向导第一步确认分支/版本并发起生成。</p>
+                </div>
+              )}
+            </div>
+
+            {/* 底部操作 */}
+            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400">步骤 {addStep} / {ADD_STEPS.length} · {ADD_STEPS[addStep - 1]}</span>
+              <div className="flex gap-2">
+                {addStep > 1 && (
+                  <button type="button" onClick={addPrev} className="flex items-center gap-1 px-3 py-1.5 text-xs border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50">
+                    <ChevronLeft className="w-3.5 h-3.5" />上一步
+                  </button>
+                )}
+                {addStep < ADD_STEPS.length ? (
+                  <button type="button" onClick={addNext} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+                    下一步 · {ADD_STEPS[addStep]}<ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <button type="button" onClick={submitAdd} className="flex items-center gap-1 px-4 py-1.5 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+                    <Check className="w-3.5 h-3.5" />确认添加
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
