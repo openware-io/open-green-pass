@@ -272,6 +272,32 @@ export const CASES: ICase[] = [
   ] },
 ];
 
+// ============ 用例执行载体 ============
+// 执行的本质：用例（意图/规格/断言）经执行器翻译成可运行的载体（脚本 / HTTP 请求 / 规则集 / 压测配置），由场景 Runner 拉起。
+// 详情页全面呈现脚本、测试数据、参数、断言规则、执行引擎与动态性来源；总览列表仅展示精简标识。
+export type ExecCarrierType = '脚本' | 'HTTP' | '规则' | '压测';
+export interface ICaseExec {
+  type: ExecCarrierType;         // 载体类型
+  engine: string;                // 执行引擎 / Runner
+  script: string;                // 脚本标识（类名/路径/请求模板）
+  params: string[];              // 参与执行的参数 / 变量
+  data: string[];                // 测试数据样本（输入 / 边界）
+  assert: string;                // 断言规则
+  source: '固定脚本' | '数据驱动' | 'AI 动态生成'; // 动态性来源
+}
+export const CASE_EXEC: Record<string, ICaseExec> = {
+  'TC-2024-001': { type: '脚本', engine: 'JUnit 5', script: 'svc-auth/AuthLoginTest.java', params: ['userType', 'device'], data: ['标准账号 · 多设备', '弱网 token 刷新'], assert: '200 + 会话有效性断言', source: '固定脚本' },
+  'TC-2024-005': { type: '脚本', engine: 'JUnit 5', script: 'svc-user/UserStatusTest.java', params: ['userId'], data: ['正常 / 注销 / 不存在用户'], assert: '状态码 + 字段类型断言', source: '固定脚本' },
+  'TC-2024-006': { type: '脚本', engine: 'Playwright', script: 'web-frontend/e2e/login.spec.ts', params: ['viewport', 'locale'], data: ['桌面 1440 · zh-CN', '移动 390 · zh-CN'], assert: '元素可见 + 跳转断言', source: '固定脚本' },
+  'TC-2024-095': { type: 'HTTP', engine: '契约测试器 · 幂等校验', script: 'POST /v2/payment/callback', params: ['幂等键 idemKey', '回调次数'], data: ['重复回调×3', '并发双回调'], assert: '同键幂等，仅一次生效', source: '数据驱动' },
+  'TC-2024-118': { type: '脚本', engine: 'JUnit 5', script: 'svc-payment/RefundCalcTest.java', params: ['金额', '费率', '优惠券'], data: ['¥199.00 · 新费率', '含 30 元券', '跨境+税费'], assert: '退款额 = 应付 - 抵扣', source: '固定脚本' },
+  'TC-2024-125': { type: '脚本', engine: 'Appium · iOS 真机', script: 'mobile-ios/tests/LoginE2E.swift', params: ['device', 'iOSVer'], data: ['iPhone 15 · iOS 17', 'iPhone 12 · iOS 16'], assert: '登录态 + 返回包断言', source: '固定脚本' },
+  'TC-2024-130': { type: '规则', engine: 'OWASP ASVS L2', script: 'svc-auth/security/ASVS-L2.json', params: ['认证项', '会话项'], data: ['V2 认证 15 项', 'V3 会话 8 项'], assert: 'L2 全部检查项通过', source: '固定脚本' },
+  'TC-2024-132': { type: '脚本', engine: 'JUnit 5 · 参数化', script: 'svc-payment/RefundCouponTest.java', params: ['优惠券类型', '抵扣上限'], data: ['满减券 / 折扣券', '超额抵扣边界'], assert: '抵扣后退款金额正确', source: 'AI 动态生成' },
+  'TC-2024-133': { type: 'HTTP', engine: '契约测试器 · 状态机', script: 'POST /v2/payment/timeout-cancel', params: ['超时阈值', '撤销动作'], data: ['15s 超时', '支付成功不撤销'], assert: '超时自动撤销退款', source: 'AI 动态生成' },
+  'TC-2024-020': { type: '脚本', engine: 'JUnit 5', script: 'svc-auth/LegacyLoginTest.java', params: ['legacyToken'], data: ['旧版 /v1/login 报文'], assert: '接口已下线，跳过执行', source: '固定脚本' },
+};
+
 // ============ 契约测试 ============
 export interface IContract {
   id: string;
