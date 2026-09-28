@@ -234,6 +234,19 @@ export const SERVICE_VERSIONS: { asset: string; version: string; change: string 
   { asset: 'mobile-ios', version: 'v2.4.0', change: '更新 · 退款入口' },
 ];
 
+// ============ 环境版本校验（执行前防线）============
+// 目标版本（用例/本次迭代锁定的被测版本） vs 测试环境实际运行版本
+// 版本不一致时阻断相关用例执行，避免「测了也白测」
+export interface IEnvVersionCheck { asset: string; target: string; runtime: string; matched: boolean }
+export const ENV_RUNTIME_VERSIONS: IEnvVersionCheck[] = [
+  { asset: 'svc-payment', target: 'v2.4.1', runtime: 'v2.4.0', matched: false },
+  { asset: 'svc-auth', target: 'v2.3.0', runtime: 'v2.3.0', matched: true },
+  { asset: 'svc-user', target: 'v2.1.2', runtime: 'v2.1.2', matched: true },
+  { asset: 'svc-order', target: 'v2.0.5', runtime: 'v2.0.5', matched: true },
+  { asset: 'web-frontend', target: 'v2.4.0', runtime: 'v2.4.0', matched: true },
+  { asset: 'mobile-ios', target: 'v2.4.0', runtime: 'v2.4.0', matched: true },
+];
+
 export const CASES: ICase[] = [
   { id: 'TC-2024-001', title: '正常登录流程验证', asset: 'svc-auth', source: 'REQ-101 + OpenAPI', type: '单元', assertion: '强', mutation: 92, status: '已激活', version: 3, change: '稳定', changedAt: '2026-08-12', versions: [
     { v: 1, iter: 'v2.1.0', ts: '2026-07-02', change: '新增', summary: '登录流程基线用例' },

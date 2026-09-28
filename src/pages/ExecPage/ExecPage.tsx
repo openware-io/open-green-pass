@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { FLOW_ITEMS, EXEC_RUN, TEST_SCENARIOS } from '@/data/mock';
+import { FLOW_ITEMS, EXEC_RUN, TEST_SCENARIOS, ENV_RUNTIME_VERSIONS, type IEnvVersionCheck } from '@/data/mock';
 import { PageHeader, Card, ListFilter } from '@/components/shared';
-import { Cpu, Globe, Smartphone, Sparkles, Play, Pause } from 'lucide-react';
+import { Cpu, Globe, Smartphone, Sparkles, Play, Pause, ShieldCheck, ShieldAlert, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 const STATUS_STYLE: Record<string, { dot: string; badge: string; text: string }> = {
@@ -36,6 +36,12 @@ export default function ExecPage() {
     queued: EXEC_RUN.queued,
     running: EXEC_RUN.running,
     blocked: EXEC_RUN.blocked,
+  };
+
+  const [envChecks, setEnvChecks] = useState<IEnvVersionCheck[]>(ENV_RUNTIME_VERSIONS);
+  const recheck = () => {
+    setEnvChecks(envChecks.map((v) => (v.asset === 'svc-payment' ? { ...v, runtime: 'v2.4.1', matched: true } : v)));
+    toast.success('版本校验通过', { description: 'svc-payment 已部署 v2.4.1 与目标一致，可放行执行' });
   };
 
   const togglePause = () => {
@@ -79,6 +85,41 @@ export default function ExecPage() {
           </div>
           <span className="text-slate-400">{EXEC_RUN.eta}</span>
         </div>
+            </div>
+
+      {/* 环境版本校验：执行前防线 */}
+      <div className="card bg-white rounded-xl border border-slate-200 p-5 mb-5">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-500" />
+            <span className="text-sm font-semibold text-slate-700">环境版本校验</span>
+            <span className="text-[10px] text-slate-400">执行前防线 · 目标版本 vs 环境运行版本，不一致则阻断相关用例，防止「测了也白测」</span>
+          </div>
+          <button type="button" onClick={recheck}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] bg-emerald-600 text-white hover:bg-emerald-700">
+            <RefreshCw className="w-3 h-3" />重新校验 / 刷新环境
+          </button>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
+          {envChecks.map((v) => (
+            <div key={v.asset}
+              className={'flex items-center justify-between rounded-lg border px-3 py-2 ' + (v.matched ? 'border-emerald-200 bg-emerald-50/50' : 'border-red-200 bg-red-50/50')}>
+              <div>
+                <div className="text-[11px] font-medium text-slate-600">{v.asset}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">目标 <span className="font-mono">{v.target}</span> · 环境 <span className={'font-mono ' + (v.matched ? 'text-emerald-600' : 'text-red-600')}>{v.runtime}</span></div>
+              </div>
+              <span className={'flex items-center gap-1 text-[10px] font-medium ' + (v.matched ? 'text-emerald-600' : 'text-red-600')}>
+                {v.matched ? <ShieldCheck className="w-3.5 h-3.5" /> : <ShieldAlert className="w-3.5 h-3.5" />}{v.matched ? '匹配' : '不匹配'}
+              </span>
+            </div>
+          ))}
+        </div>
+        {envChecks.some((v) => !v.matched) && (
+          <div className="mt-3 flex items-start gap-2 text-[11px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>svc-payment 环境运行 v2.4.0 与目标 v2.4.1 不一致：相关用例（支付回调幂等、退款金额计算等）将被<b>阻断执行</b>，避免测试结果失真。请刷新环境 / 重新校验后放行。</span>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-3 gap-5">
