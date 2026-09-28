@@ -20,14 +20,14 @@ const AI_TRACES = [
 ];
 
 // ============ 被测仓库：AI 生成用例的输入（仓库 + 分支 + 版本） ============
-interface IRepo { name: string; source: string; branch: string; branches: string[]; versions: string[]; synced: string; owner: string }
+interface IRepo { name: string; source: string; branch: string; branches: string[]; versions: string[]; synced: string; owner: string; src: string[] }
 const REPOS: IRepo[] = [
-  { name: 'svc-payment', source: 'GitLab', branch: 'main', branches: ['main', 'release', 'feature-refund-v2'], versions: ['v2.4.1', 'v2.4.0'], synced: '2026-09-27', owner: '张立' },
-  { name: 'svc-auth', source: 'GitLab', branch: 'main', branches: ['main', 'develop'], versions: ['v2.3.0'], synced: '2026-09-25', owner: '张立' },
-  { name: 'svc-user', source: 'GitHub', branch: 'main', branches: ['main'], versions: ['v2.1.2'], synced: '2026-09-22', owner: '张立' },
-  { name: 'web-frontend', source: 'GitLab', branch: 'release', branches: ['release', 'main'], versions: ['v2.4.0'], synced: '2026-09-26', owner: '李伟' },
-  { name: 'mobile-ios', source: 'GitHub', branch: 'main', branches: ['main', 'release'], versions: ['v2.4.0'], synced: '2026-09-24', owner: '李伟' },
-  { name: 'svc-order', source: 'GitLab', branch: 'main', branches: ['main', 'develop'], versions: ['v2.0.5'], synced: '2026-09-20', owner: '张立' },
+  { name: 'svc-payment', source: 'GitLab', branch: 'main', branches: ['main', 'release', 'feature-refund-v2'], versions: ['v2.4.1', 'v2.4.0'], synced: '2026-09-27', owner: '张立', src: ['需求文档', '设计文档', 'API 契约', '代码变更', '生产追踪', '缺陷报告'] },
+  { name: 'svc-auth', source: 'GitLab', branch: 'main', branches: ['main', 'develop'], versions: ['v2.3.0'], synced: '2026-09-25', owner: '张立', src: ['需求文档', 'API 契约', '代码变更'] },
+  { name: 'svc-user', source: 'GitHub', branch: 'main', branches: ['main'], versions: ['v2.1.2'], synced: '2026-09-22', owner: '张立', src: ['需求文档', 'API 契约'] },
+  { name: 'web-frontend', source: 'GitLab', branch: 'release', branches: ['release', 'main'], versions: ['v2.4.0'], synced: '2026-09-26', owner: '李伟', src: ['需求文档', '设计文档', '代码变更', '生产追踪'] },
+  { name: 'mobile-ios', source: 'GitHub', branch: 'main', branches: ['main', 'release'], versions: ['v2.4.0'], synced: '2026-09-24', owner: '李伟', src: ['需求文档', '设计文档', '代码变更'] },
+  { name: 'svc-order', source: 'GitLab', branch: 'main', branches: ['main', 'develop'], versions: ['v2.0.5'], synced: '2026-09-20', owner: '张立', src: ['需求文档', 'API 契约', '缺陷报告'] },
 ];
 
 // 生成流程向导步骤
@@ -360,11 +360,18 @@ export default function GenerationPage() {
         </div>
       </Card>
 
-      {/* 上游源适配器明细 */}
+      {/* 上游源适配器明细（随关联仓库联动） */}
       <div className="card bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="font-semibold text-slate-700 text-sm">上游源适配器 · 明细</h2>
+        <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2.5">
+            <h2 className="font-semibold text-slate-700 text-sm">上游源适配器 · 明细</h2>
+            <span className="text-[11px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-medium">关联仓库 {genRepo} · 已接入 {REPOS.find((r) => r.name === genRepo)?.src.length ?? 0}/{UPSTREAM_ADAPTERS.length}</span>
+          </div>
           <span className="text-[11px] text-slate-400">共 {upFiltered.length} / {UPSTREAM_ADAPTERS.length} 个上游源</span>
+        </div>
+        <div className="px-5 py-2.5 bg-slate-50/50 border-b border-slate-100 flex items-center gap-2 text-[11px] text-slate-500">
+          <GitBranch className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+          <span>适配器明细随<b>关联仓库</b>联动：上方仓库管理选中哪个仓库，此处即展示该仓库已接入的上游源；未接入源灰显（到仓库管理配置接入）。切换到 svc-auth 可对比不同仓库的接入差异。</span>
         </div>
         <div className="flex items-center justify-between px-5 pt-3">
           <ListFilter search={q} onSearch={setQ} />
@@ -376,28 +383,43 @@ export default function GenerationPage() {
               <th className="px-5 py-2.5 font-medium">系统</th>
               <th className="px-5 py-2.5 font-medium">提取信息</th>
               <th className="px-5 py-2.5 font-medium">本次种子</th>
+              <th className="px-5 py-2.5 font-medium">本仓库接入</th>
               <th className="px-5 py-2.5 font-medium">状态</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {upFiltered.map((a) => (
-              <tr key={a.source} className={a.status === '验证中' ? 'bg-indigo-50/30 hover:bg-indigo-50' : 'hover:bg-slate-50'}>
-                <td className="px-5 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded bg-slate-100 text-slate-600 flex items-center justify-center text-[10px]">源</span>
-                    <span className="text-slate-700 font-medium">{a.source}</span>
-                  </div>
-                </td>
-                <td className="px-5 py-3 text-slate-500">{a.system}</td>
-                <td className="px-5 py-3 text-slate-500">{a.extract}</td>
-                <td className="px-5 py-3 text-slate-600">{a.seeds}</td>
-                <td className="px-5 py-3">
-                  <span className={a.status === '验证中' ? 'bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full text-[10px]' : 'bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full text-[10px]'}>
-                    {a.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {upFiltered.map((a) => {
+              const attached = (REPOS.find((r) => r.name === genRepo)?.src ?? []).includes(a.source);
+              return (
+                <tr key={a.source} className={(attached ? (a.status === '验证中' ? 'bg-indigo-50/30 hover:bg-indigo-50' : 'hover:bg-slate-50') : 'opacity-45 hover:opacity-70 hover:bg-slate-50')}>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded bg-slate-100 text-slate-600 flex items-center justify-center text-[10px]">源</span>
+                      <span className="text-slate-700 font-medium">{a.source}</span>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 text-slate-500">{a.system}</td>
+                  <td className="px-5 py-3 text-slate-500">{a.extract}</td>
+                  <td className="px-5 py-3">
+                    {attached ? <span className="text-slate-600">{a.seeds}</span> : <span className="text-slate-300">—</span>}
+                  </td>
+                  <td className="px-5 py-3">
+                    {attached
+                      ? <span className="text-[10px] text-emerald-600 flex items-center gap-1"><Check className="w-3 h-3" />已接入</span>
+                      : <span className="text-[10px] text-slate-300">未接入</span>}
+                  </td>
+                  <td className="px-5 py-3">
+                    {attached ? (
+                      <span className={a.status === '验证中' ? 'bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full text-[10px]' : 'bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full text-[10px]'}>
+                        {a.status}
+                      </span>
+                    ) : (
+                      <span className="bg-slate-50 text-slate-300 px-2 py-0.5 rounded-full text-[10px]">未接入</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
