@@ -39,14 +39,14 @@ const AI_TRACES = [
 // ============ 被测仓库：AI 生成用例的输入（仓库 + 版本） ============
 // 研发团队管理者在此添加代码仓库并获取仓库代码与版本；
 // 每次更新测试在此选择目标版本生成用例；未来 CI/CD 联动后版本可由上游流水线推送并触发联动流程（后续迭代实现）。
-interface IRepo { name: string; source: string; branch: string; versions: string[]; synced: string; owner: string }
+interface IRepo { name: string; source: string; branch: string; branches: string[]; versions: string[]; synced: string; owner: string }
 const REPOS: IRepo[] = [
-  { name: 'svc-payment', source: 'GitLab', branch: 'main', versions: ['v2.4.1', 'v2.4.0'], synced: '2026-09-27', owner: '张立' },
-  { name: 'svc-auth', source: 'GitLab', branch: 'main', versions: ['v2.3.0'], synced: '2026-09-25', owner: '张立' },
-  { name: 'svc-user', source: 'GitHub', branch: 'main', versions: ['v2.1.2'], synced: '2026-09-22', owner: '张立' },
-  { name: 'web-frontend', source: 'GitLab', branch: 'release', versions: ['v2.4.0'], synced: '2026-09-26', owner: '李伟' },
-  { name: 'mobile-ios', source: 'GitHub', branch: 'main', versions: ['v2.4.0'], synced: '2026-09-24', owner: '李伟' },
-  { name: 'svc-order', source: 'GitLab', branch: 'main', versions: ['v2.0.5'], synced: '2026-09-20', owner: '张立' },
+  { name: 'svc-payment', source: 'GitLab', branch: 'main', branches: ['main', 'release', 'feature-refund-v2'], versions: ['v2.4.1', 'v2.4.0'], synced: '2026-09-27', owner: '张立' },
+  { name: 'svc-auth', source: 'GitLab', branch: 'main', branches: ['main', 'develop'], versions: ['v2.3.0'], synced: '2026-09-25', owner: '张立' },
+  { name: 'svc-user', source: 'GitHub', branch: 'main', branches: ['main'], versions: ['v2.1.2'], synced: '2026-09-22', owner: '张立' },
+  { name: 'web-frontend', source: 'GitLab', branch: 'release', branches: ['release', 'main'], versions: ['v2.4.0'], synced: '2026-09-26', owner: '李伟' },
+  { name: 'mobile-ios', source: 'GitHub', branch: 'main', branches: ['main', 'release'], versions: ['v2.4.0'], synced: '2026-09-24', owner: '李伟' },
+  { name: 'svc-order', source: 'GitLab', branch: 'main', branches: ['main', 'develop'], versions: ['v2.0.5'], synced: '2026-09-20', owner: '张立' },
 ];
 
 export default function GenerationPage() {
@@ -57,6 +57,7 @@ export default function GenerationPage() {
   // AI 生成用例面板：输入 = 仓库 + 版本
   const [genPanel, setGenPanel] = useState(false);
   const [genRepo, setGenRepo] = useState('svc-payment');
+  const [genBranch, setGenBranch] = useState('main');
   const [genVer, setGenVer] = useState('v2.4.1');
 
   return (
@@ -232,9 +233,16 @@ export default function GenerationPage() {
             <div className="px-5 py-4 space-y-4">
               <div>
                 <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5"><GitBranch className="w-3.5 h-3.5" />被测仓库</div>
-                <select value={genRepo} onChange={(e) => { const r = e.target.value; setGenRepo(r); setGenVer((REPOS.find((x) => x.name === r)?.versions ?? ['v2.4.1'])[0]); }}
+                <select value={genRepo} onChange={(e) => { const r = e.target.value; const repo = REPOS.find((x) => x.name === r); setGenRepo(r); setGenBranch(repo?.branches?.[0] ?? 'main'); setGenVer((repo?.versions ?? ['v2.4.1'])[0]); }}
                   className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:border-emerald-400">
                   {REPOS.map((r) => <option key={r.name} value={r.name}>{r.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5"><GitBranch className="w-3.5 h-3.5" />分支（测试环境可能运行在指定分支）</div>
+                <select value={genBranch} onChange={(e) => setGenBranch(e.target.value)}
+                  className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:border-emerald-400">
+                  {(REPOS.find((r) => r.name === genRepo)?.branches ?? ['main']).map((b) => <option key={b} value={b}>{b}</option>)}
                 </select>
               </div>
               <div>
@@ -243,11 +251,11 @@ export default function GenerationPage() {
                   className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:border-emerald-400">
                   {(REPOS.find((r) => r.name === genRepo)?.versions ?? []).map((v) => <option key={v} value={v}>{v}</option>)}
                 </select>
-                <div className="text-[10px] text-slate-300 mt-1">生成时锁定该版本，执行前校验测试环境运行版本与之一致，防止「测了也白测」</div>
+                <div className="text-[10px] text-slate-300 mt-1">生成时锁定分支与版本，执行前校验测试环境运行的分支/版本与之一致，防止「测了也白测」</div>
               </div>
               <div className="flex items-start gap-2 text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
                 <BookOpen className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
-                <span>AI 将读取 <b>{genRepo}@{genVer}</b> 的仓库代码（接口 / 业务逻辑）与文档（README / 接口契约 / 需求）→ 生成用例规格 → 翻译为对应场景的执行载体 → 进入「待审核」。</span>
+                <span>AI 将读取 <b>{genRepo}@{genBranch}@{genVer}</b> 的仓库代码（接口 / 业务逻辑）与文档（README / 接口契约 / 需求）→ 生成用例规格 → 翻译为对应场景的执行载体 → 进入「待审核」。分支/版本将用于执行前环境校验。</span>
               </div>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setGenPanel(false)} className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50">取消</button>
