@@ -221,7 +221,7 @@ export default function TracePage() {
           <tbody className="divide-y divide-slate-100">
             {rows.map((r) => (
               <tr key={r.id}
-                onClick={() => { setActiveReq(r.id); setActiveTcId(TRACE_CHAINS[r.id]?.tcs[0]?.id ?? null); }}
+                onClick={() => { setActiveReq(r.id); setActiveTcId(TRACE_CHAINS[r.id]?.tcs[0]?.id ?? null); setView('chain'); }}
                 className={(activeReq === r.id ? 'bg-emerald-50/60 ' : '') + (r.traceability === '缺口' ? 'bg-red-50/40 ' : 'hover:bg-slate-50 ') + 'cursor-pointer'}>
                 <td className={'px-4 py-3 font-mono text-xs font-medium ' + (r.traceability === '缺口' ? 'text-red-600' : 'text-emerald-700')}>{r.id}</td>
                 <td className="px-4 py-3 text-slate-700">{r.title}</td>

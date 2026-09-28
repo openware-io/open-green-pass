@@ -269,7 +269,7 @@ export default function GenerationPage() {
           {cur.key === 'review' && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-purple-50 text-purple-600"><UserCheck className="w-4 h-4" /></span>
+                <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600"><UserCheck className="w-4 h-4" /></span>
                 人工审核 · {selectedAsset.name} 逐条确认用例
               </div>
               <table className="w-full text-xs bg-white border border-slate-200 rounded-lg overflow-hidden">

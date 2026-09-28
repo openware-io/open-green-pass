@@ -378,14 +378,14 @@ function ExecDetail({ c }: { c: ICase }) {
         <div>
           <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5"><Boxes className="w-3.5 h-3.5 text-amber-500" />参与执行的参数</div>
           <div className="flex flex-wrap gap-1.5">
-            {ex.params.map((p) => <span key={p} className="text-[11px] font-mono bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-200">{p}</span>)}
+            {ex.params.map((p) => <span key={p} className="text-[11px] font-mono bg-slate-50 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200">{p}</span>)}
           </div>
         </div>
 
         <div>
-          <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5"><FlaskConical className="w-3.5 h-3.5 text-blue-500" />测试数据样本（本次执行入参）</div>
+          <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5"><FlaskConical className="w-3.5 h-3.5 text-emerald-600" />测试数据样本（本次执行入参）</div>
           <div className="flex flex-wrap gap-1.5">
-            {ex.data.map((d) => <span key={d} className="text-[11px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-200">{d}</span>)}
+            {ex.data.map((d) => <span key={d} className="text-[11px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200">{d}</span>)}
           </div>
         </div>
 
