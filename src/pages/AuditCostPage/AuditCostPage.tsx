@@ -30,9 +30,9 @@ function TrendChart() {
         <line x1="0" y1={yT(maxT / 2)} x2={W} y2={yT(maxT / 2)} stroke="#f1f5f9" strokeWidth="1" />
         <line x1="0" y1={H - PAD} x2={W} y2={H - PAD} stroke="#e2e8f0" strokeWidth="1" />
         <path d={line(yE, (p) => p.exec) + ' L' + (W - PAD) + ',' + (H - PAD) + ' L' + PAD + ',' + (H - PAD) + ' Z'} fill="#10b981" opacity="0.06" />
-        <path d={line(yT, (p) => p.total)} fill="none" stroke="#6366f1" strokeWidth="2" />
+        <path d={line(yT, (p) => p.total)} fill="none" stroke="#059669" strokeWidth="2" />
         <path d={line(yE, (p) => p.exec)} fill="none" stroke="#10b981" strokeWidth="2" />
-        <circle cx={x(pts.length - 1)} cy={yT(pts[pts.length - 1].total)} r="3" fill="#6366f1" />
+        <circle cx={x(pts.length - 1)} cy={yT(pts[pts.length - 1].total)} r="3" fill="#059669" />
         <circle cx={x(pts.length - 1)} cy={yE(pts[pts.length - 1].exec)} r="3" fill="#10b981" />
       </svg>
       <div className="flex justify-between text-[10px] text-slate-400 mt-1">
@@ -388,7 +388,7 @@ export default function AuditCostPage() {
               </div>
               <div className="col-span-2">
                 <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-40">
-                  <path d={pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p.cost).toFixed(1)}`).join(' ')} fill="none" stroke="#6366f1" strokeWidth="2" />
+                  <path d={pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p.cost).toFixed(1)}`).join(' ')} fill="none" stroke="#059669" strokeWidth="2" />
                   {pts.map((p, i) => (
                     <g key={i}>
                       <circle cx={x(i)} cy={y(p.cost)} r="3.5" fill={p.result === '失败' ? '#ef4444' : '#10b981'} stroke="white" strokeWidth="1.5" />

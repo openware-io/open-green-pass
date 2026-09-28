@@ -91,7 +91,7 @@ function CaseCostPanel({ caseId, cases, onSelect }: { caseId: string; cases: str
         </div>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-32">
-        <path d={pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p.cost).toFixed(1)}`).join(' ')} fill="none" stroke="#6366f1" strokeWidth="2" />
+        <path d={pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p.cost).toFixed(1)}`).join(' ')} fill="none" stroke="#10b981" strokeWidth="2" />
         {pts.map((p, i) => (
           <g key={i}>
             <circle cx={x(i)} cy={y(p.cost)} r="3.5" fill={p.result === '失败' ? '#ef4444' : '#10b981'} stroke="white" strokeWidth="1.5" />
