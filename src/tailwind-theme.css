@@ -16,7 +16,7 @@
   --card-border: hsl(214 32% 91%);
   --popover: hsl(0 0% 100%);
   --popover-foreground: hsl(222 47% 11%);
-  --primary: hsl(239 84% 67%);
+  --primary: hsl(160 84% 39%);
   --primary-foreground: hsl(0 0% 100%);
   --secondary: hsl(214 32% 91%);
   --secondary-foreground: hsl(222 47% 11%);
@@ -24,7 +24,7 @@
   --muted-foreground: hsl(215 16% 47%);
   --accent: hsl(214 32% 91%);
   --accent-foreground: hsl(222 47% 11%);
-  --info: hsl(239 84% 67%);
+  --info: hsl(160 84% 39%);
   --info-foreground: hsl(0 0% 100%);
   --destructive: hsl(0 84% 60%);
   --destructive-foreground: hsl(0 0% 100%);
@@ -34,23 +34,23 @@
   --warning-foreground: hsl(0 0% 100%);
   --border: hsl(214 32% 91%);
   --input: hsl(214 32% 91%);
-  --ring: hsl(239 84% 67%);
-  --chart-1: hsl(239 84% 67%);
+  --ring: hsl(160 84% 55%);
+  --chart-1: hsl(160 84% 55%);
   --chart-2: hsl(142 71% 45%);
   --chart-3: hsl(38 92% 50%);
   --chart-4: hsl(0 84% 60%);
   --chart-5: hsl(262 83% 58%);
   --sidebar: hsl(224 24% 11%);
   --sidebar-foreground: hsl(215 20% 65%);
-  --sidebar-primary: hsl(239 84% 67%);
+  --sidebar-primary: hsl(160 84% 39%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
   --sidebar-accent: hsl(222 47% 15%);
   --sidebar-accent-foreground: hsl(230 100% 91%);
   --sidebar-border: hsl(222 47% 15%);
-  --sidebar-ring: hsl(239 84% 67%);
+  --sidebar-ring: hsl(160 84% 55%);
 
   /* Computed borders using hsl relative color syntax */
-  --primary-border: hsl(from hsl(221 83% 53%) h s calc(l + var(--opaque-button-border-intensity)));
+  --primary-border: hsl(from hsl(160 84% 39%) h s calc(l + var(--opaque-button-border-intensity)));
   --secondary-border: hsl(from hsl(220 14% 96%) h s calc(l + var(--opaque-button-border-intensity)));
   --destructive-border: hsl(from hsl(2 84% 62%) h s calc(l + var(--opaque-button-border-intensity)));
   --accent-border: hsl(from hsl(220 14% 96%) h s calc(l + var(--opaque-button-border-intensity)));
