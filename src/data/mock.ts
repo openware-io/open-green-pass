@@ -206,6 +206,8 @@ export const GOVERNANCE_EVENTS: IGovernanceEvent[] = [
 ];
 
 // ============ 测试用例 ============
+export type CaseChange = '新增' | '更新' | '删除' | '稳定';
+export interface ICaseVersion { v: number; iter: string; ts: string; change: string; summary: string }
 export interface ICase {
   id: string;
   title: string;
@@ -215,16 +217,59 @@ export interface ICase {
   assertion: '强' | '中' | '弱';
   mutation: number | null;
   status: '已激活' | '冲突' | '待审核' | '已禁用';
+  version: number;            // 当前版本号
+  change: CaseChange;         // 相对上一稳定迭代的变更类型（新增/更新/删除/稳定）
+  changedAt: string;          // 最近变更时间
+  versions: ICaseVersion[];   // 版本历史（随迭代发布演进）
 }
 
+// 当前迭代版本上下文 + 服务版本
+export const CURRENT_ITERATION = { version: 'v2.4.0', name: '2026-Q3 · 支付退款迭代', releasedAt: '2026-09-24' };
+export const SERVICE_VERSIONS: { asset: string; version: string; change: string }[] = [
+  { asset: 'svc-payment', version: 'v2.4.1', change: '更新 · refund-v2' },
+  { asset: 'svc-auth', version: 'v2.3.0', change: '稳定' },
+  { asset: 'svc-user', version: 'v2.1.2', change: '稳定' },
+  { asset: 'svc-order', version: 'v2.0.5', change: '稳定' },
+  { asset: 'web-frontend', version: 'v2.4.0', change: '更新 · 退款页' },
+  { asset: 'mobile-ios', version: 'v2.4.0', change: '更新 · 退款入口' },
+];
+
 export const CASES: ICase[] = [
-  { id: 'TC-2024-001', title: '正常登录流程验证', asset: 'svc-auth', source: 'REQ-101 + OpenAPI', type: '单元', assertion: '强', mutation: 92, status: '已激活' },
-  { id: 'TC-2024-005', title: '用户状态查询', asset: 'svc-user', source: 'REQ-101', type: '单元', assertion: '强', mutation: 88, status: '已激活' },
-  { id: 'TC-2024-006', title: 'Web 端登录页面 E2E', asset: 'web-frontend', source: 'REQ-101', type: 'Web', assertion: '强', mutation: 85, status: '已激活' },
-  { id: 'TC-2024-095', title: '支付回调幂等性验证', asset: 'svc-payment', source: 'REQ-103 + OpenAPI', type: '集成', assertion: '中', mutation: 64, status: '已激活' },
-  { id: 'TC-2024-118', title: '退款金额计算', asset: 'svc-payment', source: 'REQ-104', type: '单元', assertion: '弱', mutation: 31, status: '已激活' },
-  { id: 'TC-2024-125', title: '移动端真机登录测试', asset: 'mobile-ios', source: 'REQ-101', type: '移动', assertion: '强', mutation: 79, status: '已激活' },
-  { id: 'TC-2024-130', title: 'ASVS L2 认证安全检查', asset: 'svc-auth', source: 'REQ-101 + ASVS', type: '安全', assertion: '强', mutation: null, status: '已激活' },
+  { id: 'TC-2024-001', title: '正常登录流程验证', asset: 'svc-auth', source: 'REQ-101 + OpenAPI', type: '单元', assertion: '强', mutation: 92, status: '已激活', version: 3, change: '稳定', changedAt: '2026-08-12', versions: [
+    { v: 1, iter: 'v2.1.0', ts: '2026-07-02', change: '新增', summary: '登录流程基线用例' },
+    { v: 2, iter: 'v2.2.0', ts: '2026-07-20', change: '更新', summary: '补充 token 刷新分支' },
+    { v: 3, iter: 'v2.3.0', ts: '2026-08-12', change: '更新', summary: '适配多设备登录策略' },
+  ] },
+  { id: 'TC-2024-005', title: '用户状态查询', asset: 'svc-user', source: 'REQ-101', type: '单元', assertion: '强', mutation: 88, status: '已激活', version: 1, change: '稳定', changedAt: '2026-07-02', versions: [
+    { v: 1, iter: 'v2.1.0', ts: '2026-07-02', change: '新增', summary: '用户状态查询基线' },
+  ] },
+  { id: 'TC-2024-006', title: 'Web 端登录页面 E2E', asset: 'web-frontend', source: 'REQ-101', type: 'Web', assertion: '强', mutation: 85, status: '已激活', version: 1, change: '稳定', changedAt: '2026-07-02', versions: [
+    { v: 1, iter: 'v2.1.0', ts: '2026-07-02', change: '新增', summary: 'Web 登录 E2E 基线' },
+  ] },
+  { id: 'TC-2024-095', title: '支付回调幂等性验证', asset: 'svc-payment', source: 'REQ-103 + OpenAPI', type: '集成', assertion: '中', mutation: 64, status: '已激活', version: 2, change: '更新', changedAt: '2026-09-22', versions: [
+    { v: 1, iter: 'v2.1.0', ts: '2026-07-10', change: '新增', summary: '回调幂等基线' },
+    { v: 2, iter: 'v2.4.0', ts: '2026-09-22', change: '更新', summary: '适配 refund-v2 幂等增强（新增回调幂等键校验）' },
+  ] },
+  { id: 'TC-2024-118', title: '退款金额计算', asset: 'svc-payment', source: 'REQ-104', type: '单元', assertion: '弱', mutation: 31, status: '已激活', version: 2, change: '更新', changedAt: '2026-09-22', versions: [
+    { v: 1, iter: 'v2.1.0', ts: '2026-07-12', change: '新增', summary: '退款金额计算基线' },
+    { v: 2, iter: 'v2.4.0', ts: '2026-09-22', change: '更新', summary: '适配新费率与优惠券入参，断言加强' },
+  ] },
+  { id: 'TC-2024-125', title: '移动端真机登录测试', asset: 'mobile-ios', source: 'REQ-101', type: '移动', assertion: '强', mutation: 79, status: '已激活', version: 1, change: '稳定', changedAt: '2026-07-02', versions: [
+    { v: 1, iter: 'v2.1.0', ts: '2026-07-02', change: '新增', summary: '真机登录 E2E 基线' },
+  ] },
+  { id: 'TC-2024-130', title: 'ASVS L2 认证安全检查', asset: 'svc-auth', source: 'REQ-101 + ASVS', type: '安全', assertion: '强', mutation: null, status: '已激活', version: 1, change: '稳定', changedAt: '2026-07-02', versions: [
+    { v: 1, iter: 'v2.1.0', ts: '2026-07-02', change: '新增', summary: 'ASVS L2 安全检查基线' },
+  ] },
+  { id: 'TC-2024-132', title: '退款金额含优惠券计算', asset: 'svc-payment', source: 'REQ-104 + refund-v2', type: '单元', assertion: '强', mutation: 90, status: '已激活', version: 1, change: '新增', changedAt: '2026-09-22', versions: [
+    { v: 1, iter: 'v2.4.0', ts: '2026-09-22', change: '新增', summary: '新增优惠券抵扣退款金额场景（随退款迭代新增）' },
+  ] },
+  { id: 'TC-2024-133', title: '限时支付超时自动撤销', asset: 'svc-payment', source: 'REQ-104 + refund-v2', type: '集成', assertion: '强', mutation: 87, status: '已激活', version: 1, change: '新增', changedAt: '2026-09-22', versions: [
+    { v: 1, iter: 'v2.4.0', ts: '2026-09-22', change: '新增', summary: '新增支付超时自动撤销退款流程（随退款迭代新增）' },
+  ] },
+  { id: 'TC-2024-020', title: '旧版登录接口（已下线）', asset: 'svc-auth', source: 'REQ-100', type: '单元', assertion: '中', mutation: null, status: '已禁用', version: 2, change: '删除', changedAt: '2026-09-20', versions: [
+    { v: 1, iter: 'v2.0.0', ts: '2026-06-20', change: '新增', summary: '旧版 /v1/login 接口基线' },
+    { v: 2, iter: 'v2.4.0', ts: '2026-09-20', change: '删除', summary: '接口下线移除，随迭代删除' },
+  ] },
 ];
 
 // ============ 契约测试 ============
