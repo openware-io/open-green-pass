@@ -37,6 +37,8 @@ const PARENT_ICONS: Record<string, typeof Target> = {
 
 // 平台级/全局级页面：不隶属于某个被测对象，页首不显示被测对象面包屑路径与工程层次筛选
 const PLATFORM_ROUTES = ['/settings', '/teams', '/models', '/cicd', '/cicd-trigger', '/cicd-connector', '/audit', '/audit-cost', '/audit-exec', '/audit-op'];
+// 运行相关页面：展示当前关联的 CI 运行编号与运行态；其余页面显示「CI 未运行」灰色态
+const RUN_RELATED_ROUTES = ['/exec', '/history', '/report', '/gate', '/audit', '/audit-cost', '/audit-exec', '/audit-op'];
 
 function findChain(node: IAssetNode, id: string): IAssetNode[] | null {
   if (node.id === id) return [node];
@@ -110,6 +112,7 @@ export function Layout() {
   const [level, setLevel] = useState<AssetLevel>('service');
   const [query, setQuery] = useState('');
   const isPlatform = PLATFORM_ROUTES.includes(location.pathname);
+  const isRunCtx = RUN_RELATED_ROUTES.includes(location.pathname);
 
   const setLevelAndAsset = (l: AssetLevel) => {
     setLevel(l);
@@ -276,8 +279,10 @@ export function Layout() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[11px] bg-emerald-50 text-emerald-600 px-2 py-1 rounded flex items-center gap-1"><Users className="w-3 h-3" />{TEAMS.find((t) => t.id === CURRENT_TEAM_ID)?.name}</span>
-              <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">CI #4821</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span className={'text-xs font-mono px-2 py-1 rounded ' + (isRunCtx ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400')}>
+                {isRunCtx ? 'CI #4821' : 'CI 未运行'}
+              </span>
+              <span className={'w-2 h-2 rounded-full ' + (isRunCtx ? 'bg-emerald-400' : 'bg-slate-300')} />
             </div>
             <div className="h-8 w-px bg-slate-200" />
             <div className="relative">
