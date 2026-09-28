@@ -90,6 +90,8 @@ export interface IAsset {
 
 export interface IAssetNode extends IAsset {
   children?: IAssetNode[];
+  /** 来源仓库：叶子服务/应用/端显式绑定；工程/服务组由子节点聚合推导 */
+  repo?: string;
 }
 
 export const ASSET_TREE: IAssetNode = {
@@ -114,14 +116,14 @@ export const ASSET_TREE: IAssetNode = {
       gateRate: 100,
       children: [
         {
-          id: 'svc-auth', name: 'svc-auth', type: 'service', coverage: 100, gateRate: 100,
+          id: 'svc-auth', name: 'svc-auth', type: 'service', coverage: 100, gateRate: 100, repo: 'svc-auth',
           children: [
             { id: 'svc-auth-login', name: 'login', type: 'module', coverage: 96, gateRate: 100 },
             { id: 'svc-auth-token', name: 'token', type: 'module', coverage: 92, gateRate: 100 },
             { id: 'svc-auth-profile', name: 'profile', type: 'module', coverage: 78, gateRate: 75 },
           ],
         },
-        { id: 'svc-user', name: 'svc-user', type: 'service', coverage: 100, gateRate: 100 },
+        { id: 'svc-user', name: 'svc-user', type: 'service', coverage: 100, gateRate: 100, repo: 'svc-user' },
       ],
     },
     {
@@ -131,8 +133,8 @@ export const ASSET_TREE: IAssetNode = {
       coverage: 50,
       gateRate: 0,
       children: [
-        { id: 'svc-payment', name: 'svc-payment', type: 'service', coverage: 50, gateRate: 0 },
-        { id: 'svc-order', name: 'svc-order', type: 'service', coverage: 100, gateRate: 100 },
+        { id: 'svc-payment', name: 'svc-payment', type: 'service', coverage: 50, gateRate: 0, repo: 'svc-payment' },
+        { id: 'svc-order', name: 'svc-order', type: 'service', coverage: 100, gateRate: 100, repo: 'svc-order' },
       ],
     },
     {
@@ -142,8 +144,8 @@ export const ASSET_TREE: IAssetNode = {
       coverage: 100,
       gateRate: 100,
       children: [
-        { id: 'web-frontend', name: 'web-frontend', type: 'app', coverage: 100, gateRate: 100 },
-        { id: 'mobile-ios', name: 'mobile-ios', type: 'end', coverage: 100, gateRate: 100 },
+        { id: 'web-frontend', name: 'web-frontend', type: 'app', coverage: 100, gateRate: 100, repo: 'web-frontend' },
+        { id: 'mobile-ios', name: 'mobile-ios', type: 'end', coverage: 100, gateRate: 100, repo: 'mobile-ios' },
         { id: 'mobile-android', name: 'mobile-android', type: 'end', coverage: 100, gateRate: 100 },
       ],
     },
@@ -172,6 +174,16 @@ export const ASSET_TREE: IAssetNode = {
   ],
 };
 
+// 计算节点关联的来源仓库：叶子=显式绑定的 repo；工程/服务组=聚合所有子节点仓库（去重）
+export function nodeRepos(node: IAssetNode): string[] {
+  const set = new Set<string>();
+  const walk = (n: IAssetNode): void => {
+    if (n.repo) set.add(n.repo);
+    n.children?.forEach(walk);
+  };
+  walk(node);
+  return [...set];
+}
 // ============ 需求（追溯链来源）============
 export interface IRequirement {
   id: string;

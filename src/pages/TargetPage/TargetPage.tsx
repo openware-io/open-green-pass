@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ASSET_TREE, METRICS, GEN_TRACE, ASSET_RISKS, AI_MODELS, PROJECT_MODELS, TEST_SCENARIOS, TESTED_REPOS, assetToProfile, type IAsset, type IAssetNode, type ITestedRepo } from '@/data/mock';
+import { ASSET_TREE, METRICS, GEN_TRACE, ASSET_RISKS, AI_MODELS, PROJECT_MODELS, TEST_SCENARIOS, TESTED_REPOS, assetToProfile, nodeRepos, type IAsset, type IAssetNode, type ITestedRepo } from '@/data/mock';
 import { scenarioNav } from '@/context/scenarioNav';
 import { KpiCard, PageHeader, PrimaryButton, GhostButton, ListFilter } from '@/components/shared';
 import { Brain, ShieldAlert, ChevronRight, ChevronDown, Sparkles, GitBranch, CircleDot, FileSearch, History, CheckCircle2, AlertTriangle, XCircle, Layers, Cpu, Globe, Smartphone, X, Plus, ExternalLink, Check, Plug, Files, FileText, Wallet } from 'lucide-react';
@@ -84,6 +84,15 @@ function TreeNode({ node, activeId, onSelect, depth, openMap, onToggle }: {
           : <span className="w-3.5 flex-shrink-0" />}
         <span className={'w-2 h-2 rounded-sm flex-shrink-0 ' + (TYPE_COLOR[node.type] ?? 'bg-slate-300')} />
         <span className="text-xs truncate">{node.name}</span>
+        {!hasChildren && node.repo && (
+          <span className="ml-1 inline-flex items-center gap-0.5 text-[9px] text-emerald-600 flex-shrink-0"><GitBranch className="w-3 h-3" />{node.repo}</span>
+        )}
+        {!hasChildren && !node.repo && (
+          <span className="ml-1 text-[9px] text-slate-300 flex-shrink-0">未接入源码</span>
+        )}
+        {hasChildren && nodeRepos(node).length > 0 && (
+          <span className="ml-1 text-[9px] text-slate-400 flex-shrink-0">{nodeRepos(node).length} 仓</span>
+        )}
         <span className={'ml-auto text-[9px] font-normal flex-shrink-0 ' + (node.coverage >= 85 ? 'text-emerald-500' : 'text-amber-500')}>{node.coverage}%</span>
       </div>
       {hasChildren && open && node.children!.map((c) => (
@@ -209,6 +218,26 @@ export default function TargetPage() {
                 </span>
               </div>
             )}
+            {/* 来源溯源：被测对象 → 源码仓库 → 分支@版本（实现「来源可溯源」） */}
+            {nodeRepos(selectedAsset).length > 0 ? (
+              <div className="mt-3 pt-3 border-t border-white/15 text-[11px] text-emerald-100">
+                <div className="flex items-center gap-1.5 mb-1.5"><GitBranch className="w-3.5 h-3.5" />来源溯源 · 源码仓库</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {nodeRepos(selectedAsset).map((repo) => {
+                    const rp = repos.find((x) => x.name === repo);
+                    return (
+                      <span key={repo} className="inline-flex items-center gap-1 bg-white/10 rounded-full px-2 py-0.5 font-mono">
+                        {repo}<span className="text-emerald-200">{rp ? `${rp.branch}@${rp.versions[0]}` : '未同步'}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 pt-3 border-t border-white/15 text-[11px] text-amber-200 flex items-center gap-1.5">
+                <GitBranch className="w-3.5 h-3.5" />来源未接入源码仓库 —— 需绑定仓库方可溯源
+              </div>
+            )}
           </div>
 
           {/* 被测对象 = 轴心：环节状态条（一页一焦点，状态可见，不铺文字） */}
@@ -272,14 +301,14 @@ export default function TargetPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {repos.map((r) => {
-                  const linked = selectedAsset.id === r.name;
+                  const linked = nodeRepos(selectedAsset).includes(r.name);
                   return (
                     <tr key={r.name} className={(linked ? 'bg-emerald-50/60' : 'hover:bg-slate-50')}>
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2">
                           <span className="flex items-center justify-center w-5 h-5 rounded bg-emerald-50 text-emerald-600"><GitBranch className="w-3.5 h-3.5" /></span>
                           <span className="font-medium text-slate-700">{r.name}</span>
-                          {linked && <span className="text-[10px] text-emerald-600">树节点联动</span>}
+                          {linked && <span className="text-[10px] text-emerald-600">来源仓库 · 树联动</span>}
                         </div>
                       </td>
                       <td className="px-5 py-3 text-slate-500">{r.source}</td>
