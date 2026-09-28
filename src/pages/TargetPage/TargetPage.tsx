@@ -8,23 +8,30 @@ import { Brain, ShieldAlert, ChevronRight, ChevronDown, Sparkles, GitBranch, Cir
 
 const ADD_STEPS = ['基本信息', '代码源接入', '上游源', '确认'];
 
-// 围绕当前被测对象的测试治理环节全景：被测对象为轴心，每个环节都针对该对象
+// 围绕当前被测对象的测试治理环节状态条：被测对象为轴心，每环节只显示 状态点+数字（交互本身表达，不铺文字）
 const STAGE_FLOW = [
-  { path: '/generation', label: '用例生成', icon: Sparkles, desc: 'AI 生成流程 · 针对当前对象', core: true },
-  { path: '/trace', label: '需求追溯', icon: GitBranch, desc: '生成产出的追溯矩阵', core: false },
-  { path: '/cases', label: '用例管理', icon: Files, desc: '版本化用例库', core: false },
-  { path: '/exec', label: '测试执行', icon: CircleDot, desc: '执行总览清单', core: false },
-  { path: '/gate', label: '质量门禁', icon: ShieldAlert, desc: '防 AI 自放水的判定', core: true },
-  { path: '/history', label: '测试历史', icon: History, desc: '时间维运行记录', core: false },
-  { path: '/report', label: '测试报告', icon: FileText, desc: '跨场景汇总合编', core: false },
-  { path: '/audit-cost', label: '成本审计', icon: Wallet, desc: '生成 / 执行成本', core: false },
+  { path: '/generation', label: '用例生成', icon: Sparkles, status: 'done', value: '12 用例' },
+  { path: '/trace', label: '需求追溯', icon: GitBranch, status: 'done', value: '完整' },
+  { path: '/cases', label: '用例管理', icon: Files, status: 'done', value: '32' },
+  { path: '/exec', label: '测试执行', icon: CircleDot, status: 'partial', value: '5/12' },
+  { path: '/gate', label: '质量门禁', icon: ShieldAlert, status: 'block', value: '3 阻断' },
+  { path: '/history', label: '测试历史', icon: History, status: 'done', value: '18 次' },
+  { path: '/report', label: '测试报告', icon: FileText, status: 'todo', value: '待生成' },
+  { path: '/audit-cost', label: '成本审计', icon: Wallet, status: 'done', value: '¥2.4k' },
 ];
+// 环节状态点：绿实心=完成、琥珀=待处理、红=阻断、灰=待办
+const STAGE_DOT: Record<string, { cls: string; txt: string }> = {
+  done: { cls: 'bg-emerald-500', txt: 'text-emerald-600' },
+  partial: { cls: 'bg-amber-500', txt: 'text-amber-600' },
+  block: { cls: 'bg-red-500', txt: 'text-red-600' },
+  todo: { cls: 'bg-slate-300', txt: 'text-slate-400' },
+};
 
 const DIM_BAR: Record<string, string> = {
   '需求覆盖率': 'bg-emerald-500',
   '门禁通过': 'bg-amber-500',
   '契约健康': 'bg-emerald-500',
-  '用例有效': 'bg-teal-500',
+  '用例有效': 'bg-emerald-500',
   '追溯完整': 'bg-amber-500',
 };
 const GEN_ICON: Record<string, typeof History> = { '规格解析': FileSearch, '架构生成': Layers, '代码生成': Sparkles, '自检回放': CheckCircle2, '提交验收': ShieldAlert };
@@ -204,6 +211,34 @@ export default function TargetPage() {
             )}
           </div>
 
+          {/* 被测对象 = 轴心：环节状态条（一页一焦点，状态可见，不铺文字） */}
+          <div className="card bg-white rounded-xl border border-slate-200 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-slate-700 text-sm flex items-center gap-1.5"><Layers className="w-4 h-4 text-emerald-500" />围绕 {profile.name} 的测试治理环节</h2>
+              <span className="text-[11px] text-slate-400">状态点：绿=完成 · 琥珀=待处理 · 红=阻断 · 灰=待办 · 点击进入</span>
+            </div>
+            <div className="grid grid-cols-4 gap-2.5">
+              {STAGE_FLOW.map((s) => {
+                const Icon = s.icon;
+                const dot = STAGE_DOT[s.status];
+                const core = s.label === '用例生成' || s.label === '质量门禁';
+                return (
+                  <Link key={s.path} to={s.path}
+                    className={'flex items-center gap-2.5 rounded-xl border px-3 py-2.5 transition hover:-translate-y-0.5 ' + (core ? 'bg-emerald-50/60 border-emerald-200 hover:border-emerald-300 hover:shadow-sm' : 'bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm')}>
+                    <span className={'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ' + (core ? 'bg-emerald-500 text-white' : 'bg-emerald-50 text-emerald-600')}><Icon className="w-4 h-4" /></span>
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-slate-700 flex items-center gap-1.5">{s.label}{core && <span className="text-[9px] text-emerald-500">核心</span>}</div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className={'w-2 h-2 rounded-full flex-shrink-0 ' + dot.cls} />
+                        <span className={'text-[11px] font-medium ' + dot.txt}>{s.value}</span>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
           {/* 被测对象页 = 被测对象管理总入口：仓库与版本管理（权威来源） */}
           <div className="card bg-white rounded-xl border border-slate-200 overflow-hidden">
             <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
@@ -249,7 +284,7 @@ export default function TargetPage() {
                       </td>
                       <td className="px-5 py-3 text-slate-500">{r.source}</td>
                       <td className="px-5 py-3 text-slate-500">{r.branch}</td>
-                      <td className="px-5 py-3"><span className="font-mono text-indigo-600">{r.versions[0]}</span><span className="text-slate-400 ml-1 text-[10px]">+{r.versions.length - 1}</span></td>
+                      <td className="px-5 py-3"><span className="font-mono text-emerald-700">{r.versions[0]}</span><span className="text-slate-400 ml-1 text-[10px]">+{r.versions.length - 1}</span></td>
                       <td className="px-5 py-3"><span className="text-emerald-600">{r.src.length}/6 类</span></td>
                       <td className="px-5 py-3 text-slate-500">{r.synced}</td>
                       <td className="px-5 py-3 text-slate-500">{r.owner}</td>
@@ -313,31 +348,6 @@ export default function TargetPage() {
                       <div className="text-[11px] text-slate-600 mt-1 leading-relaxed">{g.desc}</div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 被测对象 = 轴心：围绕当前被测对象的测试治理环节全景 */}
-          <div className="card bg-white rounded-xl border border-slate-200 p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-slate-700 text-sm flex items-center gap-1.5"><Layers className="w-4 h-4 text-emerald-500" />围绕 {profile.name} 的测试治理环节</h2>
-              <span className="text-[11px] text-slate-400">被测对象为轴心 · 每个环节均针对该对象 · 点击进入对应页</span>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {STAGE_FLOW.map((s) => {
-                const Icon = s.icon;
-                const current = s.core;
-                return (
-                  <Link key={s.path} to={s.path}
-                    className={'p-3 rounded-xl border transition ' + (current ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm' : 'border-slate-200 bg-white hover:border-emerald-300 hover:-translate-y-0.5 hover:shadow-sm')}>
-                    <div className="flex items-center gap-2">
-                      <span className={'w-7 h-7 rounded-lg flex items-center justify-center ' + (current ? 'bg-white/15 text-white' : 'bg-emerald-50 text-emerald-600')}><Icon className="w-4 h-4" /></span>
-                      <span className={'text-sm font-medium ' + (current ? 'text-white' : 'text-slate-700')}>{s.label}</span>
-                      {current && <span className="ml-auto text-[9px] bg-white/20 text-emerald-50 px-1.5 py-0.5 rounded-full">核心</span>}
-                    </div>
-                    <div className={'text-[10px] mt-1.5 ' + (current ? 'text-emerald-100' : 'text-slate-400')}>{s.desc}</div>
-                  </Link>
                 );
               })}
             </div>
