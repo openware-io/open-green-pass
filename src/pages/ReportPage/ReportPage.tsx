@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { TEST_RUNS, TEST_SCENARIOS, SCENARIO_GROUPS, type ITestRun } from '@/data/mock';
 import { scenarioNav } from '@/context/scenarioNav';
 import { toast } from 'sonner';
-import { PageHeader, Card, ListFilter } from '@/components/shared';
-import { Cpu, Globe, Smartphone, Sparkles, Download, ShieldCheck, TrendingUp, CornerDownRight } from 'lucide-react';
+import { PageHeader, Card, ListFilter, PrimaryButton } from '@/components/shared';
+import { Cpu, Globe, Smartphone, Sparkles, Download, ShieldCheck, TrendingUp, CornerDownRight, FileText } from 'lucide-react';
 
 const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
 const EXPORT_FORMATS = [
@@ -15,6 +15,7 @@ export default function ReportPage() {
   const [runId, setRunId] = useState('RUN-4821');
   const navigate = useNavigate();
   const [q, setQ] = useState('');
+  const [fmt, setFmt] = useState('PDF');
   const kw = q.trim().toLowerCase();
   const runs = TEST_RUNS.filter((r) => !kw || (r.id + r.branch + r.trigger).toLowerCase().includes(kw));
   const run = TEST_RUNS.find((r) => r.id === runId) as ITestRun;
@@ -48,11 +49,19 @@ export default function ReportPage() {
             </button>
           ))}
         </div>
+        <div className="mt-3 flex items-center gap-3 flex-wrap">
+          <PrimaryButton onClick={() => toast.success('报告已生成（原型模拟）', { description: `${runId} · 跨场景合编 · 可在下方预览与导出` })}>
+            <span className="flex items-center gap-1"><FileText className="w-4 h-4" />生成报告</span>
+          </PrimaryButton>
+          <span className={'text-[11px] px-2 py-1 rounded-full ' + (run.gate === '通过' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')}>
+            该运行门禁：{run.gate === '通过' ? '通过' : '阻断'} · 通过率 {Math.round((run.pass / run.total) * 1000) / 10}%
+          </span>
+        </div>
         <p className="mt-3 text-[10px] text-slate-400">存量用例回放成本持平/递减；本次失败触发「新增分析」成本回升 —— 每次 CI 触发产出一份可追溯、可独立验证、跨场景合编的测试报告。</p>
       </Card>
 
       {/* 跨场景总览 */}
-      <Card title="跨场景汇总总览" extra={<span className="text-[11px] text-slate-400">将全部测试场景报告汇总合编为工程级报告</span>} className="p-5 mb-5">
+      <Card title="跨场景汇总总览" extra={<span className="text-[11px] text-slate-400">工程级历史汇总 · 不随所选运行变化 · 将全部场景报告合编为工程报告</span>} className="p-5 mb-5">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           <div className="rounded-xl border border-slate-200 p-4">
             <div className="text-[11px] text-slate-400 flex items-center gap-1"><TrendingUp className="w-3 h-3" />汇总通过率</div>
@@ -128,7 +137,11 @@ export default function ReportPage() {
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <button type="button" onClick={() => onExport(s.id, EXPORT_FORMATS[1].l)}
+                            <select value={fmt} onChange={(e) => setFmt(e.target.value)}
+                              className="px-1.5 py-1 text-[10px] border border-slate-200 rounded-lg text-slate-600 outline-none focus:border-emerald-300">
+                              {EXPORT_FORMATS.map((f) => <option key={f.f} value={f.l}>{f.l}</option>)}
+                            </select>
+                            <button type="button" onClick={() => onExport(s.id, fmt)}
                               className="flex items-center gap-1 px-2 py-1 text-[10px] bg-slate-100 text-slate-600 rounded-lg hover:bg-emerald-50 hover:text-emerald-600">
                               <Download className="w-3 h-3" />单独导出
                             </button>
