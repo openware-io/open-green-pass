@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CASES, TEST_SCENARIOS, CURRENT_ITERATION, SERVICE_VERSIONS, CASE_EXEC, type ICase, type CaseChange, type ExecCarrierType } from '@/data/mock';
+import { CASES, TEST_SCENARIOS, CURRENT_ITERATION, SERVICE_VERSIONS, CASE_EXEC, RECENT_GEN, type ICase, type CaseChange, type ExecCarrierType } from '@/data/mock';
 import { useNavigate } from 'react-router-dom';
 import { scenarioNav } from '@/context/scenarioNav';
 import { toast } from 'sonner';
@@ -52,6 +52,7 @@ export default function CasesPage() {
   const [status, setStatus] = useState('');
   const [change, setChange] = useState('');
   const [detail, setDetail] = useState<{ c: ICase; tab: 'exec' | 'version' } | null>(null);
+  const [rolledBack, setRolledBack] = useState(false);
 
   useEffect(() => {
     if (!detail) return;
@@ -101,6 +102,18 @@ export default function CasesPage() {
     toast('用例已恢复', { description: `${id} · 重新纳入管理（原型 mock）` });
   };
 
+  const rollback = () => {
+    setRolledBack(true);
+    const imp = RECENT_GEN.impact;
+    setRows(rows.map((c) => {
+      if (imp.added.includes(c.id)) return { ...c, change: '删除' as CaseChange, status: '已禁用' as ICase['status'] };
+      if (imp.updated.includes(c.id)) { const base = c.versions.filter((v) => v.v === 1); return { ...c, version: 1, change: '稳定' as CaseChange, status: '已激活' as ICase['status'], changedAt: base[0]?.ts ?? c.changedAt, versions: base }; }
+      if (imp.removed.includes(c.id)) return { ...c, change: '稳定' as CaseChange, status: '已激活' as ICase['status'] };
+      return c;
+    }));
+    toast('已回退到本次生成前', { description: `撤销 ${RECENT_GEN.id}（${RECENT_GEN.repo}@${RECENT_GEN.branch}@${RECENT_GEN.version}）引入的变更：撤销新增 ${imp.added.length} 条、回退更新 ${imp.updated.length} 条、恢复删除 ${imp.removed.length} 条` });
+  };
+
   return (
     <div>
       <PageHeader title="用例管理" desc="版本化用例 · 新增/更新/删除可辨别 · 执行载体与脚本数据 · 测试关联服务版本">
@@ -137,6 +150,23 @@ export default function CasesPage() {
             </span>
           ))}
           <span className="text-[10px] text-slate-300 ml-auto">执行 = 用例规格经执行器翻译成载体（脚本/请求/规则/负载），绑定被测对象当时版本</span>
+        </div>
+        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2 text-[11px]">
+            {rolledBack ? (
+              <span className="flex items-center gap-1 text-emerald-600 font-medium"><Check className="w-3.5 h-3.5" />已回退至 {RECENT_GEN.id} 生成前版本</span>
+            ) : (
+              <>
+                <span className="text-slate-500">最近 AI 生成：<b className="font-mono text-indigo-600">{RECENT_GEN.repo}@{RECENT_GEN.branch}@{RECENT_GEN.version}</b></span>
+                <span className="text-slate-400">新增 {RECENT_GEN.impact.added.length} · 更新 {RECENT_GEN.impact.updated.length} · 删除 {RECENT_GEN.impact.removed.length}</span>
+                <button type="button" onClick={rollback}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100">
+                  <History className="w-3 h-3" />回退本次生成
+                </button>
+              </>
+            )}
+          </div>
+          <span className="text-[10px] text-slate-300">用错分支 / 版本生成用例时，可回退到本次生成之前（撤销引入的变更，审计留痕）</span>
         </div>
       </div>
 
@@ -394,6 +424,10 @@ function VersionTimeline({ c }: { c: ICase }) {
                 <span className={'inline-flex px-1.5 py-0.5 rounded-full text-[10px] ' + (v.change === '新增' ? 'bg-emerald-600 text-white' : v.change === '更新' ? 'bg-amber-500 text-white' : v.change === '删除' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-500')}>{v.change}</span>
                 <span className="text-[10px] text-slate-300">{v.ts}</span>
                 {v.v === c.version && <span className="text-[10px] text-emerald-600">← 当前版本</span>}
+                {v.v !== c.version && (
+                  <button type="button" onClick={() => toast('版本回退（原型模拟）', { description: `${c.id} 回退到 v${v.v}（${v.iter}）版本，作为一次新的变更记录保留审计` })}
+                    className="ml-auto text-[10px] text-slate-400 hover:text-emerald-600 border border-slate-200 px-1.5 py-0.5 rounded">回退到此版本</button>
+                )}
               </div>
               <div className="mt-1 text-[11px] text-slate-500 bg-slate-50 rounded px-2 py-1">{v.summary}</div>
             </div>

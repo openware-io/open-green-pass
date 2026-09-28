@@ -247,6 +247,22 @@ export const ENV_RUNTIME_VERSIONS: IEnvVersionCheck[] = [
   { asset: 'mobile-ios', target: 'v2.4.0', runtime: 'v2.4.0', matched: true },
 ];
 
+// ============ 最近 AI 生成批次（用于按版本回退） ============
+// 场景：某次用了错误的分支/版本生成用例，可回退到该次生成之前（撤销本次引入的新增/更新/删除）
+export const RECENT_GEN = {
+  id: 'GEN-2042',
+  repo: 'svc-payment',
+  branch: 'feature-refund-v2',
+  version: 'v2.4.1',
+  generatedAt: '2026-09-28',
+  note: '误选了 feature-refund-v2 分支生成用例，需回退到生成前版本',
+  impact: {
+    added: ['TC-2024-132', 'TC-2024-133'],
+    updated: ['TC-2024-095', 'TC-2024-118'],
+    removed: ['TC-2024-020'],
+  },
+};
+
 export const CASES: ICase[] = [
   { id: 'TC-2024-001', title: '正常登录流程验证', asset: 'svc-auth', source: 'REQ-101 + OpenAPI', type: '单元', assertion: '强', mutation: 92, status: '已激活', version: 3, change: '稳定', changedAt: '2026-08-12', versions: [
     { v: 1, iter: 'v2.1.0', ts: '2026-07-02', change: '新增', summary: '登录流程基线用例' },
