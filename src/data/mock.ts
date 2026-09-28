@@ -462,18 +462,7 @@ export interface IGateRule {
   aiNote?: string;
 }
 
-export const GATE_RULES: IGateRule[] = [
-  { name: '覆盖率阈值', detail: '变更文件覆盖率 86.4% ≥ 阈值 80%', status: 'pass' },
-  { name: '断言强度检测', detail: '检测到 3 处断言弱化行为', status: 'block', evidence: ['TC-2024-118:42 → assertTrue(true) 替代金额校验', 'TC-2024-118:67 → 断言被 try/except 包裹', 'TC-2024-095:31 → @pytest.mark.skip 新增'] },
-  { name: '契约门禁 · CT-003', detail: '/v2/refund 存在破坏性变更，2 个消费者契约测试未更新', status: 'block' },
-  { name: '变异测试分数', detail: 'TC-2024-118 变异分数 31% < 阈值 70%', status: 'block' },
-  { name: '跨服务追溯完整性', detail: '涉及 4 个被测对象节点的用例全部绑定需求', status: 'pass' },
-  { name: '原始测试回放', detail: '基线 42 个用例在产出代码上全部通过', status: 'pass' },
-];
-
-export const GATE_TOTAL = GATE_RULES.length;
-export const GATE_PASS = GATE_RULES.filter((r) => r.status === 'pass').length;
-export const GATE_BLOCK = GATE_RULES.filter((r) => r.status === 'block').length;
+// 注：门禁规则不再使用全局常量，统一由 assetToProfile(asset) 按各被测对象 coverage/gateRate 派生（GatePage 与画像页同源，阻断数与明细自洽）
 
 // ============ 审计日志 ============
 export interface IAuditLog {
@@ -1147,7 +1136,7 @@ export const OP_AUDIT_ROWS: IOpAuditRow[] = [
 // 测试运行（时间维主键）
 export interface ITestRun { id: string; ts: string; branch: string; trigger: string; pass: number; fail: number; block: number; queue: number; total: number; duration: string; cost: number; gate: '通过' | '阻断' }
 export const TEST_RUNS: ITestRun[] = [
-  { id: 'RUN-4821', ts: '09-24 10:28', branch: 'feature/refund-v2', trigger: 'CI 提交', pass: 1192, fail: 34, block: 10, queue: 52, total: 1300, duration: '4m 22s', cost: 4599, gate: '阻断' },
+  { id: 'RUN-4821', ts: '09-24 10:28', branch: 'feature/refund-v2', trigger: 'CI 提交', pass: 1204, fail: 34, block: 10, queue: 52, total: 1300, duration: '4m 22s', cost: 4599, gate: '阻断' },
   { id: 'RUN-4805', ts: '09-23 16:40', branch: 'feature/refund-v2', trigger: 'CI 提交', pass: 1262, fail: 8, block: 6, queue: 24, total: 1300, duration: '3m 58s', cost: 4210, gate: '通过' },
   { id: 'RUN-4792', ts: '09-22 11:12', branch: 'main', trigger: '定时', pass: 1278, fail: 2, block: 0, queue: 20, total: 1300, duration: '3m 41s', cost: 4056, gate: '通过' },
   { id: 'RUN-4788', ts: '09-21 09:05', branch: 'feature/trace-v2', trigger: 'CI 提交', pass: 1201, fail: 48, block: 12, queue: 39, total: 1300, duration: '4m 40s', cost: 4721, gate: '阻断' },

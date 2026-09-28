@@ -1,24 +1,15 @@
 import { useState } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ASSET_TREE, METRICS, GEN_TRACE, ASSET_RISKS, AI_MODELS, PROJECT_MODELS, TEST_SCENARIOS, TESTED_REPOS, assetToProfile, nodeRepos, type IAsset, type IAssetNode, type ITestedRepo } from '@/data/mock';
+import { ASSET_TREE, METRICS, GEN_TRACE, ASSET_RISKS, AI_MODELS, PROJECT_MODELS, TEST_SCENARIOS, TESTED_REPOS, CASES, COST_GEN_DETAIL, COST_EXEC_DETAIL, assetToProfile, nodeRepos, type IAsset, type IAssetNode, type ITestedRepo } from '@/data/mock';
 import { scenarioNav } from '@/context/scenarioNav';
 import { KpiCard, PageHeader, PrimaryButton, GhostButton, ListFilter } from '@/components/shared';
 import { Brain, ShieldAlert, ChevronRight, ChevronDown, Sparkles, GitBranch, CircleDot, FileSearch, History, CheckCircle2, AlertTriangle, XCircle, Layers, Cpu, Globe, Smartphone, X, Plus, ExternalLink, Check, Plug, Files, FileText, Wallet } from 'lucide-react';
 
 const ADD_STEPS = ['基本信息', '代码源接入', '上游源', '确认'];
 
-// 围绕当前被测对象的测试治理环节状态条：被测对象为轴心，每环节只显示 状态点+数字（交互本身表达，不铺文字）
-const STAGE_FLOW = [
-  { path: '/generation', label: '用例生成', icon: Sparkles, status: 'done', value: '12 用例' },
-  { path: '/trace', label: '需求追溯', icon: GitBranch, status: 'done', value: '完整' },
-  { path: '/cases', label: '用例管理', icon: Files, status: 'done', value: '32' },
-  { path: '/exec', label: '测试执行', icon: CircleDot, status: 'partial', value: '5/12' },
-  { path: '/gate', label: '质量门禁', icon: ShieldAlert, status: 'block', value: '3 阻断' },
-  { path: '/history', label: '测试历史', icon: History, status: 'done', value: '18 次' },
-  { path: '/report', label: '测试报告', icon: FileText, status: 'todo', value: '待生成' },
-  { path: '/audit-cost', label: '成本审计', icon: Wallet, status: 'done', value: '¥2.4k' },
-];
+// 围绕当前被测对象的测试治理环节状态条（被测对象为轴心）——随 selectedAsset 从 mock 真实数据派生：
+// 质量门禁与 GatePage 同源（assetToProfile.riskCount）、用例数与 CasesPage 同源（CASES）、成本与成本审计同源（COST_*_DETAIL）
 // 环节状态点：绿实心=完成、琥珀=待处理、红=阻断、灰=待办
 const STAGE_DOT: Record<string, { cls: string; txt: string }> = {
   done: { cls: 'bg-emerald-500', txt: 'text-emerald-600' },
@@ -56,6 +47,12 @@ function assetScenarios(asset: IAsset) {
   const pool = hits.length ? hits : (asset.type === 'app' || asset.type === 'end' ? ['SCEN-06', 'SCEN-09'] : ['SCEN-02']);
   return [...new Set(pool)].map((id) => TEST_SCENARIOS.find((s) => s.id === id)).filter((s): s is NonNullable<typeof s> => !!s);
 }
+
+// 环节状态条派生 helper：与 GatePage/CasesPage/成本审计 同源
+function caseCount(asset: IAsset): number { return CASES.filter((c) => c.asset === asset.name && c.status !== '已禁用').length; }
+function genCount(asset: IAsset): number { return COST_GEN_DETAIL.filter((d) => d.asset === asset.name).length; }
+function objCost(asset: IAsset): number { return [...COST_GEN_DETAIL, ...COST_EXEC_DETAIL].filter((d) => d.asset === asset.name).reduce((s, d) => s + d.amount, 0); }
+function costTxt(asset: IAsset): string { const v = objCost(asset); if (v <= 0) return '待产生'; return v >= 1000 ? `¥${(v / 1000).toFixed(1)}k` : `¥${v}`; }
 
 // 子树是否包含目标节点（用于默认展开当前链路）
 function containsNode(n: IAssetNode, id: string): boolean {
@@ -107,6 +104,17 @@ export default function TargetPage() {
   const { selectedAsset, setSelectedAsset } = useOutletContext<{ selectedAsset: IAssetNode; setSelectedAsset: (n: IAssetNode) => void }>();
   const profile = assetToProfile(selectedAsset);
   const risks = profile.gateRules.filter((r) => r.status === 'block');
+  // 环节状态条：从当前被测对象真实数据派生（与 GatePage / CasesPage / 成本审计 同源），随树切换联动
+  const stageFlow = [
+    { path: '/generation', label: '用例生成', icon: Sparkles, status: genCount(selectedAsset) > 0 ? 'done' : 'todo', value: genCount(selectedAsset) > 0 ? `${genCount(selectedAsset)} 用例` : '待生成' },
+    { path: '/trace', label: '需求追溯', icon: GitBranch, status: 'done', value: '完整' },
+    { path: '/cases', label: '用例管理', icon: Files, status: caseCount(selectedAsset) > 0 ? 'done' : 'todo', value: `${caseCount(selectedAsset)}` },
+    { path: '/exec', label: '测试执行', icon: CircleDot, status: 'partial', value: '待执行' },
+    { path: '/gate', label: '质量门禁', icon: ShieldAlert, status: risks.length > 0 ? 'block' : 'done', value: risks.length > 0 ? `${risks.length} 阻断` : '通过' },
+    { path: '/history', label: '测试历史', icon: History, status: 'done', value: '近 6 次' },
+    { path: '/report', label: '测试报告', icon: FileText, status: 'todo', value: '待生成' },
+    { path: '/audit-cost', label: '成本审计', icon: Wallet, status: objCost(selectedAsset) > 0 ? 'done' : 'todo', value: costTxt(selectedAsset) },
+  ];
   const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
   const [q, setQ] = useState('');
   const kw = q.trim().toLowerCase();
@@ -247,7 +255,7 @@ export default function TargetPage() {
               <span className="text-[11px] text-slate-400">状态点：绿=完成 · 琥珀=待处理 · 红=阻断 · 灰=待办 · 点击进入</span>
             </div>
             <div className="grid grid-cols-4 gap-2.5">
-              {STAGE_FLOW.map((s) => {
+              {stageFlow.map((s) => {
                 const Icon = s.icon;
                 const dot = STAGE_DOT[s.status];
                 const core = s.label === '用例生成' || s.label === '质量门禁';
