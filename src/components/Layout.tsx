@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { SidebarProvider, SidebarInset, Sidebar } from '@/components/ui/sidebar';
 import { NAV_GROUPS, ASSET_TREE, CASES, REQUIREMENTS, CONTRACTS, TEAMS, CURRENT_TEAM_ID, ACCOUNTS, type IAssetNode } from '@/data/mock';
@@ -98,6 +98,47 @@ function CrumbSelect({ label, siblings, children, currentId, onSelect, active }:
         </div>
       )}
     </span>
+  );
+}
+
+// 全局「当前被测对象 · 测试治理环节」状态条（规范 4.6 对象状态条）：全站业务页顶部统一轴心感知，环节状态点可见
+const STAGE_BAR = [
+  { path: '/generation', label: '用例生成', icon: Settings2, status: 'done', value: '12' },
+  { path: '/trace', label: '需求追溯', icon: GitBranch, status: 'done', value: '完整' },
+  { path: '/cases', label: '用例管理', icon: Files, status: 'done', value: '32' },
+  { path: '/exec', label: '测试执行', icon: Play, status: 'partial', value: '5/12' },
+  { path: '/gate', label: '质量门禁', icon: ShieldCheck, status: 'block', value: '3 阻断' },
+  { path: '/history', label: '测试历史', icon: History, status: 'done', value: '18' },
+  { path: '/report', label: '测试报告', icon: FileText, status: 'todo', value: '待生成' },
+  { path: '/audit-cost', label: '成本审计', icon: Wallet, status: 'done', value: '¥2.4k' },
+];
+const STAGE_BAR_DOT: Record<string, string> = { done: 'bg-emerald-500', partial: 'bg-amber-500', block: 'bg-red-500', todo: 'bg-slate-300' };
+
+function ObjectStageBar({ asset, current }: { asset: IAssetNode; current: string }) {
+  return (
+    <div className="mb-5 rounded-xl border border-slate-200 bg-white px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+      <span className="inline-flex items-center gap-2.5">
+        <span className="w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center"><Target className="w-4 h-4" /></span>
+        <span className="text-sm font-semibold text-slate-800">{asset.name}</span>
+        <span className="text-[10px] text-slate-400">当前被测对象 · 测试治理环节</span>
+      </span>
+      <span className="w-px h-5 bg-slate-200" />
+      <span className="inline-flex items-center gap-2 flex-wrap">
+        {STAGE_BAR.map((s) => {
+          const Icon = s.icon;
+          const active = current === s.path;
+          return (
+            <Link key={s.path} to={s.path}
+              className={'inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] transition ' + (active ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-emerald-50')}>
+              <Icon className="w-3.5 h-3.5" />
+              <span className="font-medium">{s.label}</span>
+              <span className={'w-1.5 h-1.5 rounded-full ' + STAGE_BAR_DOT[s.status]} />
+              <span className="opacity-75">{s.value}</span>
+            </Link>
+          );
+        })}
+      </span>
+    </div>
   );
 }
 
@@ -326,6 +367,7 @@ export function Layout() {
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-6">
+          {!isPlatform && location.pathname !== '/target' && <ObjectStageBar asset={selectedAsset} current={location.pathname} />}
           <Outlet context={{ selectedAsset, setSelectedAsset }} />
         </main>
       </SidebarInset>
