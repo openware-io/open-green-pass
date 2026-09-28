@@ -67,7 +67,7 @@ export default function GenerationPage() {
 
   return (
     <div>
-      <PageHeader title="上游源与生成" desc="针对当前被测对象的用例生成流程 · 适配解析 → AI 生成 → 质量验证 → 审核入库">
+      <PageHeader title="生成用例" desc="针对当前被测对象的用例生成流程 · 适配解析 → AI 生成 → 质量验证 → 审核入库">
         <GhostButton onClick={() => toast('配置适配器', { description: '管理六类上游源的同步规则与解析策略（原型示意）' })}>配置适配器</GhostButton>
         <PrimaryButton onClick={() => setStep(1)}>开始生成流程</PrimaryButton>
       </PageHeader>

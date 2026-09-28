@@ -132,7 +132,7 @@ export default function TargetPage() {
     setRepos((p) => [...p, nr]);
     setShowAdd(false); setAddStep(0); setConnected(false); setAddBranches([]); setAddSrc([]);
     setAddForm({ name: '', type: 'GitLab', url: '', node: '服务', owner: '', ver: '', auth: 'Access Token', token: '' });
-    toast.success('仓库已添加', { description: `${nr.name} 已纳入被测对象库，可到「上游源与生成」对其发起用例生成` });
+    toast.success('仓库已添加', { description: `${nr.name} 已纳入被测对象库，可到「生成用例」对其发起用例生成` });
   };
 
   return (
@@ -247,7 +247,7 @@ export default function TargetPage() {
                 <span className="text-[11px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-medium">{repos.length} 个被测仓库</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-slate-400 hidden md:inline">被测对象库统一管理 · 选择「发起生成」跳转上游源与生成</span>
+                <span className="text-[10px] text-slate-400 hidden md:inline">被测对象库统一管理 · 选择「发起生成」跳转生成用例</span>
                 <GhostButton onClick={() => setShowAdd(true)}>
                   <Plus className="w-3.5 h-3.5 mr-1" />添加仓库
                 </GhostButton>
@@ -255,7 +255,7 @@ export default function TargetPage() {
             </div>
             <div className="px-5 py-2 bg-slate-50/50 border-b border-slate-100 flex items-center gap-2 text-[11px] text-slate-500">
               <ExternalLink className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-              <span>仓库是<b>被测对象的资产底座</b>：此处管理仓库/分支/版本/上游源接入（树节点选中的服务将在下方高亮对应仓库）；用例生成在上游源与生成页从本库选择对象。</span>
+              <span>仓库是<b>被测对象的资产底座</b>：此处管理仓库/分支/版本/上游源接入（树节点选中的服务将在下方高亮对应仓库）；用例生成在生成用例页从本库选择对象。</span>
             </div>
             <table className="w-full text-xs">
               <thead className="bg-slate-50 border-b border-slate-200">
@@ -580,7 +580,7 @@ export default function TargetPage() {
               {/* 步骤4 确认 */}
               {addStep === 3 && (
                 <div className="space-y-3">
-                  <div className="text-xs text-slate-500 mb-1">仓库将纳入被测对象库，并在「上游源与生成」作为生成输入。确认以下汇总：</div>
+                  <div className="text-xs text-slate-500 mb-1">仓库将纳入被测对象库，并在「生成用例」作为生成输入。确认以下汇总：</div>
                   <div className="bg-slate-50 rounded-lg border border-slate-200 p-4 space-y-2 text-xs">
                     <div className="flex gap-2"><span className="text-slate-400 w-20 shrink-0">仓库</span><span className="font-medium text-slate-700">{addForm.name}@{addBranches[0] ?? 'main'}@{addForm.ver.trim() || 'v1.0.0'}</span></div>
                     <div className="flex gap-2"><span className="text-slate-400 w-20 shrink-0">代码源</span><span className="text-slate-700">{addForm.type} · {urlPrefix}{addForm.url || addForm.name}</span></div>

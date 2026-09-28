@@ -25,7 +25,7 @@ function ResultIcon({ kind }: { kind: string }) {
 
 const COLS: Record<string, number> = { system: 2, group: 3, service: 4, module: 5 };
 
-// 需求追溯 = 生成产出的消费视图：每需求所属的 AI 生成批次（呼应上游源与生成的追溯绑定）
+// 需求追溯 = 生成产出的消费视图：每需求所属的 AI 生成批次（呼应生成用例的追溯绑定）
 const GEN_BATCH: Record<string, string> = { 'REQ-101': '#GEN-2041', 'REQ-102': '#GEN-2041', 'REQ-103': '#GEN-2038', 'REQ-104': '#GEN-2041' };
 const GEN_BATCHES = ['全部', '#GEN-2041', '#GEN-2038'];
 
@@ -71,7 +71,7 @@ export default function TracePage() {
 
   return (
     <div>
-      <PageHeader title="需求与追溯矩阵" desc="AI 生成产出的追溯矩阵 · 被测对象 × 需求 → 测试点 → 用例 · 按被测对象 / 生成批次过滤">
+      <PageHeader title="追溯覆盖" desc="AI 生成产出的追溯矩阵 · 被测对象 × 需求 → 测试点 → 用例 · 按被测对象 / 生成批次过滤">
         <GhostButton onClick={() => setGapOnly((g) => !g)}>
           <ScanSearch className="w-4 h-4 mr-1.5" />{gapOnly ? '显示全部' : '检测覆盖缺口'}
         </GhostButton>
@@ -83,10 +83,10 @@ export default function TracePage() {
         </GhostButton>
       </PageHeader>
 
-      {/* 生成产出追溯说明：追溯链由上游源与生成的 AI 生成种子自动建立 */}
+      {/* 生成产出追溯说明：追溯链由生成用例的 AI 生成种子自动建立 */}
       <div className="mb-5 flex items-start gap-2 text-[11px] text-slate-500 bg-emerald-50/60 border border-emerald-200 rounded-xl px-4 py-2.5">
         <CircleCheckBig className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
-        <span>本页是<b>生成产出的追溯矩阵</b>：AI 在上游源与生成页为每条用例种子建立 <b>REQ → 测试点 → 用例</b> 追溯链，此处即该产出的消费视图；可<b>按被测对象</b>（左侧树联动 / 页首层次筛选）与<b>按生成批次</b>（#GEN-2041 / #GEN-2038）过滤，追踪每批 AI 生成的用例覆盖与缺口。</span>
+        <span>本页是<b>生成产出的追溯矩阵</b>：AI 在生成用例页为每条用例种子建立 <b>REQ → 测试点 → 用例</b> 追溯链，此处即该产出的消费视图；可<b>按被测对象</b>（左侧树联动 / 页首层次筛选）与<b>按生成批次</b>（#GEN-2041 / #GEN-2038）过滤，追踪每批 AI 生成的用例覆盖与缺口。</span>
       </div>
 
       {view === 'chain' && (

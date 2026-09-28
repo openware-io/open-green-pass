@@ -142,6 +142,45 @@ function ObjectStageBar({ asset, current }: { asset: IAssetNode; current: string
   );
 }
 
+// 被测对象板块「测试准备流程」步骤条（方案A·闭环单入口）：定义对象→生成用例→追溯覆盖→测试资源
+const PREP_STEPS = [
+  { path: '/target', label: '定义对象', icon: Target, desc: '对象画像 · 仓库底座' },
+  { path: '/generation', label: '生成用例', icon: Settings2, desc: '上游源 · AI 生成' },
+  { path: '/trace', label: '追溯覆盖', icon: GitBranch, desc: '需求追溯矩阵' },
+  { path: '/resources', label: '测试资源', icon: Server, desc: '场景方法 · 载体' },
+];
+const PREP_ROUTES = ['/target', '/generation', '/trace', '/resources'];
+
+function PrepStepBar({ asset, current }: { asset: IAssetNode; current: string }) {
+  return (
+    <div className="mb-5 rounded-xl border border-slate-200 bg-white px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+      <span className="inline-flex items-center gap-2.5">
+        <span className="w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center"><Target className="w-4 h-4" /></span>
+        <span className="text-sm font-semibold text-slate-800">{asset.name}</span>
+        <span className="text-[10px] text-slate-400">被测对象 · 测试准备流程</span>
+      </span>
+      <span className="w-px h-5 bg-slate-200" />
+      <span className="inline-flex items-center flex-wrap gap-1">
+        {PREP_STEPS.map((s, i) => {
+          const Icon = s.icon;
+          const active = current === s.path;
+          const done = PREP_STEPS.findIndex((x) => x.path === current) > i;
+          return (
+            <span key={s.path} className="inline-flex items-center gap-1">
+              {i > 0 && <ChevronRight className="w-3.5 h-3.5 text-slate-300" />}
+              <Link to={s.path}
+                className={'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] transition ' + (active ? 'bg-emerald-600 text-white shadow-sm' : done ? 'text-emerald-600 hover:bg-emerald-50' : 'text-slate-500 hover:bg-slate-50')}>
+                <Icon className="w-3.5 h-3.5" />
+                <span className="font-medium">{s.label}</span>
+              </Link>
+            </span>
+          );
+        })}
+      </span>
+    </div>
+  );
+}
+
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -367,7 +406,9 @@ export function Layout() {
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-6">
-          {!isPlatform && location.pathname !== '/target' && <ObjectStageBar asset={selectedAsset} current={location.pathname} />}
+          {!isPlatform && (PREP_ROUTES.includes(location.pathname)
+            ? <PrepStepBar asset={selectedAsset} current={location.pathname} />
+            : <ObjectStageBar asset={selectedAsset} current={location.pathname} />)}
           <Outlet context={{ selectedAsset, setSelectedAsset }} />
         </main>
       </SidebarInset>
