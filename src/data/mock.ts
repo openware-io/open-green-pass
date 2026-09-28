@@ -415,6 +415,17 @@ export const UPSTREAM_ADAPTERS: IUpstreamAdapter[] = [
 
 export const ADAPTER_SEED_TOTAL = UPSTREAM_ADAPTERS.reduce((s, a) => s + a.seeds, 0); // 48
 
+// ============ 被测仓库：AI 生成用例的输入（仓库 + 分支 + 版本），被测对象页与上游源生成页共享 ============
+export interface ITestedRepo { name: string; source: string; branch: string; branches: string[]; versions: string[]; synced: string; owner: string; src: string[] }
+export const TESTED_REPOS: ITestedRepo[] = [
+  { name: 'svc-payment', source: 'GitLab', branch: 'main', branches: ['main', 'release', 'feature-refund-v2'], versions: ['v2.4.1', 'v2.4.0'], synced: '2026-09-27', owner: '张立', src: ['需求文档', '设计文档', 'API 契约', '代码变更', '生产追踪', '缺陷报告'] },
+  { name: 'svc-auth', source: 'GitLab', branch: 'main', branches: ['main', 'develop'], versions: ['v2.3.0'], synced: '2026-09-25', owner: '张立', src: ['需求文档', 'API 契约', '代码变更'] },
+  { name: 'svc-user', source: 'GitHub', branch: 'main', branches: ['main'], versions: ['v2.1.2'], synced: '2026-09-22', owner: '张立', src: ['需求文档', 'API 契约'] },
+  { name: 'web-frontend', source: 'GitLab', branch: 'release', branches: ['release', 'main'], versions: ['v2.4.0'], synced: '2026-09-26', owner: '李伟', src: ['需求文档', '设计文档', '代码变更', '生产追踪'] },
+  { name: 'mobile-ios', source: 'GitHub', branch: 'main', branches: ['main', 'release'], versions: ['v2.4.0'], synced: '2026-09-24', owner: '李伟', src: ['需求文档', '设计文档', '代码变更'] },
+  { name: 'svc-order', source: 'GitLab', branch: 'main', branches: ['main', 'develop'], versions: ['v2.0.5'], synced: '2026-09-20', owner: '张立', src: ['需求文档', 'API 契约', '缺陷报告'] },
+];
+
 export interface IGenerationStage {
   label: string;
   meta: string;

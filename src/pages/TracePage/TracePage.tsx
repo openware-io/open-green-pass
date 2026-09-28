@@ -25,6 +25,10 @@ function ResultIcon({ kind }: { kind: string }) {
 
 const COLS: Record<string, number> = { system: 2, group: 3, service: 4, module: 5 };
 
+// 需求追溯 = 生成产出的消费视图：每需求所属的 AI 生成批次（呼应上游源与生成的追溯绑定）
+const GEN_BATCH: Record<string, string> = { 'REQ-101': '#GEN-2041', 'REQ-102': '#GEN-2041', 'REQ-103': '#GEN-2038', 'REQ-104': '#GEN-2041' };
+const GEN_BATCHES = ['全部', '#GEN-2041', '#GEN-2038'];
+
 const serviceToReq = (svc: string): string => {
   if (svc.startsWith('web-') || svc.startsWith('mobile-')) return 'REQ-101';
   return (Object.values(TRACE_CHAINS).find((c) => c.service === svc)?.reqId
@@ -54,6 +58,7 @@ export default function TracePage() {
   }
   const [gapOnly, setGapOnly] = useState(false);
   const [view, setView] = useState<'chain' | 'matrix'>('chain');
+  const [batch, setBatch] = useState('全部');
 
   const chain = TRACE_CHAINS[activeReq];
   const activeTc = activeTcId ? chain.tcs.find((t) => t.id === activeTcId) ?? null : null;
@@ -61,18 +66,28 @@ export default function TracePage() {
   const [q, setQ] = useState('');
   const kw = q.trim().toLowerCase();
   const rows = (gapOnly ? REQUIREMENTS.filter((r) => r.traceability !== '完整') : REQUIREMENTS)
+    .filter((r) => batch === '全部' || GEN_BATCH[r.id] === batch)
     .filter((r) => !kw || (r.id + r.title).toLowerCase().includes(kw));
 
   return (
     <div>
-      <PageHeader title="需求与追溯矩阵" desc="跨服务追溯链 · 从需求到执行的完整链路">
+      <PageHeader title="需求与追溯矩阵" desc="AI 生成产出的追溯矩阵 · 被测对象 × 需求 → 测试点 → 用例 · 按被测对象 / 生成批次过滤">
         <GhostButton onClick={() => setGapOnly((g) => !g)}>
           <ScanSearch className="w-4 h-4 mr-1.5" />{gapOnly ? '显示全部' : '检测覆盖缺口'}
         </GhostButton>
         <GhostButton onClick={() => setView((v) => (v === 'chain' ? 'matrix' : 'chain'))}>
           <ListFilter className="w-4 h-4 mr-1.5" />{view === 'chain' ? '矩阵视图' : '链路视图'}
         </GhostButton>
+        <GhostButton onClick={() => setBatch((b) => GEN_BATCHES[(GEN_BATCHES.indexOf(b) + 1) % GEN_BATCHES.length])}>
+          <ScanSearch className="w-4 h-4 mr-1.5" />生成批次 · {batch}
+        </GhostButton>
       </PageHeader>
+
+      {/* 生成产出追溯说明：追溯链由上游源与生成的 AI 生成种子自动建立 */}
+      <div className="mb-5 flex items-start gap-2 text-[11px] text-slate-500 bg-emerald-50/60 border border-emerald-200 rounded-xl px-4 py-2.5">
+        <CircleCheckBig className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+        <span>本页是<b>生成产出的追溯矩阵</b>：AI 在上游源与生成页为每条用例种子建立 <b>REQ → 测试点 → 用例</b> 追溯链，此处即该产出的消费视图；可<b>按被测对象</b>（左侧树联动 / 页首层次筛选）与<b>按生成批次</b>（#GEN-2041 / #GEN-2038）过滤，追踪每批 AI 生成的用例覆盖与缺口。</span>
+      </div>
 
       {view === 'chain' && (
         <Card title={<span className="flex items-center gap-1.5"><GitBranch className="w-4 h-4 text-emerald-600" />跨服务追溯链 · {activeReq} {chain.title}<span className="ml-2 text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">当前层级 · {LEVEL_LABEL[level]}</span></span>}
@@ -191,6 +206,7 @@ export default function TracePage() {
             <tr className="text-left text-xs text-slate-500">
               <th className="px-4 py-3 font-medium">需求 ID</th>
               <th className="px-4 py-3 font-medium">需求标题</th>
+              <th className="px-4 py-3 font-medium">生成批次</th>
               <th className="px-4 py-3 font-medium">涉及被测对象</th>
               <th className="px-4 py-3 font-medium">测试点</th>
               <th className="px-4 py-3 font-medium">用例数</th>
@@ -205,6 +221,9 @@ export default function TracePage() {
                 className={(activeReq === r.id ? 'bg-indigo-50/60 ' : '') + (r.traceability === '缺口' ? 'bg-red-50/40 ' : 'hover:bg-slate-50 ') + 'cursor-pointer'}>
                 <td className={'px-4 py-3 font-mono text-xs font-medium ' + (r.traceability === '缺口' ? 'text-red-600' : 'text-indigo-600')}>{r.id}</td>
                 <td className="px-4 py-3 text-slate-700">{r.title}</td>
+                <td className="px-4 py-3">
+                  <span className="font-mono text-[10px] bg-slate-50 border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded">{GEN_BATCH[r.id]}</span>
+                </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
                     {r.assets.map((a) => (
