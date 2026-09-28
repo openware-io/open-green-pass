@@ -636,6 +636,7 @@ export const NAV_GROUPS: { title: string; items: INavItem[]; adminOnly?: boolean
     items: [
       { path: '/scenarios', label: '测试中心' },
       { path: '/cases', label: '用例管理' },
+      { path: '/resources', label: '测试资源' },
       { path: '/exec', label: '测试执行' },
       { path: '/gate', label: '质量门禁' },
       { path: '/history', label: '测试历史' },

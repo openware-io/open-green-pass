@@ -27,7 +27,7 @@ export default function ConcurrencyPage() {
   const toggle = (id: string) => setExpanded((cur) => (cur === id ? null : id));
   return (
     <div>
-      <PageHeader title="测试资源" desc="资源池 · 每个测试场景的测试方法与实现方案 · 调度隔离 · 冲突事件">
+      <PageHeader title="测试资源" desc="测试执行资源底座 · 真机 / 浏览器 / 沙箱并发池 · 场景测试方法与实现方案 · 调度隔离与冲突事件">
         <div className="flex items-center gap-3 text-xs">
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400"></span>健康</span>
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400"></span>高负载</span>

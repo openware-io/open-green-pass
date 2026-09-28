@@ -142,14 +142,13 @@ function ObjectStageBar({ asset, current }: { asset: IAssetNode; current: string
   );
 }
 
-// 被测对象板块「测试准备流程」步骤条（方案A·闭环单入口）：定义对象→生成用例→追溯覆盖→测试资源
+// 被测对象板块「测试准备流程」步骤条（方案A·闭环单入口）：定义对象→生成用例→追溯覆盖（测试资源移至测试治理）
 const PREP_STEPS = [
   { path: '/target', label: '定义对象', icon: Target, desc: '对象画像 · 仓库底座' },
   { path: '/generation', label: '生成用例', icon: Settings2, desc: '上游源 · AI 生成' },
   { path: '/trace', label: '追溯覆盖', icon: GitBranch, desc: '需求追溯矩阵' },
-  { path: '/resources', label: '测试资源', icon: Server, desc: '场景方法 · 载体' },
 ];
-const PREP_ROUTES = ['/target', '/generation', '/trace', '/resources'];
+const PREP_ROUTES = ['/target', '/generation', '/trace'];
 
 function PrepStepBar({ asset, current }: { asset: IAssetNode; current: string }) {
   return (
