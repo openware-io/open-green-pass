@@ -3,7 +3,7 @@ import { CASES, TEST_SCENARIOS, CURRENT_ITERATION, SERVICE_VERSIONS, CASE_EXEC, 
 import { useNavigate } from 'react-router-dom';
 import { scenarioNav } from '@/context/scenarioNav';
 import { toast } from 'sonner';
-import { Cpu, Globe, Smartphone, Sparkles, ShieldCheck, Pencil, Trash2, Power, Check, Ban, GitBranch, History, ArrowLeft, Package, RefreshCcw, Code2, Braces, Activity, Boxes, FlaskConical, BookOpen, Wand2 } from 'lucide-react';
+import { Cpu, Globe, Smartphone, Sparkles, ShieldCheck, Pencil, Trash2, Power, Check, Ban, GitBranch, History, ArrowLeft, Package, RefreshCcw, Code2, Braces, Activity, Boxes, FlaskConical } from 'lucide-react';
 import { PageHeader, GhostButton, PrimaryButton, ListFilter } from '@/components/shared';
 
 const TYPE_BADGE: Record<string, string> = {
@@ -43,17 +43,6 @@ const SOURCE_BADGE: Record<string, string> = {
 
 const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles, ShieldCheck };
 const SCEN_OF: Record<string, string> = { '单元': 'SCEN-01', '集成': 'SCEN-02', '契约': 'SCEN-03', '安全': 'SCEN-07', 'Web': 'SCEN-08', '移动': 'SCEN-09' };
-// AI 生成用例：可选择的代码仓库 + 各仓库可生成的目标版本
-const GEN_REPOS = ['svc-payment', 'svc-auth', 'svc-user', 'web-frontend', 'mobile-ios', 'svc-order'];
-const GEN_VERSIONS: Record<string, string[]> = {
-  'svc-payment': ['v2.4.1', 'v2.4.0'],
-  'svc-auth': ['v2.3.0'],
-  'svc-user': ['v2.1.2'],
-  'web-frontend': ['v2.4.0'],
-  'mobile-ios': ['v2.4.0'],
-  'svc-order': ['v2.0.5'],
-};
-
 export default function CasesPage() {
   const navigate = useNavigate();
   const [rows, setRows] = useState<ICase[]>(CASES);
@@ -63,10 +52,6 @@ export default function CasesPage() {
   const [status, setStatus] = useState('');
   const [change, setChange] = useState('');
   const [detail, setDetail] = useState<{ c: ICase; tab: 'exec' | 'version' } | null>(null);
-  // AI 生成用例面板：输入 = 仓库 + 版本（AI 读取仓库代码与文档生成用例）
-  const [genPanel, setGenPanel] = useState(false);
-  const [genRepo, setGenRepo] = useState('svc-payment');
-  const [genVer, setGenVer] = useState('v2.4.1');
 
   useEffect(() => {
     if (!detail) return;
@@ -120,7 +105,7 @@ export default function CasesPage() {
     <div>
       <PageHeader title="用例管理" desc="版本化用例 · 新增/更新/删除可辨别 · 执行载体与脚本数据 · 测试关联服务版本">
         <GhostButton onClick={() => toast('导入用例（原型 mock）', { description: '支持从上游 / 用例仓库批量导入，解析为版本化用例并绑定执行载体' })}>导入用例</GhostButton>
-        <PrimaryButton onClick={() => setGenPanel(true)}>AI 生成用例</PrimaryButton>
+        <PrimaryButton onClick={() => navigate('/generation')}>去上游源生成用例</PrimaryButton>
       </PageHeader>
 
       <div className="card bg-white rounded-xl border border-slate-200 p-4 mb-4">
@@ -335,49 +320,6 @@ export default function CasesPage() {
         </div>
       )}
 
-      {/* AI 生成用例面板：输入 = 仓库 + 版本 */}
-      {genPanel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-6" onClick={() => setGenPanel(false)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600"><Wand2 className="w-4 h-4" /></span>
-                <div>
-                  <div className="text-sm font-semibold text-slate-800">AI 生成用例</div>
-                  <div className="text-[10px] text-slate-400">输入 = 代码仓库 + 版本 · AI 读取仓库代码与文档生成用例规格</div>
-                </div>
-              </div>
-              <button type="button" onClick={() => setGenPanel(false)} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"><ArrowLeft className="w-4 h-4" />关闭</button>
-            </div>
-            <div className="px-5 py-4 space-y-4">
-              <div>
-                <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5"><GitBranch className="w-3.5 h-3.5" />输入仓库</div>
-                <select value={genRepo} onChange={(e) => { const r = e.target.value; setGenRepo(r); setGenVer(GEN_VERSIONS[r]?.[0] ?? 'v2.4.1'); }}
-                  className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:border-emerald-400">
-                  {GEN_REPOS.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5"><Package className="w-3.5 h-3.5" />目标版本（将用于执行前环境版本校验）</div>
-                <select value={genVer} onChange={(e) => setGenVer(e.target.value)}
-                  className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700 focus:outline-none focus:border-emerald-400">
-                  {(GEN_VERSIONS[genRepo] ?? []).map((v) => <option key={v} value={v}>{v}</option>)}
-                </select>
-                <div className="text-[10px] text-slate-300 mt-1">生成时锁定该版本，执行前校验测试环境运行版本与之一致，防止「测了也白测」</div>
-              </div>
-              <div className="flex items-start gap-2 text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
-                <BookOpen className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
-                <span>AI 将读取 <b>{genRepo}@{genVer}</b> 的仓库代码（接口 / 业务逻辑）与文档（README / 接口契约 / 需求）→ 生成用例规格 → 翻译为对应场景的执行载体 → 进入「待审核」。</span>
-              </div>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setGenPanel(false)} className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50">取消</button>
-                <button type="button" onClick={() => { setGenPanel(false); toast('用例已生成', { description: `AI 依据 ${genRepo}@${genVer} 的代码与文档生成一批用例，进入待审核（原型 mock）` }); }}
-                  className="px-3 py-1.5 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">生成用例</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
