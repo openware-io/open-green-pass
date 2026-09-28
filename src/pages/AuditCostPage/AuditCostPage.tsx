@@ -22,7 +22,7 @@ function TrendChart() {
   return (
     <div>
       <div className="flex gap-3 text-xs mb-3">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500" />总成本</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />总成本</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />存量用例执行成本</span>
         <span className="text-[10px] text-slate-400 ml-auto">存量执行成本持平或递减（治理降本）</span>
       </div>
@@ -103,7 +103,7 @@ export default function AuditCostPage() {
           <div className="mt-1 flex items-center gap-1 text-[11px] text-emerald-600"><TrendingDown className="w-3 h-3" />环比 {Math.abs(COST_MOM_CHANGE)}%（治理降本）</div>
         </div>
         <div className="card bg-white rounded-xl border border-slate-200 p-4">
-          <div className="flex items-center justify-between mb-2"><span className="text-xs text-slate-500">Token 总量</span><Layers className="w-4 h-4 text-indigo-500" /></div>
+          <div className="flex items-center justify-between mb-2"><span className="text-xs text-slate-500">Token 总量</span><Layers className="w-4 h-4 text-emerald-600" /></div>
           <div className="text-xl font-bold text-slate-800">{(COST_TOTAL_TOKENS_IN / 1e6).toFixed(0)}M<span className="text-sm font-normal text-slate-400"> 入</span> / {(COST_TOTAL_TOKENS_OUT / 1e6).toFixed(0)}M<span className="text-sm font-normal text-slate-400"> 出</span></div>
           <div className="mt-1 text-[11px] text-slate-400">输入输出分别计费</div>
         </div>
@@ -136,7 +136,7 @@ export default function AuditCostPage() {
         <button type="button" onClick={() => setActiveKind('exec')}
           className={cn('card bg-white rounded-xl border p-5 text-left transition', activeKind === 'exec' ? 'border-emerald-400 ring-2 ring-emerald-100' : 'border-slate-200 hover:border-emerald-300')}>
           <div className="flex items-center justify-between mb-3">
-            <span className="flex items-center gap-2 text-sm font-semibold text-slate-700"><span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><Rocket className="w-4 h-4" /></span>执行测试成本</span>
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-700"><span className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center"><Rocket className="w-4 h-4" /></span>执行测试成本</span>
             {activeKind === 'exec' && <span className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">当前查看</span>}
           </div>
           <div className="text-2xl font-bold text-slate-800">¥{COST_EXEC_TOTAL.toLocaleString()} <span className="text-xs font-normal text-slate-400">占 AI 成本 {execPct}%</span></div>
@@ -198,7 +198,7 @@ export default function AuditCostPage() {
         </div>
 
         {/* 维度 × 场景 热力矩阵 */}
-        <h3 className="font-semibold text-slate-700 text-sm mt-6 mb-3 flex items-center gap-1.5"><Layers className="w-4 h-4 text-indigo-500" />服务 × 场景 热力矩阵（¥）</h3>
+        <h3 className="font-semibold text-slate-700 text-sm mt-6 mb-3 flex items-center gap-1.5"><Layers className="w-4 h-4 text-emerald-600" />服务 × 场景 热力矩阵（¥）</h3>
         <div className="rounded-xl border border-slate-200 overflow-hidden">
           <table className="w-full text-xs">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -215,7 +215,7 @@ export default function AuditCostPage() {
                 const rowSum = row.生成 + row.执行 + row.判定 + row.契约 + row.变异;
                 return (
                   <tr key={h.serviceId} className="hover:bg-slate-50">
-                    <td className="px-3 py-2 font-mono text-indigo-600 font-medium">{h.serviceId}</td>
+                    <td className="px-3 py-2 font-mono text-emerald-700 font-medium">{h.serviceId}</td>
                     <td className="px-3 py-2 text-slate-500">{h.org}</td>
                     {(['生成', '执行', '判定', '契约', '变异'] as const).map((k) => (
                       <td key={k} className="px-3 py-2 text-right">
@@ -295,7 +295,7 @@ export default function AuditCostPage() {
             {genFiltered.map((d) => (
               <tr key={d.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3 font-mono text-slate-500">{d.id}</td>
-                <td className="px-4 py-3 font-mono text-indigo-600 font-medium">{d.caseId}</td>
+                <td className="px-4 py-3 font-mono text-emerald-700 font-medium">{d.caseId}</td>
                 <td className="px-4 py-3 text-slate-600">{d.source}</td>
                 <td className="px-4 py-3"><span className="text-[10px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded">{genOrg(d)}</span> <span className="text-[10px] text-slate-400 font-mono">{d.asset}</span></td>
                 <td className="px-4 py-3 text-slate-600">{modelName(d.modelId)}</td>
@@ -334,7 +334,7 @@ export default function AuditCostPage() {
           <tbody className="divide-y divide-slate-100">
             {execFiltered.map((d) => (
               <tr key={d.id} className={'hover:bg-slate-50 ' + (d.isLegacy ? '' : 'bg-amber-50/30')}>
-                <td className="px-4 py-3 font-mono text-indigo-600 font-medium">{d.caseId}</td>
+                <td className="px-4 py-3 font-mono text-emerald-700 font-medium">{d.caseId}</td>
                 <td className="px-4 py-3"><span className="text-[10px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded">{genOrg(d)}</span> <span className="text-[10px] text-slate-400 font-mono">{d.asset}</span></td>
                 <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-[10px] ${d.isLegacy ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{d.isLegacy ? '存量回放' : '新增用例'}</span></td>
                 <td className="px-4 py-3 text-slate-600">{modelName(d.modelId)}</td>

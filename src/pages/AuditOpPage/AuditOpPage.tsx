@@ -32,7 +32,7 @@ export default function AuditOpPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
         <div className="card bg-white rounded-xl border border-slate-200 p-4">
-          <div className="flex items-center justify-between mb-2"><span className="text-xs text-slate-500">操作总数</span><Fingerprint className="w-4 h-4 text-indigo-500" /></div>
+          <div className="flex items-center justify-between mb-2"><span className="text-xs text-slate-500">操作总数</span><Fingerprint className="w-4 h-4 text-emerald-600" /></div>
           <div className="text-2xl font-bold text-slate-800">{total} <span className="text-sm font-normal text-slate-400">/ 24h</span></div>
           <div className="mt-1 text-[11px] text-slate-400">全部写入哈希链</div>
         </div>
@@ -74,7 +74,7 @@ export default function AuditOpPage() {
             {[['用例 / 执行相关', 42], ['质量门禁判定', 24], ['契约变更', 18], ['系统检测', 10], ['其他', 6]].map(([n, v]) => (
               <div key={n as string}>
                 <div className="flex justify-between text-xs mb-1"><span className="text-slate-600">{n}</span><span className="text-slate-500">{v}%</span></div>
-                <div className="h-1.5 bg-slate-100 rounded-full"><div className="h-full rounded-full bg-indigo-400" style={{ width: `${v}%` }} /></div>
+                <div className="h-1.5 bg-slate-100 rounded-full"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${v}%` }} /></div>
               </div>
             ))}
           </div>
@@ -104,7 +104,7 @@ export default function AuditOpPage() {
                 <td className="px-4 py-3"><span className="font-medium text-slate-700">{r.user}</span> <span className="text-[10px] text-slate-400">{r.role}</span></td>
                 <td className="px-4 py-3 text-slate-500">{r.role}</td>
                 <td className="px-4 py-3 font-medium text-slate-700">{r.action}</td>
-                <td className="px-4 py-3 font-mono text-indigo-600 text-[11px]">{r.target}</td>
+                <td className="px-4 py-3 font-mono text-emerald-700 text-[11px]">{r.target}</td>
                 <td className="px-4 py-3 text-slate-600">{r.result}</td>
                 <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-[10px] ${RISK_BADGE[r.risk]}`}>{r.risk}</span></td>
                 <td className="px-4 py-3 text-slate-400">{r.ts}</td>

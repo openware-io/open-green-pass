@@ -11,7 +11,8 @@
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.app.json",
     "lint": "concurrently npm:typecheck npm:lint:eslint",
-    "lint:eslint": "eslint src"
+    "lint:eslint": "eslint src",
+    "check": "npm run lint && npm run build && npm audit --omit=dev --audit-level=high"
   },
   "dependencies": {
     "@hookform/resolvers": "5.4.0",

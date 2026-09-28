@@ -13,7 +13,7 @@ const TEAM_COLOR: Record<string, { bg: string; text: string }> = {
 
 const ROLE_BADGE: Record<Role, string> = {
   owner: 'bg-purple-50 text-purple-600',
-  admin: 'bg-indigo-50 text-indigo-600',
+  admin: 'bg-emerald-50 text-emerald-700',
   tester: 'bg-emerald-50 text-emerald-600',
   viewer: 'bg-slate-100 text-slate-500',
 };
@@ -27,7 +27,7 @@ const STATUS_META: Record<ITeamMember['status'], { label: string; cls: string }>
 const PERM_BADGE: Record<AssetPerm, string> = {
   full: 'bg-purple-50 text-purple-600',
   edit: 'bg-emerald-50 text-emerald-600',
-  exec: 'bg-indigo-50 text-indigo-600',
+  exec: 'bg-emerald-50 text-emerald-700',
   view: 'bg-slate-100 text-slate-500',
   none: 'bg-red-50 text-red-600',
 };

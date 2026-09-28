@@ -145,7 +145,7 @@ export default function HistoryPage() {
           <RunTrend />
         </div>
         <div className="card bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="font-semibold text-slate-700 text-sm mb-3 flex items-center gap-1.5"><ScanEye className="w-4 h-4 text-indigo-500" />运行要点</h3>
+          <h3 className="font-semibold text-slate-700 text-sm mb-3 flex items-center gap-1.5"><ScanEye className="w-4 h-4 text-emerald-600" />运行要点</h3>
           <div className="space-y-2.5 text-[11px]">
             <div className="flex justify-between"><span className="text-slate-500">历史共执行</span><span className="text-slate-700 font-medium">{TEST_RUNS.length} 次 / {totalExec.toLocaleString()} 用例次</span></div>
             <div className="flex justify-between"><span className="text-slate-500">平均通过率</span><span className="text-emerald-600 font-medium">{avgPass}%</span></div>
@@ -179,7 +179,7 @@ export default function HistoryPage() {
             {runs.map((r) => (
               <tr key={r.id} onClick={() => setRunId(r.id)}
                 className={'cursor-pointer ' + (runId === r.id ? 'bg-emerald-50/50' : 'hover:bg-slate-50')}>
-                <td className="px-4 py-2.5 font-mono text-indigo-600 font-medium">{r.id}</td>
+                <td className="px-4 py-2.5 font-mono text-emerald-700 font-medium">{r.id}</td>
                 <td className="px-4 py-2.5 text-slate-500">{r.ts}</td>
                 <td className="px-4 py-2.5 font-mono text-slate-600">{r.branch}</td>
                 <td className="px-4 py-2.5 text-slate-500">{r.trigger}</td>
@@ -200,8 +200,8 @@ export default function HistoryPage() {
       {/* 运行详情 */}
       <div className="card bg-white rounded-xl border border-slate-200 p-5 mt-5">
         <div className="flex items-center justify-between mb-1">
-          <h3 className="font-semibold text-slate-700 text-sm">运行详情 · <span className="font-mono text-indigo-600">{run.id}</span> <span className="text-slate-400 font-normal">（{run.ts} · {run.branch}）</span></h3>
-          <button type="button" onClick={() => navigate('/report')} className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg flex items-center gap-1"><FileText className="w-3.5 h-3.5" />查看工程报告</button>
+          <h3 className="font-semibold text-slate-700 text-sm">运行详情 · <span className="font-mono text-emerald-700">{run.id}</span> <span className="text-slate-400 font-normal">（{run.ts} · {run.branch}）</span></h3>
+          <button type="button" onClick={() => navigate('/report')} className="px-3 py-1.5 text-xs bg-emerald-600 text-white rounded-lg flex items-center gap-1"><FileText className="w-3.5 h-3.5" />查看工程报告</button>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
           <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200"><div className="text-[11px] text-emerald-600">通过率</div><div className="text-lg font-bold text-emerald-700">{passRate}%</div><div className="text-[10px] text-emerald-500">{run.pass}/{run.total}</div></div>
@@ -239,7 +239,7 @@ export default function HistoryPage() {
                   const cost = his ? his[his.length - 1].cost : '—';
                   return (
                     <tr key={r.caseId + r.ts} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 font-mono text-indigo-600 font-medium">{r.caseId}</td>
+                      <td className="px-4 py-3 font-mono text-emerald-700 font-medium">{r.caseId}</td>
                       <td className="px-4 py-3 font-mono text-slate-500">{r.asset}</td>
                       <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-[10px] ${RESULT_BADGE[r.result]}`}>{r.result}</span></td>
                       <td className="px-4 py-3 font-mono text-slate-500">{r.duration}</td>
@@ -265,7 +265,7 @@ export default function HistoryPage() {
               {RUN_SERVICE_REPORTS.map((s) => (
                 <div key={s.service} className={'rounded-xl border p-4 ' + (s.risk === '高' ? 'bg-red-50/40 border-red-200' : s.risk === '中' ? 'bg-amber-50/30 border-amber-200' : 'bg-white border-slate-200')}>
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2"><span className="font-mono text-indigo-600 font-medium text-sm">{s.service}</span><span className="text-[11px] text-slate-400">{s.name}</span></div>
+                    <div className="flex items-center gap-2"><span className="font-mono text-emerald-700 font-medium text-sm">{s.service}</span><span className="text-[11px] text-slate-400">{s.name}</span></div>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] ${RISK_BADGE[s.risk]}`}>风险 {s.risk}</span>
                   </div>
                   <div className="flex gap-4 text-xs text-slate-600 mb-2">
@@ -289,17 +289,17 @@ export default function HistoryPage() {
         {tab === 'evidence' && (
           <div>
             {/* 截图证据规范 */}
-            <div className="mb-4 p-4 rounded-xl bg-indigo-50 border border-indigo-200">
+            <div className="mb-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200">
               <div className="flex items-center gap-1.5 mb-1">
-                <Camera className="w-4 h-4 text-indigo-600" />
-                <span className="text-sm font-semibold text-indigo-800">截图证据 · 普遍规范</span>
-                <span className="ml-auto text-[10px] text-indigo-500">关键流程全程 + 失败现场自动截图</span>
+                <Camera className="w-4 h-4 text-emerald-700" />
+                <span className="text-sm font-semibold text-emerald-800">截图证据 · 普遍规范</span>
+                <span className="ml-auto text-[10px] text-emerald-600">关键流程全程 + 失败现场自动截图</span>
               </div>
-              <p className="text-[11px] text-indigo-700">截图作为测试证据的普遍规范：关键流程执行全程截图、断言失败自动捕获失败现场，默认开启；服务可单独关闭，以避免高并发 / 大流量服务的截图性能开销。</p>
-              <div className="mt-3 rounded-lg border border-indigo-200 bg-white overflow-hidden">
+              <p className="text-[11px] text-emerald-700">截图作为测试证据的普遍规范：关键流程执行全程截图、断言失败自动捕获失败现场，默认开启；服务可单独关闭，以避免高并发 / 大流量服务的截图性能开销。</p>
+              <div className="mt-3 rounded-lg border border-emerald-200 bg-white overflow-hidden">
                 <table className="w-full text-[11px]">
-                  <thead className="bg-indigo-50/60">
-                    <tr className="text-left text-indigo-500">
+                  <thead className="bg-emerald-50/60">
+                    <tr className="text-left text-emerald-600">
                       <th className="px-3 py-1.5 font-medium">服务</th>
                       <th className="px-3 py-1.5 font-medium">截图模式</th>
                       <th className="px-3 py-1.5 font-medium">状态</th>
@@ -309,7 +309,7 @@ export default function HistoryPage() {
                   <tbody className="divide-y divide-slate-100">
                     {policies.map((pl) => (
                       <tr key={pl.serviceId}>
-                        <td className="px-3 py-1.5 font-mono text-indigo-600 font-medium">{pl.serviceId}</td>
+                        <td className="px-3 py-1.5 font-mono text-emerald-700 font-medium">{pl.serviceId}</td>
                         <td className="px-3 py-1.5 text-slate-600">{pl.mode === 'always' ? '全程截图' : pl.mode === 'on-fail' ? '仅失败时' : '关闭'}</td>
                         <td className="px-3 py-1.5">
                           <button type="button" onClick={() => togglePolicy(pl.serviceId)}
@@ -321,7 +321,7 @@ export default function HistoryPage() {
                   </tbody>
                 </table>
               </div>
-              <p className="mt-2 text-[10px] text-indigo-400">服务级策略覆盖普遍规范 · 关闭可防截图导致的性能问题 · 证据仍按「用例→Run」组织并哈希锚定</p>
+              <p className="mt-2 text-[10px] text-emerald-500">服务级策略覆盖普遍规范 · 关闭可防截图导致的性能问题 · 证据仍按「用例→Run」组织并哈希锚定</p>
             </div>
             <div className="flex flex-wrap gap-2 mb-4">
               {evidCases.map((c) => (

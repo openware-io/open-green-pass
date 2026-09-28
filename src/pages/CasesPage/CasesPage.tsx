@@ -157,7 +157,7 @@ export default function CasesPage() {
               <span className="flex items-center gap-1 text-emerald-600 font-medium"><Check className="w-3.5 h-3.5" />已回退至 {RECENT_GEN.id} 生成前版本</span>
             ) : (
               <>
-                <span className="text-slate-500">最近 AI 生成：<b className="font-mono text-indigo-600">{RECENT_GEN.repo}@{RECENT_GEN.branch}@{RECENT_GEN.version}</b></span>
+                <span className="text-slate-500">最近 AI 生成：<b className="font-mono text-emerald-700">{RECENT_GEN.repo}@{RECENT_GEN.branch}@{RECENT_GEN.version}</b></span>
                 <span className="text-slate-400">新增 {RECENT_GEN.impact.added.length} · 更新 {RECENT_GEN.impact.updated.length} · 删除 {RECENT_GEN.impact.removed.length}</span>
                 <button type="button" onClick={rollback}
                   className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100">
@@ -230,7 +230,7 @@ export default function CasesPage() {
                 <td className="px-4 py-3">
                   <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggleSelect(c.id)} className="accent-emerald-600" />
                 </td>
-                <td className="px-4 py-3 font-mono text-indigo-600 font-medium">{c.id}</td>
+                <td className="px-4 py-3 font-mono text-emerald-700 font-medium">{c.id}</td>
                 <td className={'px-4 py-3 text-slate-700 ' + (c.change === '删除' ? 'line-through text-slate-400' : '')}>{c.title}</td>
                 <td className="px-4 py-3">
                   <span className={'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ' + CHANGE_BADGE[c.change]}>
@@ -370,7 +370,7 @@ function ExecDetail({ c }: { c: ICase }) {
 
       <div className="space-y-4">
         <div>
-          <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5"><Braces className="w-3.5 h-3.5 text-indigo-500" />执行脚本 / 请求载体</div>
+          <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-1.5"><Braces className="w-3.5 h-3.5 text-emerald-600" />执行脚本 / 请求载体</div>
           <div className="bg-slate-900 rounded-lg px-3 py-2.5 font-mono text-[12px] text-emerald-200 overflow-x-auto">{ex.script}</div>
           <div className="text-[10px] text-slate-300 mt-1">脚本 / 请求模板引用，交由 {ex.engine} 拉起执行</div>
         </div>

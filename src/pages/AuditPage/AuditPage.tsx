@@ -16,7 +16,7 @@ const TYPE_BADGE: Record<string, string> = {
 
 const DOMAINS = [
   { to: '/audit-cost', icon: Wallet, color: 'text-emerald-600 bg-emerald-50 border-emerald-200', title: '成本审计', desc: '金额 · 维度 · 降本', kpi: `¥${COST_TOTAL.toLocaleString()}`, sub: `环比 ${Math.abs(COST_MOM_CHANGE)}% ↓` },
-  { to: '/audit-exec', icon: Play, color: 'text-indigo-600 bg-indigo-50 border-indigo-200', title: '执行审计', desc: '用例 · 结果 · 耗时', kpi: '1,248 / 1,300', sub: '失败 34 · 阻塞 10' },
+  { to: '/audit-exec', icon: Play, color: 'text-emerald-700 bg-emerald-50 border-emerald-200', title: '执行审计', desc: '用例 · 结果 · 耗时', kpi: '1,248 / 1,300', sub: '失败 34 · 阻塞 10' },
   { to: '/audit-op', icon: UserCog, color: 'text-amber-600 bg-amber-50 border-amber-200', title: '操作审计', desc: '谁 · 何时 · 做了什么', kpi: '128 条', sub: '近 24h · 高风险 3' },
   { to: '/audit', icon: ScrollText, color: 'text-slate-600 bg-slate-50 border-slate-200', title: '原始日志', desc: '哈希链 · 仅追加', kpi: '12,847 条', sub: '外部锚定 WORM ✓' },
 ];

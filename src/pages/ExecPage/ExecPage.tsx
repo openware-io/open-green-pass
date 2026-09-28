@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 const STATUS_STYLE: Record<string, { dot: string; badge: string; text: string }> = {
   '通过': { dot: 'bg-emerald-500', badge: 'text-emerald-600 bg-emerald-50', text: '通过' },
   '失败': { dot: 'bg-red-500', badge: 'text-red-600 bg-red-50', text: '失败' },
-  '执行中': { dot: 'bg-indigo-500', badge: 'text-indigo-500 bg-indigo-100', text: '执行中' },
+  '执行中': { dot: 'bg-emerald-500', badge: 'text-emerald-600 bg-emerald-100', text: '执行中' },
   '阻塞': { dot: 'bg-amber-500', badge: 'text-amber-600 bg-amber-50', text: '阻塞' },
 };
 const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
@@ -144,11 +144,11 @@ export default function ExecPage() {
                 const scen = TEST_SCENARIOS.find((x) => x.id === flowScenario(item.title, item.asset));
                 const Icon = scen ? SCEN_ICON[scen.icon] ?? Cpu : null;
                 return (
-                  <tr key={item.id} className={item.status === '执行中' ? 'bg-indigo-50/40' : item.status === '失败' ? 'bg-red-50/40' : item.status === '阻塞' ? 'bg-amber-50/40' : ''}>
+                  <tr key={item.id} className={item.status === '执行中' ? 'bg-emerald-50/40' : item.status === '失败' ? 'bg-red-50/40' : item.status === '阻塞' ? 'bg-amber-50/40' : ''}>
                     <td className="px-5 py-2.5">
                       <div className="flex items-center gap-2">
                         <span className={s.dot + ' w-2 h-2 rounded-full' + (item.status === '执行中' ? ' animate-pulse' : '')} />
-                        <span className="font-mono text-indigo-600 w-24 flex-shrink-0">{item.id}</span>
+                        <span className="font-mono text-emerald-700 w-24 flex-shrink-0">{item.id}</span>
                         <span className="text-slate-600 truncate">{item.title}</span>
                       </div>
                     </td>

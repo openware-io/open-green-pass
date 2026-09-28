@@ -271,7 +271,7 @@ export function Layout() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
-                className="w-56 bg-slate-100 border border-transparent focus:border-indigo-300 focus:bg-white rounded-lg pl-9 pr-8 py-1.5 text-sm outline-none transition" />
+                className="w-56 bg-slate-100 border border-transparent focus:border-emerald-300 focus:bg-white rounded-lg pl-9 pr-8 py-1.5 text-sm outline-none transition" />
               <button type="button" onClick={handleSearch}
                 className="absolute right-2 top-1.5 text-slate-400 hover:text-emerald-600">
                 <CornerDownLeft className="w-3.5 h-3.5" />

@@ -95,7 +95,7 @@ export default function TracePage() {
           extra={
             <div className="flex gap-3 text-[10px]">
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-amber-400"></span>系统</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-indigo-400"></span>服务组</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-500"></span>服务组</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-emerald-400"></span>服务</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-blue-400"></span>端</span>
             </div>
@@ -106,8 +106,8 @@ export default function TracePage() {
               <div className="text-xs text-slate-700 mt-0.5">{chain.system}</div>
             </div>
             {level !== 'system' && (
-              <div className="px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-lg text-center">
-                <div className="text-[10px] text-indigo-600 font-medium">服务组</div>
+              <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
+                <div className="text-[10px] text-emerald-700 font-medium">服务组</div>
                 <div className="text-xs text-slate-700 mt-0.5">{chain.group}</div>
               </div>
             )}
@@ -129,7 +129,7 @@ export default function TracePage() {
                 <div className="px-2 py-2 bg-red-50 border border-red-200 rounded text-[10px] text-red-600 text-center">覆盖缺口 · 无用例</div>
               ) : chain.tcs.map((tc) => (
                 <button key={tc.id} type="button" onClick={() => setActiveTcId(tc.id)}
-                  className={'px-2 py-1 rounded text-[10px] text-left transition ' + (activeTcId === tc.id ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-300')}>
+                  className={'px-2 py-1 rounded text-[10px] text-left transition ' + (activeTcId === tc.id ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:border-emerald-300')}>
                   <span className="font-mono">{tc.id}</span> {tc.name}
                 </button>
               ))}
@@ -138,7 +138,7 @@ export default function TracePage() {
 
           {/* 选中用例详情 */}
           {activeTc && (
-            <div className="mt-3 p-3 rounded-lg border border-indigo-200 bg-indigo-50/50 grid grid-cols-4 gap-3">
+            <div className="mt-3 p-3 rounded-lg border border-emerald-200 bg-emerald-50/50 grid grid-cols-4 gap-3">
               <div className="flex items-center gap-2">
                 <ResultIcon kind={RESULT_BADGE[activeTc.result]?.icon ?? 'pass'} />
                 <div>
@@ -147,21 +147,21 @@ export default function TracePage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Camera className="w-3.5 h-3.5 text-indigo-400" />
+                <Camera className="w-3.5 h-3.5 text-emerald-500" />
                 <div>
                   <div className="text-[10px] text-slate-500">证据数</div>
                   <div className="text-xs font-semibold text-slate-700">{activeTc.evidence} 份</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Wallet className="w-3.5 h-3.5 text-indigo-400" />
+                <Wallet className="w-3.5 h-3.5 text-emerald-500" />
                 <div>
                   <div className="text-[10px] text-slate-500">执行成本</div>
                   <div className="text-xs font-semibold text-slate-700">¥{activeTc.cost}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Gauge className="w-3.5 h-3.5 text-indigo-400" />
+                <Gauge className="w-3.5 h-3.5 text-emerald-500" />
                 <div>
                   <div className="text-[10px] text-slate-500">断言强度 / 变异</div>
                   <div className="text-xs font-semibold text-slate-700">{activeTc.assertion} · {activeTc.mutation}%</div>
@@ -180,7 +180,7 @@ export default function TracePage() {
                 <span className="text-slate-300">→</span>
                 <span className="font-mono text-slate-500 w-32">{r.tp}</span>
                 <span className="text-slate-300">→</span>
-                <span className="font-mono text-indigo-500">{r.tc}</span>
+                <span className="font-mono text-emerald-600">{r.tc}</span>
                 <span className={'ml-auto ' + r.color}>{r.status}</span>
               </div>
             ))}
@@ -218,8 +218,8 @@ export default function TracePage() {
             {rows.map((r) => (
               <tr key={r.id}
                 onClick={() => { setActiveReq(r.id); setActiveTcId(TRACE_CHAINS[r.id]?.tcs[0]?.id ?? null); }}
-                className={(activeReq === r.id ? 'bg-indigo-50/60 ' : '') + (r.traceability === '缺口' ? 'bg-red-50/40 ' : 'hover:bg-slate-50 ') + 'cursor-pointer'}>
-                <td className={'px-4 py-3 font-mono text-xs font-medium ' + (r.traceability === '缺口' ? 'text-red-600' : 'text-indigo-600')}>{r.id}</td>
+                className={(activeReq === r.id ? 'bg-emerald-50/60 ' : '') + (r.traceability === '缺口' ? 'bg-red-50/40 ' : 'hover:bg-slate-50 ') + 'cursor-pointer'}>
+                <td className={'px-4 py-3 font-mono text-xs font-medium ' + (r.traceability === '缺口' ? 'text-red-600' : 'text-emerald-700')}>{r.id}</td>
                 <td className="px-4 py-3 text-slate-700">{r.title}</td>
                 <td className="px-4 py-3">
                   <span className="font-mono text-[10px] bg-slate-50 border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded">{GEN_BATCH[r.id]}</span>

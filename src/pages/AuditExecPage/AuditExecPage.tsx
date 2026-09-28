@@ -45,7 +45,7 @@ export default function AuditExecPage() {
           <div className="mt-1 text-[11px] text-slate-400">关联 12 条存量用例成本</div>
         </div>
         <div className="card bg-white rounded-xl border border-slate-200 p-4">
-          <div className="flex items-center justify-between mb-2"><span className="text-xs text-slate-500">平均耗时</span><Timer className="w-4 h-4 text-indigo-500" /></div>
+          <div className="flex items-center justify-between mb-2"><span className="text-xs text-slate-500">平均耗时</span><Timer className="w-4 h-4 text-emerald-600" /></div>
           <div className="text-2xl font-bold text-slate-800">{avg}<span className="text-sm font-normal text-slate-400">s</span></div>
           <div className="mt-1 text-[11px] text-slate-400">移动端耗时更高</div>
         </div>
@@ -103,7 +103,7 @@ export default function AuditExecPage() {
           <tbody className="divide-y divide-slate-100">
             {filtered.map((r) => (
               <tr key={r.caseId + r.ts} className="hover:bg-slate-50">
-                <td className="px-4 py-3 font-mono text-indigo-600 font-medium">{r.caseId}</td>
+                <td className="px-4 py-3 font-mono text-emerald-700 font-medium">{r.caseId}</td>
                 <td className="px-4 py-3"><span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">{r.asset}</span></td>
                 <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-[10px] ${RESULT_BADGE[r.result]}`}>{r.result}</span></td>
                 <td className="px-4 py-3 font-mono text-slate-500">{r.duration}</td>

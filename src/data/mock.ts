@@ -914,7 +914,7 @@ export type AssetPerm = 'full' | 'edit' | 'exec' | 'view' | 'none';
 export const ASSET_PERM_META: { perm: AssetPerm; label: string; desc: string; color: string }[] = [
   { perm: 'full', label: '完整', desc: '等同于负责人，可再分配权限与资源', color: 'text-purple-600 bg-purple-50' },
   { perm: 'edit', label: '编辑', desc: '创建/修改用例与门禁判定', color: 'text-emerald-600 bg-emerald-50' },
-  { perm: 'exec', label: '执行', desc: '运行用例、查看执行证据', color: 'text-indigo-600 bg-indigo-50' },
+  { perm: 'exec', label: '执行', desc: '运行用例、查看执行证据', color: 'text-emerald-700 bg-emerald-50' },
   { perm: 'view', label: '只读', desc: '仅查看该被测对象结果与审计', color: 'text-slate-500 bg-slate-100' },
   { perm: 'none', label: '无权限', desc: '对该被测对象不可见、不可操作', color: 'text-red-500 bg-red-50' },
 ];
