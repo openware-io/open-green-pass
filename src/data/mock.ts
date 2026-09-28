@@ -733,10 +733,16 @@ export const METRICS: IDashboardMetric[] = (() => {
   const contractPass = CONTRACTS.filter((c) => c.status === 'pass').length;
   const contractTotal = CONTRACTS.length;
 
+  // 门禁通过率：从被测对象树（ASSET_TREE）叶子派生，口径=门禁通过对象/叶子对象数（替代已删除的 GATE_RULES 全局量；ASSET_TREE 定义在本指标之前，可安全引用）
+  const leaves = (function walk(n: IAssetNode): IAssetNode[] { const ch = n.children ?? []; return ch.length ? ch.flatMap(walk) : [n]; })(ASSET_TREE);
+  const gateTotal = leaves.length;
+  const gatePass = leaves.filter((n) => n.gateRate >= 85).length;
+  const gateBlock = gateTotal - gatePass;
+
   return [
     { label: '需求覆盖率', value: pct(coveredReq, totalReq), suffix: '%', color: coveredReq === totalReq ? 'success' : 'warning', note: `${coveredReq} / ${totalReq} 需求已覆盖` },
     { label: '用例有效率', value: pct(effective, mutations.length), suffix: '%', color: 'primary', note: '变异测试验证通过率' },
-    { label: '门禁通过率', value: pct(GATE_PASS, GATE_TOTAL), suffix: '%', color: GATE_BLOCK > 0 ? 'warning' : 'success', note: `通过 ${GATE_PASS} · 阻断 ${GATE_BLOCK}` },
+    { label: '门禁通过率', value: pct(gatePass, gateTotal), suffix: '%', color: gateBlock > 0 ? 'warning' : 'success', note: `通过 ${gatePass} · 阻断 ${gateBlock}` },
     { label: '契约测试通过率', value: pct(contractPass, contractTotal), suffix: '%', color: contractPass === contractTotal ? 'success' : 'warning', note: `${contractPass} / ${contractTotal} 契约通过` },
     { label: '追溯完整率', value: pct(fullTrace, totalReq), suffix: '%', color: fullTrace === totalReq ? 'success' : 'warning', note: `${fullTrace} / ${totalReq} 需求完整追溯` },
   ];
