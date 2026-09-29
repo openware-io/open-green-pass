@@ -30,7 +30,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	// 治理域依赖组装（被测对象树）
+	// 治理域依赖组装（被测对象树 + 用例版本化）
 	gen, err := id.New(1, nil)
 	if err != nil {
 		log.Error("id generator init failed", "err", err)
@@ -39,12 +39,15 @@ func main() {
 	db := infra.NewDB(pool)
 	store := infra.NewTargetStore(db, gen)
 	treeSvc := application.NewTargetTreeService(store, gen)
+	caseStore := infra.NewCaseStore(db, gen)
+	caseSvc := application.NewCaseService(caseStore, gen)
 
 	addr := cfg.Addr
 	srv := &http.Server{
 		Addr: addr,
 		Handler: gateway.NewRouter(log,
 			func(mux *http.ServeMux) { gapi.Register(mux, treeSvc) },
+			func(mux *http.ServeMux) { gapi.RegisterCases(mux, caseSvc) },
 		),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,

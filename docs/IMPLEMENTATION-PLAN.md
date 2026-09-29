@@ -193,7 +193,7 @@ jobs:
 - 迁移 up + `make migcheck` 通过；RLS：跨 team 查询返回空。
 - httptest：`POST /targets/{id}/repo` 成功；`GET /targets` 树正确。
 
-### GP1-02 用例版本化（governance）
+### GP1-02 用例版本化（governance）✅ 已交付（待提交）
 **实施步骤**
 1. 迁移 `000003_case.up.sql`：`cas_case`/`cas_version`（`change_type`/`source_repo_id`/`source_branch`/`script_json` + `current_version`）+ RLS。
 2. governance/domain：`Case` 聚合（`CreateVersion`/`MarkChange`/`RollbackTo`）+ `CaseRepository`（`SaveVersion`/`FindVersion`/`History`/`Rollback`）。

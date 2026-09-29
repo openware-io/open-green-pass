@@ -2,7 +2,11 @@
 // 本域负责被测对象资产建模、用例生命周期、门禁规则（零三方依赖，见 ENGINEERING-SPEC §8）。
 package domain
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+	"time"
+)
 
 // TargetNodeType 被测对象树节点类型（层级规范，见 PRD §被测对象）。
 type TargetNodeType string
@@ -145,3 +149,63 @@ type ChildrenFilter struct {
 	Type     TargetNodeType
 }
 
+
+
+// ========= GP1-02 用例版本化（变化可辨 + 来源可溯源）=========
+
+// ChangeType 用例版本变化类型（随迭代可辨新增/更新/删除/回退）。
+type ChangeType string
+
+const (
+	ChangeAdded    ChangeType = "added"    // 新增（初始版本）
+	ChangeUpdated  ChangeType = "updated"  // 更新（内容变更）
+	ChangeDeleted  ChangeType = "deleted"  // 删除（标记，保留历史）
+	ChangeRollback ChangeType = "rollback" // 回退（内容指向旧版本，非物理删）
+)
+
+// Case 测试用例（版本化主体，cas_case）。
+type Case struct {
+	ID             int64
+	TeamID         int64
+	TargetID       int64  // 归属被测对象节点（服务/模块）
+	Code           string // 用例编号（按树命名空间稳定，如 im-saas-gw-001）
+	Title          string
+	Kind           string // 场景族：api/web/ui/contract/perf/mobile/weaknet/ai...
+	CurrentVersion int    // 当前生效版本号
+	Status         string // active / archived / deleted
+	CreatedBy      int64  // 创建人（操作审计）
+}
+
+// CaseVersion 用例版本（只增不改；回退=新增指向旧内容的新版本）。
+type CaseVersion struct {
+	ID            int64
+	TeamID        int64 // RLS 租户列
+	CaseID        int64
+	Version       int
+	ChangeType    ChangeType
+	SourceRepoID  *int64            // 来源仓库（可溯源）
+	SourceBranch  *string           // 来源分支（可溯源）
+	ScriptJSON    *json.RawMessage  // 脚本/HTTP/规则/压测 + 参数/数据/断言
+	ApprovedBy    *int64
+	ApprovedAt    *time.Time
+	CreatedBy     int64
+	CreatedAt     time.Time
+}
+
+// CaseFilter 用例查询筛选。
+type CaseFilter struct {
+	TargetID *int64 // 按被测对象节点
+	Kind     string // 按场景族
+	Code     string // 按编号模糊
+	Status   string // 按状态
+}
+
+// CaseRepository 用例仓储端口（实现位于 infra，RLS 由实现注入租户）。
+type CaseRepository interface {
+	SaveCase(ctx context.Context, c *Case) error
+	SaveVersion(ctx context.Context, v *CaseVersion) error
+	FindCase(ctx context.Context, teamID, id int64) (*Case, error)
+	FindVersion(ctx context.Context, teamID, caseID int64, version int) (*CaseVersion, error)
+	ListCases(ctx context.Context, teamID int64, f CaseFilter) ([]*Case, error)
+	History(ctx context.Context, teamID, caseID int64) ([]*CaseVersion, error)
+}
