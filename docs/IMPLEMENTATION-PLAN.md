@@ -179,7 +179,7 @@ jobs:
 
 > 目标：一个被测对象（im saas）跑通「绑仓库 → 版本校验 → 生成用例(带 change) → 执行 1 个 API 用例 → 证据 → 门禁 → 报告 → 成本可下钻对比」。**口径自洽为硬验收**。P1 在 P0 验收后执行；依赖 P0 端口契约与 pkg 基础包（id/hashchain）。
 
-### GP1-01 被测对象树 + 仓库绑定（governance）
+### GP1-01 被测对象树 + 仓库绑定（governance）✅ 已交付（9527d39）
 **实施步骤**
 1. 迁移 `000002_target_repo.up.sql`：建 `tgt_target`（L0 工程/L1 服务组/L2 服务/L3 模块）+ `repo_repo`/`repo_branch`（DDL 见 TECH-DESIGN §9.3）+ 启用 RLS。
 2. governance/domain：`Target` 聚合（`AttachRepo`/`SetModelBinding`/`ResolveVersionChain`）+ `TargetRepository` 端口实现（PO 在 infra）。
