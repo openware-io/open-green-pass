@@ -259,7 +259,7 @@ jobs:
 > 定位：从单 API 场景扩展到 12 类异构场景 + 完整调度器 + 水平扩展（§10）。每项 DoD 用 `make check` + 集成测试验证。
 
 - **GP2-01 异构执行引擎抽象 + 场景接入**：执行器抽象（`Runner` 接口）扩展——Playwright 浏览器集群（Web E2E/视觉/性能）、STF 真机池（移动/兼容/弱网）、k6/Locust（压测）；每场景注册 `resource` 类型与 Runner。关键文件：`execution/infra/runner/{playwright,stf,k6}.go`、`deploy/k8s/gp-runner`（浏览器/真机/压测节点）、`res_quota` 资源类型扩展。验证：各 Runner 单测+集成；场景闭环（用例→执行→证据→门禁）。
-- **GP2-02 完整 W2 迁移到 Temporal**：执行流水线全量迁 Temporal Workflow（VersionCheck→AcquireResources→Dispatch→Collect→Gate→Cost→Report）；`cmd/worker` 注册 W2 多实例。关键文件：`internal/execution/workflow/execute_run.go`。验证：workflow 测试 + 暂停/恢复/重试 + 崩溃恢复。
+- **GP2-02 完整 W2 迁移到 Temporal ✅ 已交付（执行链纳入 Temporal 编排）**：执行流水线全量迁 Temporal Workflow（VersionCheck→AcquireResources→Dispatch→Collect→Gate→Cost→Report）；`cmd/worker` 注册 W2 多实例。关键文件：`internal/execution/workflow/execute_run.go`。验证：workflow 测试 + 暂停/恢复/重试 + 崩溃恢复。
 - **GP2-03 多级配额 + 公平队列（Redis Streams CG + 原子 Lua + WFQ）**：租户→工程→负责人三级配额；单团队不拖垮全局（§8.2/§10.4）。关键文件：`execution/infra/quota/{redis_quota.go,fairqueue.go}`（Lua 原子扣减）。验证：并发扣减原子；WFQ 公平；占满配额不影响他团队。
 - **GP2-04 冲突检测 + Pause/Resume**：资源互斥冲突检测 + 用户暂停全部/恢复全部（Signal）。验证：暂停挂起、恢复继续；冲突上报审计。
 - **GP2-05 截图开关策略下发 ✅ 已交付**：服务级截图开关按对象策略下发（防高并发性能开销，PRD R-TEST-13）。验证：策略生效；无截图场景证据=日志+hash。
