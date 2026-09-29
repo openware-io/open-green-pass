@@ -1,0 +1,11 @@
+# GP0-03 命名空间：gp（服务）与 gp-runner（执行沙箱）。
+# 与 im saas 软隔离（同 kind 集群、不同 ns/网段），im-saas 绝不动。
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gp
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gp-runner
