@@ -69,3 +69,8 @@ dev.err.log
 
 # Design drafts (intermediate)
 design/
+
+# kind-forward.ps1 运行时 PID 状态文件
+*.pids
+scripts/dev/.gp-portforward.pids
+
