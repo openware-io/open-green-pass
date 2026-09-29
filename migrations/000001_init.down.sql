@@ -1,0 +1,5 @@
+-- GP0-04 迁移回滚：撤销基线
+DROP TABLE IF EXISTS tnt_team;
+DROP FUNCTION IF EXISTS gp.set_audit();
+DROP FUNCTION IF EXISTS gp.set_tenant();
+DROP SCHEMA IF EXISTS gp;

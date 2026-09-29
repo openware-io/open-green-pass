@@ -24,6 +24,7 @@
 - 图标：lucide-react
 - 路由：react-router-dom（**HashRouter**，兼容 `file://` 静态打开）
 - 提示：sonner（`<Toaster/>`）
+- 后端技术栈（规划）：Go + Temporal + PostgreSQL(RLS 多租户) + TimescaleDB + Redis + S3/MinIO，详见后端服务仓库 [`./docs/TECH-DESIGN.md`](./docs/TECH-DESIGN.md) 与 [`./docs/ENGINEERING-SPEC.md`](./docs/ENGINEERING-SPEC.md)
 
 ## 功能页面
 
@@ -58,7 +59,11 @@ src/
 └── data/
     └── mock.ts         # 单一数据源（含 assetToProfile 资产联动画像派生）
 docs/
-└── PRD.md              # 产品需求文档（随原型迭代同步更新）
+├── PRD.md                # 产品需求文档（随原型迭代同步更新）
+└── DESIGN-SPEC.md        # UI / 交互设计规范（设计 token + 状态语义）
+├── ENGINEERING-SPEC.md   # Go 后端全量工程规范（模块边界 / 依赖 / 门禁 / DB / 测试 / CI）
+├── TECH-DESIGN.md        # 技术方案与技术栈选型（Go + Temporal，可执行稿）
+└── IMPLEMENTATION-PLAN.md # 实施执行方案（P0 脚手架 / P1 最小闭环 · 照单执行）
 dist/
 └── GreenPass-standalone.html   # 可独立打开的单文件原型（内联 CSS/JS）
 ```
@@ -88,7 +93,7 @@ npm run lint:eslint    # eslint src
 ## 说明
 
 - 原型阶段**不做后端业务**，所有交互（重新判定、搜索、成员/模型配置、资产联动）均为前端 mock 反馈。
-- 产品需求文档见 [`docs/PRD.md`](./docs/PRD.md)。
+- 产品需求文档见 [`docs/PRD.md`](./docs/PRD.md)、设计规范 [`docs/DESIGN-SPEC.md`](./docs/DESIGN-SPEC.md)；后端技术方案/工程规范/执行方案见后端服务仓库 [`./docs/`](./docs/)。
 - 开源许可：[MIT](./LICENSE)。
 
 ---

@@ -2,6 +2,15 @@
 
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
+## [v1.8.2] - 2026-09-29
+- **执行方案全阶段可执行（v0.3）**：P1 细化到实现级（GP1-01~08 含实施步骤/关键文件/验证，im saas 首个 SUT 闭环）；P2–P4 从执行纲要细化为任务级施工图（GP2-01~08 异构执行+调度+扩展 / GP3-01~07 AI 治理+W1 / GP4-01~06 平台化）；确认点调整（P2–P4 按图执行，阶段 DoD→用户验收）。## [v1.8.1] - 2026-09-29
+- **实施执行方案**：新增后端服务仓库 [`./docs/IMPLEMENTATION-PLAN.md`](./docs/IMPLEMENTATION-PLAN.md) v0.2（实现级）——基于 ENGINEERING-SPEC 约束细化到「照单执行」：P0 工程骨架（GP0-01~09，实现级）+ P1 最小闭环（GP1-01~08，im saas 为首个 SUT，模块级）+ P2–P4 执行纲要；每项含实施步骤/关键文件/验收，每阶段含完成定义（DoD）；本地软隔离（ns: gp + gp-runner）且不动 im-saas；宿主机端口避让；不使用 docker 部署形式调试。后端文档统一归入 `./docs/`。
+
+## [v1.8.0] - 2026-09-29
+- **技术方案定稿（可执行）**：新增后端服务仓库 [`./docs/TECH-DESIGN.md`](./docs/TECH-DESIGN.md) v1.0 可执行稿——技术栈 **Go + Temporal**（主后端 + 工作流编排），补齐工程骨架 / 领域包结构 / DDL 级数据模型(RLS 多租户 + TimescaleDB + 审计哈希链 + 成本明细) / Temporal 工作流与 Activity 划分 / API 接口清单 / 成本审计数据流(requestId 贯穿、总览=Σ明细) / 报告服务端渲染链路 / 前端整合 DESIGN-SPEC / 自身 CI/CD 对接 / P0–P4 里程碑。
+- **后端全量工程规范**：新增后端服务仓库 [`./docs/ENGINEERING-SPEC.md`](./docs/ENGINEERING-SPEC.md) v1.0——参考 open-im-server Java 工程治理骨架，按 Go 技术栈改写（cmd/internal 拓扑、四域限界上下文、domain 零三方依赖、slog+OTel 日志、Makefile 统一门禁、PG 表前缀登记、golang-migrate 只增不改、分层测试、发布与 CI）。
+- **文档归属调整**：后端 Go 工程与技术方案文档统一归入后端服务仓库 `./docs/`；`open-green-pass` 仅保留原型 + 产品（PRD）/ 设计（DESIGN-SPEC）文档。
+
 ## [v1.7.6] - 2026-09-27
 - **术语规范**：全平台「资产 / 资产树 / 资产库」统一为测试领域规范术语「被测对象 / 被测对象树 / 被测对象库」（SUT）。
 - **被测对象层级定义**：被测工程 → 被测服务组 / 被测服务 → 被测模块 → 被测应用 / 被测端。

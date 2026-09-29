@@ -7,15 +7,45 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  lint-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+
+      - uses: actions/setup-go@v5
         with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run lint:eslint
-      - run: npm run build
+          go-version: "1.24"
+          cache: true
+
+      - name: 格式化检查 (gofumpt)
+        run: |
+          go install mvdan.cc/gofumpt@v0.12.0
+          test -z "$(gofumpt -l ./cmd ./internal ./pkg ./test)"
+
+      - name: 静态检查 (go vet)
+        run: go vet ./cmd/... ./internal/... ./pkg/...
+
+      - name: 静态检查 (staticcheck)
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
+          staticcheck ./cmd/... ./internal/... ./pkg/...
+
+      - name: 依赖边界与代码规范 (golangci-lint)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64
+          args: run ./cmd/... ./internal/... ./pkg/...
+
+      - name: 单元测试 (race)
+        run: go test -race ./cmd/... ./internal/... ./pkg/...
+
+      - name: 编译
+        run: go build ./cmd/... ./internal/... ./pkg/...
+
+      - name: 漏洞扫描 (govulncheck)
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./cmd/... ./internal/... ./pkg/...
+
+      - name: 迁移规范校验 (migcheck)
+        run: bash ./scripts/validate/validate-migrations.sh
