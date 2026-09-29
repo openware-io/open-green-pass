@@ -42,8 +42,10 @@ func newTrustedHandler(t *testing.T) http.Handler {
 	gateSvc := tapp.NewGateService(gateStore, auditSvc, statReader, gen)
 	costStore := tinfra.NewCostStore(dbb, gen)
 	costSvc := tapp.NewCostService(costStore, auditSvc, gen)
+	reportStore := tinfra.NewReportStore(dbb, gen)
+	reportSvc, _ := tapp.NewReportService(statReader, costStore, gateStore, reportStore, gen)
 	return gateway.NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)),
-		func(mux *http.ServeMux) { Register(mux, gateSvc, auditSvc, costSvc) })
+		func(mux *http.ServeMux) { Register(mux, gateSvc, auditSvc, costSvc, reportSvc) })
 }
 
 // seedRun 直接造一条 run + 一条用例结果（幂等：随机 run_id；同一事务 set tenant 供触发器/RLS）。

@@ -64,6 +64,12 @@ func main() {
 	gateSvc := tapp.NewGateService(gateStore, auditSvc, statReader, gen)
 	costStore := tinfra.NewCostStore(db, gen)
 	costSvc := tapp.NewCostService(costStore, auditSvc, gen)
+	reportStore := tinfra.NewReportStore(db, gen)
+	reportSvc, err := tapp.NewReportService(statReader, costStore, gateStore, reportStore, gen)
+	if err != nil {
+		log.Error("init report service", "error", err)
+		panic(err)
+	}
 
 	addr := cfg.Addr
 	srv := &http.Server{
@@ -72,7 +78,7 @@ func main() {
 			func(mux *http.ServeMux) { gapi.Register(mux, treeSvc) },
 			func(mux *http.ServeMux) { gapi.RegisterCases(mux, caseSvc) },
 			func(mux *http.ServeMux) { eapi.Register(mux, envSvc, runSvc) },
-			func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc, costSvc) },
+			func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc, costSvc, reportSvc) },
 		),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,

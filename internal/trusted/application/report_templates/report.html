@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>{{.Title}} — GreenPass 测试报告</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; margin: 24px 32px; color: #1f2328; background:#fff; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .meta { color: #656d76; font-size: 13px; margin-bottom: 16px; }
+  .badge { display: inline-block; padding: 3px 12px; border-radius: 999px; color: #fff; font-size: 12px; font-weight: 600; }
+  .pass { background: #10a37f; }
+  .fail { background: #d1242f; }
+  .blocked { background: #b08800; }
+  h2 { font-size: 16px; border-bottom: 1px solid #e6e6e6; padding-bottom: 6px; margin: 20px 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #eef0f2; }
+  th { background: #f6f8fa; color: #57606a; }
+  .st-pass { color: #10a37f; font-weight: 600; }
+  .st-fail { color: #d1242f; font-weight: 600; }
+  .summary-cards { display: flex; gap: 16px; }
+  .card { flex: 1; border: 1px solid #e6e6e6; border-radius: 8px; padding: 12px 16px; }
+  .card .num { font-size: 24px; font-weight: 700; }
+  .card .lbl { font-size: 12px; color: #656d76; }
+  pre { background:#f6f8fa; padding:8px; border-radius:6px; font-size:12px; overflow:auto; }
+</style>
+</head>
+<body>
+  <h1>{{.Title}}</h1>
+  <div class="meta">
+    报告粒度：{{.Kind}} · 运行ID：{{.RunID}} · 环境：{{.Head.Env}} · 版本：{{.Head.Version}} · 分支：{{.Head.Branch}} · 场景：{{.Head.ScenarioID}}
+    · 状态：<span class="badge {{.Status}}">{{.Status}}</span>
+    · 生成时间：{{.CreatedAt.Format "2006-01-02 15:04:05"}}
+  </div>
+
+  <div class="summary-cards">
+    <div class="card"><div class="num">{{.Summary.Total}}</div><div class="lbl">用例总数</div></div>
+    <div class="card"><div class="num" style="color:#10a37f">{{.Summary.Pass}}</div><div class="lbl">通过</div></div>
+    <div class="card"><div class="num" style="color:#d1242f">{{.Summary.Fail}}</div><div class="lbl">失败</div></div>
+    <div class="card"><div class="num">{{printf "%.4f" .Summary.CostTotal}}</div><div class="lbl">执行成本（元）</div></div>
+    <div class="card"><div class="num">{{.Summary.Tokens}}</div><div class="lbl">Token 总量</div></div>
+  </div>
+
+  <h2>门禁判定</h2>
+  {{if .Gates}}
+  <table>
+    <tr><th>判定</th><th>规则</th><th>判定时间</th><th>详情</th></tr>
+    {{range .Gates}}
+    <tr>
+      <td><span class="badge {{.Result}}">{{.Result}}</span></td>
+      <td>{{.RuleID}}</td>
+      <td>{{.DecidedAt.Format "2006-01-02 15:04:05"}}</td>
+      <td><pre>{{printf "%s" .DetailJSON}}</pre></td>
+    </tr>
+    {{end}}
+  </table>
+  {{else}}<p style="color:#656d76">该运行尚未产生门禁判定。</p>{{end}}
+
+  <h2>用例执行明细</h2>
+  <table>
+    <tr><th>用例</th><th>类型</th><th>attempt</th><th>状态</th><th>证据</th><th>tokens</th><th>成本(元)</th></tr>
+    {{range .Cases}}
+    <tr>
+      <td>{{.CaseCode}} <span style="color:#8b949e">#{{.CaseID}}</span></td>
+      <td>{{.Kind}}</td>
+      <td>{{.Attempt}}</td>
+      <td><span class="st-{{.Status}}">{{.Status}}</span></td>
+      <td>{{.EvidenceNote}}</td>
+      <td>{{.Tokens}}</td>
+      <td>{{printf "%.4f" .Cost}}</td>
+    </tr>
+    {{else}}
+    <tr><td colspan="7" style="color:#656d76">无用例执行记录。</td></tr>
+    {{end}}
+  </table>
+
+  <h2>审计与证据</h2>
+  <p style="color:#656d76;font-size:12px">
+    本报告由 GreenPass 生成，证据与执行数据可回溯至对应运行（run_id）与审计哈希链。
+    证据哈希标注见各用例详情；跨场景报告合编预留（P2）。
+  </p>
+</body>
+</html>

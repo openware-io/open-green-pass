@@ -234,7 +234,7 @@ jobs:
 4. api：`GET /cost/overview`（总览=Σ明细，按团队/对象/大类）、`GET /cost/items`（生成/执行分大类）、`GET /cost/compare/{caseId}`（历史对比）。
 **验证**：总览=Σ明细；幂等键防重复（同 `request_id` 不双计）；历史对比显示存量成本持平/递减；`make check` 全绿。
 
-### GP1-07 报告（HTML）
+### GP1-07 报告（HTML）✅ 已交付
 **实施步骤**
 1. 迁移 `000008_report.up.sql`：`rpt_report`（`kind: project/service/case`）+ RLS。
 2. trusted/domain：`Report` + `ReportRepository`；服务端 HTML 模板（`internal/trusted/.../report/templates` 用 `go:embed` 打包）。

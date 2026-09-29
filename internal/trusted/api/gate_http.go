@@ -13,14 +13,15 @@ import (
 )
 
 type gateHandler struct {
-	gate  *application.GateService
-	audit *application.AuditService
-	cost  *application.CostService
+	gate   *application.GateService
+	audit  *application.AuditService
+	cost   *application.CostService
+	report *application.ReportService
 }
 
-// Register 注册可信域路由（门禁 + 审计 + 成本）。
-func Register(mux *http.ServeMux, gate *application.GateService, audit *application.AuditService, cost *application.CostService) {
-	h := &gateHandler{gate: gate, audit: audit, cost: cost}
+// Register 注册可信域路由（门禁 + 审计 + 成本 + 报告）。
+func Register(mux *http.ServeMux, gate *application.GateService, audit *application.AuditService, cost *application.CostService, report *application.ReportService) {
+	h := &gateHandler{gate: gate, audit: audit, cost: cost, report: report}
 	mux.HandleFunc("PUT /gates/rules", h.upsertRule)
 	mux.HandleFunc("POST /gates/evaluate", h.evaluate)
 	mux.HandleFunc("GET /gates/results", h.resultsByRun)
@@ -29,6 +30,9 @@ func Register(mux *http.ServeMux, gate *application.GateService, audit *applicat
 	mux.HandleFunc("GET /cost/overview", h.costOverview)
 	mux.HandleFunc("GET /cost/items", h.costItems)
 	mux.HandleFunc("GET /cost/compare/{caseId}", h.costCompare)
+	// 报告
+	mux.HandleFunc("POST /reports/generate", h.generateReport)
+	mux.HandleFunc("GET /reports/{id}/export", h.exportReport)
 }
 
 // upsertRuleRequest 装载门禁规则请求。

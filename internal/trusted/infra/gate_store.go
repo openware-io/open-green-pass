@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -152,6 +153,73 @@ func (r *RunStatReader) RunMeta(ctx context.Context, teamID, runID int64) (int64
 		return 0, 0, domain.ErrRunNotFound
 	}
 	return targetID, scenarioID, err
+}
+
+// RunHead 读取运行头信息（环境/版本/分支/模式/状态），供报告。
+func (r *RunStatReader) RunHead(ctx context.Context, teamID, runID int64) (*domain.RunHead, error) {
+	var h domain.RunHead
+	err := r.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		var started, ended *time.Time
+		err := tx.QueryRow(ctx, `
+			SELECT target_id, scenario_id, COALESCE(env,''), COALESCE(target_version,''), COALESCE(target_branch,''), COALESCE(run_mode,''), state,
+			       started_at, ended_at
+			FROM run_run WHERE team_id=$1 AND id=$2`, teamID, runID).
+			Scan(&h.TargetID, &h.ScenarioID, &h.Env, &h.Version, &h.Branch, &h.RunMode, &h.State, &started, &ended)
+		if started != nil {
+			h.StartedAt = *started
+		}
+		if ended != nil {
+			h.EndedAt = *ended
+		}
+		return err
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ErrRunNotFound
+	}
+	return &h, err
+}
+
+func (r *RunStatReader) CaseResults(ctx context.Context, teamID, runID int64) ([]*domain.CaseResult, error) {
+	var out []*domain.CaseResult
+	err := r.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT r.case_id, c.code, COALESCE(c.kind,''), r.status, r.attempt_seq,
+			       r.evidence_ref, r.ai_tokens_in, r.ai_tokens_out, r.cost_amount,
+			       r.started_at, r.ended_at
+			FROM run_case_result r
+			LEFT JOIN cas_case c ON c.id = r.case_id AND c.team_id = r.team_id
+			WHERE r.team_id=$1 AND r.run_id=$2 AND r.attempt_seq = (
+				SELECT max(attempt_seq) FROM run_case_result x WHERE x.run_id=r.run_id AND x.case_id=r.case_id
+			)`, teamID, runID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var cr domain.CaseResult
+			var ev []byte
+			var cost float64
+			var tokensIn, tokensOut int64
+			var started, ended *time.Time
+			if err := rows.Scan(&cr.CaseID, &cr.CaseCode, &cr.Kind, &cr.Status, &cr.Attempt,
+				&ev, &tokensIn, &tokensOut, &cost, &started, &ended); err != nil {
+				return err
+			}
+			cr.TokensIn, cr.TokensOut, cr.Cost = tokensIn, tokensOut, cost
+			if ev != nil {
+				_ = json.Unmarshal(ev, &cr.Evidence)
+			}
+			if started != nil {
+				cr.StartedAt = *started
+			}
+			if ended != nil {
+				cr.EndedAt = *ended
+			}
+			out = append(out, &cr)
+		}
+		return rows.Err()
+	})
+	return out, err
 }
 
 // CaseStats 统计运行内各用例最新 attempt 的总数/通过/失败。

@@ -66,4 +66,27 @@ type GatePort interface {
 type RunStatPort interface {
 	RunMeta(ctx context.Context, teamID, runID int64) (targetID, scenarioID int64, err error)
 	CaseStats(ctx context.Context, teamID, runID int64) (total, pass, fail int64, err error)
+	RunHead(ctx context.Context, teamID, runID int64) (*RunHead, error)
+	CaseResults(ctx context.Context, teamID, runID int64) ([]*CaseResult, error)
+}
+
+// RunHead 运行头信息（报告聚合用）。
+type RunHead struct {
+	TargetID, ScenarioID int64
+	Env, Version, Branch, RunMode, State string
+	StartedAt, EndedAt                   time.Time
+}
+
+// CaseResult 用例执行结果（报告聚合用，最新 attempt）。
+type CaseResult struct {
+	CaseID   int64
+	CaseCode string
+	Kind     string
+	Status   string
+	Attempt  int
+	Evidence map[string]any
+	TokensIn int64
+	TokensOut int64
+	Cost     float64
+	StartedAt, EndedAt time.Time
 }
