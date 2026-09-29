@@ -38,3 +38,10 @@ const SetTenantStmt = "SELECT set_config('gp.team_id', $1::text, false)"
 
 // SetUserStmt 在单个 DB 会话上设置操作人（审计 user_id）的语句。参数 1: user_id (int64)。
 const SetUserStmt = "SELECT set_config('gp.user_id', $1::text, false)"
+
+// SetTenantTxStmt 事务级设置租户（set_config 第三参 true = transaction_local，事务结束自动失效，
+// 连接归还池无租户污染；供 infra 在事务内注入 RLS 租户使用）。
+const SetTenantTxStmt = "SELECT set_config('gp.team_id', $1::text, true)"
+
+// SetUserTxStmt 事务级设置操作人（审计 user_id）。
+const SetUserTxStmt = "SELECT set_config('gp.user_id', $1::text, true)"

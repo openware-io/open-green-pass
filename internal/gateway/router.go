@@ -12,12 +12,17 @@ import (
 
 // NewRouter 组装中间件链与基础路由。
 // 中间件顺序（由外到内）：AccessLog -> RequestID -> Tenant -> Auth -> 业务路由。
-func NewRouter(log *slog.Logger) http.Handler {
+// registrars 由各业务域 api 层提供（cmd/server 组装依赖后注入）。
+func NewRouter(log *slog.Logger, registrars ...func(*http.ServeMux)) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+
+	for _, reg := range registrars {
+		reg(mux)
+	}
 
 	var h http.Handler = mux
 	h = middleware.Auth(h)
