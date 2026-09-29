@@ -1,0 +1,34 @@
+# GP0-03 Temporal 部署 values（外部 PostgreSQL 后端，复用 gp 命名空间 gp-postgres）
+# datastores 置于 server.config.persistence（Temporal 原生 config 透传）。
+# 注：server 用 chart 默认 temporalio/server（读 config）；schema 初始化由 chart 的
+#     admin-tools schema job 完成（已建 temporal/temporal_visibility schema）。
+# 端口契约：svc/gp-temporal-frontend -> 宿主机 7233（见 .env / kind-forward.ps1）
+server:
+  config:
+    persistence:
+      defaultStore: default
+      visibilityStore: visibility
+      numHistoryShards: 64
+      datastores:
+        default:
+          sql:
+            pluginName: postgres12
+            driverName: postgres
+            databaseName: temporal
+            connectAddr: "gp-postgres-postgresql.gp.svc.cluster.local:5432"
+            connectProtocol: "tcp"
+            user: gp
+            password: gp
+            maxConns: 20
+            maxIdleConns: 20
+        visibility:
+          sql:
+            pluginName: postgres12
+            driverName: postgres
+            databaseName: temporal_visibility
+            connectAddr: "gp-postgres-postgresql.gp.svc.cluster.local:5432"
+            connectProtocol: "tcp"
+            user: gp
+            password: gp
+            maxConns: 20
+            maxIdleConns: 20
