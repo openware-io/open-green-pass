@@ -226,7 +226,7 @@ jobs:
 4. 判定结果入审计链。
 **验证**：覆盖率不足→`blocked`；满足→`pass`；判定入 `aud_event`；`make check` 全绿。
 
-### GP1-06 成本明细（trusted）——口径单点
+### GP1-06 成本明细（trusted）——口径单点 ✅ 已交付
 **实施步骤**
 1. 迁移 `000007_cost.up.sql`：`cost_line_item`（`biz_category`/`biz_point`/`idempotency_key` + `UNIQUE(idempotency_key)`）+ RLS + `gp_trusted_writer`。
 2. trusted/domain：`CostLineItem` + `CostRepository`（`Insert`/`Summarize`/`CompareHistory`）。
