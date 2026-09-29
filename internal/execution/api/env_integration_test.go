@@ -36,7 +36,7 @@ func newEnvHandler(t *testing.T) http.Handler {
 	store := einfra.NewEnvStore(dbb, gen)
 	svc := application.NewEnvService(store, gen)
 	return gateway.NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)),
-		func(mux *http.ServeMux) { Register(mux, svc) })
+		func(mux *http.ServeMux) { Register(mux, svc, nil) })
 }
 
 func doReq(t *testing.T, h http.Handler, method, path string, team int64, body string) (int, string) {

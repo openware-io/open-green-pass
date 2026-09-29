@@ -45,9 +45,13 @@ func main() {
 	caseStore := infra.NewCaseStore(db, gen)
 	caseSvc := application.NewCaseService(caseStore, gen)
 
-	// 执行域依赖组装（测试环境版本校验）
+	// 执行域依赖组装（版本校验 + 运行编排）
 	envStore := einfra.NewEnvStore(db, gen)
 	envSvc := eapp.NewEnvService(envStore, gen)
+	runStore := einfra.NewRunStore(db, gen)
+	caseReader := einfra.NewCaseReader(db)
+	mockRunner := einfra.NewMockRunner(gen)
+	runSvc := eapp.NewRunService(runStore, envSvc, caseReader, mockRunner, gen)
 
 	addr := cfg.Addr
 	srv := &http.Server{
@@ -55,7 +59,7 @@ func main() {
 		Handler: gateway.NewRouter(log,
 			func(mux *http.ServeMux) { gapi.Register(mux, treeSvc) },
 			func(mux *http.ServeMux) { gapi.RegisterCases(mux, caseSvc) },
-			func(mux *http.ServeMux) { eapi.Register(mux, envSvc) },
+			func(mux *http.ServeMux) { eapi.Register(mux, envSvc, runSvc) },
 		),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,

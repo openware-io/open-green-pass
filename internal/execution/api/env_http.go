@@ -12,12 +12,21 @@ import (
 
 type envHandler struct{ svc *application.EnvService }
 
-// Register 注册执行域版本校验路由。
-func Register(mux *http.ServeMux, svc *application.EnvService) {
-	h := &envHandler{svc: svc}
+// Register 注册执行域路由（版本校验 + 运行编排）。
+func Register(mux *http.ServeMux, envSvc *application.EnvService, runSvc *application.RunService) {
+	h := &envHandler{svc: envSvc}
+	rh := &runHandler{svc: runSvc}
 	mux.HandleFunc("POST /targets/{id}/env/runtime", h.registerRuntime)
 	mux.HandleFunc("POST /targets/{id}/version-check", h.checkVersion)
 	mux.HandleFunc("GET /targets/{id}/version-checks", h.recentChecks)
+	// 运行编排
+	mux.HandleFunc("POST /runs", rh.createRun)
+	mux.HandleFunc("GET /runs/{id}", rh.getRun)
+	mux.HandleFunc("GET /runs/{id}/case-results", rh.caseResults)
+	mux.HandleFunc("POST /runs/{id}/version-check", rh.startVersionCheck)
+	mux.HandleFunc("POST /runs/{id}/execute", rh.executeRun)
+	mux.HandleFunc("POST /runs/{id}/pause", rh.pauseRun)
+	mux.HandleFunc("POST /runs/{id}/resume", rh.resumeRun)
 }
 
 // registerRuntimeRequest 登记环境运行版本请求。
