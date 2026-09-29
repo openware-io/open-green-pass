@@ -24,7 +24,7 @@
 - 图标：lucide-react
 - 路由：react-router-dom（**HashRouter**，兼容 `file://` 静态打开）
 - 提示：sonner（`<Toaster/>`）
-- 后端技术栈（规划）：Go + Temporal + PostgreSQL(RLS 多租户) + TimescaleDB + Redis + S3/MinIO，详见后端服务仓库 [`./docs/TECH-DESIGN.md`](./docs/TECH-DESIGN.md) 与 [`./docs/ENGINEERING-SPEC.md`](./docs/ENGINEERING-SPEC.md)
+- 后端技术栈（规划）：Go + Temporal + PostgreSQL(RLS 多租户) + TimescaleDB + Redis + S3 兼容对象存储(SeaweedFS)，详见后端服务仓库 [`./docs/TECH-DESIGN.md`](./docs/TECH-DESIGN.md) 与 [`./docs/ENGINEERING-SPEC.md`](./docs/ENGINEERING-SPEC.md)
 
 ## 功能页面
 

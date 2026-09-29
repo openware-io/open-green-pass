@@ -14,8 +14,8 @@ $mappings = @(
   @{ Name = "gp-postgres-postgresql"; Ports = "5433:5432" },
   @{ Name = "gp-redis-master";    Ports = "6380:6379" },
   @{ Name = "gp-temporal-frontend"; Ports = "7233:7233" },
-  @{ Name = "gp-temporal-web";    Ports = "8082:8080" }
-  # MinIO 未部署（quay.io 401 未决），装好后追加：gp-minio -> 9100:9000 9101:9001
+  @{ Name = "gp-temporal-web";    Ports = "8082:8080" },
+  @{ Name = "gp-seaweedfs";    Ports = "9100:9000" }
 )
 
 function Write-Forward {

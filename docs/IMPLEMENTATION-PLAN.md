@@ -82,21 +82,20 @@ linters-settings:
 ```
 helm repo add bitnami https://charts.bitnami.com/bitnami && helm install gp-postgres bitnami/postgresql -n gp --set auth.database=gp_,auth.postgresPassword=...
 helm install gp-redis  bitnami/redis          -n gp --set auth.password=...
-helm install gp-minio  minio/minio            -n gp --set rootUser=...,rootPassword=...
+kubectl apply -f deploy/k8s/seaweedfs.yaml    # 对象存储：MinIO 社区版已归档(410 Gone)，改用 S3 兼容 SeaweedFS（svc/gp-seaweedfs，S3 on 9000）
 helm repo add temporalio https://helm.temporal.io && helm install gp-temporal temporalio/temporal -n gp --set server.config.storeProvider.postgres={...}
 ```
-4. 网络/资源隔离：`deploy/k8s/gp-runner-policy.yaml`（NetworkPolicy：仅出向 im-saas 被测服务 + gp MinIO；ResourceQuota + LimitRange 硬顶）。
+4. 网络/资源隔离：`deploy/k8s/gp-runner-policy.yaml`（NetworkPolicy：仅出向 im-saas 被测服务 + gp 对象存储(SeaweedFS)；ResourceQuota + LimitRange 硬顶）。
 **关键文件**
 - `deploy/k8s/namespaces.yaml`：`apiVersion v1 kind Namespace`，name `gp` / `gp-runner`。
-- `deploy/helm/gp/values*.yaml`：各 chart 覆盖（PG 库名 gp_、MinIO 桶、Temporal 指向 gp-postgres）。
+- `deploy/helm/gp/values*.yaml`：各 chart 覆盖（PG 库名 gp_、对象存储桶(SeaweedFS)、Temporal 指向 gp-postgres）。
 **宿主机端口透传（避让 im-saas，见 §0-6）**：
 ```
 kubectl port-forward -n gp svc/gp-postgres-postgresql 5433:5432
 kubectl port-forward -n gp svc/gp-redis-master 6380:6379
 kubectl port-forward -n gp svc/gp-temporal 7233:7233
 kubectl port-forward -n gp svc/gp-temporal-web 8080:8080
-kubectl port-forward -n gp svc/gp-minio 9100:9000
-kubectl port-forward -n gp svc/gp-minio-console 9101:9001
+kubectl port-forward -n gp svc/gp-seaweedfs 9100:9000   # 对象存储 S3（SeaweedFS，无独立 console）
 ```
 `.env`：`DB_HOST=127.0.0.1:5433`、`RedisAddr=127.0.0.1:6380`、`TemporalAddr=127.0.0.1:7233`、`MinIOEndpoint=127.0.0.1:9100`。 建议落 `scripts/dev/kind-forward.ps1`：一次性后台拉起上述 port-forward（含 start/stop/cleanup），避免每次手工 kubectl；端口已避让 im-saas。
 **验证**：`helm ls -n gp` 全 deployed；`kubectl get pods -n gp` ready；`kubectl get ns` 含 im-saas(未动)/gp/gp-runner；NetworkPolicy/Quota 生效；`kubectl get svc -n im-saas` 核对 GP 宿主端口与其错开。

@@ -1,6 +1,6 @@
 # 集成测试基座 (test/)
 
-本目录放置需要**真实基础设施**的集成测试（kind 集群内 PG/Redis/Temporal/MinIO）。
+本目录放置需要**真实基础设施**的集成测试（kind 集群内 PG/Redis/Temporal/对象存储(SeaweedFS)）。
 
 ## 约定
 

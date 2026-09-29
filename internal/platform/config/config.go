@@ -13,7 +13,7 @@ type Config struct {
 	DBDSN         string // PostgreSQL DSN
 	RedisAddr     string
 	TemporalAddr  string
-	MinIOEndpoint string
+	MinIOEndpoint string // S3 兼容对象存储端点（本地 SeaweedFS）
 	MinIOKey      string
 	MinIOSecret   string
 	Env           string // dev / test / prod

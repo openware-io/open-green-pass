@@ -313,7 +313,7 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 
 - `.env` 是版本控制中的共享本地开发基线（映射 im：环境差异用受管环境变量覆盖，生产/共享凭据不入库）；`.env.example` 提供模板。
 - 本地一键调试：GP 组件以 **Helm 部署到 kind 集群内命名空间（ns: gp）**；本地调试 = 直接部署到 kind，或 `go run ./cmd/server` + 依赖经 kind 代理暴露后连接（port-forward / NodePort / ingress-nginx + kind extraPortMappings）。**不使用 docker 部署形态做调试**；`docker-compose` 仅保留给本机 testcontainers（集成测试回退，非首选）。
-- 宿主机透传端口避让同环境既有服务（PG 5433 / Redis 6380 / MinIO 9100+9101 / Temporal 专属 7233+8080）；`.env` 指向宿主机端口。
+- 宿主机透传端口避让同环境既有服务（PG 5433 / Redis 6380 / 对象存储(SeaweedFS) 9100 / Temporal 专属 7233+8080）；`.env` 指向宿主机端口。
 - 调试输出统一 `.outputs/logs/`；禁把临时日志写仓库根。
 - Windows PowerShell 批量改写源码必须显式 UTF-8（禁裸 `Set-Content`/`Out-File` 缺编码）。
 
@@ -324,7 +324,7 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 - **语义化版本 + git tag**：`vX.Y.Z`；发布前跑全量 `make check`；正式镜像用 tag，禁 `image@sha256` 运行时依赖。
 - CI 流水线：`lint+test` → `build` → `govulncheck` → `migcheck` → 镜像构建 → 推送；任一门禁失败不合并。
 - 镜像：多阶段 `Dockerfile`（builder 用固定 toolchain + `CGO_ENABLED=0` 静态二进制 + `go:embed` 打包配置/迁移/前端产物）；私有化可单二进制交付。
-- 部署：Docker/Helm（Temporal/Redis/PG/Timescale/MinIO 内网化）；密钥经 Secret/受管环境注入，禁入库。
+- 部署：Docker/Helm（Temporal/Redis/PG/Timescale/SeaweedFS 内网化）；密钥经 Secret/受管环境注入，禁入库。
 - 发布后验证制品可启动、迁移成功、关键链路可观测；失败制品按策略撤回，不静默覆盖。
 
 ---

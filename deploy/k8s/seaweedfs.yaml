@@ -1,0 +1,63 @@
+# GP0-03 对象存储：MinIO 社区版已归档(410 Gone)，改用 S3 兼容 SeaweedFS（docker.io/chrislusf/seaweedfs 可拉）。
+# 单进程 server 模式（master+volume+filer），-s3 开启 S3 gateway on 9000。
+# 端口契约：svc/gp-seaweedfs -> 宿主机 9100（见 .env GP_MINIO_ENDPOINT 语义=对象存储端点，kind-forward.ps1）
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gp-seaweedfs-data
+  namespace: gp
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gp-seaweedfs
+  namespace: gp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gp-seaweedfs
+  template:
+    metadata:
+      labels:
+        app: gp-seaweedfs
+    spec:
+      containers:
+        - name: seaweedfs
+          image: chrislusf/seaweedfs:latest
+          args:
+            - server
+            - -dir=/data
+            - -s3
+            - -s3.port=9000
+          ports:
+            - containerPort: 9000
+              name: s3
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: gp-seaweedfs-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gp-seaweedfs
+  namespace: gp
+spec:
+  selector:
+    app: gp-seaweedfs
+  ports:
+    - port: 9000
+      targetPort: 9000
+      name: s3
+  type: ClusterIP

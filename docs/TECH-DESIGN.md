@@ -14,7 +14,7 @@
 | 后端语言 | **Go**（执行调度/沙箱/事件流重 IO）为主；业务 CRUD 模块化。备选：Java(Spring Boot) 若团队 Java 主导 |
 | 主数据库 | **PostgreSQL 15+**（多租户 RLS + JSONB 灵活模型） |
 | 时序数据 | **TimescaleDB**（成本趋势/执行历史），或 Prometheus + 自研回放 |
-| 对象存储 | S3 兼容（MinIO 私有化）——测试证据（截图/日志/脚本） |
+| 对象存储 | S3 兼容（本地 SeaweedFS；MinIO 社区版已归档）——测试证据（截图/日志/脚本） |
 | 工作流编排 | **Temporal**（AI 生成管道、测试执行流水线：长时任务/重试/可观测/暂停恢复） |
 | AI 网关 | **统一模型网关（LiteLLM/OneAPI/自研）+ Token 计量 + 成本归因**——"每工程选模型"与成本审计的落地核心 |
 | 策略引擎 | **OPA (Rego)** 质量门禁"策略即代码" |
@@ -60,7 +60,7 @@ GreenPass 不是普通"测试管理工具"，它有四个本质特征，决定�
        └──────────────┴──────┬───────┴──────────┘
 ┌────────────────────────────▼───────────────────────────────┐
 │  数据层                                                   │
-│  PostgreSQL(业务+审计链)  ·  TimescaleDB(时序)  ·  S3/MinIO(证据)  │
+│  PostgreSQL(业务+审计链)  ·  TimescaleDB(时序)  ·  S3 兼容对象存储(SeaweedFS)  │
 │  Redis(缓存/队列/限流)  ·  Temporal(工作流持久化)  ·  Kafka?(事件总线)  │
 └────────────────────────────────────────────────────────────┘
 ```
@@ -88,7 +88,7 @@ GreenPass 不是普通"测试管理工具"，它有四个本质特征，决定�
 | 业务主库 | **PostgreSQL 15+** | JSONB 承载灵活模型（被测对象树/用例版本/门禁规则/成本归因快照），RLS 做多租户行级隔离，事务支撑"审计链 + 业务"原子写 |
 | 多租户 | **共享库 + RLS（默认）→ schema-per-tenant(大客户可选)** | 中大型团队多数场景 RLS + `tenant_id` 索引足够且运维成本低；独立大客户私有化可整库隔离。资产级 RBAC 在应用层叠加 |
 | 时序 | **TimescaleDB** | 成本趋势、执行历史、通过率趋势——连续聚合 + 下采样，避免自研回放 |
-| 证据存储 | **S3/MinIO** | 截图/日志/脚本按 `tenant/object/run/case` 分层，签名 URL 短时授权，哈希值与元数据入库 |
+| 证据存储 | **S3 兼容对象存储（SeaweedFS）** | 截图/日志/脚本按 `tenant/object/run/case` 分层，签名 URL 短时授权，哈希值与元数据入库 |
 | 缓存/队列 | **Redis** | 会话/限流/配额/队列(Streams)/热数据 |
 | 工作流 | **Temporal** | AI 生成管道 + 执行流水线的**长时/重试/暂停恢复/可观测/历史**，是手工队列无法替代的 |
 
@@ -207,7 +207,7 @@ CIWebhook / TriggerRule / Connector(门禁回写)
 | 多租户隔离漏洞 | RLS 强制 + 资产级鉴权 + 权限测试用例化 |
 | 审计性能 | append-only 分区 + 快照锚点，万亿级再上 Kafka/列存 |
 | 前端与后端节奏 | OpenAPI 契约先行，mock 演进为 MSW，前后端并行 |
-| 私有化交付 | Go 单二进制 + Docker/Helm + MinIO/TimescaleDB 内网化 |
+| 私有化交付 | Go 单二进制 + Docker/Helm + SeaweedFS/TimescaleDB 内网化 |
 
 ---
 
@@ -621,7 +621,7 @@ Report 分级：工程报告 → 服务报告 → 用例级明细；跨场景(AP
 ### 10.1 扩展性原则（无状态优先 + 有状态分层）
 
 - **控制面（HTTP server / 调度决策 / worker 逻辑）一律无状态**：不落进程内可变业务状态，可任意加副本、随时重启、被 LB 调度。
-- **有状态只出现在明确边界**：PG（权威）、Redis（缓存/队列/配额）、Temporal（工作流/任务）、MinIO（对象）。业务代码不得持有跨请求状态。
+- **有状态只出现在明确边界**：PG（权威）、Redis（缓存/队列/配额）、Temporal（工作流/任务）、SeaweedFS（对象）。业务代码不得持有跨请求状态。
 - 共享可变状态只经 Redis / Temporal / PG，**不用进程内单例或本地内存做跨副本共享**。
 - 每类节点独立扩缩：控制面、worker、执行沙箱按各自瓶颈扩，互不阻塞。
 
@@ -629,7 +629,7 @@ Report 分级：工程报告 → 服务报告 → 用例级明细；跨场景(AP
 
 - server 无状态（JWT 鉴权、不存本地会话；幂等由请求幂等键 + DB 保证）。
 - 多副本 + 负载均衡：K8s Deployment + Service（ClusterIP/LB）+ ingress-nginx 或 HPA（按 QPS/CPU 扩缩）。
-- 会话态（如有）进共享 Redis；文件上传走直传 MinIO（签名 URL），不走 server 中转。
+- 会话态（如有）进共享 Redis；文件上传走直传对象存储 SeaweedFS（签名 URL），不走 server 中转。
 - SSE 实时推送多副本注意连接归属：用共享订阅（Redis Pub/Sub 或事件总线）广播，单副本连接归属不阻塞扩展。
 
 ### 10.3 worker 水平扩展（Temporal 多实例）
@@ -655,7 +655,7 @@ Report 分级：工程报告 → 服务报告 → 用例级明细；跨场景(AP
 | PostgreSQL | 主从（读副本 offload 查询/报表）；审计/时序走 Timescale hypertable 自动分区；量级再大 → schema-per-tenant 或独立实例 | 读放大/团队数增长 |
 | Redis | 单实例 → Redis Cluster（slot 分片）/ Sentinel；队列/配额/缓存分离实例 | 高并发队列/配额 |
 | Temporal | 原生多节点集群（frontend/history/matching 横向扩展） | 工作流/任务规模 |
-| MinIO | 分布式（erasure coding，多节点） | 证据对象增长 |
+| SeaweedFS | 分布式（master/volume/filer，可扩节点） | 证据对象增长 |
 | Timescale | 连续聚合 + 分区 + 下采样 | 成本/执行趋势增长 |
 
 ### 10.6 多团队/多租户数据扩展
