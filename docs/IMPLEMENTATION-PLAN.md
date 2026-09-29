@@ -242,7 +242,7 @@ jobs:
 4. P1 单场景报告（API 场景）；结构预留跨场景合编（P2）。
 **验证**：报告渲染正确、证据可访问；export=html 返回可打开；`make check` 全绿。
 
-### GP1-08 前端对接（契约先行）
+### GP1-08 前端对接（契约先行）⏳ 后端侧 openapi.yaml 已交付；前端 mock/MSW/SSE 属前端阶段
 **实施步骤**
 1. `api/openapi.yaml` 定稿（含 `/targets /cases /runs /gates /cost /reports`）→ openapi-typescript 生成类型。
 2. 前端 `mock.ts` → Mock Service Worker（与真实 API 同构）；API client 接入。

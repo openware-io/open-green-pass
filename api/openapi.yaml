@@ -1,0 +1,421 @@
+openapi: 3.0.3
+info:
+  title: GreenPass 软件测试治理平台 API
+  description: |
+    测试质量管控平台后端契约（P1）。
+    租户隔离：所有业务请求必须携带 `x-gp-team-id` 与可选 `x-gp-user-id` 头，经 RLS 过滤。
+    审计哈希链 / 成本明细 / 门禁判定由 trusted 域统一写（口径单点）。
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /healthz:
+    get:
+      summary: 健康检查
+      operationId: healthz
+      responses:
+        '200':
+          description: 存活
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  # ---------- 被测对象（governance，GP1-01） ----------
+  /targets:
+    get:
+      summary: 被测对象树（工程/服务组/服务/模块）
+      operationId: listTargets
+      parameters:
+        - { name: x-gp-team-id, in: header, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: 树形列表 }
+    post:
+      summary: 创建被测对象节点
+      operationId: createTarget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ name, kind ]
+              properties:
+                name: { type: string }
+                kind: { type: string, enum: [ project, service_group, service, module ] }
+                parent_id: { type: integer }
+      responses:
+        '200': { description: 已创建 }
+  /targets/{id}/repo:
+    post:
+      summary: 关联上游仓库（来源溯源）
+      operationId: attachRepo
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ url ]
+              properties:
+                url: { type: string, description: 仓库地址（如 git@github.com:org/repo.git） }
+                default_branch: { type: string }
+      responses:
+        '200': { description: 已关联 }
+  # ---------- 用例（governance，GP1-02） ----------
+  /cases:
+    get:
+      summary: 用例列表
+      operationId: listCases
+      parameters:
+        - { name: x-gp-team-id, in: header, required: true, schema: { type: integer } }
+        - { name: target_id, in: query, schema: { type: integer } }
+        - { name: kind, in: query, schema: { type: string } }
+        - { name: keyword, in: query, schema: { type: string } }
+      responses:
+        '200': { description: 用例列表 }
+    post:
+      summary: 创建用例（版本化首版）
+      operationId: createCase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ target_id, code, kind ]
+              properties:
+                target_id: { type: integer }
+                code: { type: string }
+                kind: { type: string, enum: [ api, web, ui, perf, contract, security ] }
+                script_json: { type: object, description: 用例脚本/数据（执行产物来源） }
+      responses:
+        '200': { description: 已创建（含版本） }
+  /cases/{id}/versions:
+    post:
+      summary: 迭代创建用例新版本
+      operationId: createCaseVersion
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ version_script ]
+              properties:
+                version_script: { type: object }
+      responses:
+        '200': { description: 新版本已创建 }
+  /cases/{id}/rollback:
+    post:
+      summary: 用例按版本回退（避免错误分支生成）
+      operationId: rollbackCase
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ to_version ]
+              properties:
+                to_version: { type: integer }
+      responses:
+        '200': { description: 已回退 }
+  /cases/{id}/history:
+    get:
+      summary: 用例版本历史对比
+      operationId: caseHistory
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: 版本历史 }
+  /cases/{id}:
+    delete:
+      summary: 删除用例
+      operationId: deleteCase
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '204': { description: 已删除 }
+  # ---------- 版本校验（execution，GP1-03） ----------
+  /targets/{id}/env/runtime:
+    post:
+      summary: 登记测试环境运行版本（env_runtime）
+      operationId: registerRuntime
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ env, version ]
+              properties:
+                env: { type: string }
+                version: { type: string }
+      responses:
+        '200': { description: 已登记 }
+  /targets/{id}/version-check:
+    post:
+      summary: 发起版本校验（match/mismatch/unknown）
+      operationId: checkVersion
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ env, expected_version ]
+              properties:
+                env: { type: string }
+                expected_version: { type: string }
+      responses:
+        '200':
+          description: 校验结果（mismatch 阻断信号）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result: { type: string, enum: [ match, mismatch, unknown ] }
+  /targets/{id}/version-checks:
+    get:
+      summary: 最近版本校验记录
+      operationId: recentChecks
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        '200': { description: 记录列表 }
+  # ---------- 运行编排（execution，GP1-04） ----------
+  /runs:
+    post:
+      summary: 创建测试运行（勾选用例空=全量）
+      operationId: createRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ target_id, scenario_id ]
+              properties:
+                target_id: { type: integer }
+                scenario_id: { type: integer }
+                env: { type: string }
+                target_version: { type: string }
+                target_branch: { type: string }
+                selected_cases: { type: array, items: { type: integer }, description: 空=全量 }
+      responses:
+        '200': { description: 已创建（queued） }
+  /runs/{id}:
+    get:
+      summary: 运行详情（状态机）
+      operationId: getRun
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: 运行聚合
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  state: { type: string, enum: [ queued, version_check, scheduled, running, paused, collecting, gating, reporting, done, failed ] }
+  /runs/{id}/case-results:
+    get:
+      summary: 运行内用例结果
+      operationId: runCaseResults
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: 用例结果列表 }
+  /runs/{id}/version-check:
+    post:
+      summary: 触发版本校验阶段
+      operationId: startVersionCheck
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: mismatch 阻断 }
+  /runs/{id}/execute:
+    post:
+      summary: 执行运行（重跑 attempt 递增）
+      operationId: executeRun
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: 已启动 }
+  /runs/{id}/pause:
+    post:
+      summary: 暂停
+      operationId: pauseRun
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: 已暂停 }
+  /runs/{id}/resume:
+    post:
+      summary: 恢复
+      operationId: resumeRun
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: 已恢复 }
+  # ---------- 门禁（trusted，GP1-05） ----------
+  /gates/rules:
+    put:
+      summary: 装载门禁策略（版本化，策略即代码）
+      operationId: upsertGateRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ target_id, scenario_id, rego ]
+              properties:
+                target_id: { type: integer }
+                scenario_id: { type: integer }
+                rego: { type: string, description: 声明式策略 JSON 或 Rego }
+      responses:
+        '200': { description: 已装载（含新版本号） }
+  /gates/evaluate:
+    post:
+      summary: 门禁判定（pass/fail/blocked，入审计链）
+      operationId: evaluateGate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ run_id ]
+              properties:
+                run_id: { type: integer }
+      responses:
+        '200':
+          description: 判定结果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result: { type: string, enum: [ pass, fail, blocked ] }
+  /gates/results:
+    get:
+      summary: 运行的门禁判定结果
+      operationId: gateResults
+      parameters:
+        - { name: run_id, in: query, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: 判定列表 }
+  # ---------- 成本（trusted，GP1-06） ----------
+  /cost/record:
+    post:
+      summary: 成本计量写入（幂等：request_id+biz_point 不双计）
+      operationId: recordCost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ request_id, biz_point ]
+              properties:
+                request_id: { type: string }
+                biz_point: { type: string, enum: [ case_generate, case_execute, gate_judge, analysis ] }
+                target_id: { type: integer }
+                run_id: { type: integer }
+                case_id: { type: integer }
+                model: { type: string }
+                tokens_in: { type: integer }
+                tokens_out: { type: integer }
+                unit_price: { type: number, description: 每千 token 单价 }
+      responses:
+        '200':
+          description: inserted 是否新落账（false=幂等跳过）
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  inserted: { type: boolean }
+  /cost/overview:
+    get:
+      summary: 成本总览（=Σ明细，按大类 generate/execute）
+      operationId: costOverview
+      responses:
+        '200':
+          description: 总览
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_amount: { type: number }
+                  by_category: { type: object, additionalProperties: { type: number } }
+                  by_point: { type: object, additionalProperties: { type: number } }
+  /cost/items:
+    get:
+      summary: 成本明细（按大类/细类筛选）
+      operationId: costItems
+      parameters:
+        - { name: category, in: query, schema: { type: string, enum: [ generate, execute ] } }
+        - { name: point, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        '200': { description: 明细列表 }
+  /cost/compare/{caseId}:
+    get:
+      summary: 单用例成本历史对比（存量持平/递减证明）
+      operationId: costCompare
+      parameters:
+        - { name: caseId, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: 该用例各次成本时序 }
+  # ---------- 报告（trusted，GP1-07） ----------
+  /reports/generate:
+    post:
+      summary: 由运行生成测试报告
+      operationId: generateReport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ run_id ]
+              properties:
+                run_id: { type: integer }
+                kind: { type: string, enum: [ project, service, case ], description: 默认 service；跨场景合编 P2 }
+      responses:
+        '200': { description: 已生成报告（含 HTML） }
+  /reports/{id}/export:
+    get:
+      summary: 导出报告
+      operationId: exportReport
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: fmt, in: query, schema: { type: string, enum: [ html ], default: html } }
+      responses:
+        '200':
+          description: HTML 报告
+          content:
+            text/html: {}
+components:
+  securitySchemes:
+    teamHeader:
+      type: apiKey
+      in: header
+      name: x-gp-team-id
+security:
+  - teamHeader: []
