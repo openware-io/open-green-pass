@@ -262,7 +262,7 @@ jobs:
 - **GP2-02 完整 W2 迁移到 Temporal**：执行流水线全量迁 Temporal Workflow（VersionCheck→AcquireResources→Dispatch→Collect→Gate→Cost→Report）；`cmd/worker` 注册 W2 多实例。关键文件：`internal/execution/workflow/execute_run.go`。验证：workflow 测试 + 暂停/恢复/重试 + 崩溃恢复。
 - **GP2-03 多级配额 + 公平队列（Redis Streams CG + 原子 Lua + WFQ）**：租户→工程→负责人三级配额；单团队不拖垮全局（§8.2/§10.4）。关键文件：`execution/infra/quota/{redis_quota.go,fairqueue.go}`（Lua 原子扣减）。验证：并发扣减原子；WFQ 公平；占满配额不影响他团队。
 - **GP2-04 冲突检测 + Pause/Resume**：资源互斥冲突检测 + 用户暂停全部/恢复全部（Signal）。验证：暂停挂起、恢复继续；冲突上报审计。
-- **GP2-05 截图开关策略下发**：服务级截图开关按对象策略下发（防高并发性能开销，PRD R-TEST-13）。验证：策略生效；无截图场景证据=日志+hash。
+- **GP2-05 截图开关策略下发 ✅ 已交付**：服务级截图开关按对象策略下发（防高并发性能开销，PRD R-TEST-13）。验证：策略生效；无截图场景证据=日志+hash。
 - **GP2-06 跨场景报告合编（PDF/Word）**：多 run 跨场景汇总合编；服务端渲染 PDF(Chromium headless) / Word(docx 模板)。关键文件：`trusted/report/renderer/{html,pdf,docx,md}.go`。验证：四种格式可打开；合编结构正确。
 - **GP2-07 水平扩展 P2（§10）**：server 多副本 + worker 多实例 + 调度器无状态化（P1 起无状态代码实装）。关键文件：`deploy/helm/gp`（replica）、SSE 共享订阅（Redis Pub/Sub）。验证：加副本吞吐线性上升（压测基线 §10.10）。
 - **GP2-08 资源池注册 + 多执行集群**：执行节点/资源池登记；调度器分发到对应执行集群（§10.8）。验证：多执行节点接入，隔离一致。

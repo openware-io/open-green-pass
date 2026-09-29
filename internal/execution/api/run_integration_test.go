@@ -33,10 +33,12 @@ func newRunHandler(t *testing.T) http.Handler {
 	envSvc := application.NewEnvService(envStore, gen)
 	runStore := einfra.NewRunStore(dbb, gen)
 	caseReader := einfra.NewCaseReader(dbb)
+	policyStore := einfra.NewPolicyStore(dbb, gen)
+	policySvc := application.NewPolicyService(policyStore, gen)
 	mockRunner := einfra.NewMockRunner(gen)
-	runSvc := application.NewRunService(runStore, envSvc, caseReader, mockRunner, gen)
+	runSvc := application.NewRunService(runStore, envSvc, caseReader, policySvc, mockRunner, gen)
 	return gateway.NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)),
-		func(mux *http.ServeMux) { Register(mux, envSvc, runSvc) })
+		func(mux *http.ServeMux) { Register(mux, envSvc, runSvc, policySvc) })
 }
 
 // TestRunExecution 运行闭环：创建→版本校验(match)→执行→重跑 attempt 递增→历史 + RLS。

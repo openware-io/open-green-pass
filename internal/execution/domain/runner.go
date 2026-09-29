@@ -9,7 +9,9 @@ type CaseSpec struct {
 	CaseVersion int
 	TargetID    int64
 	Env         string
-	Script      any // 执行脚本定义（API 场景为 HTTP 定义；其他场景各异）
+	Script      any  // 执行脚本定义（API 场景为 HTTP 定义；其他场景各异）
+	// ScreenshotEnabled 服务级截图开关（PRD R-TEST-13）：false=证据仅日志+哈希，避免高并发截图开销。
+	ScreenshotEnabled bool
 }
 
 // RunnerPort 执行器端口（P1 提供 MockRunner 本地闭环；K8s Job Runner 接入真实沙箱执行）。

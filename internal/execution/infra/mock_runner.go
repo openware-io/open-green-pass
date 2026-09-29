@@ -23,14 +23,31 @@ func (r *MockRunner) Execute(ctx context.Context, spec []*domain.CaseSpec) ([]*d
 	for _, s := range spec {
 		now := time.Now().UTC()
 		ended := now
+		ev := &domain.EvidenceRef{Hash: "mock-evidence"}
+		if s.ScreenshotEnabled {
+			ev.Screenshots = []string{"mock:screenshot://case-" + itoaCase(s.CaseID)}
+		} else {
+			ev.Logs = []string{"mock:log://case-" + itoaCase(s.CaseID)}
+		}
 		results = append(results, &domain.CaseResult{
 			ID: r.gen.Next(), CaseID: s.CaseID, CaseVersion: s.CaseVersion,
 			Status: domain.CasePass, ResultText: "mock ok", AttemptSeq: 1,
-			Evidence: &domain.EvidenceRef{Hash: "mock-evidence"},
-			StartedAt: now, EndedAt: &ended,
+			Evidence: ev, StartedAt: now, EndedAt: &ended,
 		})
 	}
 	return results, nil
+}
+
+func itoaCase(n int64) string {
+	if n == 0 {
+		return "0"
+	}
+	b := []byte{}
+	for n > 0 {
+		b = append([]byte{byte('0' + n%10)}, b...)
+		n /= 10
+	}
+	return string(b)
 }
 
 var _ domain.RunnerPort = (*MockRunner)(nil)

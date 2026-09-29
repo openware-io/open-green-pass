@@ -16,14 +16,15 @@ type RunService struct {
 	repo   domain.RunRepository
 	envSvc *EnvService
 	cases  domain.CasePort
+	policy domain.PolicyPort
 	runner domain.RunnerPort
 	gen    *id.Generator
 	log    *slog.Logger
 }
 
 // NewRunService 创建运行编排服务。
-func NewRunService(repo domain.RunRepository, envSvc *EnvService, cases domain.CasePort, runner domain.RunnerPort, gen *id.Generator) *RunService {
-	return &RunService{repo: repo, envSvc: envSvc, cases: cases, runner: runner, gen: gen, log: slog.Default()}
+func NewRunService(repo domain.RunRepository, envSvc *EnvService, cases domain.CasePort, policy domain.PolicyPort, runner domain.RunnerPort, gen *id.Generator) *RunService {
+	return &RunService{repo: repo, envSvc: envSvc, cases: cases, policy: policy, runner: runner, gen: gen, log: slog.Default()}
 }
 
 // CreateRunRequest 创建运行请求。
@@ -112,7 +113,11 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (*domain.Run, 
 		}
 	}
 
-	// 装配用例执行规格（勾选范围）
+	// 装配用例执行规格（勾选范围 + 服务级截图开关策略）
+	shot, err := s.policy.Get(ctx, teamID, run.TargetID, run.ScenarioID)
+	if err != nil {
+		return nil, nil, err
+	}
 	spec := make([]*domain.CaseSpec, 0, len(run.SelectedCases))
 	for _, caseID := range run.SelectedCases {
 		version, script, err := s.cases.FetchScript(ctx, teamID, caseID)
@@ -120,7 +125,8 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (*domain.Run, 
 			return nil, nil, err
 		}
 		spec = append(spec, &domain.CaseSpec{
-			CaseID: caseID, CaseVersion: version, TargetID: run.TargetID, Env: run.Env, Script: script,
+			CaseID: caseID, CaseVersion: version, TargetID: run.TargetID, Env: run.Env,
+			Script: script, ScreenshotEnabled: shot.ScreenshotEnabled,
 		})
 	}
 

@@ -13,13 +13,15 @@ import (
 type envHandler struct{ svc *application.EnvService }
 
 // Register 注册执行域路由（版本校验 + 运行编排）。
-func Register(mux *http.ServeMux, envSvc *application.EnvService, runSvc *application.RunService) {
+func Register(mux *http.ServeMux, envSvc *application.EnvService, runSvc *application.RunService, policySvc *application.PolicyService) {
 	h := &envHandler{svc: envSvc}
 	rh := &runHandler{svc: runSvc}
+	ph := &policyHandler{svc: policySvc}
 	mux.HandleFunc("POST /targets/{id}/env/runtime", h.registerRuntime)
 	mux.HandleFunc("POST /targets/{id}/version-check", h.checkVersion)
 	mux.HandleFunc("GET /targets/{id}/version-checks", h.recentChecks)
-	// 运行编排
+	mux.HandleFunc("PUT /targets/{id}/screenshot-policy", ph.setScreenshotPolicy)
+	mux.HandleFunc("GET /targets/{id}/screenshot-policy", ph.getScreenshotPolicy)
 	mux.HandleFunc("POST /runs", rh.createRun)
 	mux.HandleFunc("GET /runs/{id}", rh.getRun)
 	mux.HandleFunc("GET /runs/{id}/case-results", rh.caseResults)

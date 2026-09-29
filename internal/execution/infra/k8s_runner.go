@@ -182,6 +182,9 @@ func (r *K8sRunner) executeOne(ctx context.Context, s *domain.CaseSpec) (*domain
 		Logs: []string{fmt.Sprintf("job://%s/%s", r.cfg.Namespace, jobName)},
 		Hash: hex.EncodeToString(hash[:]),
 	}
+	if s.ScreenshotEnabled {
+		ev.Screenshots = []string{fmt.Sprintf("job://%s/%s/screenshot", r.cfg.Namespace, jobName)}
+	}
 	return &domain.CaseResult{
 		ID: r.gen.Next(), CaseID: s.CaseID, CaseVersion: s.CaseVersion,
 		Status: status, ResultText: truncateStr(logs, 400), Evidence: ev,

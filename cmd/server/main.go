@@ -54,6 +54,8 @@ func main() {
 	envSvc := eapp.NewEnvService(envStore, gen)
 	runStore := einfra.NewRunStore(db, gen)
 	caseReader := einfra.NewCaseReader(db)
+	policyStore := einfra.NewPolicyStore(db, gen)
+	policySvc := eapp.NewPolicyService(policyStore, gen)
 	var runner edomain.RunnerPort
 	switch os.Getenv("GP_RUNNER_TYPE") {
 	case "k8s":
@@ -72,7 +74,7 @@ func main() {
 		runner = einfra.NewMockRunner(gen)
 		log.Info("runner", "type", "mock")
 	}
-	runSvc := eapp.NewRunService(runStore, envSvc, caseReader, runner, gen)
+	runSvc := eapp.NewRunService(runStore, envSvc, caseReader, policySvc, runner, gen)
 
 	// 可信域依赖组装（审计哈希链 + 门禁判定 + 成本明细）
 	gateStore := tinfra.NewGateStore(db, gen)
@@ -95,7 +97,7 @@ func main() {
 		Handler: gateway.NewRouter(log,
 			func(mux *http.ServeMux) { gapi.Register(mux, treeSvc) },
 			func(mux *http.ServeMux) { gapi.RegisterCases(mux, caseSvc) },
-			func(mux *http.ServeMux) { eapi.Register(mux, envSvc, runSvc) },
+			func(mux *http.ServeMux) { eapi.Register(mux, envSvc, runSvc, policySvc) },
 			func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc, costSvc, reportSvc) },
 		),
 		ReadHeaderTimeout: 5 * time.Second,
