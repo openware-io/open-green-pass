@@ -209,7 +209,7 @@ jobs:
 4. `mismatch` → 阻断执行 + 写 `env_check` + 入审计链（`aud_event`）。
 **验证**：目标≠环境 → 阻断 + 审计留痕；相等 → 放行；幂等重跑一致。
 
-### GP1-04 单 API 场景执行（execution）✅ 编排闭环已交付（K8s Job Runner 待接入 gp1-04-b）
+### GP1-04 单 API 场景执行（execution）✅ 编排闭环已交付（K8s Job Runner 已接入 gp1-04-b ✅）
 **实施步骤**
 1. 迁移 `000005_run.up.sql`：`run_run` + `run_case_result`（含 `attempt_seq`，支持重试/重跑）+ RLS。
 2. execution/domain：`Run` 聚合（`StartRun`/`CollectEvidence`/`ApplyGate`/`ProduceReport`，状态机）+ `RunRepository`。

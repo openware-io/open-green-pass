@@ -14,6 +14,7 @@ import (
 	"github.com/openware-io/open-green-pass/internal/governance/infra"
 	eapi "github.com/openware-io/open-green-pass/internal/execution/api"
 	eapp "github.com/openware-io/open-green-pass/internal/execution/application"
+	edomain "github.com/openware-io/open-green-pass/internal/execution/domain"
 	einfra "github.com/openware-io/open-green-pass/internal/execution/infra"
 	"github.com/openware-io/open-green-pass/internal/platform/config"
 	"github.com/openware-io/open-green-pass/internal/platform/observability"
@@ -53,8 +54,25 @@ func main() {
 	envSvc := eapp.NewEnvService(envStore, gen)
 	runStore := einfra.NewRunStore(db, gen)
 	caseReader := einfra.NewCaseReader(db)
-	mockRunner := einfra.NewMockRunner(gen)
-	runSvc := eapp.NewRunService(runStore, envSvc, caseReader, mockRunner, gen)
+	var runner edomain.RunnerPort
+	switch os.Getenv("GP_RUNNER_TYPE") {
+	case "k8s":
+		k8sRunner, err := einfra.NewK8sRunner(gen, einfra.K8sRunnerConfig{
+			Namespace: os.Getenv("GP_RUNNER_NS"),
+			Image:     os.Getenv("GP_RUNNER_IMAGE"),
+			Timeout:   5 * time.Minute,
+		})
+		if err != nil {
+			log.Error("init k8s runner", "error", err)
+			os.Exit(1)
+		}
+		runner = k8sRunner
+		log.Info("runner", "type", "k8s")
+	default:
+		runner = einfra.NewMockRunner(gen)
+		log.Info("runner", "type", "mock")
+	}
+	runSvc := eapp.NewRunService(runStore, envSvc, caseReader, runner, gen)
 
 	// 可信域依赖组装（审计哈希链 + 门禁判定 + 成本明细）
 	gateStore := tinfra.NewGateStore(db, gen)
