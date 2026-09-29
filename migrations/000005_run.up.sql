@@ -50,6 +50,7 @@ CREATE TABLE run_case_result (
   ended_at      TIMESTAMPTZ,
   created_by     BIGINT,
   updated_by     BIGINT,
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (run_id, case_id, attempt_seq)
 );
 CREATE INDEX idx_run_case_result_run ON run_case_result(run_id, attempt_seq);

@@ -17,6 +17,9 @@ import (
 	einfra "github.com/openware-io/open-green-pass/internal/execution/infra"
 	"github.com/openware-io/open-green-pass/internal/platform/config"
 	"github.com/openware-io/open-green-pass/internal/platform/observability"
+	tapi "github.com/openware-io/open-green-pass/internal/trusted/api"
+	tapp "github.com/openware-io/open-green-pass/internal/trusted/application"
+	tinfra "github.com/openware-io/open-green-pass/internal/trusted/infra"
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
 
@@ -53,6 +56,13 @@ func main() {
 	mockRunner := einfra.NewMockRunner(gen)
 	runSvc := eapp.NewRunService(runStore, envSvc, caseReader, mockRunner, gen)
 
+	// 可信域依赖组装（审计哈希链 + 门禁判定）
+	gateStore := tinfra.NewGateStore(db, gen)
+	auditStore := tinfra.NewAuditStore(db, gen)
+	auditSvc := tapp.NewAuditService(auditStore, gen)
+	statReader := tinfra.NewRunStatReader(db)
+	gateSvc := tapp.NewGateService(gateStore, auditSvc, statReader, gen)
+
 	addr := cfg.Addr
 	srv := &http.Server{
 		Addr: addr,
@@ -60,6 +70,7 @@ func main() {
 			func(mux *http.ServeMux) { gapi.Register(mux, treeSvc) },
 			func(mux *http.ServeMux) { gapi.RegisterCases(mux, caseSvc) },
 			func(mux *http.ServeMux) { eapi.Register(mux, envSvc, runSvc) },
+			func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc) },
 		),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,

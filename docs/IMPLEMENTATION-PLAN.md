@@ -218,7 +218,7 @@ jobs:
 5. `CollectEvidence`：截图/日志→MinIO + sha256；服务级截图开关（策略下发）。
 **验证**：状态机推进（Queued→VersionCheck→Scheduled→Running→Collect→Gate→Report→Done/Failed）；用例结果落 `run_case_result`（`attempt_seq` 递增支持重试）；证据在 MinIO；失败可重跑。
 
-### GP1-05 门禁（trusted，OPA）
+### GP1-05 门禁（trusted，OPA）✅ 已交付（声明式策略 P1；完整 OPA 引擎 P2）
 **实施步骤**
 1. 迁移 `000006_gate.up.sql`：`gate_rule`/`gate_result` + RLS + `gp_trusted_writer` 角色。
 2. trusted/domain：`GateRule`（Rego 装载）+ `GateResult` + `GateRepository`；execution→trusted 经 `GatePort`。
