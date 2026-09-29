@@ -201,7 +201,7 @@ jobs:
 4. 首个用例种子：绑定 im-saas 服务，生成 1 个 API 用例（`script_json`=HTTP 定义）。
 **验证**：版本化正确；change 标记可辨；回退后 `current_version` 指向旧内容新版本；history 完整；`make check` 全绿。
 
-### GP1-03 版本校验（execution）——"测了没白测"
+### GP1-03 版本校验（execution）✅ 已交付——"测了没白测"
 **实施步骤**
 1. 迁移 `000004_env.up.sql`：`env_runtime`/`env_check`（`result: match/mismatch/unknown`）+ RLS。
 2. execution/domain：`EnvVersion` 聚合 + 版本比对端口；目标版本 vs 环境运行版本比对。

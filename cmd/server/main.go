@@ -12,6 +12,9 @@ import (
 	gapi "github.com/openware-io/open-green-pass/internal/governance/api"
 	"github.com/openware-io/open-green-pass/internal/governance/application"
 	"github.com/openware-io/open-green-pass/internal/governance/infra"
+	eapi "github.com/openware-io/open-green-pass/internal/execution/api"
+	eapp "github.com/openware-io/open-green-pass/internal/execution/application"
+	einfra "github.com/openware-io/open-green-pass/internal/execution/infra"
 	"github.com/openware-io/open-green-pass/internal/platform/config"
 	"github.com/openware-io/open-green-pass/internal/platform/observability"
 	"github.com/openware-io/open-green-pass/pkg/id"
@@ -42,12 +45,17 @@ func main() {
 	caseStore := infra.NewCaseStore(db, gen)
 	caseSvc := application.NewCaseService(caseStore, gen)
 
+	// 执行域依赖组装（测试环境版本校验）
+	envStore := einfra.NewEnvStore(db, gen)
+	envSvc := eapp.NewEnvService(envStore, gen)
+
 	addr := cfg.Addr
 	srv := &http.Server{
 		Addr: addr,
 		Handler: gateway.NewRouter(log,
 			func(mux *http.ServeMux) { gapi.Register(mux, treeSvc) },
 			func(mux *http.ServeMux) { gapi.RegisterCases(mux, caseSvc) },
+			func(mux *http.ServeMux) { eapi.Register(mux, envSvc) },
 		),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
