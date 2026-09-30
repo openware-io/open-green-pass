@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ASSET_TREE, METRICS, GEN_TRACE, ASSET_RISKS, AI_MODELS, PROJECT_MODELS, TEST_SCENARIOS, TESTED_REPOS, CASES, COST_GEN_DETAIL, COST_EXEC_DETAIL, assetToProfile, nodeRepos, type IAsset, type IAssetNode, type ITestedRepo } from '@/data/mock';
 import { scenarioNav } from '@/context/scenarioNav';
-import { KpiCard, PageHeader, PrimaryButton, GhostButton, ListFilter } from '@/components/shared';
+import { KpiCard, PageHeader, PrimaryButton, GhostButton, ListFilter, Card } from '@/components/shared';
+import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
+import type { Target } from '@/api/client';
 import { Brain, ShieldAlert, ChevronRight, ChevronDown, Sparkles, GitBranch, CircleDot, FileSearch, History, CheckCircle2, AlertTriangle, XCircle, Layers, Cpu, Globe, Smartphone, X, Plus, ExternalLink, Check, Plug, Files, FileText, Wallet } from 'lucide-react';
 
 const ADD_STEPS = ['基本信息', '代码源接入', '上游源', '确认'];
@@ -123,6 +125,8 @@ export default function TargetPage() {
   const modelBound = PROJECT_MODELS.find((p) => p.projectId === profile.name);
   const model = modelBound && AI_MODELS.find((m) => m.id === modelBound.modelId);
 
+  const realClient = useMemo(() => configuredGreenPassClient(), []);
+
   // 被测对象页 = 被测仓库与版本管理的权威来源（仓库列表可增删）
   const [repos, setRepos] = useState<ITestedRepo[]>(TESTED_REPOS);
   // 添加仓库分步录入弹窗
@@ -157,6 +161,8 @@ export default function TargetPage() {
       <PageHeader title="被测对象" desc="被测对象树 + 画像一体 · 点击左侧树节点联动右侧画像与全局上下文">
         <PrimaryButton><Link to="/gate" className="flex items-center gap-1">进入质量门禁<ChevronRight className="w-4 h-4" /></Link></PrimaryButton>
       </PageHeader>
+
+      <RealTargetsPanel client={realClient} />
 
       <div className="grid grid-cols-[360px_1fr] gap-6 items-start">
         {/* ===== 左侧：被测对象树（一体化导航） ===== */}
@@ -648,4 +654,48 @@ export default function TargetPage() {
       )}
     </div>
   );
+}
+
+function RealTargetsPanel({ client }: { client: ReturnType<typeof configuredGreenPassClient> }) {
+  const [targets, setTargets] = useState<Target[]>([]);
+  const [name, setName] = useState('');
+  const [type, setType] = useState<'project' | 'service_group' | 'service' | 'module'>('service');
+  const [kind, setKind] = useState('api_service');
+  const [parentID, setParentID] = useState('');
+  const [repoTargetID, setRepoTargetID] = useState('');
+  const [repoURL, setRepoURL] = useState('');
+  const [defaultBranch, setDefaultBranch] = useState('main');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const refresh = async () => { if (client) setTargets(await client.listTargets()); };
+  useEffect(() => {
+    if (!client) return;
+    let active = true;
+    client.listTargets().then((loaded) => { if (active) setTargets(loaded); }).catch((error: unknown) => { if (active) setMessage(error instanceof Error ? error.message : '读取真实被测对象失败'); });
+    return () => { active = false; };
+  }, [client]);
+  const run = async (action: () => Promise<void>) => { setBusy(true); setMessage(''); try { await action(); } catch (error) { setMessage(error instanceof Error ? error.message : '真实 API 操作失败'); } finally { setBusy(false); } };
+
+  if (!client) return <Card title="真实被测对象控制" className="mb-5" extra={<span className="text-[11px] text-slate-400">原型模式</span>}><p className="p-5 text-sm text-slate-500">配置 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_API_BASE</code> 与数值型 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_TEAM_ID</code> 后启用真实对象树、创建节点和仓库绑定。</p></Card>;
+  return <Card title="真实被测对象控制" className="mb-5" extra={<span className="text-[11px] text-emerald-700">真实 API 已启用</span>}>
+    <div className="p-5 space-y-4">
+      <p className="text-[11px] text-slate-500">连接：{greenPassConnectionHint()}。本区与下方原型资产树分离，真实操作只提交 OpenAPI 定义字段。</p>
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="节点名称" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+        <select value={type} onChange={(event) => setType(event.target.value as typeof type)} disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs"><option value="project">project</option><option value="service_group">service_group</option><option value="service">service</option><option value="module">module</option></select>
+        <input value={kind} onChange={(event) => setKind(event.target.value)} placeholder="kind" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+        <input value={parentID} onChange={(event) => setParentID(event.target.value)} placeholder="父节点 ID（可选）" inputMode="numeric" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+        <button type="button" disabled={busy} onClick={() => void run(async () => { if (!name.trim()) throw new Error('节点名称不能为空'); const parent = Number(parentID); await client.createTarget({ name: name.trim(), type, kind: kind.trim() || undefined, parent_id: parentID && Number.isSafeInteger(parent) && parent > 0 ? parent : undefined }); await refresh(); setName(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实节点</button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+        <select value={repoTargetID} onChange={(event) => setRepoTargetID(event.target.value)} disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs"><option value="">选择绑定节点</option>{targets.map((target) => <option key={target.id} value={target.id}>{target.name} · #{target.id}</option>)}</select>
+        <input value={repoURL} onChange={(event) => setRepoURL(event.target.value)} placeholder="仓库 URL" disabled={busy} className="md:col-span-2 rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+        <input value={defaultBranch} onChange={(event) => setDefaultBranch(event.target.value)} placeholder="默认分支" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+        <button type="button" disabled={busy} onClick={() => void run(async () => { const target = Number(repoTargetID); if (!Number.isSafeInteger(target) || target <= 0 || !repoURL.trim()) throw new Error('请选择节点并填写仓库 URL'); await client.attachRepo(target, { url: repoURL.trim(), default_branch: defaultBranch.trim() || undefined }); await refresh(); })} className="rounded-lg border border-emerald-300 px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-60">绑定仓库</button>
+      </div>
+      {message && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{message}</div>}
+      <div className="overflow-x-auto rounded-lg border border-slate-200"><table className="w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-3 py-2">ID</th><th className="px-3 py-2">名称</th><th className="px-3 py-2">类型</th><th className="px-3 py-2">kind</th><th className="px-3 py-2">状态</th><th className="px-3 py-2">仓库</th></tr></thead><tbody className="divide-y divide-slate-100">{targets.map((target) => <tr key={target.id}><td className="px-3 py-2 font-mono">#{target.id}</td><td className="px-3 py-2">{target.name}</td><td className="px-3 py-2">{target.type}</td><td className="px-3 py-2">{target.kind}</td><td className="px-3 py-2">{target.status}</td><td className="px-3 py-2">{target.repo_id ? `#${target.repo_id}` : '未绑定'}</td></tr>)}</tbody></table>{targets.length === 0 && <div className="px-3 py-5 text-center text-xs text-slate-400">暂无真实被测对象</div>}</div>
+    </div>
+  </Card>;
 }
