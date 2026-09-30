@@ -148,6 +148,10 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 	// 首次：scheduled→running；重跑（done/failed 终态）：重置为 running，attempt 递增
 	if run.State == domain.RunDone || run.State == domain.RunFailed {
 		run.State = domain.RunRunning
+	} else if run.State == domain.RunPaused {
+		if err := run.Resume(); err != nil {
+			return nil, nil, err
+		}
 	} else {
 		if err := run.Schedule(); err != nil {
 			return nil, nil, err
