@@ -49,8 +49,8 @@ func TestCaseVersioning(t *testing.T) {
 		t.Fatalf("create case want 201 got %d body=%s", code, body)
 	}
 	var created struct {
-		ID int64 `json:"ID"`
-		CurrentVersion int `json:"CurrentVersion"`
+		ID             int64 `json:"id"`
+		CurrentVersion int   `json:"current_version"`
 	}
 	if err := json.Unmarshal([]byte(body), &created); err != nil || created.ID == 0 || created.CurrentVersion != 1 {
 		t.Fatalf("parse created: %v body=%s", err, body)
@@ -63,7 +63,7 @@ func TestCaseVersioning(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("add version want 200 got %d body=%s", code, body)
 	}
-	if !strings.Contains(body, `"CurrentVersion":2`) {
+	if !strings.Contains(body, `"current_version":2`) {
 		t.Fatalf("after update current_version should be 2, body=%s", body)
 	}
 
@@ -72,7 +72,7 @@ func TestCaseVersioning(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("rollback want 200 got %d body=%s", code, body)
 	}
-	if !strings.Contains(body, `"CurrentVersion":1`) {
+	if !strings.Contains(body, `"current_version":1`) {
 		t.Fatalf("after rollback current_version should be 1, body=%s", body)
 	}
 

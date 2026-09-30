@@ -12,7 +12,9 @@ import (
 	gperr "github.com/openware-io/open-green-pass/pkg/errors"
 )
 
-type handler struct{ svc *application.TargetTreeService }
+type handler struct {
+	svc *application.TargetTreeService
+}
 
 // Register 注册治理域被测对象树路由。
 func Register(mux *http.ServeMux, svc *application.TargetTreeService) {
@@ -46,7 +48,7 @@ func (h *handler) createTarget(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusCreated, tgt)
+	httpx.WriteJSON(w, http.StatusCreated, toTargetResponse(tgt))
 }
 
 // attachRepoRequest 绑定仓库/分支/版本请求。
@@ -95,5 +97,5 @@ func (h *handler) listTargets(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, tgts)
+	httpx.WriteJSON(w, http.StatusOK, toTargetResponses(tgts))
 }

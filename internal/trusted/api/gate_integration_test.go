@@ -121,7 +121,7 @@ func TestGateEvaluate(t *testing.T) {
 	policy := `{"min_pass_rate":1.0,"max_failed":0,"min_coverage":0.8}`
 	code, body := gdoReq(t, h, "PUT", "/gates/rules", 100,
 		fmt.Sprintf(`{"target_id":1003,"scenario_id":1,"rego":%q}`, policy))
-	if code != http.StatusOK || !strings.Contains(body, `"Version":1`) {
+	if code != http.StatusOK || !strings.Contains(body, `"version":1`) {
 		t.Fatalf("upsert rule want 200/v1 got %d body=%s", code, body)
 	}
 
@@ -129,7 +129,7 @@ func TestGateEvaluate(t *testing.T) {
 	seedRun(t, pool, runID, "pass")
 	code, body = gdoReq(t, h, "POST", "/gates/evaluate", 100,
 		fmt.Sprintf(`{"run_id":%d}`, runID))
-	if code != http.StatusOK || !strings.Contains(body, `"Result":"pass"`) {
+	if code != http.StatusOK || !strings.Contains(body, `"result":"pass"`) {
 		t.Fatalf("evaluate pass-run want pass got %d body=%s", code, body)
 	}
 
@@ -140,7 +140,7 @@ func TestGateEvaluate(t *testing.T) {
 	}
 	code, body = gdoReq(t, h, "POST", "/gates/evaluate", 100,
 		fmt.Sprintf(`{"run_id":%d}`, runID))
-	if code != http.StatusOK || !strings.Contains(body, `"Result":"fail"`) {
+	if code != http.StatusOK || !strings.Contains(body, `"result":"fail"`) {
 		t.Fatalf("evaluate fail-run want fail got %d body=%s", code, body)
 	}
 

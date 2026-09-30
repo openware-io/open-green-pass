@@ -34,7 +34,7 @@ func (h *gateHandler) costOverview(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, ov)
+	httpx.WriteJSON(w, http.StatusOK, toCostOverviewResponse(ov))
 }
 
 func (h *gateHandler) costItems(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +46,7 @@ func (h *gateHandler) costItems(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, items)
+	httpx.WriteJSON(w, http.StatusOK, toCostLineResponses(items))
 }
 
 func (h *gateHandler) costCompare(w http.ResponseWriter, r *http.Request) {
@@ -60,5 +60,5 @@ func (h *gateHandler) costCompare(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, items)
+	httpx.WriteJSON(w, http.StatusOK, toCostLineResponses(items))
 }

@@ -83,14 +83,12 @@ func TestTargetTree_CreateRepoList(t *testing.T) {
 		t.Fatalf("create project want 201 got %d body=%s", code, body)
 	}
 	var created struct {
-		Node struct {
-			ID int64 `json:"ID"`
-		} `json:"Node"`
+		ID int64 `json:"id"`
 	}
-	if err := json.Unmarshal([]byte(body), &created); err != nil || created.Node.ID == 0 {
+	if err := json.Unmarshal([]byte(body), &created); err != nil || created.ID == 0 {
 		t.Fatalf("parse created: %v body=%s", err, body)
 	}
-	targetID := created.Node.ID
+	targetID := created.ID
 
 	// 2. team 100 绑仓库/分支/版本
 	code, body = doReq(t, h, "POST", "/targets/"+itoa(targetID)+"/repo", 100,

@@ -30,7 +30,7 @@ func (h *gateHandler) generateReport(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, rep)
+	httpx.WriteJSON(w, http.StatusOK, toReportResponse(rep))
 }
 
 func (h *gateHandler) exportReport(w http.ResponseWriter, r *http.Request) {

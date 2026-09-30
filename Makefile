@@ -4,7 +4,7 @@ GO      := go
 GOSRC   := ./cmd/... ./internal/... ./pkg/... ./test/...
 GODIRS  := ./cmd ./internal ./pkg ./test
 
-.PHONY: validate lint test build vuln migcheck check tools clean
+.PHONY: validate lint test build vuln migcheck api-contract check tools clean
 
 validate:
 	gofumpt -l $(GODIRS)
@@ -28,7 +28,10 @@ vuln:
 migcheck:
 	./scripts/validate/validate-migrations.sh
 
-check: validate lint test build vuln migcheck
+api-contract:
+	npm run api:check
+
+check: validate lint test build vuln migcheck api-contract
 
 tools:
 	go install mvdan.cc/gofumpt@latest

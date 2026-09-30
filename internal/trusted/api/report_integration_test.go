@@ -38,15 +38,15 @@ func TestReportGenerate(t *testing.T) {
 		t.Fatalf("generate want 200 got %d body=%s", code, body)
 	}
 	// 提取报告 id
-	idx := strings.Index(body, `"ID":`)
+	idx := strings.Index(body, `"id":`)
 	if idx < 0 {
 		t.Fatalf("no report id in body=%s", body)
 	}
-	end := idx + len(`"ID":`)
+	end := idx + len(`"id":`)
 	for end < len(body) && body[end] >= '0' && body[end] <= '9' {
 		end++
 	}
-	reportID := body[idx+len(`"ID":`) : end]
+	reportID := body[idx+len(`"id":`) : end]
 
 	// 2. 导出 HTML
 	code, body = gdoReq(t, h, "GET", "/reports/"+reportID+"/export?fmt=html", 100, "")

@@ -52,14 +52,14 @@ func (h *caseHandler) createCase(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusCreated, created)
+	httpx.WriteJSON(w, http.StatusCreated, toCaseResponse(created))
 }
 
 // updateVersionRequest 新增用例版本请求。
 type updateVersionRequest struct {
-	Script        json.RawMessage `json:"script,omitempty"`
-	SourceRepoID  *int64          `json:"source_repo_id,omitempty"`
-	SourceBranch  *string         `json:"source_branch,omitempty"`
+	Script       json.RawMessage `json:"script,omitempty"`
+	SourceRepoID *int64          `json:"source_repo_id,omitempty"`
+	SourceBranch *string         `json:"source_branch,omitempty"`
 }
 
 func (h *caseHandler) createVersion(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +78,7 @@ func (h *caseHandler) createVersion(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, c)
+	httpx.WriteJSON(w, http.StatusOK, toCaseResponse(c))
 }
 
 // rollbackRequest 回退到指定版本请求。
@@ -106,7 +106,7 @@ func (h *caseHandler) rollback(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, c)
+	httpx.WriteJSON(w, http.StatusOK, toCaseResponse(c))
 }
 
 func (h *caseHandler) deleteCase(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +135,7 @@ func (h *caseHandler) listCases(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, cases)
+	httpx.WriteJSON(w, http.StatusOK, toCaseResponses(cases))
 }
 
 func (h *caseHandler) history(w http.ResponseWriter, r *http.Request) {

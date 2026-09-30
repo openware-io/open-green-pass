@@ -46,7 +46,7 @@ func (h *runHandler) getRun(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, run)
+	httpx.WriteJSON(w, http.StatusOK, toRunResponse(run))
 }
 
 func (h *runHandler) caseResults(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +59,7 @@ func (h *runHandler) caseResults(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, results)
+	httpx.WriteJSON(w, http.StatusOK, toCaseResultResponses(results))
 }
 
 func (h *runHandler) startVersionCheck(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +72,7 @@ func (h *runHandler) startVersionCheck(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, run)
+	httpx.WriteJSON(w, http.StatusOK, toRunResponse(run))
 }
 
 func (h *runHandler) executeRun(w http.ResponseWriter, r *http.Request) {
@@ -86,9 +86,9 @@ func (h *runHandler) executeRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, struct {
-		Run     any `json:"run"`
-		Results any `json:"results"`
-	}{run, results})
+		Run     runResponse          `json:"run"`
+		Results []caseResultResponse `json:"results"`
+	}{toRunResponse(run), toCaseResultResponses(results)})
 }
 
 func (h *runHandler) pauseRun(w http.ResponseWriter, r *http.Request) {
@@ -101,7 +101,7 @@ func (h *runHandler) pauseRun(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, run)
+	httpx.WriteJSON(w, http.StatusOK, toRunResponse(run))
 }
 
 func (h *runHandler) resumeRun(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +114,7 @@ func (h *runHandler) resumeRun(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, run)
+	httpx.WriteJSON(w, http.StatusOK, toRunResponse(run))
 }
 
 func runID(w http.ResponseWriter, r *http.Request) (int64, bool) {

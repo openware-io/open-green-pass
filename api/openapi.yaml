@@ -27,7 +27,7 @@ paths:
       parameters:
         - { name: x-gp-team-id, in: header, required: true, schema: { type: integer } }
       responses:
-        '200': { description: 树形列表 }
+        '200': { description: 树形列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Target' } } } } }
     post:
       summary: 创建被测对象节点
       operationId: createTarget
@@ -37,13 +37,14 @@ paths:
           application/json:
             schema:
               type: object
-              required: [ name, kind ]
+              required: [ name, type ]
               properties:
                 name: { type: string }
-                kind: { type: string, enum: [ project, service_group, service, module ] }
+                type: { type: string, enum: [ project, service_group, service, module ] }
                 parent_id: { type: integer }
+                kind: { type: string }
       responses:
-        '200': { description: 已创建 }
+        '201': { description: 已创建, content: { application/json: { schema: { $ref: '#/components/schemas/Target' } } } }
   /targets/{id}/repo:
     post:
       summary: 关联上游仓库（来源溯源）
@@ -61,7 +62,7 @@ paths:
                 url: { type: string, description: 仓库地址（如 git@github.com:org/repo.git） }
                 default_branch: { type: string }
       responses:
-        '200': { description: 已关联 }
+        '200': { description: 已关联, content: { application/json: { schema: { $ref: '#/components/schemas/StatusResponse' } } } }
   # ---------- 用例（governance，GP1-02） ----------
   /cases:
     get:
@@ -71,9 +72,10 @@ paths:
         - { name: x-gp-team-id, in: header, required: true, schema: { type: integer } }
         - { name: target_id, in: query, schema: { type: integer } }
         - { name: kind, in: query, schema: { type: string } }
-        - { name: keyword, in: query, schema: { type: string } }
+        - { name: code, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string } }
       responses:
-        '200': { description: 用例列表 }
+        '200': { description: 用例列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TestCase' } } } } }
     post:
       summary: 创建用例（版本化首版）
       operationId: createCase
@@ -83,14 +85,15 @@ paths:
           application/json:
             schema:
               type: object
-              required: [ target_id, code, kind ]
+              required: [ target_id, code, title ]
               properties:
                 target_id: { type: integer }
                 code: { type: string }
-                kind: { type: string, enum: [ api, web, ui, perf, contract, security ] }
-                script_json: { type: object, description: 用例脚本/数据（执行产物来源） }
+                title: { type: string }
+                kind: { type: string }
+                script: { description: 用例脚本/数据（执行产物来源） }
       responses:
-        '200': { description: 已创建（含版本） }
+        '201': { description: 已创建（含版本）, content: { application/json: { schema: { $ref: '#/components/schemas/TestCase' } } } }
   /cases/{id}/versions:
     post:
       summary: 迭代创建用例新版本
@@ -103,11 +106,13 @@ paths:
           application/json:
             schema:
               type: object
-              required: [ version_script ]
+              required: [ script ]
               properties:
-                version_script: { type: object }
+                script: { description: 用例脚本/数据 }
+                source_repo_id: { type: integer }
+                source_branch: { type: string }
       responses:
-        '200': { description: 新版本已创建 }
+        '200': { description: 新版本已创建, content: { application/json: { schema: { $ref: '#/components/schemas/TestCase' } } } }
   /cases/{id}/rollback:
     post:
       summary: 用例按版本回退（避免错误分支生成）
@@ -120,9 +125,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [ to_version ]
+              required: [ version ]
               properties:
-                to_version: { type: integer }
+                version: { type: integer }
       responses:
         '200': { description: 已回退 }
   /cases/{id}/history:
@@ -132,7 +137,7 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
-        '200': { description: 版本历史 }
+        '200': { description: 版本历史, content: { application/json: { schema: { type: array, items: { type: object, additionalProperties: true } } } } }
   /cases/{id}:
     delete:
       summary: 删除用例
@@ -140,7 +145,7 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
-        '204': { description: 已删除 }
+        '200': { description: 已删除, content: { application/json: { schema: { $ref: '#/components/schemas/StatusResponse' } } } }
   # ---------- 版本校验（execution，GP1-03） ----------
   /targets/{id}/env/runtime:
     post:
@@ -159,7 +164,7 @@ paths:
                 env: { type: string }
                 version: { type: string }
       responses:
-        '200': { description: 已登记 }
+        '200': { description: 已登记, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
   /targets/{id}/version-check:
     post:
       summary: 发起版本校验（match/mismatch/unknown）
@@ -172,10 +177,10 @@ paths:
           application/json:
             schema:
               type: object
-              required: [ env, expected_version ]
+              required: [ env, target_version ]
               properties:
                 env: { type: string }
-                expected_version: { type: string }
+                target_version: { type: string }
       responses:
         '200':
           description: 校验结果（mismatch 阻断信号）
@@ -193,7 +198,7 @@ paths:
         - { name: id, in: path, required: true, schema: { type: integer } }
         - { name: limit, in: query, schema: { type: integer } }
       responses:
-        '200': { description: 记录列表 }
+        '200': { description: 记录列表, content: { application/json: { schema: { type: array, items: { type: object, additionalProperties: true } } } } }
   # ---------- 运行编排（execution，GP1-04） ----------
   /runs:
     post:
@@ -205,16 +210,16 @@ paths:
           application/json:
             schema:
               type: object
-              required: [ target_id, scenario_id ]
+              required: [ target_id, scenario_id, target_version ]
               properties:
                 target_id: { type: integer }
                 scenario_id: { type: integer }
                 env: { type: string }
                 target_version: { type: string }
                 target_branch: { type: string }
-                selected_cases: { type: array, items: { type: integer }, description: 空=全量 }
+                selected_case_ids: { type: array, items: { type: integer }, description: 空=全量 }
       responses:
-        '200': { description: 已创建（queued） }
+        '201': { description: 已创建（queued）, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
   /runs/{id}:
     get:
       summary: 运行详情（状态机）
@@ -227,9 +232,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  state: { type: string, enum: [ queued, version_check, scheduled, running, paused, collecting, gating, reporting, done, failed ] }
+                $ref: '#/components/schemas/Run'
   /runs/{id}/case-results:
     get:
       summary: 运行内用例结果
@@ -237,7 +240,7 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
-        '200': { description: 用例结果列表 }
+        '200': { description: 用例结果列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CaseResult' } } } } }
   /runs/{id}/version-check:
     post:
       summary: 触发版本校验阶段
@@ -245,7 +248,7 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
-        '200': { description: mismatch 阻断 }
+        '200': { description: mismatch 阻断, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
   /runs/{id}/execute:
     post:
       summary: 执行运行（重跑 attempt 递增）
@@ -253,7 +256,7 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
-        '200': { description: 已启动 }
+        '200': { description: 已启动, content: { application/json: { schema: { type: object, required: [ run, results ], properties: { run: { $ref: '#/components/schemas/Run' }, results: { type: array, items: { $ref: '#/components/schemas/CaseResult' } } } } } } }
   /runs/{id}/pause:
     post:
       summary: 暂停
@@ -261,7 +264,7 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
-        '200': { description: 已暂停 }
+        '200': { description: 已暂停, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
   /runs/{id}/resume:
     post:
       summary: 恢复
@@ -269,7 +272,7 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
-        '200': { description: 已恢复 }
+        '200': { description: 已恢复, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
   # ---------- 门禁（trusted，GP1-05） ----------
   /gates/rules:
     put:
@@ -287,7 +290,7 @@ paths:
                 scenario_id: { type: integer }
                 rego: { type: string, description: 声明式策略 JSON 或 Rego }
       responses:
-        '200': { description: 已装载（含新版本号） }
+        '200': { description: 已装载（含新版本号）, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
   /gates/evaluate:
     post:
       summary: 门禁判定（pass/fail/blocked，入审计链）
@@ -317,7 +320,7 @@ paths:
       parameters:
         - { name: run_id, in: query, required: true, schema: { type: integer } }
       responses:
-        '200': { description: 判定列表 }
+        '200': { description: 判定列表, content: { application/json: { schema: { type: array, items: { type: object, additionalProperties: true } } } } }
   # ---------- 成本（trusted，GP1-06） ----------
   /cost/record:
     post:
@@ -373,7 +376,7 @@ paths:
         - { name: point, in: query, schema: { type: string } }
         - { name: limit, in: query, schema: { type: integer } }
       responses:
-        '200': { description: 明细列表 }
+        '200': { description: 明细列表, content: { application/json: { schema: { type: array, items: { type: object, additionalProperties: true } } } } }
   /cost/compare/{caseId}:
     get:
       summary: 单用例成本历史对比（存量持平/递减证明）
@@ -381,9 +384,9 @@ paths:
       parameters:
         - { name: caseId, in: path, required: true, schema: { type: integer } }
       responses:
-        '200': { description: 该用例各次成本时序 }
+        '200': { description: 该用例各次成本时序, content: { application/json: { schema: { type: array, items: { type: object, additionalProperties: true } } } } }
   # ---------- 报告（trusted，GP1-07） ----------
-    /reports/generate:
+  /reports/generate:
     post:
       summary: 由运行生成测试报告
       operationId: generateReport
@@ -397,24 +400,24 @@ paths:
               properties:
                 run_id: { type: integer }
                 kind: { type: string, enum: [ project, service, case ], description: 默认 service；跨场景合编 P2 }
-        responses:
-          '200': { description: 已生成报告（含 HTML） }
-    /reports/bundle:
-      post:
-        summary: 跨场景合编报告（HTML/Markdown）
-        operationId: bundleReports
-        requestBody:
-          required: true
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [ report_ids ]
-                properties:
-                  report_ids: { type: array, items: { type: integer } }
-                  format: { type: string, enum: [ html, markdown ], default: html }
-        responses:
-          '200': { description: 合编报告内容 }
+      responses:
+        '200': { description: 已生成报告（含 HTML）, content: { application/json: { schema: { $ref: '#/components/schemas/Report' } } } }
+  /reports/bundle:
+    post:
+      summary: 跨场景合编报告（HTML/Markdown）
+      operationId: bundleReports
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ report_ids ]
+              properties:
+                report_ids: { type: array, items: { type: integer } }
+                format: { type: string, enum: [ html, markdown ], default: html }
+      responses:
+        '200': { description: 合编报告内容, content: { application/json: { schema: { $ref: '#/components/schemas/ReportBundle' } } } }
   /reports/{id}/export:
     get:
       summary: 导出报告
@@ -428,6 +431,97 @@ paths:
           content:
             text/html: {}
 components:
+  schemas:
+    StatusResponse:
+      type: object
+      required: [ status ]
+      properties:
+        status: { type: string }
+    Target:
+      type: object
+      required: [ id, team_id, type, name, kind, status ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        type: { type: string }
+        name: { type: string }
+        kind: { type: string }
+        status: { type: string }
+        parent_id: { type: integer, format: int64, nullable: true }
+        repo_id: { type: integer, format: int64, nullable: true }
+    TestCase:
+      type: object
+      required: [ id, team_id, target_id, code, title, kind, current_version, status ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        target_id: { type: integer, format: int64 }
+        code: { type: string }
+        title: { type: string }
+        kind: { type: string }
+        current_version: { type: integer }
+        status: { type: string }
+    Run:
+      type: object
+      required: [ id, team_id, scenario_id, target_id, env, target_version, target_branch, env_version, run_mode, state, selected_cases ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        scenario_id: { type: integer, format: int64 }
+        target_id: { type: integer, format: int64 }
+        env: { type: string }
+        target_version: { type: string }
+        target_branch: { type: string }
+        env_version: { type: string }
+        env_check_id: { type: integer, format: int64, nullable: true }
+        run_mode: { type: string }
+        state: { type: string, enum: [ queued, version_check, scheduled, running, paused, collect, gate, report, done, failed ] }
+        selected_cases: { type: array, items: { type: integer, format: int64 } }
+        started_at: { type: string, format: date-time, nullable: true }
+        ended_at: { type: string, format: date-time, nullable: true }
+    CaseResult:
+      type: object
+      required: [ id, team_id, run_id, case_id, case_version, status, result_text, attempt_seq ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        run_id: { type: integer, format: int64 }
+        case_id: { type: integer, format: int64 }
+        case_version: { type: integer }
+        status: { type: string, enum: [ pass, fail, blocked, skipped, retried ] }
+        result_text: { type: string }
+        evidence: { type: object, additionalProperties: true, nullable: true }
+        attempt_seq: { type: integer }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time, nullable: true }
+    Report:
+      type: object
+      required: [ id, team_id, run_id, target_id, kind, title, version, branch, scenario, status, summary, html, created_at ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        run_id: { type: integer, format: int64 }
+        target_id: { type: integer, format: int64 }
+        kind: { type: string }
+        title: { type: string }
+        version: { type: string }
+        branch: { type: string }
+        scenario: { type: string }
+        status: { type: string }
+        summary: { type: object, additionalProperties: true }
+        evidence: { type: object, additionalProperties: true }
+        html: { type: string }
+        created_at: { type: string, format: date-time }
+    ReportBundle:
+      type: object
+      required: [ reports, total, pass, fail ]
+      properties:
+        reports: { type: array, items: { $ref: '#/components/schemas/Report' } }
+        total: { type: integer }
+        pass: { type: integer }
+        fail: { type: integer }
+        html: { type: string }
+        markdown: { type: string }
   securitySchemes:
     teamHeader:
       type: apiKey

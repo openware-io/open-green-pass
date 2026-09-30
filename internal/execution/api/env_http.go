@@ -57,7 +57,7 @@ func (h *envHandler) registerRuntime(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, rt)
+	httpx.WriteJSON(w, http.StatusOK, toEnvRuntimeResponse(rt))
 }
 
 // checkVersionRequest 版本校验请求。
@@ -86,7 +86,7 @@ func (h *envHandler) checkVersion(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, c)
+	httpx.WriteJSON(w, http.StatusOK, toEnvCheckResponse(c))
 }
 
 func (h *envHandler) recentChecks(w http.ResponseWriter, r *http.Request) {
@@ -101,5 +101,5 @@ func (h *envHandler) recentChecks(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, checks)
+	httpx.WriteJSON(w, http.StatusOK, toEnvCheckResponses(checks))
 }

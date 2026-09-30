@@ -51,7 +51,7 @@ func (h *gateHandler) bundleReports(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, b)
+	httpx.WriteJSON(w, http.StatusOK, toReportBundleResponse(b))
 }
 
 // upsertRuleRequest 装载门禁规则请求。
@@ -81,7 +81,7 @@ func (h *gateHandler) upsertRule(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, rule)
+	httpx.WriteJSON(w, http.StatusOK, toGateRuleResponse(rule))
 }
 
 // evaluateRequest 门禁判定请求。
@@ -108,7 +108,7 @@ func (h *gateHandler) evaluate(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, res)
+	httpx.WriteJSON(w, http.StatusOK, toGateResultResponse(res))
 }
 
 func (h *gateHandler) resultsByRun(w http.ResponseWriter, r *http.Request) {
@@ -122,5 +122,5 @@ func (h *gateHandler) resultsByRun(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, results)
+	httpx.WriteJSON(w, http.StatusOK, toGateResultResponses(results))
 }

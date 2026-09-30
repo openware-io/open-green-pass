@@ -75,21 +75,21 @@ func TestEnvVersionCheck(t *testing.T) {
 	// 1. 登记环境运行版本（env=test, v1.0.0）
 	code, body := doReq(t, h, "POST", "/targets/"+itoa(targetID)+"/env/runtime", 100,
 		`{"env":"test","version":"v1.0.0"}`)
-	if code != http.StatusOK || !strings.Contains(body, `"RunningVersion":"v1.0.0"`) {
+	if code != http.StatusOK || !strings.Contains(body, `"running_version":"v1.0.0"`) {
 		t.Fatalf("register runtime want 200 got %d body=%s", code, body)
 	}
 
 	// 2. 目标 v1.0.0 == 环境 v1.0.0 → match
 	code, body = doReq(t, h, "POST", "/targets/"+itoa(targetID)+"/version-check", 100,
 		`{"env":"test","target_version":"v1.0.0"}`)
-	if code != http.StatusOK || !strings.Contains(body, `"Result":"match"`) {
+	if code != http.StatusOK || !strings.Contains(body, `"result":"match"`) {
 		t.Fatalf("check match want 200/match got %d body=%s", code, body)
 	}
 
 	// 3. 目标 v1.0.1 != 环境 v1.0.0 → mismatch
 	code, body = doReq(t, h, "POST", "/targets/"+itoa(targetID)+"/version-check", 100,
 		`{"env":"test","target_version":"v1.0.1"}`)
-	if code != http.StatusOK || !strings.Contains(body, `"Result":"mismatch"`) {
+	if code != http.StatusOK || !strings.Contains(body, `"result":"mismatch"`) {
 		t.Fatalf("check mismatch want 200/mismatch got %d body=%s", code, body)
 	}
 
