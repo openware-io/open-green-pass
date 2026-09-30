@@ -81,9 +81,9 @@ func TestCaseVersioning(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("history want 200 got %d body=%s", code, body)
 	}
-	if !strings.Contains(body, `"ChangeType":"added"`) ||
-		!strings.Contains(body, `"ChangeType":"updated"`) ||
-		!strings.Contains(body, `"ChangeType":"rollback"`) {
+	if !strings.Contains(body, `"change_type":"added"`) ||
+		!strings.Contains(body, `"change_type":"updated"`) ||
+		!strings.Contains(body, `"change_type":"rollback"`) {
 		t.Fatalf("history missing change types, body=%s", body)
 	}
 

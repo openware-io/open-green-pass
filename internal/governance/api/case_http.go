@@ -149,5 +149,5 @@ func (h *caseHandler) history(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, hist)
+	httpx.WriteJSON(w, http.StatusOK, toCaseVersionResponses(hist))
 }

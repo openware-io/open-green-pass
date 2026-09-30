@@ -137,7 +137,7 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
-        '200': { description: 版本历史, content: { application/json: { schema: { type: array, items: { type: object, additionalProperties: true } } } } }
+        '200': { description: 版本历史, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CaseVersion' } } } } }
   /cases/{id}:
     delete:
       summary: 删除用例
@@ -461,6 +461,20 @@ components:
         kind: { type: string }
         current_version: { type: integer }
         status: { type: string }
+    CaseVersion:
+      type: object
+      required: [ id, team_id, case_id, version, change_type, created_by, created_at ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        case_id: { type: integer, format: int64 }
+        version: { type: integer }
+        change_type: { type: string }
+        source_repo_id: { type: integer, format: int64, nullable: true }
+        source_branch: { type: string, nullable: true }
+        script: { description: 用例脚本/数据 }
+        created_by: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
     Run:
       type: object
       required: [ id, team_id, scenario_id, target_id, env, target_version, target_branch, env_version, run_mode, state, selected_cases ]

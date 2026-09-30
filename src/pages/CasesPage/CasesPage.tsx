@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { CASES, TEST_SCENARIOS, CURRENT_ITERATION, SERVICE_VERSIONS, CASE_EXEC, RECENT_GEN, type ICase, type CaseChange, type ExecCarrierType } from '@/data/mock';
 import { useNavigate } from 'react-router-dom';
 import { scenarioNav } from '@/context/scenarioNav';
 import { toast } from 'sonner';
 import { Cpu, Globe, Smartphone, Sparkles, ShieldCheck, Pencil, Trash2, Power, Check, Ban, GitBranch, History, ArrowLeft, Package, RefreshCcw, Code2, Braces, Activity, Boxes, FlaskConical } from 'lucide-react';
 import { PageHeader, GhostButton, PrimaryButton, ListFilter } from '@/components/shared';
+import { Card } from '@/components/shared';
+import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
+import type { CaseVersion, Target, TestCase } from '@/api/client';
 
 const TYPE_BADGE: Record<string, string> = {
   '单元': 'bg-emerald-50 text-emerald-700',
@@ -120,6 +123,8 @@ export default function CasesPage() {
         <GhostButton onClick={() => toast('导入用例（原型 mock）', { description: '支持从上游 / 用例仓库批量导入，解析为版本化用例并绑定执行载体' })}>导入用例</GhostButton>
         <PrimaryButton onClick={() => navigate('/generation')}>去上游源生成用例</PrimaryButton>
       </PageHeader>
+
+      <RealCasesPanel />
 
       <div className="card bg-white rounded-xl border border-slate-200 p-4 mb-4">
         <div className="flex items-center justify-between flex-wrap gap-3">
@@ -351,6 +356,85 @@ export default function CasesPage() {
       )}
 
     </div>
+  );
+}
+
+function RealCasesPanel() {
+  const client = useMemo(() => configuredGreenPassClient(), []);
+  const [targets, setTargets] = useState<Target[]>([]);
+  const [cases, setCases] = useState<TestCase[]>([]);
+  const [targetID, setTargetID] = useState('');
+  const [code, setCode] = useState('');
+  const [title, setTitle] = useState('');
+  const [kind, setKind] = useState('api');
+  const [script, setScript] = useState('{"method":"GET","path":"/healthz"}');
+  const [versionScript, setVersionScript] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [history, setHistory] = useState<{ caseID: number; items: CaseVersion[] }>();
+  const [message, setMessage] = useState('');
+
+  const loadCases = useCallback(async (targetId = targetID) => {
+    if (!client) return;
+    const parsed = Number(targetId);
+    const loaded = await client.listCases(Number.isSafeInteger(parsed) && parsed > 0 ? { target_id: parsed } : {});
+    setCases(loaded);
+  }, [client, targetID]);
+
+  useEffect(() => {
+    if (!client) return;
+    let active = true;
+    client.listTargets().then((loaded) => {
+      if (!active) return;
+      setTargets(loaded);
+      const first = loaded[0]?.id;
+      if (first) {
+        setTargetID(String(first));
+        void loadCases(String(first));
+      }
+    }).catch((error: unknown) => { if (active) setMessage(error instanceof Error ? error.message : '读取真实被测对象失败'); });
+    return () => { active = false; };
+  }, [client, loadCases]);
+
+  const run = async (action: () => Promise<void>) => {
+    setBusy(true); setMessage('');
+    try { await action(); } catch (error) { setMessage(error instanceof Error ? error.message : '真实 API 操作失败'); }
+    finally { setBusy(false); }
+  };
+  const parseScript = () => {
+    try { return JSON.parse(script); } catch { throw new Error('脚本必须是合法 JSON'); }
+  };
+
+  if (!client) return (
+    <Card title="真实用例控制" className="mb-5" extra={<span className="text-[11px] text-slate-400">原型模式</span>}>
+      <p className="p-5 text-sm text-slate-500">配置 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_API_BASE</code> 与数值型 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_TEAM_ID</code> 后启用真实用例查询、创建、版本和删除。下方表格仍为原型数据。</p>
+    </Card>
+  );
+
+  return (
+    <Card title="真实用例控制" className="mb-5" extra={<span className="text-[11px] text-emerald-700">真实 API 已启用</span>}>
+      <div className="p-5 space-y-4">
+        <p className="text-[11px] text-slate-500">连接：{greenPassConnectionHint()}。本区仅使用 OpenAPI 定义的数值 ID；下方原型表格不会写入后端。</p>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+          <select value={targetID} disabled={busy} onChange={(event) => { setTargetID(event.target.value); void run(() => loadCases(event.target.value)); }} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs">
+            <option value="">选择真实被测对象</option>{targets.map((target) => <option key={target.id} value={target.id}>{target.name} · #{target.id}</option>)}
+          </select>
+          <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="用例编号" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+          <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="标题" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+          <input value={kind} onChange={(event) => setKind(event.target.value)} placeholder="场景族，如 api" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+          <button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(targetID); if (!Number.isSafeInteger(id) || id <= 0 || !code.trim() || !title.trim()) throw new Error('被测对象、编号、标题不能为空'); await client.createCase({ target_id: id, code: code.trim(), title: title.trim(), kind: kind.trim() || undefined, script: parseScript() }); await loadCases(); setCode(''); setTitle(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实用例</button>
+        </div>
+        <textarea value={script} onChange={(event) => setScript(event.target.value)} disabled={busy} rows={2} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" aria-label="用例脚本 JSON" />
+        {message && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{message}</div>}
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-3 py-2">ID / 编号</th><th className="px-3 py-2">标题</th><th className="px-3 py-2">类型</th><th className="px-3 py-2">版本</th><th className="px-3 py-2">状态</th><th className="px-3 py-2">操作</th></tr></thead>
+            <tbody className="divide-y divide-slate-100">{cases.map((item) => <tr key={item.id}><td className="px-3 py-2 font-mono">#{item.id} · {item.code}</td><td className="px-3 py-2">{item.title}</td><td className="px-3 py-2">{item.kind}</td><td className="px-3 py-2">v{item.current_version}</td><td className="px-3 py-2">{item.status}</td><td className="px-3 py-2"><div className="flex flex-wrap gap-1.5"><button type="button" disabled={busy} onClick={() => void run(async () => { const value = versionScript.trim(); if (!value) throw new Error('先填写新版本脚本'); const parsed = JSON.parse(value) as unknown; await client.createCaseVersion(item.id, { script: parsed }); setVersionScript(''); await loadCases(); })} className="rounded border border-slate-200 px-2 py-1 text-[10px] hover:border-emerald-300">提交新版本</button><button type="button" disabled={busy} onClick={() => void run(async () => { const items = await client.caseHistory(item.id); setHistory({ caseID: item.id, items }); })} className="rounded border border-slate-200 px-2 py-1 text-[10px] hover:border-emerald-300">历史</button><button type="button" disabled={busy} onClick={() => { const raw = window.prompt(`回退 #${item.id} 到哪个版本？`, String(item.current_version)); const version = Number(raw); if (raw && Number.isSafeInteger(version) && version > 0) void run(async () => { await client.rollbackCase(item.id, version); await loadCases(); }); }} className="rounded border border-amber-200 px-2 py-1 text-[10px] text-amber-700">回退</button><button type="button" disabled={busy} onClick={() => void run(async () => { await client.deleteCase(item.id); await loadCases(); })} className="rounded border border-red-200 px-2 py-1 text-[10px] text-red-600">删除</button></div></td></tr>)}</tbody>
+          </table>
+          {cases.length === 0 && <div className="px-3 py-5 text-center text-xs text-slate-400">当前被测对象暂无真实用例</div>}
+        </div>
+        <input value={versionScript} onChange={(event) => setVersionScript(event.target.value)} placeholder="新版本脚本 JSON（选中行后提交新版本）" disabled={busy} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" />
+        {history && <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="mb-2 text-xs font-medium text-slate-600">用例 #{history.caseID} 版本历史</div><div className="space-y-1">{history.items.map((item) => <div key={item.id} className="flex flex-wrap gap-2 text-[11px] text-slate-500"><span className="font-mono">v{item.version}</span><span>{item.change_type}</span><span>{item.created_at}</span></div>)}</div></div>}
+      </div>
+    </Card>
   );
 }
 

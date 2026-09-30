@@ -2,6 +2,7 @@ import type { components, operations, paths } from './generated';
 
 export type Target = components['schemas']['Target'];
 export type TestCase = components['schemas']['TestCase'];
+export type CaseVersion = components['schemas']['CaseVersion'];
 export type Run = components['schemas']['Run'];
 export type CaseResult = components['schemas']['CaseResult'];
 export type Report = components['schemas']['Report'];
@@ -88,7 +89,10 @@ export class GreenPassClient {
   createCaseVersion(caseId: number, input: CreateCaseVersionInput): JsonResponse<TestCase> {
     return this.request(`/cases/${caseId}/versions`, { method: 'POST', body: JSON.stringify(input) });
   }
-  caseHistory(caseId: number): JsonResponse<unknown[]> { return this.request(`/cases/${caseId}/history`); }
+  rollbackCase(caseId: number, version: number): JsonResponse<TestCase> {
+    return this.request(`/cases/${caseId}/rollback`, { method: 'POST', body: JSON.stringify({ version }) });
+  }
+  caseHistory(caseId: number): JsonResponse<CaseVersion[]> { return this.request(`/cases/${caseId}/history`); }
   deleteCase(caseId: number): JsonResponse<{ status: string }> {
     return this.request(`/cases/${caseId}`, { method: 'DELETE' });
   }

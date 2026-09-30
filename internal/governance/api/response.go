@@ -1,6 +1,23 @@
 package api
 
-import "github.com/openware-io/open-green-pass/internal/governance/domain"
+import (
+	"time"
+
+	"github.com/openware-io/open-green-pass/internal/governance/domain"
+)
+
+type caseVersionResponse struct {
+	ID           int64   `json:"id"`
+	TeamID       int64   `json:"team_id"`
+	CaseID       int64   `json:"case_id"`
+	Version      int     `json:"version"`
+	ChangeType   string  `json:"change_type"`
+	SourceRepoID *int64  `json:"source_repo_id,omitempty"`
+	SourceBranch *string `json:"source_branch,omitempty"`
+	Script       any     `json:"script,omitempty"`
+	CreatedBy    int64   `json:"created_by"`
+	CreatedAt    string  `json:"created_at"`
+}
 
 // targetResponse 是治理域对外被测对象契约；禁止直接序列化领域聚合。
 type targetResponse struct {
@@ -53,6 +70,27 @@ func toCaseResponses(cases []*domain.Case) []caseResponse {
 	responses := make([]caseResponse, 0, len(cases))
 	for _, c := range cases {
 		responses = append(responses, toCaseResponse(c))
+	}
+	return responses
+}
+
+func toCaseVersionResponse(v *domain.CaseVersion) caseVersionResponse {
+	var script any
+	if v.ScriptJSON != nil {
+		script = *v.ScriptJSON
+	}
+	return caseVersionResponse{
+		ID: v.ID, TeamID: v.TeamID, CaseID: v.CaseID, Version: v.Version,
+		ChangeType: string(v.ChangeType), SourceRepoID: v.SourceRepoID,
+		SourceBranch: v.SourceBranch, Script: script, CreatedBy: v.CreatedBy,
+		CreatedAt: v.CreatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+func toCaseVersionResponses(versions []*domain.CaseVersion) []caseVersionResponse {
+	responses := make([]caseVersionResponse, 0, len(versions))
+	for _, version := range versions {
+		responses = append(responses, toCaseVersionResponse(version))
 	}
 	return responses
 }

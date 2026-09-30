@@ -516,6 +516,25 @@ export interface components {
             current_version: number;
             status: string;
         };
+        CaseVersion: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            team_id: number;
+            /** Format: int64 */
+            case_id: number;
+            version: number;
+            change_type: string;
+            /** Format: int64 */
+            source_repo_id?: number | null;
+            source_branch?: string | null;
+            /** @description 用例脚本/数据 */
+            script?: unknown;
+            /** Format: int64 */
+            created_by: number;
+            /** Format: date-time */
+            created_at: string;
+        };
         Run: {
             /** Format: int64 */
             id: number;
@@ -840,9 +859,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["CaseVersion"][];
                 };
             };
         };
