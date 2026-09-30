@@ -242,10 +242,10 @@ jobs:
 4. P1 单场景报告（API 场景）；结构预留跨场景合编（P2）。
 **验证**：报告渲染正确、证据可访问；export=html 返回可打开；`make check` 全绿。
 
-### GP1-08 前端对接（契约先行）⏳ 契约生成、真实执行链路、报告控制、被测对象、用例管理和成本审计真实区已交付；门禁真实区、MSW/SSE 与其余页面接入待完成
+### GP1-08 前端对接（契约先行）⏳ 契约生成、真实执行链路、报告控制、被测对象、用例管理、成本审计和门禁真实区已交付；MSW/SSE 与其余页面接入待完成
 **实施步骤**
 1. `api/openapi.yaml` 定稿（含 `/targets /cases /runs /gates /cost /reports`）→ openapi-typescript 生成类型。
-2. 前端 `mock.ts` → Mock Service Worker（与真实 API 同构）；API client 接入。**当前：** 已由 `openapi-typescript` 生成 `src/api/generated.ts`，`src/api/client.ts` 仅消费生成类型；`/exec` 的真实运行控制已接入 targets 查询、运行创建、版本校验、执行、暂停/恢复和结果查询；`/targets` 已接入真实对象查询、节点创建和仓库绑定；`/cases` 已接入真实 targets/cases 查询、创建、版本提交、历史、回退和删除；`/audit-cost` 已接入真实成本总览、明细与单用例历史对比。真实调用须显式配置 `VITE_GP_API_BASE` 与数值型 `VITE_GP_TEAM_ID`，不会将原型 ID 写入后端。真实用例版本历史已通过 API DTO 输出，领域对象不直接序列化；成本返回也已补齐明确 OpenAPI schema。
+2. 前端 `mock.ts` → Mock Service Worker（与真实 API 同构）；API client 接入。**当前：** 已由 `openapi-typescript` 生成 `src/api/generated.ts`，`src/api/client.ts` 仅消费生成类型；`/exec` 的真实运行控制已接入 targets/cases 查询、运行创建（支持勾选真实用例 ID）、版本校验、执行、暂停/恢复和结果查询；运行创建响应已使用执行域 DTO；`/targets` 已接入真实对象查询、节点创建和仓库绑定；`/cases` 已接入真实 targets/cases 查询、创建、版本提交、历史、回退和删除；`/audit-cost` 已接入真实成本总览、明细与单用例历史对比；`/gate` 已接入真实运行门禁判定和结果查询。真实调用须显式配置 `VITE_GP_API_BASE` 与数值型 `VITE_GP_TEAM_ID`，不会将原型 ID 写入后端。真实用例版本历史已通过 API DTO 输出，领域对象不直接序列化；成本和门禁返回也已补齐明确 OpenAPI schema。
 3. 实时：`/runs/{id}` SSE；状态色板映射（`pass→emerald/fail→red/pending→amber`，DESIGN-SPEC §2.1）。**当前：** 真实运行状态按 API 返回映射为 emerald/amber/red；SSE 尚未实现，用户可手动刷新。
 4. 列表页查询条件（PRD）。
 **验证**：前端直连本地 server（依赖经 kind 代理）跑通闭环；SSE 实时更新；色板一致。
