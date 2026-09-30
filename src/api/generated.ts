@@ -227,6 +227,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 运行状态 SSE 事件流 */
+        get: operations["runEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{id}/case-results": {
         parameters: {
             query?: never;
@@ -1076,6 +1093,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"];
+                };
+            };
+        };
+    };
+    runEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 运行状态事件流；每条 data 为 Run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
                 };
             };
         };

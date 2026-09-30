@@ -24,6 +24,7 @@ func Register(mux *http.ServeMux, envSvc *application.EnvService, runSvc *applic
 	mux.HandleFunc("GET /targets/{id}/screenshot-policy", ph.getScreenshotPolicy)
 	mux.HandleFunc("POST /runs", rh.createRun)
 	mux.HandleFunc("GET /runs/{id}", rh.getRun)
+	mux.HandleFunc("GET /runs/{id}/events", rh.events)
 	mux.HandleFunc("GET /runs/{id}/case-results", rh.caseResults)
 	mux.HandleFunc("POST /runs/{id}/version-check", rh.startVersionCheck)
 	mux.HandleFunc("POST /runs/{id}/execute", rh.executeRun)

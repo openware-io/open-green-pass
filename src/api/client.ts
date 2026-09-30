@@ -107,6 +107,25 @@ export class GreenPassClient {
   }
   createRun(input: CreateRunInput): JsonResponse<Run> { return this.request('/runs', { method: 'POST', body: JSON.stringify(input) }); }
   getRun(runId: number): JsonResponse<Run> { return this.request(`/runs/${runId}`); }
+  async streamRunEvents(runId: number, onRun: (run: Run) => void, signal?: AbortSignal): Promise<void> {
+    const headers = new Headers({ Accept: 'text/event-stream', 'x-gp-team-id': String(this.teamId) });
+    const response = await this.fetcher(`${this.baseUrl}/runs/${runId}/events`, { headers, signal });
+    if (!response.ok || !response.body) throw new GreenPassApiError(response.status, response.statusText || 'SSE stream unavailable');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += decoder.decode(chunk.value, { stream: true });
+      const events = buffer.split('\n\n');
+      buffer = events.pop() ?? '';
+      for (const event of events) {
+        const data = event.split('\n').find((line) => line.startsWith('data:'))?.slice(5).trim();
+        if (data) onRun(JSON.parse(data) as Run);
+      }
+    }
+  }
   startVersionCheck(runId: number): JsonResponse<Run> { return this.request(`/runs/${runId}/version-check`, { method: 'POST' }); }
   executeRun(runId: number): JsonResponse<operations['executeRun']['responses'][200]['content']['application/json']> {
     return this.request(`/runs/${runId}/execute`, { method: 'POST' });

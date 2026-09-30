@@ -233,6 +233,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Run'
+  /runs/{id}/events:
+    get:
+      summary: 运行状态 SSE 事件流
+      operationId: runEvents
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: 运行状态事件流；每条 data 为 Run
+          content:
+            text/event-stream:
+              schema: { type: string }
   /runs/{id}/case-results:
     get:
       summary: 运行内用例结果

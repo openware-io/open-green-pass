@@ -90,6 +90,23 @@ export default function ExecPage() {
     return () => { active = false; };
   }, [client]);
 
+  useEffect(() => {
+    if (!client || !run?.id) return;
+    const controller = new AbortController();
+    void client.streamRunEvents(run.id, (next) => {
+      setRun(next);
+      if (next.state === 'done' || next.state === 'failed') {
+        void client.caseResults(next.id).then(setResults).catch(() => undefined);
+        controller.abort();
+      }
+    }, controller.signal).catch((error: unknown) => {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) {
+        toast.error('真实运行事件流已断开', { description: error instanceof Error ? error.message : '未知错误' });
+      }
+    });
+    return () => controller.abort();
+  }, [client, run?.id]);
+
   const loadTargetCases = (value: string) => {
     setTargetID(value);
     setSelectedCaseIDs([]);

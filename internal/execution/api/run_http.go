@@ -2,9 +2,12 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/openware-io/open-green-pass/internal/execution/application"
 	"github.com/openware-io/open-green-pass/internal/execution/domain"
@@ -47,6 +50,81 @@ func (h *runHandler) getRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, toRunResponse(run))
+}
+
+// events emits the current run snapshot immediately, then emits changed snapshots.
+// It polls the authoritative repository so the endpoint remains correct when the
+// workflow worker and HTTP server are separate processes. Shared pub/sub can be
+// added later to reduce polling for multi-replica deployments.
+func (h *runHandler) events(w http.ResponseWriter, r *http.Request) {
+	id, ok := runID(w, r)
+	if !ok {
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming responses are not supported", http.StatusInternalServerError)
+		return
+	}
+	initial, err := h.svc.GetRun(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, domain.ErrRunNotFound) {
+			httpx.WriteErr(w, gperr.NotFound("run not found"))
+			return
+		}
+		httpx.WriteErr(w, err)
+		return
+	}
+	initialPayload, err := json.Marshal(toRunResponse(initial))
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+
+	last := string(initialPayload)
+	sequence := 1
+	if _, err := fmt.Fprintf(w, "id: %d\nevent: run\ndata: %s\n\n", sequence, initialPayload); err != nil {
+		return
+	}
+	flusher.Flush()
+	send := func() error {
+		run, err := h.svc.GetRun(r.Context(), id)
+		if err != nil {
+			return err
+		}
+		payload, err := json.Marshal(toRunResponse(run))
+		if err != nil {
+			return err
+		}
+		current := string(payload)
+		if current == last {
+			return nil
+		}
+		last = current
+		sequence++
+		if _, err := fmt.Fprintf(w, "id: %d\nevent: run\ndata: %s\n\n", sequence, payload); err != nil {
+			return err
+		}
+		flusher.Flush()
+		return nil
+	}
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			if err := send(); err != nil {
+				return
+			}
+		}
+	}
 }
 
 func (h *runHandler) caseResults(w http.ResponseWriter, r *http.Request) {
