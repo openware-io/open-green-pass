@@ -7,7 +7,7 @@
 [![Vite](https://img.shields.io/badge/Vite-8-purple)](https://vitejs.dev/)
 > **GreenPass**：软件工程测试治理平台 —— 站在软件工程"测试阶段"的位置，对（AI 生成 / 人写的）被测工程与系统做**质量量化、测试管控与可信治理**，系统本身由 AI 驱动。
 
-本仓库为**纯前端原型工程**（React + Vite + TypeScript + Tailwind + shadcn/ui），全部数据为本地 mock，可独立构建与运行，用于产品原型沟通与设计打磨。
+本仓库以 React + Vite + TypeScript + Tailwind + shadcn/ui 提供产品原型；默认仍使用本地 mock，已具备按 OpenAPI 生成类型并接入真实 GreenPass API 的基础能力。
 
 ## 产品定位
 
@@ -74,6 +74,19 @@ dist/
 npm install
 npm run dev        # 开发服务（localhost:5173，URL 形如 #/target）
 ```
+
+### 真实 API 开发接入
+
+默认不发起后端请求。要在“测试执行”页启用真实运行控制，创建本地 `.env.local`：
+
+```dotenv
+VITE_GP_API_BASE=http://127.0.0.1:8080
+VITE_GP_TEAM_ID=100
+```
+
+`VITE_GP_TEAM_ID` 必须是后端已存在的数值型租户 ID。页面会先从 `/targets` 读取真实对象，再按 OpenAPI 调用创建运行、版本校验、执行、暂停/恢复和结果查询；不会把原型中的对象或场景标识写入后端。
+
+后端默认仅允许 Vite 本地来源 `http://127.0.0.1:5173` 和 `http://localhost:5173` 跨域调用；部署到其他域名时，应以 `GP_CORS_ALLOWED_ORIGINS` 配置明确来源白名单，或由网关/Nginx 以同样的白名单策略代理。
 
 **构建 / 生成可独立打开的单文件原型：**
 

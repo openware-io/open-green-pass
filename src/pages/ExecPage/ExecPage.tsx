@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FLOW_ITEMS, EXEC_RUN, TEST_SCENARIOS, ENV_RUNTIME_VERSIONS, type IEnvVersionCheck } from '@/data/mock';
 import { PageHeader, Card, ListFilter } from '@/components/shared';
-import { Cpu, Globe, Smartphone, Sparkles, Play, Pause, ShieldCheck, ShieldAlert, RefreshCw } from 'lucide-react';
+import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
+import type { CaseResult, Run, Target } from '@/api/client';
+import { Cpu, Globe, Smartphone, Sparkles, Play, Pause, ShieldCheck, ShieldAlert, RefreshCw, Server, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 const STATUS_STYLE: Record<string, { dot: string; badge: string; text: string }> = {
@@ -11,6 +13,24 @@ const STATUS_STYLE: Record<string, { dot: string; badge: string; text: string }>
   '阻塞': { dot: 'bg-amber-500', badge: 'text-amber-600 bg-amber-50', text: '阻塞' },
 };
 const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
+const REAL_STATE_STYLE: Record<Run['state'], { label: string; className: string }> = {
+  queued: { label: '排队中', className: 'bg-amber-50 text-amber-700' },
+  version_check: { label: '版本校验中', className: 'bg-amber-50 text-amber-700' },
+  scheduled: { label: '待执行', className: 'bg-amber-50 text-amber-700' },
+  running: { label: '执行中', className: 'bg-emerald-100 text-emerald-700' },
+  paused: { label: '已暂停', className: 'bg-amber-50 text-amber-700' },
+  collect: { label: '收集证据', className: 'bg-emerald-50 text-emerald-700' },
+  gate: { label: '门禁判定', className: 'bg-emerald-50 text-emerald-700' },
+  report: { label: '生成报告', className: 'bg-emerald-50 text-emerald-700' },
+  done: { label: '已完成', className: 'bg-emerald-50 text-emerald-700' },
+  failed: { label: '已失败/阻断', className: 'bg-red-50 text-red-700' },
+};
+
+function caseResultStyle(status: CaseResult['status']): string {
+  if (status === 'pass') return 'bg-emerald-50 text-emerald-700';
+  if (status === 'fail' || status === 'blocked') return 'bg-red-50 text-red-700';
+  return 'bg-amber-50 text-amber-700';
+}
 
 /** 执行任务 → 所属测试场景（清单归属标注，按标题/被测对象关键词映射） */
 function flowScenario(title: string, asset: string): string {
@@ -21,6 +41,7 @@ function flowScenario(title: string, asset: string): string {
 }
 
 export default function ExecPage() {
+  const client = useMemo(() => configuredGreenPassClient(), []);
   const [paused, setPaused] = useState(false);
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
@@ -39,6 +60,75 @@ export default function ExecPage() {
   };
 
   const [envChecks, setEnvChecks] = useState<IEnvVersionCheck[]>(ENV_RUNTIME_VERSIONS);
+  const [targets, setTargets] = useState<Target[]>([]);
+  const [run, setRun] = useState<Run>();
+  const [results, setResults] = useState<CaseResult[]>([]);
+  const [targetID, setTargetID] = useState('');
+  const [scenarioID, setScenarioID] = useState('1');
+  const [environment, setEnvironment] = useState('test');
+  const [targetVersion, setTargetVersion] = useState('');
+  const [targetBranch, setTargetBranch] = useState('main');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!client) return;
+    let active = true;
+    client.listTargets()
+      .then((loaded) => {
+        if (!active) return;
+        setTargets(loaded);
+        if (loaded.length > 0) setTargetID(String(loaded[0].id));
+      })
+      .catch((error: unknown) => {
+        if (active) toast.error('无法读取真实被测对象', { description: error instanceof Error ? error.message : '未知错误' });
+      });
+    return () => { active = false; };
+  }, [client]);
+
+  const refreshRun = async (runID: number) => {
+    if (!client) return;
+    const [current, caseResults] = await Promise.all([client.getRun(runID), client.caseResults(runID)]);
+    setRun(current);
+    setResults(caseResults);
+  };
+
+  const submitRealRun = async () => {
+    if (!client) return;
+    const parsedTargetID = Number(targetID);
+    const parsedScenarioID = Number(scenarioID);
+    if (!Number.isSafeInteger(parsedTargetID) || parsedTargetID <= 0 || !Number.isSafeInteger(parsedScenarioID) || parsedScenarioID <= 0 || !targetVersion.trim()) {
+      toast.error('请填写有效的被测对象、场景 ID 与目标版本');
+      return;
+    }
+    setBusy(true);
+    try {
+      const created = await client.createRun({ target_id: parsedTargetID, scenario_id: parsedScenarioID, env: environment.trim(), target_version: targetVersion.trim(), target_branch: targetBranch.trim() || undefined });
+      setRun(created);
+      setResults([]);
+      toast.success(`已创建真实运行 #${created.id}`, { description: '下一步必须执行版本校验，校验通过后才能发起执行。' });
+    } catch (error) {
+      toast.error('创建运行失败', { description: error instanceof Error ? error.message : '未知错误' });
+    } finally { setBusy(false); }
+  };
+
+  const invokeRunAction = async (action: 'version-check' | 'execute' | 'pause' | 'resume') => {
+    if (!client || !run) return;
+    setBusy(true);
+    try {
+      if (action === 'version-check') setRun(await client.startVersionCheck(run.id));
+      if (action === 'execute') {
+        const executed = await client.executeRun(run.id);
+        setRun(executed.run);
+        setResults(executed.results);
+      }
+      if (action === 'pause') setRun(await client.pauseRun(run.id));
+      if (action === 'resume') setRun(await client.resumeRun(run.id));
+      if (action !== 'execute') await refreshRun(run.id);
+      toast.success('真实运行状态已刷新');
+    } catch (error) {
+      toast.error('运行操作失败', { description: error instanceof Error ? error.message : '未知错误' });
+    } finally { setBusy(false); }
+  };
   const recheck = () => {
     setEnvChecks(envChecks.map((v) => (v.asset === 'svc-payment' ? { ...v, runtime: 'v2.4.1', matched: true } : v)));
     toast.success('版本校验通过', { description: 'svc-payment 已部署 v2.4.1 与目标一致，可放行执行' });
@@ -62,6 +152,75 @@ export default function ExecPage() {
           </button>
         </div>
       </PageHeader>
+
+      <Card title="真实运行控制" className="mb-5" extra={
+        <span className={'inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md ' + (client ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500')}>
+          {client ? <Server className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
+          {client ? '真实 API 已启用' : '原型模式'}
+        </span>
+      }>
+        <div className="p-5">
+          {client ? (
+            <>
+              <p className="text-[11px] text-slate-500 mb-4">连接：{greenPassConnectionHint()}。仅发送 OpenAPI 定义的数值 ID 与版本字段；页面不会将原型数据写入后端。</p>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                <label className="text-xs text-slate-600">被测对象
+                  <select value={targetID} onChange={(event) => setTargetID(event.target.value)} disabled={busy}
+                    className="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none disabled:bg-slate-50">
+                    <option value="">选择真实对象</option>
+                    {targets.map((target) => <option key={target.id} value={target.id}>{target.name} · #{target.id}</option>)}
+                  </select>
+                </label>
+                <label className="text-xs text-slate-600">场景 ID
+                  <input value={scenarioID} onChange={(event) => setScenarioID(event.target.value)} inputMode="numeric" disabled={busy}
+                    className="mt-1 block w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none disabled:bg-slate-50" />
+                </label>
+                <label className="text-xs text-slate-600">环境
+                  <input value={environment} onChange={(event) => setEnvironment(event.target.value)} disabled={busy}
+                    className="mt-1 block w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none disabled:bg-slate-50" />
+                </label>
+                <label className="text-xs text-slate-600">目标版本
+                  <input value={targetVersion} onChange={(event) => setTargetVersion(event.target.value)} placeholder="如 v1.0.0" disabled={busy}
+                    className="mt-1 block w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none disabled:bg-slate-50" />
+                </label>
+                <label className="text-xs text-slate-600">目标分支
+                  <input value={targetBranch} onChange={(event) => setTargetBranch(event.target.value)} disabled={busy}
+                    className="mt-1 block w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none disabled:bg-slate-50" />
+                </label>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button type="button" onClick={submitRealRun} disabled={busy}
+                  className="px-3 py-1.5 rounded-lg text-sm bg-emerald-600 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">创建真实运行</button>
+                <button type="button" onClick={() => run && invokeRunAction('version-check')} disabled={!run || busy || run.state !== 'queued'}
+                  className="px-3 py-1.5 rounded-lg text-sm border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">版本校验</button>
+                <button type="button" onClick={() => run && invokeRunAction('execute')} disabled={!run || busy || run.state !== 'scheduled'}
+                  className="px-3 py-1.5 rounded-lg text-sm border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">执行</button>
+                <button type="button" onClick={() => run && invokeRunAction('pause')} disabled={!run || busy || run.state !== 'running'}
+                  className="px-3 py-1.5 rounded-lg text-sm border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">暂停</button>
+                <button type="button" onClick={() => run && invokeRunAction('resume')} disabled={!run || busy || run.state !== 'paused'}
+                  className="px-3 py-1.5 rounded-lg text-sm border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">恢复</button>
+                <button type="button" onClick={() => run && refreshRun(run.id).catch((error: unknown) => toast.error('刷新失败', { description: error instanceof Error ? error.message : '未知错误' }))} disabled={!run || busy}
+                  className="px-3 py-1.5 rounded-lg text-sm border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">刷新状态</button>
+              </div>
+              {run && (
+                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                  <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-emerald-700">RUN #{run.id}</span><span className={'rounded-full px-2 py-0.5 text-[11px] font-medium ' + REAL_STATE_STYLE[run.state].className}>{REAL_STATE_STYLE[run.state].label}</span><span>目标 #{run.target_id} · {run.env} · {run.target_version}</span></div>
+                  <div className="mt-1 text-[11px] text-slate-400">本次选择 {run.selected_cases.length} 个用例；空选择在服务端已解析为该对象的全量用例。</div>
+                </div>
+              )}
+              {results.length > 0 && (
+                <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
+                  <table className="w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-3 py-2 font-medium">用例</th><th className="px-3 py-2 font-medium">版本</th><th className="px-3 py-2 font-medium">结果</th><th className="px-3 py-2 font-medium">尝试</th><th className="px-3 py-2 font-medium">说明</th></tr></thead>
+                    <tbody className="divide-y divide-slate-100">{results.map((result) => <tr key={result.id}><td className="px-3 py-2 font-mono">#{result.case_id}</td><td className="px-3 py-2">v{result.case_version}</td><td className="px-3 py-2"><span className={'rounded-full px-2 py-0.5 ' + caseResultStyle(result.status)}>{result.status}</span></td><td className="px-3 py-2">{result.attempt_seq}</td><td className="px-3 py-2 text-slate-500">{result.result_text || '—'}</td></tr>)}</tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">配置 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_API_BASE</code> 与数值型 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_TEAM_ID</code> 后，本区才会启用真实后端调用。当前下面的运行总览保留为原型展示，不会发起伪请求。</p>
+          )}
+        </div>
+      </Card>
 
       {/* 本次执行总览 */}
       <div className="card bg-white rounded-xl border border-slate-200 p-5 mb-5">

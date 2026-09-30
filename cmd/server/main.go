@@ -14,6 +14,7 @@ import (
 	einfra "github.com/openware-io/open-green-pass/internal/execution/infra"
 	gpRunner "github.com/openware-io/open-green-pass/internal/execution/infra/runner"
 	"github.com/openware-io/open-green-pass/internal/gateway"
+	"github.com/openware-io/open-green-pass/internal/gateway/middleware"
 	gapi "github.com/openware-io/open-green-pass/internal/governance/api"
 	"github.com/openware-io/open-green-pass/internal/governance/application"
 	"github.com/openware-io/open-green-pass/internal/governance/infra"
@@ -96,14 +97,15 @@ func main() {
 	}
 
 	addr := cfg.Addr
+	handler := gateway.NewRouter(log,
+		func(mux *http.ServeMux) { gapi.Register(mux, treeSvc) },
+		func(mux *http.ServeMux) { gapi.RegisterCases(mux, caseSvc) },
+		func(mux *http.ServeMux) { eapi.Register(mux, envSvc, runSvc, policySvc) },
+		func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc, costSvc, reportSvc) },
+	)
 	srv := &http.Server{
-		Addr: addr,
-		Handler: gateway.NewRouter(log,
-			func(mux *http.ServeMux) { gapi.Register(mux, treeSvc) },
-			func(mux *http.ServeMux) { gapi.RegisterCases(mux, caseSvc) },
-			func(mux *http.ServeMux) { eapi.Register(mux, envSvc, runSvc, policySvc) },
-			func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc, costSvc, reportSvc) },
-		),
+		Addr:              addr,
+		Handler:           middleware.CORS(cfg.CORSAllowedOrigins)(handler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,
