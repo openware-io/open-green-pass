@@ -10,6 +10,9 @@ export type ReportBundle = components['schemas']['ReportBundle'];
 export type CostOverview = components['schemas']['CostOverview'];
 export type CostLineItem = components['schemas']['CostLineItem'];
 export type GateResult = components['schemas']['GateResult'];
+export type GateRule = components['schemas']['GateRule'];
+export type EnvRuntime = components['schemas']['EnvRuntime'];
+export type EnvCheck = components['schemas']['EnvCheck'];
 
 export type CreateTargetInput = paths['/targets']['post']['requestBody']['content']['application/json'];
 export type CreateCaseInput = paths['/cases']['post']['requestBody']['content']['application/json'];
@@ -100,10 +103,14 @@ export class GreenPassClient {
     return this.request(`/cases/${caseId}`, { method: 'DELETE' });
   }
   registerRuntime(targetId: number, input: paths['/targets/{id}/env/runtime']['post']['requestBody']['content']['application/json']) {
-    return this.request<Record<string, unknown>>(`/targets/${targetId}/env/runtime`, { method: 'POST', body: JSON.stringify(input) });
+    return this.request<EnvRuntime>(`/targets/${targetId}/env/runtime`, { method: 'POST', body: JSON.stringify(input) });
   }
-  checkVersion(targetId: number, input: CheckVersionInput): JsonResponse<operations['checkVersion']['responses'][200]['content']['application/json']> {
+  checkVersion(targetId: number, input: CheckVersionInput): JsonResponse<EnvCheck> {
     return this.request(`/targets/${targetId}/version-check`, { method: 'POST', body: JSON.stringify(input) });
+  }
+  recentChecks(targetId: number, limit?: number): JsonResponse<EnvCheck[]> {
+    const query = limit === undefined ? '' : `?limit=${encodeURIComponent(String(limit))}`;
+    return this.request(`/targets/${targetId}/version-checks${query}`);
   }
   createRun(input: CreateRunInput): JsonResponse<Run> { return this.request('/runs', { method: 'POST', body: JSON.stringify(input) }); }
   listRuns(params: { target_id?: number; state?: string; limit?: number } = {}): JsonResponse<Run[]> {
@@ -138,7 +145,10 @@ export class GreenPassClient {
   pauseRun(runId: number): JsonResponse<Run> { return this.request(`/runs/${runId}/pause`, { method: 'POST' }); }
   resumeRun(runId: number): JsonResponse<Run> { return this.request(`/runs/${runId}/resume`, { method: 'POST' }); }
   caseResults(runId: number): JsonResponse<CaseResult[]> { return this.request(`/runs/${runId}/case-results`); }
-  evaluateGate(runId: number): JsonResponse<{ result: 'pass' | 'fail' | 'blocked' }> {
+  upsertGateRule(input: paths['/gates/rules']['put']['requestBody']['content']['application/json']): JsonResponse<GateRule> {
+    return this.request('/gates/rules', { method: 'PUT', body: JSON.stringify(input) });
+  }
+  evaluateGate(runId: number): JsonResponse<GateResult> {
     return this.request('/gates/evaluate', { method: 'POST', body: JSON.stringify({ run_id: runId }) });
   }
   gateResults(runId: number): JsonResponse<GateResult[]> { return this.request(`/gates/results?run_id=${runId}`); }

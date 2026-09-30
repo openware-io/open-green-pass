@@ -683,6 +683,47 @@ export interface components {
             /** Format: date-time */
             decided_at: string;
         };
+        GateRule: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            team_id: number;
+            /** Format: int64 */
+            target_id: number;
+            /** Format: int64 */
+            scenario_id: number;
+            rego: string;
+            version: number;
+            enabled: boolean;
+        };
+        EnvRuntime: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            team_id: number;
+            /** Format: int64 */
+            target_id: number;
+            env: string;
+            running_version: string;
+            /** Format: date-time */
+            checked_at: string;
+        };
+        EnvCheck: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            team_id: number;
+            /** Format: int64 */
+            run_id?: number | null;
+            /** Format: int64 */
+            target_id: number;
+            target_version: string;
+            env_version: string;
+            /** @enum {string} */
+            result: "match" | "mismatch" | "unknown";
+            /** Format: date-time */
+            checked_at: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -979,9 +1020,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["EnvRuntime"];
                 };
             };
         };
@@ -1010,10 +1049,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @enum {string} */
-                        result?: "match" | "mismatch" | "unknown";
-                    };
+                    "application/json": components["schemas"]["EnvCheck"];
                 };
             };
         };
@@ -1037,9 +1073,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["EnvCheck"][];
                 };
             };
         };
@@ -1281,9 +1315,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["GateRule"];
                 };
             };
         };
@@ -1309,10 +1341,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** @enum {string} */
-                        result?: "pass" | "fail" | "blocked";
-                    };
+                    "application/json": components["schemas"]["GateResult"];
                 };
             };
         };

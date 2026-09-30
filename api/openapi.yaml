@@ -164,7 +164,7 @@ paths:
                 env: { type: string }
                 version: { type: string }
       responses:
-        '200': { description: 已登记, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+        '200': { description: 已登记, content: { application/json: { schema: { $ref: '#/components/schemas/EnvRuntime' } } } }
   /targets/{id}/version-check:
     post:
       summary: 发起版本校验（match/mismatch/unknown）
@@ -182,14 +182,7 @@ paths:
                 env: { type: string }
                 target_version: { type: string }
       responses:
-        '200':
-          description: 校验结果（mismatch 阻断信号）
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  result: { type: string, enum: [ match, mismatch, unknown ] }
+        '200': { description: 校验结果（mismatch 阻断信号）, content: { application/json: { schema: { $ref: '#/components/schemas/EnvCheck' } } } }
   /targets/{id}/version-checks:
     get:
       summary: 最近版本校验记录
@@ -198,7 +191,7 @@ paths:
         - { name: id, in: path, required: true, schema: { type: integer } }
         - { name: limit, in: query, schema: { type: integer } }
       responses:
-        '200': { description: 记录列表, content: { application/json: { schema: { type: array, items: { type: object, additionalProperties: true } } } } }
+        '200': { description: 记录列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/EnvCheck' } } } } }
   # ---------- 运行编排（execution，GP1-04） ----------
   /runs:
     get:
@@ -311,7 +304,7 @@ paths:
                 scenario_id: { type: integer }
                 rego: { type: string, description: 声明式策略 JSON 或 Rego }
       responses:
-        '200': { description: 已装载（含新版本号）, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+        '200': { description: 已装载（含新版本号）, content: { application/json: { schema: { $ref: '#/components/schemas/GateRule' } } } }
   /gates/evaluate:
     post:
       summary: 门禁判定（pass/fail/blocked，入审计链）
@@ -330,10 +323,7 @@ paths:
           description: 判定结果
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  result: { type: string, enum: [ pass, fail, blocked ] }
+              schema: { $ref: '#/components/schemas/GateResult' }
   /gates/results:
     get:
       summary: 运行的门禁判定结果
@@ -596,6 +586,39 @@ components:
         result: { type: string, enum: [ pass, fail, blocked ] }
         detail: { type: object, additionalProperties: true }
         decided_at: { type: string, format: date-time }
+    GateRule:
+      type: object
+      required: [ id, team_id, target_id, scenario_id, rego, version, enabled ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        target_id: { type: integer, format: int64 }
+        scenario_id: { type: integer, format: int64 }
+        rego: { type: string }
+        version: { type: integer }
+        enabled: { type: boolean }
+    EnvRuntime:
+      type: object
+      required: [ id, team_id, target_id, env, running_version, checked_at ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        target_id: { type: integer, format: int64 }
+        env: { type: string }
+        running_version: { type: string }
+        checked_at: { type: string, format: date-time }
+    EnvCheck:
+      type: object
+      required: [ id, team_id, target_id, target_version, env_version, result, checked_at ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        run_id: { type: integer, format: int64, nullable: true }
+        target_id: { type: integer, format: int64 }
+        target_version: { type: string }
+        env_version: { type: string }
+        result: { type: string, enum: [ match, mismatch, unknown ] }
+        checked_at: { type: string, format: date-time }
   securitySchemes:
     teamHeader:
       type: apiKey
