@@ -6,12 +6,20 @@ import { ErrorFallback } from '@/components/ErrorFallback';
 import App from './app';
 import './index.css';
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <HashRouter>
-      <ErrorBoundary FallbackComponent={ErrorFallback}>
-        <App />
-      </ErrorBoundary>
-    </HashRouter>
-  </StrictMode>,
-);
+async function start() {
+  if (import.meta.env.VITE_GP_MOCK_API?.trim().toLowerCase() === 'true' && !import.meta.env.VITE_GP_API_BASE) {
+    const { worker } = await import('./mocks/browser');
+    await worker.start({ onUnhandledFrame: 'bypass' });
+  }
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <HashRouter>
+        <ErrorBoundary FallbackComponent={ErrorFallback}>
+          <App />
+        </ErrorBoundary>
+      </HashRouter>
+    </StrictMode>,
+  );
+}
+
+void start();

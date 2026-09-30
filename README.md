@@ -86,6 +86,17 @@ VITE_GP_TEAM_ID=100
 
 `VITE_GP_TEAM_ID` 必须是后端已存在的数值型租户 ID。页面会先从 `/targets` 读取真实对象，再按 OpenAPI 调用创建运行、版本校验、执行、暂停/恢复和结果查询；不会把原型中的对象或场景标识写入后端。
 
+### OpenAPI 契约 Mock
+
+前端联调可以显式启用 MSW，不需要启动 Go 服务：
+
+```dotenv
+VITE_GP_MOCK_API=true
+VITE_GP_TEAM_ID=100
+```
+
+`VITE_GP_API_BASE` 配置后优先连接真实服务；未配置真实地址且 `VITE_GP_MOCK_API=true` 时，浏览器 Service Worker 只拦截 `api/openapi.yaml` 已定义的对象、用例、运行、门禁、成本和报告路径。MSW 不是生产服务，也不会在默认配置下自动启用。
+
 后端默认仅允许 Vite 本地来源 `http://127.0.0.1:5173` 和 `http://localhost:5173` 跨域调用；部署到其他域名时，应以 `GP_CORS_ALLOWED_ORIGINS` 配置明确来源白名单，或由网关/Nginx 以同样的白名单策略代理。
 
 **构建 / 生成可独立打开的单文件原型：**
