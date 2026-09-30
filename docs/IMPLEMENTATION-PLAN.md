@@ -258,18 +258,18 @@ jobs:
 
 > 定位：从单 API 场景扩展到 12 类异构场景 + 完整调度器 + 水平扩展（§10）。每项 DoD 用 `make check` + 集成测试验证。
 
-- **GP2-01 异构执行引擎抽象 + 场景接入**：执行器抽象（`Runner` 接口）扩展——Playwright 浏览器集群（Web E2E/视觉/性能）、STF 真机池（移动/兼容/弱网）、k6/Locust（压测）；每场景注册 `resource` 类型与 Runner。关键文件：`execution/infra/runner/{playwright,stf,k6}.go`、`deploy/k8s/gp-runner`（浏览器/真机/压测节点）、`res_quota` 资源类型扩展。验证：各 Runner 单测+集成；场景闭环（用例→执行→证据→门禁）。
+- **GP2-01 异构执行引擎抽象 + 场景接入**：执行器抽象与场景注册已完成（`internal/execution/infra/runner`）：Playwright/STF/k6 适配器输出统一 `Plan`，API/浏览器/真机/压测资源类型路由、证据哈希、失败传播均有单测；server/worker 支持 `GP_RUNNER_TYPE=scenario`。**当前剩余**：将 `CommandExecutor` 接到真实 Playwright 浏览器集群、STF 真机池、k6/Locust 资源池，并补对应 kind 集成测试；在真实资源池接入完成前不得宣称 GP2-01 阶段 DoD 完成。
 - **GP2-02 完整 W2 迁移到 Temporal ✅ 已交付（执行链纳入 Temporal 编排）**：执行流水线全量迁 Temporal Workflow（VersionCheck→AcquireResources→Dispatch→Collect→Gate→Cost→Report）；`cmd/worker` 注册 W2 多实例。关键文件：`internal/execution/workflow/execute_run.go`。验证：workflow 测试 + 暂停/恢复/重试 + 崩溃恢复。
-- **GP2-03 多级配额 + 公平队列（Redis Streams CG + 原子 Lua + WFQ）**：租户→工程→负责人三级配额；单团队不拖垮全局（§8.2/§10.4）。关键文件：`execution/infra/quota/{redis_quota.go,fairqueue.go}`（Lua 原子扣减）。验证：并发扣减原子；WFQ 公平；占满配额不影响他团队。
-- **GP2-04 冲突检测 + Pause/Resume**：资源互斥冲突检测 + 用户暂停全部/恢复全部（Signal）。验证：暂停挂起、恢复继续；冲突上报审计。
+- **GP2-03 多级配额 + 公平队列（Redis Streams CG + 原子 Lua + WFQ）**：调度契约与本地参考实现已完成（`internal/execution/domain/quota.go`、`internal/execution/infra/quota`）：租户→工程→负责人三级配额、资源类型隔离、原子扣减/释放、加权公平队列均有单测与并发验证。**当前剩余**：接入 Redis Streams Consumer Group + Lua 原子脚本，并在 kind Redis 上完成跨进程/多 worker 集成测试；Redis 接入前不得宣称 GP2-03 DoD 完成。
+- **GP2-04 冲突检测 + Pause/Resume**：暂停/恢复控制边界已完成：application 通过 `WorkflowController` 发送 Temporal `pause`/`resume` signal，workflow 在版本校验后等待恢复；当前剩余资源互斥冲突检测、冲突审计和 Temporal 集成验证。
 - **GP2-05 截图开关策略下发 ✅ 已交付**：服务级截图开关按对象策略下发（防高并发性能开销，PRD R-TEST-13）。验证：策略生效；无截图场景证据=日志+hash。
-- **GP2-06 跨场景报告合编（PDF/Word）**：多 run 跨场景汇总合编；服务端渲染 PDF(Chromium headless) / Word(docx 模板)。关键文件：`trusted/report/renderer/{html,pdf,docx,md}.go`。验证：四种格式可打开；合编结构正确。
+- **GP2-06 跨场景报告合编（PDF/Word）**：跨 run 合编查询、汇总和 HTML/Markdown 输出已完成（`POST /reports/bundle`，tenant scoped）；当前剩余 PDF/Word 渲染器和对应运行时集成验证。
 - **GP2-07 水平扩展 P2（§10）**：server 多副本 + worker 多实例 + 调度器无状态化（P1 起无状态代码实装）。关键文件：`deploy/helm/gp`（replica）、SSE 共享订阅（Redis Pub/Sub）。验证：加副本吞吐线性上升（压测基线 §10.10）。
-- **GP2-08 资源池注册 + 多执行集群**：执行节点/资源池登记；调度器分发到对应执行集群（§10.8）。验证：多执行节点接入，隔离一致。
+- **GP2-08 资源池注册 + 多执行集群**：本地资源池注册/能力选择/容量 reserve-release 参考实现已完成（`internal/execution/infra/pool`），当前剩余资源池持久化、心跳和真实多集群接入验证。
 
 ## 4. P3 AI 治理 + 生成管道 W1（任务级施工图）
 
-- **GP3-01 统一 AI 网关（LiteLLM→自研）**：路由/fallback/超时/并发控流/单点 Token 计量/`requestId` 贯穿（D4）。关键文件：`ai/infra/gateway/{router,fallback,meter}.go`、`mdl_model/mdl_binding`。验证：多模型路由；计量幂等（`idempotency_key`）。
+- **GP3-01 统一 AI 网关（LiteLLM→自研）**：统一请求/结果端口、首选模型路由、fallback、并发信号量、request_id 强制和幂等计量已完成（`internal/ai/domain/gateway.go`、`internal/ai/infra/gateway.go`，fake provider 单测）；当前剩余真实 LiteLLM/供应商适配、超时策略和成本库接入。
 - **GP3-02 完整 W1 生成管道（Temporal）**：拉仓库→解析→AI 生成→质量门禁→人工审核(Signal)→提交版本→回退。关键文件：`cmd/worker` 注册 W1、`ai/workflow/gen_case_pipeline.go`。验证：审核 Signal 挂起/通过/回退；版本按 change 提交。
 - **GP3-03 成本趋势（Timescale）**：`ts_cost_trend` hypertable + 连续聚合 + 历史对比时序。验证：趋势正确；与 `cost_line_item` 对账。
 - **GP3-04 审计哈希链锚定 + 独立校验**：`aud_event` 周期快照锚点 + 独立校验 API（可独立验证）。验证：篡改可检出；Verify 通过。

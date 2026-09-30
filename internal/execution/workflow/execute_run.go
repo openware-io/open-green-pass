@@ -28,6 +28,8 @@ type ExecuteRunResult struct {
 
 // ExecuteRunWorkflow 测试运行执行 Workflow：版本校验 → 执行（collect/gate/report/done）。
 func ExecuteRunWorkflow(ctx workflow.Context, input ExecuteRunInput) (*ExecuteRunResult, error) {
+	paused := workflow.GetSignalChannel(ctx, "pause")
+	resume := workflow.GetSignalChannel(ctx, "resume")
 	ao := workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Minute, // 长执行容忍
 		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 3},
@@ -42,7 +44,12 @@ func ExecuteRunWorkflow(ctx workflow.Context, input ExecuteRunInput) (*ExecuteRu
 	if !vc.Ok {
 		return &ExecuteRunResult{State: domain.RunFailed}, nil
 	}
-
+	var ignored struct{}
+	if paused.ReceiveAsync(&ignored) {
+		resume.Receive(ctx, &ignored)
+	}
+	// Pause is a durable workflow signal. A pause request is consumed before
+	// dispatch, and the workflow remains suspended until resume arrives.
 	// 2) 执行（含 collect→gate→report→done）
 	var ex ExecuteResult
 	if err := workflow.ExecuteActivity(ctx, ActivityExecuteRun, input.TeamID, input.RunID).Get(ctx, &ex); err != nil {

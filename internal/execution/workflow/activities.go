@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/client"
 
 	"github.com/openware-io/open-green-pass/internal/execution/application"
 	"github.com/openware-io/open-green-pass/internal/execution/domain"
@@ -16,6 +17,35 @@ var deps *Activities
 
 // SetDeps 注入执行链依赖（worker 启动时调用一次）。
 func SetDeps(runSvc *application.RunService) { deps = &Activities{runSvc: runSvc} }
+
+// TemporalController signals the long-lived run workflow by its stable ID.
+type TemporalController struct{ client client.Client }
+
+func NewTemporalController(c client.Client) *TemporalController {
+	return &TemporalController{client: c}
+}
+
+func (c *TemporalController) Signal(ctx context.Context, runID, _ int64, signal string) error {
+	return c.client.SignalWorkflow(ctx, workflowID(runID), "", signal, struct{}{})
+}
+
+func workflowID(runID int64) string {
+	return "gp-run-" + itoaWorkflow(runID)
+}
+
+func itoaWorkflow(n int64) string {
+	if n == 0 {
+		return "0"
+	}
+	var b [20]byte
+	i := len(b)
+	for n > 0 {
+		i--
+		b[i] = byte('0' + n%10)
+		n /= 10
+	}
+	return string(b[i:])
+}
 
 // Activities 持有执行链依赖。
 type Activities struct {

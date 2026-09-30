@@ -8,14 +8,15 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/openware-io/open-green-pass/internal/gateway"
-	gapi "github.com/openware-io/open-green-pass/internal/governance/api"
-	"github.com/openware-io/open-green-pass/internal/governance/application"
-	"github.com/openware-io/open-green-pass/internal/governance/infra"
 	eapi "github.com/openware-io/open-green-pass/internal/execution/api"
 	eapp "github.com/openware-io/open-green-pass/internal/execution/application"
 	edomain "github.com/openware-io/open-green-pass/internal/execution/domain"
 	einfra "github.com/openware-io/open-green-pass/internal/execution/infra"
+	gpRunner "github.com/openware-io/open-green-pass/internal/execution/infra/runner"
+	"github.com/openware-io/open-green-pass/internal/gateway"
+	gapi "github.com/openware-io/open-green-pass/internal/governance/api"
+	"github.com/openware-io/open-green-pass/internal/governance/application"
+	"github.com/openware-io/open-green-pass/internal/governance/infra"
 	"github.com/openware-io/open-green-pass/internal/platform/config"
 	"github.com/openware-io/open-green-pass/internal/platform/observability"
 	tapi "github.com/openware-io/open-green-pass/internal/trusted/api"
@@ -58,6 +59,9 @@ func main() {
 	policySvc := eapp.NewPolicyService(policyStore, gen)
 	var runner edomain.RunnerPort
 	switch os.Getenv("GP_RUNNER_TYPE") {
+	case "scenario":
+		runner = gpRunner.NewScenarioRunner(gen, gpRunner.DefaultRegistry(), nil)
+		log.Info("runner", "type", "scenario")
 	case "k8s":
 		k8sRunner, err := einfra.NewK8sRunner(gen, einfra.K8sRunnerConfig{
 			Namespace: os.Getenv("GP_RUNNER_NS"),

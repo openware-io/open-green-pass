@@ -33,3 +33,9 @@ type ReportRepository interface {
 	Save(ctx context.Context, r *Report) error
 	Find(ctx context.Context, teamID, id int64) (*Report, error)
 }
+
+// ReportBundlePort supplies already-authorized reports for cross-scenario
+// aggregation. Implementations must apply tenant isolation in the repository.
+type ReportBundlePort interface {
+	FindMany(ctx context.Context, teamID int64, ids []int64) ([]*Report, error)
+}

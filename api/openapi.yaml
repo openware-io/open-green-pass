@@ -383,7 +383,7 @@ paths:
       responses:
         '200': { description: 该用例各次成本时序 }
   # ---------- 报告（trusted，GP1-07） ----------
-  /reports/generate:
+    /reports/generate:
     post:
       summary: 由运行生成测试报告
       operationId: generateReport
@@ -397,8 +397,24 @@ paths:
               properties:
                 run_id: { type: integer }
                 kind: { type: string, enum: [ project, service, case ], description: 默认 service；跨场景合编 P2 }
-      responses:
-        '200': { description: 已生成报告（含 HTML） }
+        responses:
+          '200': { description: 已生成报告（含 HTML） }
+    /reports/bundle:
+      post:
+        summary: 跨场景合编报告（HTML/Markdown）
+        operationId: bundleReports
+        requestBody:
+          required: true
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ report_ids ]
+                properties:
+                  report_ids: { type: array, items: { type: integer } }
+                  format: { type: string, enum: [ html, markdown ], default: html }
+        responses:
+          '200': { description: 合编报告内容 }
   /reports/{id}/export:
     get:
       summary: 导出报告

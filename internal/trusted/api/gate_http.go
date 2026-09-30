@@ -32,7 +32,26 @@ func Register(mux *http.ServeMux, gate *application.GateService, audit *applicat
 	mux.HandleFunc("GET /cost/compare/{caseId}", h.costCompare)
 	// 报告
 	mux.HandleFunc("POST /reports/generate", h.generateReport)
+	mux.HandleFunc("POST /reports/bundle", h.bundleReports)
 	mux.HandleFunc("GET /reports/{id}/export", h.exportReport)
+}
+
+func (h *gateHandler) bundleReports(w http.ResponseWriter, r *http.Request) {
+	var req application.BundleRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	if len(req.ReportIDs) == 0 {
+		httpx.WriteErr(w, gperr.Validation("report_ids required"))
+		return
+	}
+	b, err := h.report.BuildBundle(r.Context(), req.ReportIDs, req.Format)
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, b)
 }
 
 // upsertRuleRequest 装载门禁规则请求。

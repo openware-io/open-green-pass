@@ -12,7 +12,9 @@ import (
 	"go.temporal.io/sdk/worker"
 
 	eapp "github.com/openware-io/open-green-pass/internal/execution/application"
+	edomain "github.com/openware-io/open-green-pass/internal/execution/domain"
 	einfra "github.com/openware-io/open-green-pass/internal/execution/infra"
+	gpRunner "github.com/openware-io/open-green-pass/internal/execution/infra/runner"
 	"github.com/openware-io/open-green-pass/internal/execution/workflow"
 	"github.com/openware-io/open-green-pass/internal/platform/config"
 	"github.com/openware-io/open-green-pass/internal/platform/db"
@@ -47,7 +49,20 @@ func main() {
 	caseReader := einfra.NewCaseReader(dbb)
 	policyStore := einfra.NewPolicyStore(dbb, gen)
 	policySvc := eapp.NewPolicyService(policyStore, gen)
-	runner := einfra.NewMockRunner(gen)
+	var runner edomain.RunnerPort
+	switch os.Getenv("GP_RUNNER_TYPE") {
+	case "scenario":
+		runner = gpRunner.NewScenarioRunner(gen, gpRunner.DefaultRegistry(), nil)
+	case "k8s":
+		kr, e := einfra.NewK8sRunner(gen, einfra.K8sRunnerConfig{Namespace: os.Getenv("GP_RUNNER_NS"), Image: os.Getenv("GP_RUNNER_IMAGE"), Timeout: 5 * time.Minute})
+		if e != nil {
+			log.Error("init k8s runner", "error", e)
+			os.Exit(1)
+		}
+		runner = kr
+	default:
+		runner = einfra.NewMockRunner(gen)
+	}
 	runSvc := eapp.NewRunService(runStore, envSvc, caseReader, policySvc, runner, gen)
 
 	// Temporal client + worker
@@ -61,6 +76,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer c.Close()
+	runSvc.SetWorkflowController(workflow.NewTemporalController(c))
 
 	w := worker.New(c, "gp-execution", worker.Options{})
 	workflow.SetDeps(runSvc)

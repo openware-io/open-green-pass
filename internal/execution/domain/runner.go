@@ -9,7 +9,10 @@ type CaseSpec struct {
 	CaseVersion int
 	TargetID    int64
 	Env         string
-	Script      any  // 执行脚本定义（API 场景为 HTTP 定义；其他场景各异）
+	// Scenario selects the execution adapter (api, web_e2e, mobile_e2e,
+	// performance). Empty values are treated as api for backwards compatibility.
+	Scenario string
+	Script   any // 执行脚本定义（API 场景为 HTTP 定义；其他场景各异）
 	// ScreenshotEnabled 服务级截图开关（PRD R-TEST-13）：false=证据仅日志+哈希，避免高并发截图开销。
 	ScreenshotEnabled bool
 }

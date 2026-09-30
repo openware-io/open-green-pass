@@ -13,18 +13,25 @@ import (
 
 // RunService 运行编排应用服务实现。
 type RunService struct {
-	repo   domain.RunRepository
-	envSvc *EnvService
-	cases  domain.CasePort
-	policy domain.PolicyPort
-	runner domain.RunnerPort
-	gen    *id.Generator
-	log    *slog.Logger
+	repo     domain.RunRepository
+	envSvc   *EnvService
+	cases    domain.CasePort
+	policy   domain.PolicyPort
+	runner   domain.RunnerPort
+	gen      *id.Generator
+	log      *slog.Logger
+	workflow WorkflowController
 }
 
 // NewRunService 创建运行编排服务。
 func NewRunService(repo domain.RunRepository, envSvc *EnvService, cases domain.CasePort, policy domain.PolicyPort, runner domain.RunnerPort, gen *id.Generator) *RunService {
-	return &RunService{repo: repo, envSvc: envSvc, cases: cases, policy: policy, runner: runner, gen: gen, log: slog.Default()}
+	return &RunService{repo: repo, envSvc: envSvc, cases: cases, policy: policy, runner: runner, gen: gen, log: slog.Default(), workflow: NoopWorkflowController{}}
+}
+
+func (s *RunService) SetWorkflowController(controller WorkflowController) {
+	if controller != nil {
+		s.workflow = controller
+	}
 }
 
 // CreateRunRequest 创建运行请求。
@@ -126,7 +133,7 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (*domain.Run, 
 		}
 		spec = append(spec, &domain.CaseSpec{
 			CaseID: caseID, CaseVersion: version, TargetID: run.TargetID, Env: run.Env,
-			Script: script, ScreenshotEnabled: shot.ScreenshotEnabled,
+			Scenario: scenarioFromScript(script), Script: script, ScreenshotEnabled: shot.ScreenshotEnabled,
 		})
 	}
 
@@ -173,14 +180,38 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (*domain.Run, 
 	return run, results, nil
 }
 
+func scenarioFromScript(script any) string {
+	if m, ok := script.(map[string]any); ok {
+		if v, ok := m["scenario"].(string); ok && v != "" {
+			return v
+		}
+		if v, ok := m["kind"].(string); ok && v != "" {
+			return v
+		}
+	}
+	return "api"
+}
+
 // PauseRun 暂停运行。
 func (s *RunService) PauseRun(ctx context.Context, runID int64) (*domain.Run, error) {
-	return s.transition(ctx, runID, (*domain.Run).Pause)
+	return s.transitionWithSignal(ctx, runID, (*domain.Run).Pause, "pause")
 }
 
 // ResumeRun 恢复运行。
 func (s *RunService) ResumeRun(ctx context.Context, runID int64) (*domain.Run, error) {
-	return s.transition(ctx, runID, (*domain.Run).Resume)
+	return s.transitionWithSignal(ctx, runID, (*domain.Run).Resume, "resume")
+}
+
+func (s *RunService) transitionWithSignal(ctx context.Context, runID int64, fn func(*domain.Run) error, signal string) (*domain.Run, error) {
+	run, err := s.transition(ctx, runID, fn)
+	if err != nil {
+		return nil, err
+	}
+	teamID, _ := rls.TenantFrom(ctx)
+	if err := s.workflow.Signal(ctx, runID, teamID, signal); err != nil {
+		return nil, err
+	}
+	return run, nil
 }
 
 func (s *RunService) transition(ctx context.Context, runID int64, fn func(*domain.Run) error) (*domain.Run, error) {
