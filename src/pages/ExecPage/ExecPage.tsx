@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FLOW_ITEMS, EXEC_RUN, TEST_SCENARIOS, ENV_RUNTIME_VERSIONS, type IEnvVersionCheck } from '@/data/mock';
 import { PageHeader, Card, ListFilter } from '@/components/shared';
 import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
-import type { CaseResult, Run, Target } from '@/api/client';
+import type { CaseResult, Run, Target, TestCase } from '@/api/client';
 import { Cpu, Globe, Smartphone, Sparkles, Play, Pause, ShieldCheck, ShieldAlert, RefreshCw, Server, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -61,6 +61,8 @@ export default function ExecPage() {
 
   const [envChecks, setEnvChecks] = useState<IEnvVersionCheck[]>(ENV_RUNTIME_VERSIONS);
   const [targets, setTargets] = useState<Target[]>([]);
+  const [cases, setCases] = useState<TestCase[]>([]);
+  const [selectedCaseIDs, setSelectedCaseIDs] = useState<number[]>([]);
   const [run, setRun] = useState<Run>();
   const [results, setResults] = useState<CaseResult[]>([]);
   const [targetID, setTargetID] = useState('');
@@ -77,13 +79,24 @@ export default function ExecPage() {
       .then((loaded) => {
         if (!active) return;
         setTargets(loaded);
-        if (loaded.length > 0) setTargetID(String(loaded[0].id));
+        if (loaded.length > 0) {
+          setTargetID(String(loaded[0].id));
+          void client.listCases({ target_id: loaded[0].id }).then(setCases).catch(() => undefined);
+        }
       })
       .catch((error: unknown) => {
         if (active) toast.error('无法读取真实被测对象', { description: error instanceof Error ? error.message : '未知错误' });
       });
     return () => { active = false; };
   }, [client]);
+
+  const loadTargetCases = (value: string) => {
+    setTargetID(value);
+    setSelectedCaseIDs([]);
+    const id = Number(value);
+    if (client && Number.isSafeInteger(id) && id > 0) void client.listCases({ target_id: id }).then(setCases).catch((error: unknown) => toast.error('无法读取真实用例', { description: error instanceof Error ? error.message : '未知错误' }));
+    else setCases([]);
+  };
 
   const refreshRun = async (runID: number) => {
     if (!client) return;
@@ -102,7 +115,7 @@ export default function ExecPage() {
     }
     setBusy(true);
     try {
-      const created = await client.createRun({ target_id: parsedTargetID, scenario_id: parsedScenarioID, env: environment.trim(), target_version: targetVersion.trim(), target_branch: targetBranch.trim() || undefined });
+      const created = await client.createRun({ target_id: parsedTargetID, scenario_id: parsedScenarioID, env: environment.trim(), target_version: targetVersion.trim(), target_branch: targetBranch.trim() || undefined, selected_case_ids: selectedCaseIDs });
       setRun(created);
       setResults([]);
       toast.success(`已创建真实运行 #${created.id}`, { description: '下一步必须执行版本校验，校验通过后才能发起执行。' });
@@ -165,7 +178,7 @@ export default function ExecPage() {
               <p className="text-[11px] text-slate-500 mb-4">连接：{greenPassConnectionHint()}。仅发送 OpenAPI 定义的数值 ID 与版本字段；页面不会将原型数据写入后端。</p>
               <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                 <label className="text-xs text-slate-600">被测对象
-                  <select value={targetID} onChange={(event) => setTargetID(event.target.value)} disabled={busy}
+                  <select value={targetID} onChange={(event) => loadTargetCases(event.target.value)} disabled={busy}
                     className="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none disabled:bg-slate-50">
                     <option value="">选择真实对象</option>
                     {targets.map((target) => <option key={target.id} value={target.id}>{target.name} · #{target.id}</option>)}
@@ -187,6 +200,10 @@ export default function ExecPage() {
                   <input value={targetBranch} onChange={(event) => setTargetBranch(event.target.value)} disabled={busy}
                     className="mt-1 block w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none disabled:bg-slate-50" />
                 </label>
+              </div>
+              <div className="mt-3 rounded-lg border border-slate-200 p-3">
+                <div className="mb-2 flex items-center justify-between text-[11px] text-slate-500"><span>本次用例（不选择=该对象全量）</span><span>已选 {selectedCaseIDs.length} / {cases.length}</span></div>
+                <div className="max-h-32 space-y-1 overflow-auto">{cases.map((testCase) => <label key={testCase.id} className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={selectedCaseIDs.includes(testCase.id)} onChange={() => setSelectedCaseIDs((current) => current.includes(testCase.id) ? current.filter((id) => id !== testCase.id) : [...current, testCase.id])} disabled={busy} className="accent-emerald-600" /><span className="font-mono">#{testCase.id}</span><span>{testCase.code} · {testCase.title}</span></label>)}</div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button type="button" onClick={submitRealRun} disabled={busy}

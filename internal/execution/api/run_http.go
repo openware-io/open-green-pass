@@ -29,7 +29,7 @@ func (h *runHandler) createRun(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusCreated, run)
+	httpx.WriteJSON(w, http.StatusCreated, toRunResponse(run))
 }
 
 func (h *runHandler) getRun(w http.ResponseWriter, r *http.Request) {
