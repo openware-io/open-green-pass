@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TEST_RUNS, TEST_SCENARIOS, SCENARIO_GROUPS, type ITestRun } from '@/data/mock';
 import { scenarioNav } from '@/context/scenarioNav';
 import { toast } from 'sonner';
 import { PageHeader, Card, ListFilter, PrimaryButton } from '@/components/shared';
-import { Cpu, Globe, Smartphone, Sparkles, Download, ShieldCheck, TrendingUp, CornerDownRight, FileText } from 'lucide-react';
+import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
+import type { Report } from '@/api/client';
+import { Cpu, Globe, Smartphone, Sparkles, Download, ShieldCheck, TrendingUp, CornerDownRight, FileText, Server, WifiOff } from 'lucide-react';
 
 const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
 const EXPORT_FORMATS = [
@@ -12,10 +14,15 @@ const EXPORT_FORMATS = [
 ];
 
 export default function ReportPage() {
+  const client = useMemo(() => configuredGreenPassClient(), []);
   const [runId, setRunId] = useState('RUN-4821');
   const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [fmt, setFmt] = useState('PDF');
+  const [realRunID, setRealRunID] = useState('');
+  const [realReport, setRealReport] = useState<Report>();
+  const [realReportHTML, setRealReportHTML] = useState('');
+  const [busy, setBusy] = useState(false);
   const kw = q.trim().toLowerCase();
   const runs = TEST_RUNS.filter((r) => !kw || (r.id + r.branch + r.trigger).toLowerCase().includes(kw));
   const run = TEST_RUNS.find((r) => r.id === runId) as ITestRun;
@@ -29,11 +36,75 @@ export default function ReportPage() {
 
   const onExport = (scope: string, format: string) => toast.success(`报告已导出（原型模拟下载）`, { description: `${runId}-${scope} · ${format}` });
 
+  const generateRealReport = async () => {
+    if (!client) return;
+    const parsedRunID = Number(realRunID);
+    if (!Number.isSafeInteger(parsedRunID) || parsedRunID <= 0) {
+      toast.error('请输入有效的真实运行 ID');
+      return;
+    }
+    setBusy(true);
+    try {
+      const report = await client.generateReport(parsedRunID);
+      setRealReport(report);
+      setRealReportHTML(report.html);
+      toast.success(`已生成真实报告 #${report.id}`);
+    } catch (error) {
+      toast.error('生成真实报告失败', { description: error instanceof Error ? error.message : '未知错误' });
+    } finally { setBusy(false); }
+  };
+
+  const refreshRealHTML = async () => {
+    if (!client || !realReport) return;
+    setBusy(true);
+    try {
+      setRealReportHTML(await client.reportHTML(realReport.id));
+      toast.success('已从服务端刷新 HTML 报告');
+    } catch (error) {
+      toast.error('读取 HTML 报告失败', { description: error instanceof Error ? error.message : '未知错误' });
+    } finally { setBusy(false); }
+  };
+
+  const openRealHTML = () => {
+    if (!realReportHTML) return;
+    const preview = window.open('', '_blank', 'noopener,noreferrer');
+    if (!preview) {
+      toast.error('浏览器阻止了报告预览窗口');
+      return;
+    }
+    preview.document.write(realReportHTML);
+    preview.document.close();
+  };
+
   return (
     <div>
       <PageHeader title="测试报告" desc="测试闭环最后一环 · 跨场景汇总合编 · 工程报告 = 多场景报告合编（可逐场景分块 / 整份合编导出）">
         <span className="text-[11px] text-slate-400">按工程筛选：sys-payment-platform · {run.gate === '通过' ? '门禁通过' : '门禁阻断'}</span>
       </PageHeader>
+
+      <Card title="真实报告控制" className="mb-5" extra={
+        <span className={'inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md ' + (client ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500')}>
+          {client ? <Server className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}{client ? '真实 API 已启用' : '原型模式'}
+        </span>
+      }>
+        <div className="p-5">
+          {client ? <>
+            <p className="mb-3 text-[11px] text-slate-500">连接：{greenPassConnectionHint()}。请输入真实数值运行 ID；当前服务端仅支持 HTML 报告导出。</p>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="text-xs text-slate-600">真实运行 ID
+                <input value={realRunID} onChange={(event) => setRealRunID(event.target.value)} inputMode="numeric" placeholder="如 123456" disabled={busy}
+                  className="mt-1 block w-36 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:border-emerald-400 focus:outline-none disabled:bg-slate-50" />
+              </label>
+              <PrimaryButton disabled={busy} onClick={generateRealReport}><span className="flex items-center gap-1"><FileText className="w-4 h-4" />生成 HTML 报告</span></PrimaryButton>
+              <button type="button" onClick={refreshRealHTML} disabled={!realReport || busy}
+                className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">刷新 HTML</button>
+              <button type="button" onClick={openRealHTML} disabled={!realReportHTML}
+                className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">新窗口预览</button>
+            </div>
+            {realReport && <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600"><span className="font-mono text-emerald-700">REPORT #{realReport.id}</span><span className="mx-2">·</span>{realReport.kind}<span className="mx-2">·</span><span className={realReport.status === 'pass' ? 'text-emerald-700' : 'text-red-700'}>{realReport.status}</span></div>}
+          </> : <p className="text-sm text-slate-500">配置 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_API_BASE</code> 与数值型 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_TEAM_ID</code> 后，本区可生成服务端真实 HTML 报告。下面的报告数据仍是原型展示。</p>}
+        </div>
+      </Card>
 
       <Card title="选择运行 · 生成报告" extra={<span className="text-[11px] text-slate-400">点击运行生成对应跨场景合编报告</span>} className="mb-5 p-5">
         <div className="flex items-center justify-between mb-3">

@@ -60,6 +60,15 @@ export class GreenPassClient {
     return response.json() as Promise<T>;
   }
 
+  private async requestText(path: string, init: RequestInit = {}): Promise<string> {
+    const headers = new Headers(init.headers);
+    headers.set('Accept', 'text/html');
+    headers.set('x-gp-team-id', String(this.teamId));
+    const response = await this.fetcher(`${this.baseUrl}${path}`, { ...init, headers });
+    if (!response.ok) throw new GreenPassApiError(response.status, response.statusText);
+    return response.text();
+  }
+
   health(): JsonResponse<{ status: string }> { return this.request('/healthz'); }
   listTargets(): JsonResponse<Target[]> { return this.request('/targets'); }
   createTarget(input: CreateTargetInput): JsonResponse<Target> {
@@ -102,6 +111,9 @@ export class GreenPassClient {
   costOverview(): JsonResponse<Record<string, unknown>> { return this.request('/cost/overview'); }
   generateReport(runId: number, kind = 'service'): JsonResponse<Report> {
     return this.request('/reports/generate', { method: 'POST', body: JSON.stringify({ run_id: runId, kind }) });
+  }
+  reportHTML(reportId: number): Promise<string> {
+    return this.requestText(`/reports/${reportId}/export?fmt=html`);
   }
   bundleReports(reportIds: number[], format: 'html' | 'markdown' = 'html'): JsonResponse<ReportBundle> {
     return this.request('/reports/bundle', { method: 'POST', body: JSON.stringify({ report_ids: reportIds, format }) });
