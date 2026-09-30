@@ -614,6 +614,40 @@ export interface components {
             html?: string;
             markdown?: string;
         };
+        CostOverview: {
+            total_amount: number;
+            by_category: {
+                [key: string]: number;
+            };
+            by_point: {
+                [key: string]: number;
+            };
+        };
+        CostLineItem: {
+            /** Format: int64 */
+            id: number;
+            request_id: string;
+            idempotency_key: string;
+            /** Format: int64 */
+            team_id: number;
+            /** Format: int64 */
+            target_id: number;
+            /** Format: int64 */
+            run_id: number;
+            /** Format: int64 */
+            case_id: number;
+            category: string;
+            biz_point: string;
+            model: string;
+            /** Format: int64 */
+            tokens_in: number;
+            /** Format: int64 */
+            tokens_out: number;
+            unit_price: number;
+            amount: number;
+            /** Format: date-time */
+            occurred_at: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -1279,15 +1313,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        total_amount?: number;
-                        by_category?: {
-                            [key: string]: number;
-                        };
-                        by_point?: {
-                            [key: string]: number;
-                        };
-                    };
+                    "application/json": components["schemas"]["CostOverview"];
                 };
             };
         };
@@ -1311,9 +1337,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["CostLineItem"][];
                 };
             };
         };
@@ -1335,9 +1359,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["CostLineItem"][];
                 };
             };
         };

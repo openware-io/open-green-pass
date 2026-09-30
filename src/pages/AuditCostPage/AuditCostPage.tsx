@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { COST_GEN_DETAIL, COST_EXEC_DETAIL, COST_GEN_TOTAL, COST_EXEC_TOTAL, COST_SCENARIOS, COST_TOTAL, COST_TOTAL_TOKENS_IN, COST_TOTAL_TOKENS_OUT, COST_AICALLS, COST_MOM_CHANGE, COST_PER_CASE, COST_TREND, COST_EXEC_LEGACY_TOTAL, COST_EXEC_NEW_TOTAL, COST_ORGS, COST_BY_GROUP, COST_BY_SERVICE, COST_HEAT, SERVICE_ORG_MAP, AI_MODELS, CASE_COST_HISTORY } from '@/data/mock';
 import { PageHeader, Card, ListFilter } from '@/components/shared';
 import { Wallet, TrendingDown, Cpu, Layers, ArrowDownRight, ArrowUpRight, History, PenTool, Rocket } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
+import type { CostLineItem, CostOverview } from '@/api/client';
 
 const SCEN_COLOR: Record<string, string> = {
   '用例生成': 'bg-emerald-500', '测试执行辅助': 'bg-teal-500', '质量判定': 'bg-indigo-500', '契约分析': 'bg-amber-500', '变异/篡改检测': 'bg-slate-400',
@@ -52,6 +54,7 @@ const DIMS: { key: DimKey; label: string }[] = [
 ];
 
 export default function AuditCostPage() {
+  const realClient = useMemo(() => configuredGreenPassClient(), []);
   const [dim, setDim] = useState<DimKey>('org');
   const [activeKind, setActiveKind] = useState<'gen' | 'exec'>('gen');
   const [genQ, setGenQ] = useState('');
@@ -94,6 +97,8 @@ export default function AuditCostPage() {
       <PageHeader title="成本审计" desc="AI 场景成本 · 维度归因 · 治理降本">
         <span className="text-[11px] text-slate-400">统计周期：近 30 天 · 金额 = 单价表 × token 量（输入+输出）</span>
       </PageHeader>
+
+      <RealCostPanel client={realClient} />
 
       {/* 总览 KPI */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
@@ -407,4 +412,35 @@ export default function AuditCostPage() {
       )}
     </div>
   );
+}
+
+function RealCostPanel({ client }: { client: ReturnType<typeof configuredGreenPassClient> }) {
+  const [overview, setOverview] = useState<CostOverview>();
+  const [items, setItems] = useState<CostLineItem[]>([]);
+  const [caseID, setCaseID] = useState('');
+  const [history, setHistory] = useState<CostLineItem[]>([]);
+  const [message, setMessage] = useState('');
+
+  const refresh = async () => {
+    if (!client) return;
+    const [loadedOverview, loadedItems] = await Promise.all([client.costOverview(), client.costItems({ limit: 20 })]);
+    setOverview(loadedOverview); setItems(loadedItems);
+  };
+  useEffect(() => {
+    if (!client) return;
+    let active = true;
+    client.costOverview().then((loaded) => { if (active) setOverview(loaded); }).catch((error: unknown) => { if (active) setMessage(error instanceof Error ? error.message : '读取真实成本失败'); });
+    client.costItems({ limit: 20 }).then((loaded) => { if (active) setItems(loaded); }).catch((error: unknown) => { if (active) setMessage(error instanceof Error ? error.message : '读取真实成本明细失败'); });
+    return () => { active = false; };
+  }, [client]);
+  if (!client) return <Card title="真实成本数据" className="mb-5" extra={<span className="text-[11px] text-slate-400">原型模式</span>}><p className="p-5 text-sm text-slate-500">配置 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_API_BASE</code> 与数值型 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_TEAM_ID</code> 后显示真实成本总览、明细与单用例历史；其余内容保持原型展示。</p></Card>;
+  return <Card title="真实成本数据" className="mb-5" extra={<button type="button" onClick={() => void refresh().catch((error: unknown) => setMessage(error instanceof Error ? error.message : '刷新失败'))} className="text-[11px] text-emerald-700">刷新</button>}>
+    <div className="p-5 space-y-3"><p className="text-[11px] text-slate-500">连接：{greenPassConnectionHint()}。总览由服务端明细汇总，页面不写入计量数据。</p>
+      {overview && <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs"><div className="rounded-lg bg-emerald-50 p-3 text-emerald-800">总额 <b>¥{overview.total_amount.toFixed(4)}</b></div><div className="rounded-lg bg-slate-50 p-3 text-slate-600">生成 ¥{(overview.by_category.generate ?? 0).toFixed(4)}</div><div className="rounded-lg bg-slate-50 p-3 text-slate-600">执行 ¥{(overview.by_category.execute ?? 0).toFixed(4)}</div></div>}
+      {message && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{message}</div>}
+      <div className="overflow-x-auto rounded-lg border border-slate-200"><table className="w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-3 py-2">时间</th><th className="px-3 py-2">类别</th><th className="px-3 py-2">用例</th><th className="px-3 py-2">模型</th><th className="px-3 py-2">金额</th></tr></thead><tbody className="divide-y divide-slate-100">{items.map((item) => <tr key={item.id}><td className="px-3 py-2">{item.occurred_at}</td><td className="px-3 py-2">{item.category} / {item.biz_point}</td><td className="px-3 py-2 font-mono">#{item.case_id || '—'}</td><td className="px-3 py-2">{item.model || '—'}</td><td className="px-3 py-2">¥{item.amount.toFixed(4)}</td></tr>)}</tbody></table>{items.length === 0 && <div className="p-4 text-center text-xs text-slate-400">暂无真实成本明细</div>}</div>
+      <div className="flex gap-2"><input value={caseID} onChange={(event) => setCaseID(event.target.value)} inputMode="numeric" placeholder="真实用例 ID" className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" /><button type="button" onClick={() => { const id = Number(caseID); if (!Number.isSafeInteger(id) || id <= 0) { setMessage('请输入有效的真实用例 ID'); return; } void client.costCompare(id).then(setHistory).catch((error: unknown) => setMessage(error instanceof Error ? error.message : '读取历史失败')); }} className="rounded-lg border border-emerald-300 px-3 py-2 text-xs text-emerald-700">查询用例历史</button></div>
+      {history.length > 0 && <div className="text-xs text-slate-600">历史：{history.map((item) => <span key={item.id} className="mr-2 inline-block rounded bg-slate-100 px-2 py-1">#{item.run_id} ¥{item.amount.toFixed(4)}</span>)}</div>}
+    </div>
+  </Card>;
 }

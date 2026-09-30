@@ -7,6 +7,8 @@ export type Run = components['schemas']['Run'];
 export type CaseResult = components['schemas']['CaseResult'];
 export type Report = components['schemas']['Report'];
 export type ReportBundle = components['schemas']['ReportBundle'];
+export type CostOverview = components['schemas']['CostOverview'];
+export type CostLineItem = components['schemas']['CostLineItem'];
 
 export type CreateTargetInput = paths['/targets']['post']['requestBody']['content']['application/json'];
 export type CreateCaseInput = paths['/cases']['post']['requestBody']['content']['application/json'];
@@ -112,7 +114,13 @@ export class GreenPassClient {
   resumeRun(runId: number): JsonResponse<Run> { return this.request(`/runs/${runId}/resume`, { method: 'POST' }); }
   caseResults(runId: number): JsonResponse<CaseResult[]> { return this.request(`/runs/${runId}/case-results`); }
   gateResults(runId: number): JsonResponse<unknown[]> { return this.request(`/gates/results?run_id=${runId}`); }
-  costOverview(): JsonResponse<Record<string, unknown>> { return this.request('/cost/overview'); }
+  costOverview(): JsonResponse<CostOverview> { return this.request('/cost/overview'); }
+  costItems(params: { category?: 'generate' | 'execute'; point?: string; limit?: number } = {}): JsonResponse<CostLineItem[]> {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => { if (value !== undefined) query.set(key, String(value)); });
+    return this.request(`/cost/items${query.size ? `?${query}` : ''}`);
+  }
+  costCompare(caseId: number): JsonResponse<CostLineItem[]> { return this.request(`/cost/compare/${caseId}`); }
   generateReport(runId: number, kind = 'service'): JsonResponse<Report> {
     return this.request('/reports/generate', { method: 'POST', body: JSON.stringify({ run_id: runId, kind }) });
   }

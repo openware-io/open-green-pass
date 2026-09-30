@@ -362,11 +362,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  total_amount: { type: number }
-                  by_category: { type: object, additionalProperties: { type: number } }
-                  by_point: { type: object, additionalProperties: { type: number } }
+                $ref: '#/components/schemas/CostOverview'
   /cost/items:
     get:
       summary: 成本明细（按大类/细类筛选）
@@ -376,7 +372,7 @@ paths:
         - { name: point, in: query, schema: { type: string } }
         - { name: limit, in: query, schema: { type: integer } }
       responses:
-        '200': { description: 明细列表, content: { application/json: { schema: { type: array, items: { type: object, additionalProperties: true } } } } }
+        '200': { description: 明细列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CostLineItem' } } } } }
   /cost/compare/{caseId}:
     get:
       summary: 单用例成本历史对比（存量持平/递减证明）
@@ -384,7 +380,13 @@ paths:
       parameters:
         - { name: caseId, in: path, required: true, schema: { type: integer } }
       responses:
-        '200': { description: 该用例各次成本时序, content: { application/json: { schema: { type: array, items: { type: object, additionalProperties: true } } } } }
+        '200':
+          description: 该用例各次成本时序
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CostLineItem' }
   # ---------- 报告（trusted，GP1-07） ----------
   /reports/generate:
     post:
@@ -536,6 +538,32 @@ components:
         fail: { type: integer }
         html: { type: string }
         markdown: { type: string }
+    CostOverview:
+      type: object
+      required: [ total_amount, by_category, by_point ]
+      properties:
+        total_amount: { type: number }
+        by_category: { type: object, additionalProperties: { type: number } }
+        by_point: { type: object, additionalProperties: { type: number } }
+    CostLineItem:
+      type: object
+      required: [ id, request_id, idempotency_key, team_id, target_id, run_id, case_id, category, biz_point, model, tokens_in, tokens_out, unit_price, amount, occurred_at ]
+      properties:
+        id: { type: integer, format: int64 }
+        request_id: { type: string }
+        idempotency_key: { type: string }
+        team_id: { type: integer, format: int64 }
+        target_id: { type: integer, format: int64 }
+        run_id: { type: integer, format: int64 }
+        case_id: { type: integer, format: int64 }
+        category: { type: string }
+        biz_point: { type: string }
+        model: { type: string }
+        tokens_in: { type: integer, format: int64 }
+        tokens_out: { type: integer, format: int64 }
+        unit_price: { type: number }
+        amount: { type: number }
+        occurred_at: { type: string, format: date-time }
   securitySchemes:
     teamHeader:
       type: apiKey
