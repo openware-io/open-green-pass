@@ -79,6 +79,12 @@ export const handlers = [
     runs.set(run.id, run);
     return json(run, 201);
   }),
+  http.get('/runs', ({ request }) => {
+    const query = new URL(request.url).searchParams;
+    const targetID = query.get('target_id');
+    const state = query.get('state');
+    return json([...runs.values()].filter((run) => (!targetID || run.target_id === Number(targetID)) && (!state || run.state === state)));
+  }),
   http.get('/runs/:id', ({ params }) => { const run = runs.get(parseID(params.id as string)); return run ? json(runResponse(run)) : json({ message: 'run not found' }, 404); }),
   http.post('/runs/:id/version-check', ({ params }) => { const run = runs.get(parseID(params.id as string)); if (!run) return json({ message: 'run not found' }, 404); run.state = 'scheduled'; run.env_version = run.target_version; return json(run); }),
   http.post('/runs/:id/execute', ({ params }) => {

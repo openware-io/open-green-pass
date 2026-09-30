@@ -201,6 +201,15 @@ paths:
         '200': { description: 记录列表, content: { application/json: { schema: { type: array, items: { type: object, additionalProperties: true } } } } }
   # ---------- 运行编排（execution，GP1-04） ----------
   /runs:
+    get:
+      summary: 测试运行列表
+      operationId: listRuns
+      parameters:
+        - { name: target_id, in: query, schema: { type: integer } }
+        - { name: state, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        '200': { description: 运行列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Run' } } } } }
     post:
       summary: 创建测试运行（勾选用例空=全量）
       operationId: createRun

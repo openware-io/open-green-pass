@@ -200,7 +200,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** 测试运行列表 */
+        get: operations["listRuns"];
         put?: never;
         /** 创建测试运行（勾选用例空=全量） */
         post: operations["createRun"];
@@ -1039,6 +1040,30 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+        };
+    };
+    listRuns: {
+        parameters: {
+            query?: {
+                target_id?: number;
+                state?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 运行列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"][];
                 };
             };
         };

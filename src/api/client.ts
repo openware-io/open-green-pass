@@ -106,6 +106,11 @@ export class GreenPassClient {
     return this.request(`/targets/${targetId}/version-check`, { method: 'POST', body: JSON.stringify(input) });
   }
   createRun(input: CreateRunInput): JsonResponse<Run> { return this.request('/runs', { method: 'POST', body: JSON.stringify(input) }); }
+  listRuns(params: { target_id?: number; state?: string; limit?: number } = {}): JsonResponse<Run[]> {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => { if (value !== undefined) query.set(key, String(value)); });
+    return this.request(`/runs${query.size ? `?${query}` : ''}`);
+  }
   getRun(runId: number): JsonResponse<Run> { return this.request(`/runs/${runId}`); }
   async streamRunEvents(runId: number, onRun: (run: Run) => void, signal?: AbortSignal): Promise<void> {
     const headers = new Headers({ Accept: 'text/event-stream', 'x-gp-team-id': String(this.teamId) });

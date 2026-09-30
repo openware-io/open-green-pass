@@ -35,6 +35,30 @@ func (h *runHandler) createRun(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, toRunResponse(run))
 }
 
+func (h *runHandler) listRuns(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	var targetID *int64
+	if raw := query.Get("target_id"); raw != "" {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || id <= 0 {
+			httpx.WriteErr(w, gperr.Validation("invalid target_id"))
+			return
+		}
+		targetID = &id
+	}
+	limit, _ := strconv.Atoi(query.Get("limit"))
+	runs, err := h.svc.ListRuns(r.Context(), targetID, query.Get("state"), limit)
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	responses := make([]runResponse, 0, len(runs))
+	for _, run := range runs {
+		responses = append(responses, toRunResponse(run))
+	}
+	httpx.WriteJSON(w, http.StatusOK, responses)
+}
+
 func (h *runHandler) getRun(w http.ResponseWriter, r *http.Request) {
 	id, ok := runID(w, r)
 	if !ok {

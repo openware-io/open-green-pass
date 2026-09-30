@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TEST_RUNS, RUN_SERVICE_REPORTS, EXEC_AUDIT_ROWS, CASE_COST_HISTORY, TEST_EVIDENCE, SCREENSHOT_POLICY, type ITestRun, type IScreenshotPolicy } from '@/data/mock';
 import { PageHeader, Card, ListFilter } from '@/components/shared';
 import { Activity, FileText, Image, FileJson, File, Video, ArrowUpRight, ArrowDownRight, Minus, ScanEye, Camera } from 'lucide-react';
+import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
+import type { Run } from '@/api/client';
 
 const RESULT_BADGE: Record<string, string> = {
   '通过': 'bg-emerald-50 text-emerald-600',
@@ -138,6 +140,8 @@ export default function HistoryPage() {
       <PageHeader title="测试历史" desc="每次 CI 触发 = 一次运行 · 时间维主键 · 报告 / 证据 / 成本联动">
         <span className="text-[11px] text-slate-400">按工程筛选：sys-payment-platform</span>
       </PageHeader>
+
+      <RealHistoryPanel />
 
       <div className="grid grid-cols-3 gap-5 mb-5">
         <div className="col-span-2 card bg-white rounded-xl border border-slate-200 p-5">
@@ -366,4 +370,21 @@ export default function HistoryPage() {
 
     </div>
   );
+}
+
+function RealHistoryPanel() {
+  const client = useMemo(() => configuredGreenPassClient(), []);
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [message, setMessage] = useState('');
+  const load = async () => { if (client) setRuns(await client.listRuns({ limit: 50 })); };
+  useEffect(() => {
+    if (!client) return;
+    let active = true;
+    client.listRuns({ limit: 50 }).then((loaded) => { if (active) setRuns(loaded); }).catch((error: unknown) => { if (active) setMessage(error instanceof Error ? error.message : '读取真实运行历史失败'); });
+    return () => { active = false; };
+  }, [client]);
+  if (!client) return <Card title="真实运行历史" className="mb-5" extra={<span className="text-[11px] text-slate-400">原型模式</span>}><p className="p-5 text-sm text-slate-500">配置真实 API 或启用契约 Mock 后显示服务端运行列表；下方历史视图仍为原型展示。</p></Card>;
+  return <Card title="真实运行历史" className="mb-5" extra={<button type="button" onClick={() => void load().catch((error: unknown) => setMessage(error instanceof Error ? error.message : '刷新失败'))} className="text-[11px] text-emerald-700">刷新</button>}>
+    <div className="p-5"><p className="mb-3 text-[11px] text-slate-500">连接：{greenPassConnectionHint()}。列表来自 `GET /runs`，按服务端运行 ID 倒序。</p>{message && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{message}</div>}<div className="overflow-x-auto rounded-lg border border-slate-200"><table className="w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-3 py-2">运行</th><th className="px-3 py-2">对象</th><th className="px-3 py-2">场景</th><th className="px-3 py-2">环境</th><th className="px-3 py-2">状态</th><th className="px-3 py-2">用例数</th></tr></thead><tbody className="divide-y divide-slate-100">{runs.map((item) => <tr key={item.id}><td className="px-3 py-2 font-mono text-emerald-700">#{item.id}</td><td className="px-3 py-2">#{item.target_id}</td><td className="px-3 py-2">#{item.scenario_id}</td><td className="px-3 py-2">{item.env} · {item.target_version}</td><td className="px-3 py-2">{item.state}</td><td className="px-3 py-2">{item.selected_cases.length}</td></tr>)}</tbody></table>{runs.length === 0 && <div className="p-4 text-center text-xs text-slate-400">暂无真实运行记录</div>}</div></div>
+  </Card>;
 }

@@ -241,6 +241,15 @@ func (s *RunService) GetRun(ctx context.Context, runID int64) (*domain.Run, erro
 	return s.repo.Find(ctx, teamID, runID)
 }
 
+// ListRuns returns tenant-scoped runs for history views.
+func (s *RunService) ListRuns(ctx context.Context, targetID *int64, state string, limit int) ([]*domain.Run, error) {
+	teamID, ok := rls.TenantFrom(ctx)
+	if !ok {
+		return nil, ErrTenantRequired
+	}
+	return s.repo.List(ctx, teamID, targetID, state, limit)
+}
+
 // CaseResults 查询运行内用例结果。
 func (s *RunService) CaseResults(ctx context.Context, runID int64) ([]*domain.CaseResult, error) {
 	teamID, ok := rls.TenantFrom(ctx)

@@ -71,6 +71,43 @@ func (s *RunStore) Find(ctx context.Context, teamID, runID int64) (*domain.Run, 
 	return &r, nil
 }
 
+// List returns tenant-scoped runs ordered newest first.
+func (s *RunStore) List(ctx context.Context, teamID int64, targetID *int64, state string, limit int) ([]*domain.Run, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	out := make([]*domain.Run, 0)
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT id, team_id, scenario_id, target_id, env, target_version, target_branch,
+				env_version, env_check_id, run_mode, state, selected_cases, started_at, ended_at
+			FROM run_run
+			WHERE team_id=$1
+			  AND ($2::bigint IS NULL OR target_id=$2)
+			  AND ($3::text = '' OR state=$3)
+			ORDER BY id DESC LIMIT $4`, teamID, targetID, state, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			run := &domain.Run{}
+			var stateValue, runMode, targetVersion, targetBranch, envVersion string
+			var casesJSON []byte
+			if err := rows.Scan(&run.ID, &run.TeamID, &run.ScenarioID, &run.TargetID, &run.Env, &targetVersion, &targetBranch,
+				&envVersion, &run.EnvCheckID, &runMode, &stateValue, &casesJSON, &run.StartedAt, &run.EndedAt); err != nil {
+				return err
+			}
+			run.TargetVersion, run.TargetBranch, run.EnvVersion = targetVersion, targetBranch, envVersion
+			run.RunMode, run.State = runMode, domain.RunState(stateValue)
+			_ = json.Unmarshal(casesJSON, &run.SelectedCases)
+			out = append(out, run)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // SaveCaseResult 保存用例执行结果。
 func (s *RunStore) SaveCaseResult(ctx context.Context, c *domain.CaseResult) error {
 	ev, _ := json.Marshal(c.Evidence)

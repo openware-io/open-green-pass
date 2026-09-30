@@ -164,6 +164,7 @@ func (r *Run) Fail() error { return r.transition(RunFailed) }
 type RunRepository interface {
 	Save(ctx context.Context, r *Run) error
 	Find(ctx context.Context, teamID, runID int64) (*Run, error)
+	List(ctx context.Context, teamID int64, targetID *int64, state string, limit int) ([]*Run, error)
 	SaveCaseResult(ctx context.Context, c *CaseResult) error
 	CaseResults(ctx context.Context, teamID, runID int64) ([]*CaseResult, error)
 	MaxAttempt(ctx context.Context, teamID, runID, caseID int64) (int, error)
