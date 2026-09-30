@@ -14,6 +14,7 @@ import (
 	eapp "github.com/openware-io/open-green-pass/internal/execution/application"
 	edomain "github.com/openware-io/open-green-pass/internal/execution/domain"
 	einfra "github.com/openware-io/open-green-pass/internal/execution/infra"
+	gpPool "github.com/openware-io/open-green-pass/internal/execution/infra/pool"
 	gpRunner "github.com/openware-io/open-green-pass/internal/execution/infra/runner"
 	"github.com/openware-io/open-green-pass/internal/execution/workflow"
 	"github.com/openware-io/open-green-pass/internal/platform/config"
@@ -64,6 +65,9 @@ func main() {
 		runner = einfra.NewMockRunner(gen)
 	}
 	runSvc := eapp.NewRunService(runStore, envSvc, caseReader, policySvc, runner, gen)
+	// Reference-only in-process exclusion. Replace with shared Redis/DB storage
+	// before running multiple worker replicas.
+	runSvc.SetConflictPort(gpPool.NewConflictRegistry())
 
 	// Temporal client + worker
 	addr := os.Getenv("GP_TEMPORAL_ADDR")

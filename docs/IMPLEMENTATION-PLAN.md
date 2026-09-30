@@ -261,7 +261,7 @@ jobs:
 - **GP2-01 异构执行引擎抽象 + 场景接入**：执行器抽象与场景注册已完成（`internal/execution/infra/runner`）：Playwright/STF/k6 适配器输出统一 `Plan`，API/浏览器/真机/压测资源类型路由、证据哈希、失败传播均有单测；server/worker 支持 `GP_RUNNER_TYPE=scenario`。**当前剩余**：将 `CommandExecutor` 接到真实 Playwright 浏览器集群、STF 真机池、k6/Locust 资源池，并补对应 kind 集成测试；在真实资源池接入完成前不得宣称 GP2-01 阶段 DoD 完成。
 - **GP2-02 完整 W2 迁移到 Temporal ✅ 已交付（执行链纳入 Temporal 编排）**：执行流水线全量迁 Temporal Workflow（VersionCheck→AcquireResources→Dispatch→Collect→Gate→Cost→Report）；`cmd/worker` 注册 W2 多实例。关键文件：`internal/execution/workflow/execute_run.go`。验证：workflow 测试 + 暂停/恢复/重试 + 崩溃恢复。
 - **GP2-03 多级配额 + 公平队列（Redis Streams CG + 原子 Lua + WFQ）**：调度契约与本地参考实现已完成（`internal/execution/domain/quota.go`、`internal/execution/infra/quota`）：租户→工程→负责人三级配额、资源类型隔离、原子扣减/释放、加权公平队列均有单测与并发验证。**当前剩余**：接入 Redis Streams Consumer Group + Lua 原子脚本，并在 kind Redis 上完成跨进程/多 worker 集成测试；Redis 接入前不得宣称 GP2-03 DoD 完成。
-- **GP2-04 冲突检测 + Pause/Resume**：暂停/恢复控制边界已完成：application 通过 `WorkflowController` 发送 Temporal `pause`/`resume` signal，workflow 在版本校验后等待恢复；当前剩余资源互斥冲突检测、冲突审计和 Temporal 集成验证。
+- **GP2-04 冲突检测 + Pause/Resume**：暂停/恢复控制边界已完成：application 通过 `WorkflowController` 发送 Temporal `pause`/`resume` signal，workflow 在版本校验后等待恢复；资源互斥已有 `ConflictPort` 与线程安全进程内参考实现，并已接入 `RunService.ExecuteRun` 的目标级独占边界，冲突返回 HTTP 409。**当前剩余**：冲突事件写入审计链、跨进程 Redis/数据库实现、Temporal 多 worker 集成验证；因此 GP2-04 DoD 尚未完成。
 - **GP2-05 截图开关策略下发 ✅ 已交付**：服务级截图开关按对象策略下发（防高并发性能开销，PRD R-TEST-13）。验证：策略生效；无截图场景证据=日志+hash。
 - **GP2-06 跨场景报告合编（PDF/Word）**：跨 run 合编查询、汇总和 HTML/Markdown 输出已完成（`POST /reports/bundle`，tenant scoped）；当前剩余 PDF/Word 渲染器和对应运行时集成验证。
 - **GP2-07 水平扩展 P2（§10）**：server 多副本 + worker 多实例 + 调度器无状态化（P1 起无状态代码实装）。关键文件：`deploy/helm/gp`（replica）、SSE 共享订阅（Redis Pub/Sub）。验证：加副本吞吐线性上升（压测基线 §10.10）。

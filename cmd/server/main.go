@@ -12,6 +12,7 @@ import (
 	eapp "github.com/openware-io/open-green-pass/internal/execution/application"
 	edomain "github.com/openware-io/open-green-pass/internal/execution/domain"
 	einfra "github.com/openware-io/open-green-pass/internal/execution/infra"
+	gpPool "github.com/openware-io/open-green-pass/internal/execution/infra/pool"
 	gpRunner "github.com/openware-io/open-green-pass/internal/execution/infra/runner"
 	"github.com/openware-io/open-green-pass/internal/gateway"
 	"github.com/openware-io/open-green-pass/internal/gateway/middleware"
@@ -80,6 +81,9 @@ func main() {
 		log.Info("runner", "type", "mock")
 	}
 	runSvc := eapp.NewRunService(runStore, envSvc, caseReader, policySvc, runner, gen)
+	// Reference-only in-process exclusion. Replace with shared Redis/DB storage
+	// before running multiple server replicas.
+	runSvc.SetConflictPort(gpPool.NewConflictRegistry())
 
 	// 可信域依赖组装（审计哈希链 + 门禁判定 + 成本明细）
 	gateStore := tinfra.NewGateStore(db, gen)

@@ -184,6 +184,10 @@ func (h *runHandler) executeRun(w http.ResponseWriter, r *http.Request) {
 	}
 	run, results, err := h.svc.ExecuteRun(r.Context(), id)
 	if err != nil {
+		if errors.Is(err, application.ErrResourceConflict) {
+			httpx.WriteErr(w, gperr.Conflict("run conflicts with an active exclusive resource"))
+			return
+		}
 		httpx.WriteErr(w, err)
 		return
 	}

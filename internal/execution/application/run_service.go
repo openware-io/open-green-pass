@@ -3,6 +3,8 @@ package application
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -10,6 +12,11 @@ import (
 	"github.com/openware-io/open-green-pass/internal/platform/rls"
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
+
+// ErrResourceConflict indicates that another run currently owns the target's
+// exclusive execution scope. HTTP adapters map it to 409 without depending on
+// the infrastructure implementation.
+var ErrResourceConflict = errors.New("execution resource conflict")
 
 // RunService 运行编排应用服务实现。
 type RunService struct {
@@ -21,16 +28,26 @@ type RunService struct {
 	gen      *id.Generator
 	log      *slog.Logger
 	workflow WorkflowController
+	conflict domain.ConflictPort
 }
 
 // NewRunService 创建运行编排服务。
 func NewRunService(repo domain.RunRepository, envSvc *EnvService, cases domain.CasePort, policy domain.PolicyPort, runner domain.RunnerPort, gen *id.Generator) *RunService {
-	return &RunService{repo: repo, envSvc: envSvc, cases: cases, policy: policy, runner: runner, gen: gen, log: slog.Default(), workflow: NoopWorkflowController{}}
+	return &RunService{repo: repo, envSvc: envSvc, cases: cases, policy: policy, runner: runner, gen: gen, log: slog.Default(), workflow: NoopWorkflowController{}, conflict: domain.NoopConflictPort{}}
 }
 
 func (s *RunService) SetWorkflowController(controller WorkflowController) {
 	if controller != nil {
 		s.workflow = controller
+	}
+}
+
+// SetConflictPort injects the scheduling conflict implementation. The default
+// is a no-op for P1 compatibility; production schedulers should inject a
+// shared implementation (the in-process registry is only a reference).
+func (s *RunService) SetConflictPort(port domain.ConflictPort) {
+	if port != nil {
+		s.conflict = port
 	}
 }
 
@@ -102,15 +119,29 @@ func (s *RunService) StartVersionCheck(ctx context.Context, runID int64) (*domai
 }
 
 // ExecuteRun 执行当次用例（scheduled→running→collect→gate→report→done）；重跑 attempt_seq 递增。
-func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (*domain.Run, []*domain.CaseResult, error) {
+func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.Run, results []*domain.CaseResult, err error) {
 	teamID, ok := rls.TenantFrom(ctx)
 	if !ok {
 		return nil, nil, ErrTenantRequired
 	}
-	run, err := s.repo.Find(ctx, teamID, runID)
+	run, err = s.repo.Find(ctx, teamID, runID)
 	if err != nil {
 		return nil, nil, err
 	}
+	// GP2-04 reference boundary: the target is exclusive by default. A shared
+	// implementation can use a finer resource scope without changing the
+	// application service contract.
+	claimToken, err := s.conflict.Acquire(ctx, domain.ResourceClaim{
+		TeamID: teamID, TargetID: run.TargetID, ResourceType: "target", PoolID: "default", OwnerID: run.ID, Exclusive: true,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %v", ErrResourceConflict, err)
+	}
+	defer func() {
+		if releaseErr := s.conflict.Release(context.Background(), claimToken); err == nil && releaseErr != nil {
+			err = releaseErr
+		}
+	}()
 	// 首次：scheduled→running；重跑（done/failed 终态）：重置为 running，attempt 递增
 	if run.State == domain.RunDone || run.State == domain.RunFailed {
 		run.State = domain.RunRunning
@@ -138,7 +169,7 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (*domain.Run, 
 	}
 
 	// 执行（P1 MockRunner；K8s Job Runner 接管真实执行）
-	results, err := s.runner.Execute(ctx, spec)
+	results, err = s.runner.Execute(ctx, spec)
 	if err != nil {
 		return nil, nil, err
 	}
