@@ -70,7 +70,9 @@ func (r *ConflictRegistry) Release(ctx context.Context, token string) error {
 		return err
 	}
 	if token == "" {
-		return ErrClaimNotFound
+		// Empty token represents a non-exclusive claim, which does not reserve
+		// registry state and therefore needs no release operation.
+		return nil
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()

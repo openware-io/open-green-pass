@@ -37,6 +37,9 @@ func TestConflictRegistryAllowsNonExclusiveClaims(t *testing.T) {
 	if token, err := r.Acquire(context.Background(), claim); err != nil || token != "" {
 		t.Fatalf("non-exclusive acquire token=%q err=%v", token, err)
 	}
+	if err := r.Release(context.Background(), ""); err != nil {
+		t.Fatalf("non-exclusive release: %v", err)
+	}
 }
 
 func TestConflictRegistryConcurrentAcquireHasOneWinner(t *testing.T) {

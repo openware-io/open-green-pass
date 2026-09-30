@@ -138,6 +138,9 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 		return nil, nil, fmt.Errorf("%w: %v", ErrResourceConflict, err)
 	}
 	defer func() {
+		if claimToken == "" {
+			return
+		}
 		if releaseErr := s.conflict.Release(context.Background(), claimToken); err == nil && releaseErr != nil {
 			err = releaseErr
 		}
