@@ -320,7 +320,7 @@ paths:
       parameters:
         - { name: run_id, in: query, required: true, schema: { type: integer } }
       responses:
-        '200': { description: 判定列表, content: { application/json: { schema: { type: array, items: { type: object, additionalProperties: true } } } } }
+        '200': { description: 判定列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/GateResult' } } } } }
   # ---------- 成本（trusted，GP1-06） ----------
   /cost/record:
     post:
@@ -564,6 +564,17 @@ components:
         unit_price: { type: number }
         amount: { type: number }
         occurred_at: { type: string, format: date-time }
+    GateResult:
+      type: object
+      required: [ id, team_id, run_id, rule_id, result, decided_at ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        run_id: { type: integer, format: int64 }
+        rule_id: { type: integer, format: int64 }
+        result: { type: string, enum: [ pass, fail, blocked ] }
+        detail: { type: object, additionalProperties: true }
+        decided_at: { type: string, format: date-time }
   securitySchemes:
     teamHeader:
       type: apiKey

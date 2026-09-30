@@ -648,6 +648,23 @@ export interface components {
             /** Format: date-time */
             occurred_at: string;
         };
+        GateResult: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            team_id: number;
+            /** Format: int64 */
+            run_id: number;
+            /** Format: int64 */
+            rule_id: number;
+            /** @enum {string} */
+            result: "pass" | "fail" | "blocked";
+            detail?: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            decided_at: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -1253,9 +1270,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["GateResult"][];
                 };
             };
         };

@@ -9,6 +9,7 @@ export type Report = components['schemas']['Report'];
 export type ReportBundle = components['schemas']['ReportBundle'];
 export type CostOverview = components['schemas']['CostOverview'];
 export type CostLineItem = components['schemas']['CostLineItem'];
+export type GateResult = components['schemas']['GateResult'];
 
 export type CreateTargetInput = paths['/targets']['post']['requestBody']['content']['application/json'];
 export type CreateCaseInput = paths['/cases']['post']['requestBody']['content']['application/json'];
@@ -113,7 +114,10 @@ export class GreenPassClient {
   pauseRun(runId: number): JsonResponse<Run> { return this.request(`/runs/${runId}/pause`, { method: 'POST' }); }
   resumeRun(runId: number): JsonResponse<Run> { return this.request(`/runs/${runId}/resume`, { method: 'POST' }); }
   caseResults(runId: number): JsonResponse<CaseResult[]> { return this.request(`/runs/${runId}/case-results`); }
-  gateResults(runId: number): JsonResponse<unknown[]> { return this.request(`/gates/results?run_id=${runId}`); }
+  evaluateGate(runId: number): JsonResponse<{ result: 'pass' | 'fail' | 'blocked' }> {
+    return this.request('/gates/evaluate', { method: 'POST', body: JSON.stringify({ run_id: runId }) });
+  }
+  gateResults(runId: number): JsonResponse<GateResult[]> { return this.request(`/gates/results?run_id=${runId}`); }
   costOverview(): JsonResponse<CostOverview> { return this.request('/cost/overview'); }
   costItems(params: { category?: 'generate' | 'execute'; point?: string; limit?: number } = {}): JsonResponse<CostLineItem[]> {
     const query = new URLSearchParams();

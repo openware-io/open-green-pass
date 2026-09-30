@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { scenarioNav } from '@/context/scenarioNav';
 import { toast } from 'sonner';
 import { assetToProfile, TEST_SCENARIOS, type IAsset } from '@/data/mock';
 import { PageHeader, GhostButton, PrimaryButton, Card, ListFilter } from '@/components/shared';
 import { BrainCircuit, Cpu, Globe, Smartphone, Sparkles, Loader2 } from 'lucide-react';
+import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
+import type { GateResult } from '@/api/client';
 
 const RULE_ICON = { pass: <span className="text-emerald-600">✓</span>, block: <span className="text-red-600">✕</span> };
 const RULE_BG = { pass: 'bg-emerald-100 text-emerald-600', block: 'bg-red-100 text-red-600' };
@@ -22,6 +24,7 @@ const AI_NOTES: Record<string, string> = {
 const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
 
 export default function GatePage() {
+  const realClient = useMemo(() => configuredGreenPassClient(), []);
   const navigate = useNavigate();
   const { selectedAsset } = useOutletContext<{ selectedAsset: IAsset }>();
   const profile = assetToProfile(selectedAsset);
@@ -85,6 +88,8 @@ export default function GatePage() {
           {running ? <span className="inline-flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />判定中…</span> : phase === 'done' ? '重新判定 ✓' : '重新判定'}
         </PrimaryButton>
       </PageHeader>
+
+      <RealGatePanel client={realClient} />
 
       {/* AI 判定过程反馈条 */}
       {(running || phase === 'done') && (
@@ -240,4 +245,17 @@ export default function GatePage() {
       </div>
     </div>
   );
+}
+
+function RealGatePanel({ client }: { client: ReturnType<typeof configuredGreenPassClient> }) {
+  const [runID, setRunID] = useState('');
+  const [results, setResults] = useState<GateResult[]>([]);
+  const [verdict, setVerdict] = useState<string>();
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  if (!client) return <Card title="真实门禁控制" className="mb-5" extra={<span className="text-[11px] text-slate-400">原型模式</span>}><p className="p-5 text-sm text-slate-500">配置 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_API_BASE</code> 与数值型 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_TEAM_ID</code> 后启用真实运行门禁查询与判定；下面规则仍是原型展示。</p></Card>;
+  const run = async (action: () => Promise<void>) => { setBusy(true); setMessage(''); try { await action(); } catch (error) { setMessage(error instanceof Error ? error.message : '真实门禁操作失败'); } finally { setBusy(false); } };
+  return <Card title="真实门禁控制" className="mb-5" extra={<span className="text-[11px] text-emerald-700">真实 API 已启用</span>}>
+    <div className="p-5 space-y-3"><p className="text-[11px] text-slate-500">连接：{greenPassConnectionHint()}。门禁判定必须针对真实运行 ID，结果由 trusted 服务返回。</p><div className="flex flex-wrap gap-2"><input value={runID} onChange={(event) => setRunID(event.target.value)} inputMode="numeric" placeholder="真实运行 ID" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" /><button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(runID); if (!Number.isSafeInteger(id) || id <= 0) throw new Error('请输入有效的真实运行 ID'); const result = await client.evaluateGate(id); setVerdict(result.result); setResults(await client.gateResults(id)); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">判定真实运行</button><button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(runID); if (!Number.isSafeInteger(id) || id <= 0) throw new Error('请输入有效的真实运行 ID'); setResults(await client.gateResults(id)); })} className="rounded-lg border border-slate-200 px-3 py-2 text-xs">刷新结果</button></div>{message && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{message}</div>}{verdict && <div className={'rounded-lg p-3 text-xs ' + (verdict === 'pass' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700')}>真实运行 #{runID} 门禁结论：<b>{verdict}</b></div>}<div className="overflow-x-auto rounded-lg border border-slate-200"><table className="w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-3 py-2">运行</th><th className="px-3 py-2">规则</th><th className="px-3 py-2">结果</th><th className="px-3 py-2">时间</th></tr></thead><tbody className="divide-y divide-slate-100">{results.map((result) => <tr key={result.id}><td className="px-3 py-2">#{result.run_id}</td><td className="px-3 py-2">#{result.rule_id}</td><td className="px-3 py-2">{result.result}</td><td className="px-3 py-2">{result.decided_at}</td></tr>)}</tbody></table>{results.length === 0 && <div className="p-4 text-center text-xs text-slate-400">暂无真实门禁结果</div>}</div></div>
+  </Card>;
 }
