@@ -89,6 +89,7 @@ func main() {
 	gateStore := tinfra.NewGateStore(db, gen)
 	auditStore := tinfra.NewAuditStore(db, gen)
 	auditSvc := tapp.NewAuditService(auditStore, gen)
+	runSvc.SetAuditPort(einfra.NewTrustedAuditPort(auditSvc))
 	statReader := tinfra.NewRunStatReader(db)
 	gateSvc := tapp.NewGateService(gateStore, auditSvc, statReader, gen)
 	costStore := tinfra.NewCostStore(db, gen)

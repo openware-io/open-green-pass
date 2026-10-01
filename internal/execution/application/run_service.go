@@ -13,10 +13,9 @@ import (
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
 
-// ErrResourceConflict indicates that another run currently owns the target's
-// exclusive execution scope. HTTP adapters map it to 409 without depending on
-// the infrastructure implementation.
-var ErrResourceConflict = errors.New("execution resource conflict")
+// ErrResourceConflict is retained as the application-facing sentinel for
+// existing HTTP callers; its identity is the execution-domain error.
+var ErrResourceConflict = domain.ErrResourceConflict
 
 // RunService 运行编排应用服务实现。
 type RunService struct {
@@ -29,11 +28,12 @@ type RunService struct {
 	log      *slog.Logger
 	workflow WorkflowController
 	conflict domain.ConflictPort
+	audit    domain.AuditPort
 }
 
 // NewRunService 创建运行编排服务。
 func NewRunService(repo domain.RunRepository, envSvc *EnvService, cases domain.CasePort, policy domain.PolicyPort, runner domain.RunnerPort, gen *id.Generator) *RunService {
-	return &RunService{repo: repo, envSvc: envSvc, cases: cases, policy: policy, runner: runner, gen: gen, log: slog.Default(), workflow: NoopWorkflowController{}, conflict: domain.NoopConflictPort{}}
+	return &RunService{repo: repo, envSvc: envSvc, cases: cases, policy: policy, runner: runner, gen: gen, log: slog.Default(), workflow: NoopWorkflowController{}, conflict: domain.NoopConflictPort{}, audit: domain.NoopAuditPort{}}
 }
 
 func (s *RunService) SetWorkflowController(controller WorkflowController) {
@@ -48,6 +48,13 @@ func (s *RunService) SetWorkflowController(controller WorkflowController) {
 func (s *RunService) SetConflictPort(port domain.ConflictPort) {
 	if port != nil {
 		s.conflict = port
+	}
+}
+
+// SetAuditPort injects the trusted-domain audit boundary.
+func (s *RunService) SetAuditPort(port domain.AuditPort) {
+	if port != nil {
+		s.audit = port
 	}
 }
 
@@ -135,6 +142,12 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 		TeamID: teamID, TargetID: run.TargetID, ResourceType: "target", PoolID: "default", OwnerID: run.ID, Exclusive: true,
 	})
 	if err != nil {
+		if !errors.Is(err, domain.ErrResourceConflict) {
+			return nil, nil, err
+		}
+		if err := s.recordResourceConflict(ctx, run, err); err != nil {
+			return nil, nil, err
+		}
 		return nil, nil, fmt.Errorf("%w: %v", ErrResourceConflict, err)
 	}
 	defer func() {
@@ -216,6 +229,20 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 		return nil, nil, err
 	}
 	return run, results, nil
+}
+
+func (s *RunService) recordResourceConflict(ctx context.Context, run *domain.Run, cause error) error {
+	return s.audit.Append(ctx, domain.ExecutionAuditEvent{
+		Op:      "execution.resource_conflict",
+		Asset:   "run",
+		AssetID: run.ID,
+		Payload: map[string]any{
+			"target_id":     run.TargetID,
+			"resource_type": "target",
+			"pool_id":       "default",
+			"cause":         cause.Error(),
+		},
+	})
 }
 
 func scenarioFromScript(script any) string {

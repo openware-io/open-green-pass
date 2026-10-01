@@ -12,8 +12,10 @@ import (
 )
 
 var (
-	ErrInvalidClaim     = errors.New("invalid resource claim")
-	ErrResourceConflict = errors.New("resource claim conflicts with an active run")
+	ErrInvalidClaim = errors.New("invalid resource claim")
+	// ErrResourceConflict is kept as a compatibility alias for pool callers;
+	// the source of truth lives in execution/domain.
+	ErrResourceConflict = domain.ErrResourceConflict
 	ErrClaimNotFound    = errors.New("resource claim not found")
 )
 

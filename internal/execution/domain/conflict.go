@@ -1,6 +1,14 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+// ErrResourceConflict means another run owns an exclusive execution scope.
+// It is a domain error so application/API code never needs to import a
+// specific storage implementation to distinguish a conflict from a failure.
+var ErrResourceConflict = errors.New("execution resource conflict")
 
 // ResourceClaim describes a resource reservation that may conflict with
 // another run. Claims are intentionally separate from quota: quota limits

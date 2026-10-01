@@ -20,6 +20,8 @@ import (
 	"github.com/openware-io/open-green-pass/internal/platform/config"
 	"github.com/openware-io/open-green-pass/internal/platform/db"
 	"github.com/openware-io/open-green-pass/internal/platform/observability"
+	tapp "github.com/openware-io/open-green-pass/internal/trusted/application"
+	tinfra "github.com/openware-io/open-green-pass/internal/trusted/infra"
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
 
@@ -68,6 +70,8 @@ func main() {
 	// Reference-only in-process exclusion. Replace with shared Redis/DB storage
 	// before running multiple worker replicas.
 	runSvc.SetConflictPort(gpPool.NewConflictRegistry())
+	auditSvc := tapp.NewAuditService(tinfra.NewAuditStore(dbb, gen), gen)
+	runSvc.SetAuditPort(einfra.NewTrustedAuditPort(auditSvc))
 
 	// Temporal client + worker
 	addr := os.Getenv("GP_TEMPORAL_ADDR")

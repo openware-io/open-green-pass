@@ -269,22 +269,13 @@ jobs:
 
 ## 4. P3 AI 治理 + 生成管道 W1（任务级施工图）
 
-- **GP3-01 统一 AI 网关（LiteLLM→自研）**：统一请求/结果端口、首选模型路由、fallback、并发信号量、request_id 强制和幂等计量已完成（`internal/ai/domain/gateway.go`、`internal/ai/infra/gateway.go`，fake provider 单测）；当前剩余真实 LiteLLM/供应商适配、超时策略和成本库接入。
-- **GP3-02 完整 W1 生成管道（Temporal）**：拉仓库→解析→AI 生成→质量门禁→人工审核(Signal)→提交版本→回退。关键文件：`cmd/worker` 注册 W1、`ai/workflow/gen_case_pipeline.go`。验证：审核 Signal 挂起/通过/回退；版本按 change 提交。
-- **GP3-03 成本趋势（Timescale）**：`ts_cost_trend` hypertable + 连续聚合 + 历史对比时序。验证：趋势正确；与 `cost_line_item` 对账。
-- **GP3-04 审计哈希链锚定 + 独立校验**：`aud_event` 周期快照锚点 + 独立校验 API（可独立验证）。验证：篡改可检出；Verify 通过。
-- **GP3-05 模型治理/白名单**：每工程选模型绑定落地 + 模型白名单审批（PRD R-MODEL）。验证：绑定生效；白名单外拒绝。
-- **GP3-06 篡改检测/变异（护城河）**：轻量自研 + 标记学习（PRD 护城河）。验证：篡改用例检出。
-- **GP3-07 可信域 DB 级写权限落地 + Security 横切**：`gp_trusted_writer` 实装；补 Security（备份恢复/密钥托管/沙箱逃逸防护）。验证：跨域直写审计/成本被 DB 拒绝；安全专项。
+- **GP3-01～GP3-07**：已补充可开发实施规格 `docs/GP3-DETAILED-IMPLEMENTATION-SPEC.md`，覆盖各项目标边界、现有缺口、用户/架构决策、契约与事件、迁移、分层职责、测试验收和依赖顺序。当前仍按下述状态执行：GP3-01 统一 AI 网关参考实现已完成，真实 LiteLLM/供应商、超时和成本接入待完成；GP3-02～GP3-07 均未达到阶段 DoD，须按规格逐项开发和验收。
+- **GP3-02～GP3-07**：目标与验收保持不变，具体实施拆分、契约、迁移、分层边界和前置决策以 `docs/GP3-DETAILED-IMPLEMENTATION-SPEC.md` 为准；在真实依赖和用户决策未确定前，不宣称代码或 DoD 完成。
 
 ## 5. P4 平台化（任务级施工图）
 
-- **GP4-01 资产级 RBAC 精细化**：`member×asset×(perm+quota)` 落地 `iam_`；工程负责人精细分配（PRD R-ORG）。验证：鉴权矩阵 + 越权拒绝。
-- **GP4-02 CI/CD 对接成熟化**：webhook/CLI/OpenAPI/门禁回写 + 自身版本契约兼容窗口（ENGINEERING-SPEC §12）。验证：上游推送版本触发联动（`run_mode=ci` 高优）。
-- **GP4-03 微信/SSO 登录**：自有账号 + 微信扫码 + 手机号绑定打通第三方。验证：三种登录流。
-- **GP4-04 私有化交付**：Go 单二进制 + `go:embed` + Helm 一键 + 审计链独立校验。验证：私有化部署可启动/迁移。
-- **GP4-05 多租户分区 + 基础设施集群化（§10 扩展）**：schema-per-tenant 迁移路径 + PG 主从 / Redis Cluster / Temporal 集群 / MinIO 分布式。验证：大团队/大客户隔离；集群化后功能回归。
-- **GP4-06 多团队高并发压测 + 监控告警**：§10.10 压测基线 + 指标/告警落地（ENGINEERING-SPEC §9）。验证：多团队并发隔离；QPS/时延达标；告警有效。
+- **GP4-01～GP4-06**：已补充可开发实施规格 `docs/GP4-IMPLEMENTATION-SPEC-DRAFT.md`，覆盖目标、前置决策/外部依赖、OpenAPI/事件、迁移、分层、测试验收和 GP2/GP3 依赖。当前仍不得宣称 GP4 完成：身份源/RBAC、CI 首批平台、私有化拓扑、租户分区策略和 SLO 需先定稿。
+- **GP4-02～GP4-06**：目标与验收保持不变，具体实施拆分、契约、迁移、分层边界和前置决策以 `docs/GP4-IMPLEMENTATION-SPEC-DRAFT.md` 为准；真实 provider、集群和容量验收仍待用户决策与环境准备。
 
 ---
 
