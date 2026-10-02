@@ -3,6 +3,7 @@ package metrics
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 )
 
@@ -24,10 +25,12 @@ var allowedLabels = map[string]struct{}{
 		"state": {}, "resource_type": {}, "result": {},
 }
 
+var dynamicPath = regexp.MustCompile(`/[0-9a-fA-F-]{3,}`)
+
 // ValidateLabels rejects IDs and arbitrary user supplied values from metric labels.
 func ValidateLabels(labels map[string]string) error {
 	for key, value := range labels {
-		if _, ok := allowedLabels[key]; !ok || value == "" || strings.ContainsAny(value, "\r\n") {
+		if _, ok := allowedLabels[key]; !ok || value == "" || strings.ContainsAny(value, "\r\n") || (key == "route" && dynamicPath.MatchString(value)) {
 			return ErrSensitiveLabel
 		}
 	}
