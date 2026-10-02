@@ -13,13 +13,21 @@ import (
 
 // TargetTreeService 被测对象树应用服务实现。
 type TargetTreeService struct {
-	repo domain.TargetRepository
-	gen  *id.Generator
+	repo        domain.TargetRepository
+	gen         *id.Generator
+	modelPolicy domain.ModelBindingPolicy
 }
 
 // NewTargetTreeService 创建被测对象树应用服务。
 func NewTargetTreeService(repo domain.TargetRepository, gen *id.Generator) *TargetTreeService {
-	return &TargetTreeService{repo: repo, gen: gen}
+	return &TargetTreeService{repo: repo, gen: gen, modelPolicy: domain.NoopModelBindingPolicy{}}
+}
+
+// SetModelBindingPolicy injects the GP3 model approval/whitelist boundary.
+func (s *TargetTreeService) SetModelBindingPolicy(policy domain.ModelBindingPolicy) {
+	if policy != nil {
+		s.modelPolicy = policy
+	}
 }
 
 // CreateTarget 创建被测对象树节点（工程/服务组/服务/模块）。
@@ -27,6 +35,11 @@ func (s *TargetTreeService) CreateTarget(ctx context.Context, node domain.Target
 	teamID, ok := rls.TenantFrom(ctx)
 	if !ok {
 		return nil, ErrTenantRequired
+	}
+	if mb != nil {
+		if err := mb.Validate(); err != nil {
+			return nil, err
+		}
 	}
 	node.TeamID = teamID
 	if node.ID == 0 {
@@ -96,6 +109,9 @@ func (s *TargetTreeService) SetModelBinding(ctx context.Context, targetID int64,
 	teamID, ok := rls.TenantFrom(ctx)
 	if !ok {
 		return nil, ErrTenantRequired
+	}
+	if err := s.modelPolicy.ValidateBinding(ctx, teamID, targetID, binding); err != nil {
+		return nil, err
 	}
 	target, err := s.repo.FindTarget(ctx, teamID, targetID)
 	if err != nil {

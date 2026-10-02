@@ -270,7 +270,7 @@ jobs:
 ## 4. P3 AI 治理 + 生成管道 W1（任务级施工图）
 
 - **GP3-01～GP3-07**：已补充规格 `docs/GP3-DETAILED-IMPLEMENTATION-SPEC.md`，并细化为可直接排期的批次清单 `docs/GP3-GP4-EXECUTION-BACKLOG.md`。GP3-01 统一 AI 网关参考实现已完成，真实 LiteLLM/供应商、超时和成本接入待完成；GP3-02～GP3-07 均未达到阶段 DoD，按批次清单逐项开发和验收。
-- **GP3-05A 当前进展**：已完成 provider-independent 的 `tgt_target.model_binding` 读写端点、领域输入校验、OpenAPI/前端 client 和租户范围复用；模型白名单、审批、价格快照、Secret resolver 和真实 provider 仍未完成。
+- **GP3-05A 当前进展**：已完成 provider-independent 的 `tgt_target.model_binding` 读写端点、领域输入校验、可注入 `ModelBindingPolicy`/静态参考白名单、OpenAPI/前端 client 和租户范围复用；持久模型白名单、审批、价格快照、Secret resolver 和真实 provider 仍未完成。
 - **GP3-02～GP3-07**：目标与验收保持不变，具体实施拆分、契约、迁移、分层边界和前置决策以 `docs/GP3-DETAILED-IMPLEMENTATION-SPEC.md` 为准；在真实依赖和用户决策未确定前，不宣称代码或 DoD 完成。
 
 ## 5. P4 平台化（任务级施工图）

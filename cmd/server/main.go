@@ -49,6 +49,8 @@ func main() {
 	db := infra.NewDB(pool)
 	store := infra.NewTargetStore(db, gen)
 	treeSvc := application.NewTargetTreeService(store, gen)
+	// GP3-05 reference policy is intentionally empty until the persistent
+	// approval/whitelist store is configured; it can be injected here later.
 	caseStore := infra.NewCaseStore(db, gen)
 	caseSvc := application.NewCaseService(caseStore, gen)
 

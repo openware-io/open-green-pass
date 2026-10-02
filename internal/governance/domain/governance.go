@@ -68,6 +68,21 @@ type ModelBinding struct {
 	Params   map[string]string // 额外参数（temperature 等）
 }
 
+// ModelBindingPolicy is the governance boundary for model approval. The
+// default application wiring uses NoopModelBindingPolicy until GP3-05's
+// persistent whitelist/approval store is selected.
+type ModelBindingPolicy interface {
+	ValidateBinding(context.Context, int64, int64, ModelBinding) error
+}
+
+type NoopModelBindingPolicy struct{}
+
+func (NoopModelBindingPolicy) ValidateBinding(context.Context, int64, int64, ModelBinding) error {
+	return nil
+}
+
+var _ ModelBindingPolicy = NoopModelBindingPolicy{}
+
 // Validate checks the provider-independent binding contract. Approval,
 // whitelist and price resolution remain GP3 governance concerns.
 func (b ModelBinding) Validate() error {
