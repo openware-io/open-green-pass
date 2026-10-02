@@ -33,6 +33,7 @@ func Register(mux *http.ServeMux, gate *application.GateService, audit *applicat
 	// 报告
 	mux.HandleFunc("POST /reports/generate", h.generateReport)
 	mux.HandleFunc("POST /reports/bundle", h.bundleReports)
+	mux.HandleFunc("POST /reports/bundle/export", h.exportBundle)
 	mux.HandleFunc("GET /reports/{id}/export", h.exportReport)
 }
 
@@ -48,10 +49,40 @@ func (h *gateHandler) bundleReports(w http.ResponseWriter, r *http.Request) {
 	}
 	b, err := h.report.BuildBundle(r.Context(), req.ReportIDs, req.Format)
 	if err != nil {
+		if errors.Is(err, application.ErrUnsupportedBundleFormat) {
+			httpx.WriteErr(w, gperr.Validation("format must be html, markdown, pdf, or docx"))
+			return
+		}
 		httpx.WriteErr(w, err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, toReportBundleResponse(b))
+}
+
+func (h *gateHandler) exportBundle(w http.ResponseWriter, r *http.Request) {
+	var req application.BundleRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	if len(req.ReportIDs) == 0 || (req.Format != "pdf" && req.Format != "docx") {
+		httpx.WriteErr(w, gperr.Validation("report_ids and format=pdf|docx required"))
+		return
+	}
+	b, err := h.report.BuildBundle(r.Context(), req.ReportIDs, req.Format)
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	content, contentType, extension, err := b.RenderBundle(req.Format)
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", `attachment; filename="greenpass-bundle.`+extension+`"`)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(content)
 }
 
 // upsertRuleRequest 装载门禁规则请求。

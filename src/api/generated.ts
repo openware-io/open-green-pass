@@ -483,6 +483,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reports/bundle/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 导出跨场景合编报告 */
+        post: operations["exportBundleReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/reports/{id}/export": {
         parameters: {
             query?: never;
@@ -1518,7 +1535,7 @@ export interface operations {
                      * @default html
                      * @enum {string}
                      */
-                    format?: "html" | "markdown";
+                    format?: "html" | "markdown" | "pdf" | "docx";
                 };
             };
         };
@@ -1530,6 +1547,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReportBundle"];
+                };
+            };
+        };
+    };
+    exportBundleReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    report_ids: number[];
+                    /** @enum {string} */
+                    format: "pdf" | "docx";
+                };
+            };
+        };
+        responses: {
+            /** @description 二进制报告文件 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": string;
                 };
             };
         };

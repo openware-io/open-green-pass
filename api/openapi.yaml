@@ -428,9 +428,29 @@ paths:
               required: [ report_ids ]
               properties:
                 report_ids: { type: array, items: { type: integer } }
-                format: { type: string, enum: [ html, markdown ], default: html }
+                format: { type: string, enum: [ html, markdown, pdf, docx ], default: html }
       responses:
         '200': { description: 合编报告内容, content: { application/json: { schema: { $ref: '#/components/schemas/ReportBundle' } } } }
+  /reports/bundle/export:
+    post:
+      summary: 导出跨场景合编报告
+      operationId: exportBundleReport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ report_ids, format ]
+              properties:
+                report_ids: { type: array, items: { type: integer } }
+                format: { type: string, enum: [ pdf, docx ] }
+      responses:
+        '200':
+          description: 二进制报告文件
+          content:
+            application/pdf: { schema: { type: string, format: binary } }
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document: { schema: { type: string, format: binary } }
   /reports/{id}/export:
     get:
       summary: 导出报告

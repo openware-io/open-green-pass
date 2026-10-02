@@ -168,6 +168,19 @@ export class GreenPassClient {
   bundleReports(reportIds: number[], format: 'html' | 'markdown' = 'html'): JsonResponse<ReportBundle> {
     return this.request('/reports/bundle', { method: 'POST', body: JSON.stringify({ report_ids: reportIds, format }) });
   }
+  async exportBundleReport(reportIds: number[], format: 'pdf' | 'docx'): Promise<Blob> {
+    const response = await this.fetcher(`${this.baseUrl}/reports/bundle/export`, {
+      method: 'POST',
+      headers: {
+        Accept: format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'Content-Type': 'application/json',
+        'x-gp-team-id': String(this.teamId),
+      },
+      body: JSON.stringify({ report_ids: reportIds, format }),
+    });
+    if (!response.ok) throw new GreenPassApiError(response.status, response.statusText);
+    return response.blob();
+  }
 }
 
 export function createGreenPassClient(teamId: number, baseUrl?: string): GreenPassClient {
