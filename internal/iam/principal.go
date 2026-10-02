@@ -9,18 +9,18 @@ import (
 )
 
 var (
-	ErrUnauthenticated = errors.New("iam: unauthenticated")
-	ErrForbidden       = errors.New("iam: forbidden")
+	ErrUnauthenticated  = errors.New("iam: unauthenticated")
+	ErrForbidden        = errors.New("iam: forbidden")
 	ErrInvalidPrincipal = errors.New("iam: invalid principal")
 )
 
 // Principal is the normalized identity used by application layers. Provider
 // specific claims must not leak beyond the authentication adapter.
 type Principal struct {
-	Subject  string
-	TenantID string
-	Roles    []string
-	Issuer   string
+	Subject   string
+	TenantID  string
+	Roles     []string
+	Issuer    string
 	ExpiresAt time.Time
 }
 
@@ -55,8 +55,18 @@ type AuthenticationProvider interface {
 	Authenticate(ctx context.Context, credential string) AuthenticationResult
 }
 
+type principalContextKey struct{}
+
+func WithPrincipal(ctx context.Context, principal Principal) context.Context {
+	return context.WithValue(ctx, principalContextKey{}, principal)
+}
+
+func PrincipalFromContext(ctx context.Context) (Principal, bool) {
+	p, ok := ctx.Value(principalContextKey{}).(Principal)
+	return p, ok
+}
+
 // AuthorizationPort keeps policy decisions independent from identity provider.
 type AuthorizationPort interface {
 	Authorize(ctx context.Context, principal Principal, action, resource string) error
 }
-

@@ -8,12 +8,19 @@ import (
 
 	"github.com/openware-io/open-green-pass/internal/gateway/httpx"
 	"github.com/openware-io/open-green-pass/internal/gateway/middleware"
+	"github.com/openware-io/open-green-pass/internal/iam"
 )
 
 // NewRouter 组装中间件链与基础路由。
 // 中间件顺序（由外到内）：AccessLog -> RequestID -> Tenant -> Auth -> 业务路由。
 // registrars 由各业务域 api 层提供（cmd/server 组装依赖后注入）。
 func NewRouter(log *slog.Logger, registrars ...func(*http.ServeMux)) http.Handler {
+	return NewRouterWithAuth(log, nil, true, registrars...)
+}
+
+// NewRouterWithAuth allows cmd-level wiring of a verified identity provider.
+// The legacy constructor remains a dev/test compatibility path.
+func NewRouterWithAuth(log *slog.Logger, provider iam.AuthenticationProvider, allowHeaderFallback bool, registrars ...func(*http.ServeMux)) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -25,7 +32,11 @@ func NewRouter(log *slog.Logger, registrars ...func(*http.ServeMux)) http.Handle
 	}
 
 	var h http.Handler = mux
-	h = middleware.Auth(h)
+	if provider != nil || !allowHeaderFallback {
+		h = middleware.PrincipalAuth(provider, allowHeaderFallback)(h)
+	} else {
+		h = middleware.Auth(h)
+	}
 	h = middleware.Tenant(h)
 	h = middleware.RequestID(h)
 	h = middleware.AccessLog(log)(h)
