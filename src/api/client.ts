@@ -13,6 +13,8 @@ export type GateResult = components['schemas']['GateResult'];
 export type GateRule = components['schemas']['GateRule'];
 export type EnvRuntime = components['schemas']['EnvRuntime'];
 export type EnvCheck = components['schemas']['EnvCheck'];
+export type ReadinessResponse = components['schemas']['ReadinessResponse'];
+export type VersionResponse = components['schemas']['VersionResponse'];
 
 export type CreateTargetInput = paths['/targets']['post']['requestBody']['content']['application/json'];
 export type CreateCaseInput = paths['/cases']['post']['requestBody']['content']['application/json'];
@@ -77,6 +79,8 @@ export class GreenPassClient {
   }
 
   health(): JsonResponse<{ status: string }> { return this.request('/healthz'); }
+  ready(): JsonResponse<ReadinessResponse> { return this.request('/readyz'); }
+  version(): JsonResponse<VersionResponse> { return this.request('/version'); }
   listTargets(): JsonResponse<Target[]> { return this.request('/targets'); }
   createTarget(input: CreateTargetInput): JsonResponse<Target> {
     return this.request('/targets', { method: 'POST', body: JSON.stringify(input) });

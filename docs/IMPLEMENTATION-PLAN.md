@@ -274,7 +274,7 @@ jobs:
 
 ## 5. P4 平台化（任务级施工图）
 
-- **GP4-01～GP4-06**：已补充规格 `docs/GP4-IMPLEMENTATION-SPEC-DRAFT.md`，并细化为可直接排期的批次清单 `docs/GP3-GP4-EXECUTION-BACKLOG.md`。当前仍不得宣称 GP4 完成：身份源/RBAC、CI 首批平台、私有化拓扑、租户分区策略和 SLO 需先定稿；不依赖这些决策的骨架批次可先开发。
+- **GP4-01～GP4-06**：已补充规格 `docs/GP4-IMPLEMENTATION-SPEC-DRAFT.md`，并细化为可直接排期的批次清单 `docs/GP3-GP4-EXECUTION-BACKLOG.md`。GP4-04A 已开始编码：新增 `/readyz`（当前仅 PostgreSQL 探针）、`/version`、构建信息和前端契约；Redis/Temporal/对象存储探针、Helm、迁移 Job 和真实私有化验收仍待完成。当前仍不得宣称 GP4 完成：身份源/RBAC、CI 首批平台、私有化拓扑、租户分区策略和 SLO 需先定稿；不依赖这些决策的骨架批次可先开发。
 - **GP4-02～GP4-06**：目标与验收保持不变，具体实施拆分、契约、迁移、分层边界和前置决策以 `docs/GP4-IMPLEMENTATION-SPEC-DRAFT.md` 为准；真实 provider、集群和容量验收仍待用户决策与环境准备。
 
 ---

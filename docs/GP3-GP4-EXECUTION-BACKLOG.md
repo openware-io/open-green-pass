@@ -158,7 +158,7 @@ npm run build
 
 ### GP4-04A：私有化交付骨架（依赖 D-09，可先做）
 
-**交付物**：`deploy/helm/gp` Chart、values schema、server/worker、migration Job、readiness/version、Secret 引用、NetworkPolicy、非 root 默认、安装/升级/回滚 runbook。
+**交付物**：`deploy/helm/gp` Chart、values schema、server/worker、migration Job、readiness/version、Secret 引用、NetworkPolicy、非 root 默认、安装/升级/回滚 runbook。当前可先交付 `/readyz`（仅 PostgreSQL 探针）和 `/version`；Redis/Temporal/对象存储探针必须在对应客户端接入后逐项增加，不能以单一 DB 探针代表全部依赖。
 
 **代码产物**：`cmd/migrate` 或受控 migration Job、`cmd/audit-verify`、build metadata、前端 embed/产物校验。
 

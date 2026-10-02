@@ -103,6 +103,9 @@ func main() {
 
 	addr := cfg.Addr
 	handler := gateway.NewRouter(log,
+		func(mux *http.ServeMux) {
+			gateway.RegisterSystem(mux, gateway.SystemStatus{Ready: func(ctx context.Context) error { return pool.Ping(ctx) }})
+		},
 		func(mux *http.ServeMux) { gapi.Register(mux, treeSvc) },
 		func(mux *http.ServeMux) { gapi.RegisterCases(mux, caseSvc) },
 		func(mux *http.ServeMux) { eapi.Register(mux, envSvc, runSvc, policySvc) },

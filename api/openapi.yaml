@@ -19,6 +19,28 @@ paths:
           content:
             application/json:
               schema: { type: object, additionalProperties: true }
+  /readyz:
+    get:
+      summary: 就绪检查
+      operationId: readyz
+      responses:
+        '200':
+          description: 依赖可用
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/ReadinessResponse' } }
+        '503':
+          description: 依赖不可用
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/ReadinessResponse' } }
+  /version:
+    get:
+      summary: 构建和 API 版本
+      operationId: version
+      responses:
+        '200':
+          description: 版本信息
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/VersionResponse' } }
   # ---------- 被测对象（governance，GP1-01） ----------
   /targets:
     get:
@@ -465,6 +487,20 @@ paths:
             text/html: {}
 components:
   schemas:
+    ReadinessResponse:
+      type: object
+      required: [ status, checks ]
+      properties:
+        status: { type: string, enum: [ ready, not_ready ] }
+        checks: { type: object, additionalProperties: { type: string } }
+    VersionResponse:
+      type: object
+      required: [ version, commit, built_at, api_version ]
+      properties:
+        version: { type: string }
+        commit: { type: string }
+        built_at: { type: string }
+        api_version: { type: string }
     StatusResponse:
       type: object
       required: [ status ]
