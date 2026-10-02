@@ -68,6 +68,81 @@ type ModelBinding struct {
 	Params   map[string]string // 额外参数（temperature 等）
 }
 
+// ModelStatus controls whether a registered model may be selected.
+type ModelStatus string
+
+const (
+	ModelPending  ModelStatus = "pending"
+	ModelApproved ModelStatus = "approved"
+	ModelDisabled ModelStatus = "disabled"
+)
+
+// ModelConfig is the provider-independent model catalogue entry. Secret and
+// endpoint material are references only; their values never enter this type.
+type ModelConfig struct {
+	ID             int64
+	TeamID         int64
+	Name           string
+	Provider       string
+	ModelKey       string
+	Capabilities   []string
+	Status         ModelStatus
+	SecretRef      *string
+	EndpointRef    *string
+	DefaultTimeout int
+	MaxTokensIn    int
+	MaxTokensOut   int
+	Revision       int
+	CreatedBy      int64
+}
+
+func (m ModelConfig) Validate() error {
+	if m.Name == "" || m.Provider == "" || m.ModelKey == "" {
+		return NewErr("model config name, provider and model key required")
+	}
+	if m.Status == "" {
+		return NewErr("model config status required")
+	}
+	return nil
+}
+
+// PriceSnapshot is immutable pricing selected for one model invocation.
+type PriceSnapshot struct {
+	ID            int64
+	TeamID        int64
+	ModelID       int64
+	Currency      string
+	InputPer1K    float64
+	OutputPer1K   float64
+	EffectiveFrom time.Time
+	EffectiveTo   *time.Time
+	Status        string
+	ApprovedBy    *int64
+	Revision      int
+}
+
+func (p PriceSnapshot) Validate() error {
+	if p.TeamID == 0 || p.ModelID == 0 || p.Currency == "" || p.EffectiveFrom.IsZero() {
+		return NewErr("price snapshot model, currency and effective time required")
+	}
+	if p.InputPer1K < 0 || p.OutputPer1K < 0 {
+		return NewErr("price snapshot unit price cannot be negative")
+	}
+	if p.EffectiveTo != nil && !p.EffectiveTo.After(p.EffectiveFrom) {
+		return NewErr("price snapshot effective range invalid")
+	}
+	return nil
+}
+
+// ModelGovernanceRepository is the persistence boundary for GP3-05.
+type ModelGovernanceRepository interface {
+	CreateModel(context.Context, *ModelConfig) error
+	FindModel(context.Context, int64, int64) (*ModelConfig, error)
+	ListModels(context.Context, int64) ([]*ModelConfig, error)
+	AddPrice(context.Context, *PriceSnapshot) error
+	ResolvePrice(context.Context, int64, int64, time.Time) (*PriceSnapshot, error)
+}
+
 // ModelBindingPolicy is the governance boundary for model approval. The
 // default application wiring uses NoopModelBindingPolicy until GP3-05's
 // persistent whitelist/approval store is selected.

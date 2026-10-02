@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS cost_price;
+DROP TABLE IF EXISTS mdl_model;
