@@ -269,12 +269,12 @@ jobs:
 
 ## 4. P3 AI 治理 + 生成管道 W1（任务级施工图）
 
-- **GP3-01～GP3-07**：已补充可开发实施规格 `docs/GP3-DETAILED-IMPLEMENTATION-SPEC.md`，覆盖各项目标边界、现有缺口、用户/架构决策、契约与事件、迁移、分层职责、测试验收和依赖顺序。当前仍按下述状态执行：GP3-01 统一 AI 网关参考实现已完成，真实 LiteLLM/供应商、超时和成本接入待完成；GP3-02～GP3-07 均未达到阶段 DoD，须按规格逐项开发和验收。
+- **GP3-01～GP3-07**：已补充规格 `docs/GP3-DETAILED-IMPLEMENTATION-SPEC.md`，并细化为可直接排期的批次清单 `docs/GP3-GP4-EXECUTION-BACKLOG.md`。GP3-01 统一 AI 网关参考实现已完成，真实 LiteLLM/供应商、超时和成本接入待完成；GP3-02～GP3-07 均未达到阶段 DoD，按批次清单逐项开发和验收。
 - **GP3-02～GP3-07**：目标与验收保持不变，具体实施拆分、契约、迁移、分层边界和前置决策以 `docs/GP3-DETAILED-IMPLEMENTATION-SPEC.md` 为准；在真实依赖和用户决策未确定前，不宣称代码或 DoD 完成。
 
 ## 5. P4 平台化（任务级施工图）
 
-- **GP4-01～GP4-06**：已补充可开发实施规格 `docs/GP4-IMPLEMENTATION-SPEC-DRAFT.md`，覆盖目标、前置决策/外部依赖、OpenAPI/事件、迁移、分层、测试验收和 GP2/GP3 依赖。当前仍不得宣称 GP4 完成：身份源/RBAC、CI 首批平台、私有化拓扑、租户分区策略和 SLO 需先定稿。
+- **GP4-01～GP4-06**：已补充规格 `docs/GP4-IMPLEMENTATION-SPEC-DRAFT.md`，并细化为可直接排期的批次清单 `docs/GP3-GP4-EXECUTION-BACKLOG.md`。当前仍不得宣称 GP4 完成：身份源/RBAC、CI 首批平台、私有化拓扑、租户分区策略和 SLO 需先定稿；不依赖这些决策的骨架批次可先开发。
 - **GP4-02～GP4-06**：目标与验收保持不变，具体实施拆分、契约、迁移、分层边界和前置决策以 `docs/GP4-IMPLEMENTATION-SPEC-DRAFT.md` 为准；真实 provider、集群和容量验收仍待用户决策与环境准备。
 
 ---
