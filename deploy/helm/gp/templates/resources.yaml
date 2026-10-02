@@ -1,0 +1,42 @@
+{{- if .Values.resources.quota.enabled }}
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: gp-quota
+  namespace: {{ .Values.namespaceOverride }}
+  labels:
+    {{- include "gp.labels" . | nindent 4 }}
+spec:
+  hard:
+    requests.cpu: {{ .Values.resources.quota.requestsCpu | quote }}
+    requests.memory: {{ .Values.resources.quota.requestsMemory | quote }}
+    limits.cpu: {{ .Values.resources.quota.limitsCpu | quote }}
+    limits.memory: {{ .Values.resources.quota.limitsMemory | quote }}
+    count/pods: {{ .Values.resources.quota.pods | quote }}
+    persistentvolumeclaims: {{ .Values.resources.quota.pvc | quote }}
+{{- end }}
+{{- if .Values.resources.limitRange.enabled }}
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: gp-limitrange
+  namespace: {{ .Values.namespaceOverride }}
+  labels:
+    {{- include "gp.labels" . | nindent 4 }}
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: 500m
+        memory: 512Mi
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+      min:
+        cpu: 50m
+        memory: 64Mi
+      max:
+        cpu: "4"
+        memory: 8Gi
+{{- end }}

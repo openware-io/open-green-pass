@@ -1,0 +1,47 @@
+namespaceOverride: gp
+
+imagePullSecrets: []
+
+server:
+  enabled: false
+  image:
+    repository: ghcr.io/openware-io/open-green-pass
+    tag: ""
+    pullPolicy: IfNotPresent
+  replicas: 1
+  env: {}
+  resources: {}
+
+worker:
+  enabled: false
+  image:
+    repository: ghcr.io/openware-io/open-green-pass-worker
+    tag: ""
+    pullPolicy: IfNotPresent
+  replicas: 1
+  env: {}
+  resources: {}
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: nginx
+  hosts: []
+
+resources:
+  quota:
+    enabled: true
+    requestsCpu: "8"
+    requestsMemory: 16Gi
+    limitsCpu: "16"
+    limitsMemory: 32Gi
+    pods: "50"
+    pvc: "40"
+  limitRange:
+    enabled: true
+
+networkPolicy:
+  enabled: true
