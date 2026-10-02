@@ -47,12 +47,12 @@ func (h *gateHandler) bundleReports(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, gperr.Validation("report_ids required"))
 		return
 	}
+	if req.Format != "" && req.Format != "html" && req.Format != "markdown" {
+		httpx.WriteErr(w, gperr.Validation("format must be html or markdown"))
+		return
+	}
 	b, err := h.report.BuildBundle(r.Context(), req.ReportIDs, req.Format)
 	if err != nil {
-		if errors.Is(err, application.ErrUnsupportedBundleFormat) {
-			httpx.WriteErr(w, gperr.Validation("format must be html, markdown, pdf, or docx"))
-			return
-		}
 		httpx.WriteErr(w, err)
 		return
 	}

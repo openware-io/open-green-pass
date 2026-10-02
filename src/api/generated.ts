@@ -1535,7 +1535,7 @@ export interface operations {
                      * @default html
                      * @enum {string}
                      */
-                    format?: "html" | "markdown" | "pdf" | "docx";
+                    format?: "html" | "markdown";
                 };
             };
         };

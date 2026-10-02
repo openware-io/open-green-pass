@@ -428,7 +428,7 @@ paths:
               required: [ report_ids ]
               properties:
                 report_ids: { type: array, items: { type: integer } }
-                format: { type: string, enum: [ html, markdown, pdf, docx ], default: html }
+                format: { type: string, enum: [ html, markdown ], default: html }
       responses:
         '200': { description: 合编报告内容, content: { application/json: { schema: { $ref: '#/components/schemas/ReportBundle' } } } }
   /reports/bundle/export:
