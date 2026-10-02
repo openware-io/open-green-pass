@@ -265,7 +265,7 @@ jobs:
 - **GP2-05 截图开关策略下发 ✅ 已交付**：服务级截图开关按对象策略下发（防高并发性能开销，PRD R-TEST-13）。验证：策略生效；无截图场景证据=日志+hash。
 - **GP2-06 跨场景报告合编（PDF/Word）**：跨 run 合编查询、汇总和 HTML/Markdown 输出已完成（`POST /reports/bundle`，tenant scoped）；已新增 `POST /reports/bundle/export` 的 PDF/DOCX 下载契约、纯 Go 参考渲染器、OpenAPI 生成类型和前端客户端。**当前剩余**：真实字体/中文排版、Office/PDF 阅读器兼容性、证据资源嵌入和部署运行时集成验证；因此 GP2-06 阶段 DoD 尚未完成。
 - **GP2-07 水平扩展 P2（§10）**：server 多副本 + worker 多实例 + 调度器无状态化（P1 起无状态代码实装）。关键文件：`deploy/helm/gp`（replica）、SSE 共享订阅（Redis Pub/Sub）。验证：加副本吞吐线性上升（压测基线 §10.10）。
-- **GP2-08 资源池注册 + 多执行集群**：本地资源池注册/能力选择/容量 reserve-release 参考实现已完成（`internal/execution/infra/pool`），当前剩余资源池持久化、心跳和真实多集群接入验证。
+- **GP2-08 资源池注册 + 多执行集群**：本地资源池注册/能力选择/容量 reserve-release 参考实现已完成（`internal/execution/infra/pool`）；已补充显式心跳时间、TTL 存活筛选和心跳回归测试。**当前剩余**：Redis/PostgreSQL 持久化、跨进程心跳/租约 fencing 和真实多集群接入验证。
 
 ## 4. P3 AI 治理 + 生成管道 W1（任务级施工图）
 
