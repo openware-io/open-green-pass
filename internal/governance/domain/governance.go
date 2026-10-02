@@ -63,16 +63,28 @@ type GateRule struct {
 
 // ModelBinding 被测对象节点可选 AI 模型绑定（每工程可自选模型）。
 type ModelBinding struct {
-	Model   string            // 模型标识（如 gpt-4o / deepseek-v3）
-	Provider string           // 模型提供方（openai / deepseek / local 等）
-	Params  map[string]string // 额外参数（temperature 等）
+	Model    string            // 模型标识（如 gpt-4o / deepseek-v3）
+	Provider string            // 模型提供方（openai / deepseek / local 等）
+	Params   map[string]string // 额外参数（temperature 等）
+}
+
+// Validate checks the provider-independent binding contract. Approval,
+// whitelist and price resolution remain GP3 governance concerns.
+func (b ModelBinding) Validate() error {
+	if b.Model == "" {
+		return NewErr("model binding model required")
+	}
+	if b.Provider == "" {
+		return NewErr("model binding provider required")
+	}
+	return nil
 }
 
 // Repo 被测仓库（来源溯源：被测对象树 ← 仓库）。
 type Repo struct {
 	ID            int64
 	TeamID        int64
-	TargetID      int64 // 归属被测对象节点（工程/服务）
+	TargetID      int64  // 归属被测对象节点（工程/服务）
 	Kind          string // git / svn / ...
 	URL           string
 	DefaultBranch string
@@ -149,8 +161,6 @@ type ChildrenFilter struct {
 	Type     TargetNodeType
 }
 
-
-
 // ========= GP1-02 用例版本化（变化可辨 + 来源可溯源）=========
 
 // ChangeType 用例版本变化类型（随迭代可辨新增/更新/删除/回退）。
@@ -178,18 +188,18 @@ type Case struct {
 
 // CaseVersion 用例版本（只增不改；回退=新增指向旧内容的新版本）。
 type CaseVersion struct {
-	ID            int64
-	TeamID        int64 // RLS 租户列
-	CaseID        int64
-	Version       int
-	ChangeType    ChangeType
-	SourceRepoID  *int64            // 来源仓库（可溯源）
-	SourceBranch  *string           // 来源分支（可溯源）
-	ScriptJSON    *json.RawMessage  // 脚本/HTTP/规则/压测 + 参数/数据/断言
-	ApprovedBy    *int64
-	ApprovedAt    *time.Time
-	CreatedBy     int64
-	CreatedAt     time.Time
+	ID           int64
+	TeamID       int64 // RLS 租户列
+	CaseID       int64
+	Version      int
+	ChangeType   ChangeType
+	SourceRepoID *int64           // 来源仓库（可溯源）
+	SourceBranch *string          // 来源分支（可溯源）
+	ScriptJSON   *json.RawMessage // 脚本/HTTP/规则/压测 + 参数/数据/断言
+	ApprovedBy   *int64
+	ApprovedAt   *time.Time
+	CreatedBy    int64
+	CreatedAt    time.Time
 }
 
 // CaseFilter 用例查询筛选。

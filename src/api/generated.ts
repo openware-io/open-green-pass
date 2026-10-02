@@ -90,6 +90,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/targets/{id}/model-binding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询被测对象模型绑定 */
+        get: operations["getModelBinding"];
+        /** 设置被测对象模型绑定 */
+        put: operations["setModelBinding"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cases": {
         parameters: {
             query?: never;
@@ -584,6 +602,14 @@ export interface components {
             parent_id?: number | null;
             /** Format: int64 */
             repo_id?: number | null;
+            model_binding?: components["schemas"]["ModelBinding"];
+        };
+        ModelBinding: {
+            model: string;
+            provider: string;
+            params?: {
+                [key: string]: string;
+            };
         };
         TestCase: {
             /** Format: int64 */
@@ -946,6 +972,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+        };
+    };
+    getModelBinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 模型绑定（未配置时为 null） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelBinding"] | null;
+                };
+            };
+        };
+    };
+    setModelBinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelBinding"];
+            };
+        };
+        responses: {
+            /** @description 已设置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Target"];
                 };
             };
         };

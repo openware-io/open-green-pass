@@ -88,5 +88,25 @@ func (s *TargetTreeService) FindTarget(ctx context.Context, id int64) (*domain.T
 	return s.repo.FindTarget(ctx, teamID, id)
 }
 
+// SetModelBinding updates the provider-independent target model binding.
+func (s *TargetTreeService) SetModelBinding(ctx context.Context, targetID int64, binding domain.ModelBinding) (*domain.Target, error) {
+	if err := binding.Validate(); err != nil {
+		return nil, err
+	}
+	teamID, ok := rls.TenantFrom(ctx)
+	if !ok {
+		return nil, ErrTenantRequired
+	}
+	target, err := s.repo.FindTarget(ctx, teamID, targetID)
+	if err != nil {
+		return nil, err
+	}
+	target.SetModelBinding(binding)
+	if err := s.repo.SaveTarget(ctx, target); err != nil {
+		return nil, err
+	}
+	return target, nil
+}
+
 // ErrTenantRequired 请求缺少租户（x-gp-team-id）。
 var ErrTenantRequired = fmt.Errorf("tenant required: missing x-gp-team-id header")

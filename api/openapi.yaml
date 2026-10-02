@@ -85,6 +85,26 @@ paths:
                 default_branch: { type: string }
       responses:
         '200': { description: 已关联, content: { application/json: { schema: { $ref: '#/components/schemas/StatusResponse' } } } }
+  /targets/{id}/model-binding:
+    get:
+      summary: 查询被测对象模型绑定
+      operationId: getModelBinding
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: 模型绑定（未配置时为 null）, content: { application/json: { schema: { allOf: [ { $ref: '#/components/schemas/ModelBinding' } ], nullable: true } } } }
+    put:
+      summary: 设置被测对象模型绑定
+      operationId: setModelBinding
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ModelBinding' }
+      responses:
+        '200': { description: 已设置, content: { application/json: { schema: { $ref: '#/components/schemas/Target' } } } }
   # ---------- 用例（governance，GP1-02） ----------
   /cases:
     get:
@@ -518,6 +538,14 @@ components:
         status: { type: string }
         parent_id: { type: integer, format: int64, nullable: true }
         repo_id: { type: integer, format: int64, nullable: true }
+        model_binding: { $ref: '#/components/schemas/ModelBinding' }
+    ModelBinding:
+      type: object
+      required: [ model, provider ]
+      properties:
+        model: { type: string }
+        provider: { type: string }
+        params: { type: object, additionalProperties: { type: string } }
     TestCase:
       type: object
       required: [ id, team_id, target_id, code, title, kind, current_version, status ]

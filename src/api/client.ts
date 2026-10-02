@@ -15,6 +15,7 @@ export type EnvRuntime = components['schemas']['EnvRuntime'];
 export type EnvCheck = components['schemas']['EnvCheck'];
 export type ReadinessResponse = components['schemas']['ReadinessResponse'];
 export type VersionResponse = components['schemas']['VersionResponse'];
+export type ModelBinding = components['schemas']['ModelBinding'];
 
 export type CreateTargetInput = paths['/targets']['post']['requestBody']['content']['application/json'];
 export type CreateCaseInput = paths['/cases']['post']['requestBody']['content']['application/json'];
@@ -81,6 +82,10 @@ export class GreenPassClient {
   health(): JsonResponse<{ status: string }> { return this.request('/healthz'); }
   ready(): JsonResponse<ReadinessResponse> { return this.request('/readyz'); }
   version(): JsonResponse<VersionResponse> { return this.request('/version'); }
+  getModelBinding(targetId: number): JsonResponse<ModelBinding | null> { return this.request(`/targets/${targetId}/model-binding`); }
+  setModelBinding(targetId: number, input: ModelBinding): JsonResponse<Target> {
+    return this.request(`/targets/${targetId}/model-binding`, { method: 'PUT', body: JSON.stringify(input) });
+  }
   listTargets(): JsonResponse<Target[]> { return this.request('/targets'); }
   createTarget(input: CreateTargetInput): JsonResponse<Target> {
     return this.request('/targets', { method: 'POST', body: JSON.stringify(input) });

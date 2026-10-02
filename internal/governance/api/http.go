@@ -21,7 +21,52 @@ func Register(mux *http.ServeMux, svc *application.TargetTreeService) {
 	h := &handler{svc: svc}
 	mux.HandleFunc("POST /targets", h.createTarget)
 	mux.HandleFunc("POST /targets/{id}/repo", h.attachRepo)
+	mux.HandleFunc("GET /targets/{id}/model-binding", h.getModelBinding)
+	mux.HandleFunc("PUT /targets/{id}/model-binding", h.setModelBinding)
 	mux.HandleFunc("GET /targets", h.listTargets)
+}
+
+type modelBindingRequest struct {
+	Model    string            `json:"model"`
+	Provider string            `json:"provider"`
+	Params   map[string]string `json:"params,omitempty"`
+}
+
+func (h *handler) getModelBinding(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		httpx.WriteErr(w, gperr.Validation("invalid target id"))
+		return
+	}
+	target, err := h.svc.FindTarget(r.Context(), id)
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	if target.ModelBinding == nil {
+		httpx.WriteJSON(w, http.StatusOK, nil)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, modelBindingResponse{Model: target.ModelBinding.Model, Provider: target.ModelBinding.Provider, Params: target.ModelBinding.Params})
+}
+
+func (h *handler) setModelBinding(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		httpx.WriteErr(w, gperr.Validation("invalid target id"))
+		return
+	}
+	var req modelBindingRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	target, err := h.svc.SetModelBinding(r.Context(), id, domain.ModelBinding{Model: req.Model, Provider: req.Provider, Params: req.Params})
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toTargetResponse(target))
 }
 
 // createTargetRequest 建树节点请求。

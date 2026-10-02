@@ -21,14 +21,21 @@ type caseVersionResponse struct {
 
 // targetResponse 是治理域对外被测对象契约；禁止直接序列化领域聚合。
 type targetResponse struct {
-	ID       int64  `json:"id"`
-	TeamID   int64  `json:"team_id"`
-	Type     string `json:"type"`
-	Name     string `json:"name"`
-	Kind     string `json:"kind"`
-	Status   string `json:"status"`
-	ParentID *int64 `json:"parent_id,omitempty"`
-	RepoID   *int64 `json:"repo_id,omitempty"`
+	ID           int64                 `json:"id"`
+	TeamID       int64                 `json:"team_id"`
+	Type         string                `json:"type"`
+	Name         string                `json:"name"`
+	Kind         string                `json:"kind"`
+	Status       string                `json:"status"`
+	ParentID     *int64                `json:"parent_id,omitempty"`
+	RepoID       *int64                `json:"repo_id,omitempty"`
+	ModelBinding *modelBindingResponse `json:"model_binding,omitempty"`
+}
+
+type modelBindingResponse struct {
+	Model    string            `json:"model"`
+	Provider string            `json:"provider"`
+	Params   map[string]string `json:"params,omitempty"`
 }
 
 // caseResponse 是治理域对外用例契约；仅暴露用例当前视图。
@@ -45,10 +52,14 @@ type caseResponse struct {
 
 func toTargetResponse(target *domain.Target) targetResponse {
 	node := target.Node
-	return targetResponse{
+	response := targetResponse{
 		ID: node.ID, TeamID: node.TeamID, Type: string(node.Type), Name: node.Name,
 		Kind: node.Kind, Status: node.Status, ParentID: node.ParentID, RepoID: node.RepoID,
 	}
+	if target.ModelBinding != nil {
+		response.ModelBinding = &modelBindingResponse{Model: target.ModelBinding.Model, Provider: target.ModelBinding.Provider, Params: target.ModelBinding.Params}
+	}
+	return response
 }
 
 func toTargetResponses(targets []*domain.Target) []targetResponse {
