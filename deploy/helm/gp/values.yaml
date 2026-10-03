@@ -2,6 +2,25 @@ namespaceOverride: gp
 
 imagePullSecrets: []
 
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+secrets:
+  existingSecret: ""
+
+migration:
+  enabled: false
+  image:
+    repository: ghcr.io/openware-io/open-green-pass-migrate
+    tag: ""
+    pullPolicy: IfNotPresent
+  env: {}
+  resources: {}
+
 server:
   enabled: false
   image:

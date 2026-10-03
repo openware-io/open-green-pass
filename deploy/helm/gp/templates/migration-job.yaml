@@ -1,36 +1,36 @@
-{{- if .Values.worker.enabled }}
-apiVersion: apps/v1
-kind: Deployment
+{{- if .Values.migration.enabled }}
+apiVersion: batch/v1
+kind: Job
 metadata:
-  name: gp-worker
+  name: gp-migrate-{{ .Release.Revision }}
   namespace: {{ .Values.namespaceOverride }}
   labels:
     {{- include "gp.labels" . | nindent 4 }}
-    app.kubernetes.io/component: worker
+    app.kubernetes.io/component: migration
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
-  replicas: {{ .Values.worker.replicas }}
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: {{ include "gp.name" . }}
-      app.kubernetes.io/component: worker
+  backoffLimit: 1
   template:
     metadata:
       labels:
         app.kubernetes.io/name: {{ include "gp.name" . }}
         app.kubernetes.io/part-of: greenpass
-        app.kubernetes.io/component: worker
+        app.kubernetes.io/component: migration
     spec:
+      restartPolicy: Never
       securityContext:
         {{- toYaml .Values.securityContext | nindent 8 }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets: {{ toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: worker
-          image: "{{ .Values.worker.image.repository }}:{{ required "worker.image.tag is required when worker.enabled=true" .Values.worker.image.tag }}"
-          imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
+        - name: migrate
+          image: "{{ .Values.migration.image.repository }}:{{ required "migration.image.tag is required when migration.enabled=true" .Values.migration.image.tag }}"
+          imagePullPolicy: {{ .Values.migration.image.pullPolicy }}
           env:
-            {{- range $name, $value := .Values.worker.env }}
+            {{- range $name, $value := .Values.migration.env }}
             - name: {{ $name }}
               value: {{ $value | quote }}
             {{- end }}
@@ -39,5 +39,5 @@ spec:
             - secretRef:
                 name: {{ .Values.secrets.existingSecret }}
           {{- end }}
-          resources: {{- toYaml .Values.worker.resources | nindent 12 }}
+          resources: {{- toYaml .Values.migration.resources | nindent 12 }}
 {{- end }}
