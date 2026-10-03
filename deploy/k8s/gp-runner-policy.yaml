@@ -30,6 +30,39 @@ spec:
             matchLabels:
               kubernetes.io/metadata.name: gp
 ---
+# Runner 默认拒绝出站；仅放行集群 DNS 与 GP 控制面。SUT 端口需按实际
+# 被测服务显式追加 namespaceSelector/podSelector + ports，避免误把 im-saas
+# 全部服务暴露给执行沙箱。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gp-runner-egress-default-deny
+  namespace: gp-runner
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gp
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 9000
+        - protocol: TCP
+          port: 7233
+---
 apiVersion: v1
 kind: ResourceQuota
 metadata:
