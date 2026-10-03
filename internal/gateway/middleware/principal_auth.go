@@ -13,6 +13,10 @@ import (
 func PrincipalAuth(provider iam.AuthenticationProvider, allowHeaderFallback bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/version" {
+				next.ServeHTTP(w, r)
+				return
+			}
 			credential := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 			if provider != nil && credential != "" {
 				result := provider.Authenticate(r.Context(), credential)

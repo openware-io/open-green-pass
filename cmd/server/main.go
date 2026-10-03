@@ -104,7 +104,10 @@ func main() {
 	}
 
 	addr := cfg.Addr
-	handler := gateway.NewRouter(log,
+	// Header identity is a development-only compatibility path. Production
+	// must wire a verified AuthenticationProvider before serving business APIs.
+	allowHeaderFallback := cfg.Env != "prod" && os.Getenv("GP_ALLOW_HEADER_AUTH") == "true"
+	handler := gateway.NewRouterWithAuth(log, nil, allowHeaderFallback,
 		func(mux *http.ServeMux) {
 			gateway.RegisterSystem(mux, gateway.SystemStatus{Ready: func(ctx context.Context) error { return pool.Ping(ctx) }})
 		},
