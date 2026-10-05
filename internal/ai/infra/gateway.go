@@ -56,6 +56,9 @@ func (g *Gateway) Generate(ctx context.Context, req domain.GenerateRequest) (dom
 		res, err := p.Generate(ctx, req)
 		if err != nil {
 			last = err
+			if !domain.IsRetryable(err) {
+				return domain.GenerateResult{}, err
+			}
 			continue
 		}
 		res.RequestID = req.RequestID

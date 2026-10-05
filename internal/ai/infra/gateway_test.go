@@ -28,7 +28,7 @@ type fakeMeter struct{ calls int }
 func (m *fakeMeter) Record(context.Context, domain.GenerateResult) error { m.calls++; return nil }
 
 func TestGatewayFallbackAndIdempotentMeter(t *testing.T) {
-	primary := &fakeProvider{name: "primary", err: errors.New("down")}
+	primary := &fakeProvider{name: "primary", err: domain.RetryableError{Err: errors.New("down")}}
 	fallback := &fakeProvider{name: "fallback"}
 	meter := &fakeMeter{}
 	g := NewGateway(1, meter, primary, fallback)
@@ -40,6 +40,15 @@ func TestGatewayFallbackAndIdempotentMeter(t *testing.T) {
 	}
 	if primary.calls != 2 || fallback.calls != 2 || meter.calls != 1 {
 		t.Fatalf("calls primary=%d fallback=%d meter=%d", primary.calls, fallback.calls, meter.calls)
+	}
+}
+
+func TestGatewayDoesNotFallbackForNonRetryableProviderError(t *testing.T) {
+	primary := &fakeProvider{name: "primary", err: errors.New("invalid credential")}
+	fallback := &fakeProvider{name: "fallback"}
+	_, err := NewGateway(1, nil, primary, fallback).Generate(context.Background(), domain.GenerateRequest{RequestID: "req-1", Model: "primary", Prompt: "hello"})
+	if err == nil || fallback.calls != 0 {
+		t.Fatalf("err=%v fallback calls=%d", err, fallback.calls)
 	}
 }
 
