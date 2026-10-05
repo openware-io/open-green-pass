@@ -1,0 +1,12 @@
+.git
+node_modules
+dist
+public
+bin
+*.log
+.env
+dev.err.log
+dev.log
+test
+deploy
+docs
