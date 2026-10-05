@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gp-temporal
+  namespace: gp
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: gp-temporal }
+  template:
+    metadata:
+      labels: { app: gp-temporal }
+    spec:
+      containers:
+        - name: temporal
+          image: temporalio/auto-setup:1.27.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: DB, value: postgres12 }
+            - { name: DB_PORT, value: "5432" }
+            - { name: POSTGRES_USER, valueFrom: { secretKeyRef: { name: gp-postgres-auth, key: username } } }
+            - { name: POSTGRES_PWD, valueFrom: { secretKeyRef: { name: gp-postgres-auth, key: password } } }
+            - { name: POSTGRES_SEEDS, value: gp-postgres.gp.svc.cluster.local }
+            - { name: DBNAME, value: temporal }
+            - { name: VISIBILITY_DBNAME, value: temporal_visibility }
+          ports: [{ name: frontend, containerPort: 7233 }]
+          readinessProbe:
+            tcpSocket: { port: frontend }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: frontend }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { cpu: "1", memory: 2Gi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gp-temporal-frontend
+  namespace: gp
+spec:
+  type: ClusterIP
+  selector: { app: gp-temporal }
+  ports: [{ name: frontend, port: 7233, targetPort: frontend }]

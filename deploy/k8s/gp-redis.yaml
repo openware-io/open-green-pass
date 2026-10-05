@@ -1,0 +1,56 @@
+# Credentials are supplied by an existing Secret named gp-redis-auth.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gp-redis-data
+  namespace: gp
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gp-redis
+  namespace: gp
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: gp-redis }
+  template:
+    metadata:
+      labels: { app: gp-redis }
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$REDIS_PASSWORD\""]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom: { secretKeyRef: { name: gp-redis-auth, key: password } }
+          ports: [{ name: redis, containerPort: 6379 }]
+          readinessProbe:
+            exec: { command: ["sh", "-c", "redis-cli --no-auth-warning -a \"$REDIS_PASSWORD\" ping"] }
+          livenessProbe:
+            exec: { command: ["sh", "-c", "redis-cli --no-auth-warning -a \"$REDIS_PASSWORD\" ping"] }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          volumeMounts: [{ name: data, mountPath: /data }]
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: gp-redis-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gp-redis
+  namespace: gp
+spec:
+  type: ClusterIP
+  selector: { app: gp-redis }
+  ports: [{ name: redis, port: 6379, targetPort: redis }]
