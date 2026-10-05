@@ -1,4 +1,5 @@
 {{- if .Values.server.enabled }}
+{{- $serviceAccount := .Values.serviceAccount | default dict }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,7 +21,7 @@ spec:
         app.kubernetes.io/part-of: greenpass
         app.kubernetes.io/component: server
     spec:
-      serviceAccountName: {{ .Values.serviceAccount.name }}
+      serviceAccountName: {{ default "gp-controller" (get $serviceAccount "name") }}
       securityContext:
         {{- toYaml .Values.securityContext | nindent 8 }}
       {{- with .Values.imagePullSecrets }}

@@ -149,7 +149,12 @@ func (r *K8sRunner) executeOne(ctx context.Context, s *domain.CaseSpec) (*domain
 					RestartPolicy:                corev1.RestartPolicyNever,
 					ServiceAccountName:           r.cfg.ServiceAccountName,
 					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot:   boolptr(true),
+						RunAsNonRoot: boolptr(true),
+						// The default runner image curlimages/curl declares a named
+						// non-root user. Its numeric UID/GID let kubelet verify the
+						// non-root constraint before starting the sandbox.
+						RunAsUser:      int64ptr(100),
+						RunAsGroup:     int64ptr(101),
 						SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 					},
 					Containers: []corev1.Container{{
