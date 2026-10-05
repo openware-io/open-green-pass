@@ -55,6 +55,12 @@ func (h *caseHandler) authorizeCase(w http.ResponseWriter, r *http.Request, acti
 	if h.authorizer == nil {
 		return true
 	}
+	// Reject unauthenticated requests before loading the case. Besides failing
+	// closed, this avoids exposing case existence through a 404 side channel.
+	if _, ok := iam.PrincipalFromContext(r.Context()); !ok {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return false
+	}
 	c, err := h.svc.FindCase(r.Context(), caseID)
 	if err != nil {
 		httpx.WriteErr(w, err)
