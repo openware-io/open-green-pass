@@ -11,7 +11,10 @@ import (
 	gperr "github.com/openware-io/open-green-pass/pkg/errors"
 )
 
-type envHandler struct{ svc *application.EnvService }
+type envHandler struct {
+	svc        *application.EnvService
+	authorizer iam.AuthorizationPort
+}
 
 // Register 注册执行域路由（版本校验 + 运行编排）。
 func Register(mux *http.ServeMux, envSvc *application.EnvService, runSvc *application.RunService, policySvc *application.PolicyService) {
@@ -26,9 +29,9 @@ func RegisterAuthorized(mux *http.ServeMux, envSvc *application.EnvService, runS
 }
 
 func register(mux *http.ServeMux, envSvc *application.EnvService, runSvc *application.RunService, policySvc *application.PolicyService, authorizer iam.AuthorizationPort) {
-	h := &envHandler{svc: envSvc}
+	h := &envHandler{svc: envSvc, authorizer: authorizer}
 	rh := &runHandler{svc: runSvc, authorizer: authorizer}
-	ph := &policyHandler{svc: policySvc}
+	ph := &policyHandler{svc: policySvc, authorizer: authorizer}
 	mux.HandleFunc("POST /targets/{id}/env/runtime", h.registerRuntime)
 	mux.HandleFunc("POST /targets/{id}/version-check", h.checkVersion)
 	mux.HandleFunc("GET /targets/{id}/version-checks", h.recentChecks)
@@ -45,6 +48,21 @@ func register(mux *http.ServeMux, envSvc *application.EnvService, runSvc *applic
 	mux.HandleFunc("POST /runs/{id}/resume", rh.resumeRun)
 }
 
+// authorizeTarget checks the target-level permission of environment and policy
+// routes. Legacy registration leaves authorizer nil, preserving the embedded
+// and test composition contract; authorized registration fails closed.
+func (h *envHandler) authorizeTarget(w http.ResponseWriter, r *http.Request, action string, targetID int64) bool {
+	if h.authorizer == nil {
+		return true
+	}
+	principal, ok := iam.PrincipalFromContext(r.Context())
+	if !ok || h.authorizer.Authorize(r.Context(), principal, action, strconv.FormatInt(targetID, 10)) != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
 // registerRuntimeRequest 登记环境运行版本请求。
 type registerRuntimeRequest struct {
 	Env     string `json:"env"`
@@ -53,8 +71,11 @@ type registerRuntimeRequest struct {
 
 func (h *envHandler) registerRuntime(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	if err != nil || id <= 0 {
 		httpx.WriteErr(w, gperr.Validation("invalid target id"))
+		return
+	}
+	if !h.authorizeTarget(w, r, "exec", id) {
 		return
 	}
 	var req registerRuntimeRequest
@@ -82,8 +103,11 @@ type checkVersionRequest struct {
 
 func (h *envHandler) checkVersion(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	if err != nil || id <= 0 {
 		httpx.WriteErr(w, gperr.Validation("invalid target id"))
+		return
+	}
+	if !h.authorizeTarget(w, r, "exec", id) {
 		return
 	}
 	var req checkVersionRequest
@@ -105,8 +129,11 @@ func (h *envHandler) checkVersion(w http.ResponseWriter, r *http.Request) {
 
 func (h *envHandler) recentChecks(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	if err != nil || id <= 0 {
 		httpx.WriteErr(w, gperr.Validation("invalid target id"))
+		return
+	}
+	if !h.authorizeTarget(w, r, "view", id) {
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))

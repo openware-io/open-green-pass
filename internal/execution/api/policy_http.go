@@ -7,17 +7,36 @@ import (
 
 	"github.com/openware-io/open-green-pass/internal/execution/application"
 	"github.com/openware-io/open-green-pass/internal/gateway/httpx"
+	"github.com/openware-io/open-green-pass/internal/iam"
 	"github.com/openware-io/open-green-pass/internal/platform/rls"
 	gperr "github.com/openware-io/open-green-pass/pkg/errors"
 )
 
-type policyHandler struct{ svc *application.PolicyService }
+type policyHandler struct {
+	svc        *application.PolicyService
+	authorizer iam.AuthorizationPort
+}
+
+func (h *policyHandler) authorizeTarget(w http.ResponseWriter, r *http.Request, action string, targetID int64) bool {
+	if h.authorizer == nil {
+		return true
+	}
+	principal, ok := iam.PrincipalFromContext(r.Context())
+	if !ok || h.authorizer.Authorize(r.Context(), principal, action, strconv.FormatInt(targetID, 10)) != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
+}
 
 // setScreenshotPolicy 下发服务级截图开关策略。
 func (h *policyHandler) setScreenshotPolicy(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	if err != nil || id <= 0 {
 		httpx.WriteErr(w, gperr.Validation("invalid target id"))
+		return
+	}
+	if !h.authorizeTarget(w, r, "edit", id) {
 		return
 	}
 	var req application.SetPolicyRequest
@@ -37,8 +56,11 @@ func (h *policyHandler) setScreenshotPolicy(w http.ResponseWriter, r *http.Reque
 // getScreenshotPolicy 读取截图开关策略。
 func (h *policyHandler) getScreenshotPolicy(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
+	if err != nil || id <= 0 {
 		httpx.WriteErr(w, gperr.Validation("invalid target id"))
+		return
+	}
+	if !h.authorizeTarget(w, r, "view", id) {
 		return
 	}
 	scenario, _ := strconv.ParseInt(r.URL.Query().Get("scenario_id"), 10, 64)
