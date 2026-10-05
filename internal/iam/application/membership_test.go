@@ -12,6 +12,12 @@ type membershipRepo struct {
 	members []*iam.Member
 	saved   *iam.Member
 }
+type auditRecorder struct{ events []AuditEvent }
+
+func (r *auditRecorder) Append(_ context.Context, event AuditEvent) error {
+	r.events = append(r.events, event)
+	return nil
+}
 
 func (r *membershipRepo) SaveMember(_ context.Context, m *iam.Member) error { r.saved = m; return nil }
 func (r *membershipRepo) FindMember(context.Context, int64, int64) (*iam.Member, error) {
@@ -51,5 +57,18 @@ func TestMembershipServiceAllowsOwnerHandoff(t *testing.T) {
 	}
 	if r.saved.Role != iam.RoleAdmin {
 		t.Fatalf("role=%s", r.saved.Role)
+	}
+}
+
+func TestMembershipServiceAuditsRoleChange(t *testing.T) {
+	r := &membershipRepo{member: &iam.Member{ID: 1, TeamID: 10, Role: iam.RoleOwner, Status: iam.MemberActive}, members: []*iam.Member{{ID: 1, Role: iam.RoleOwner, Status: iam.MemberActive}, {ID: 2, Role: iam.RoleOwner, Status: iam.MemberActive}}}
+	audit := &auditRecorder{}
+	svc := NewMembershipService(r)
+	svc.SetAuditPort(audit)
+	if err := svc.ChangeRole(context.Background(), 10, 1, iam.RoleAdmin, iam.MemberActive); err != nil {
+		t.Fatal(err)
+	}
+	if len(audit.events) != 1 || audit.events[0].Op != "iam.member.changed" {
+		t.Fatalf("events=%+v", audit.events)
 	}
 }

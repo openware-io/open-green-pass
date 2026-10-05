@@ -9,10 +9,19 @@ import (
 
 var ErrLastOwner = errors.New("iam: cannot remove or disable the last owner")
 
-type MembershipService struct{ repo iam.RBACRepository }
+type MembershipService struct {
+	repo  iam.RBACRepository
+	audit AuditPort
+}
 
 func NewMembershipService(repo iam.RBACRepository) *MembershipService {
-	return &MembershipService{repo: repo}
+	return &MembershipService{repo: repo, audit: NoopAuditPort{}}
+}
+
+func (s *MembershipService) SetAuditPort(audit AuditPort) {
+	if audit != nil {
+		s.audit = audit
+	}
 }
 
 // ChangeRole protects the team invariant that at least one active owner
@@ -44,6 +53,10 @@ func (s *MembershipService) ChangeRole(ctx context.Context, teamID, memberID int
 			return ErrLastOwner
 		}
 	}
+	previousRole, previousStatus := m.Role, m.Status
 	m.Role, m.Status = role, status
-	return s.repo.SaveMember(ctx, m)
+	if err := s.repo.SaveMember(ctx, m); err != nil {
+		return err
+	}
+	return s.audit.Append(ctx, AuditEvent{Op: "iam.member.changed", Asset: "member", AssetID: m.ID, Payload: map[string]any{"role_before": string(previousRole), "role_after": string(role), "status_before": string(previousStatus), "status_after": string(status)}})
 }
