@@ -218,9 +218,9 @@ func (r *K8sRunner) executeOne(ctx context.Context, s *domain.CaseSpec) (*domain
 		Logs: []string{fmt.Sprintf("job://%s/%s", r.cfg.Namespace, jobName)},
 		Hash: hex.EncodeToString(hash[:]),
 	}
-	if s.ScreenshotEnabled {
-		ev.Screenshots = []string{fmt.Sprintf("job://%s/%s/screenshot", r.cfg.Namespace, jobName)}
-	}
+	// A generic API Job does not capture pixels. ScreenshotEnabled is a policy
+	// request, not evidence: only a browser-capable runner may append actual
+	// screenshot objects after persisting them. Never publish a synthetic URI.
 	return &domain.CaseResult{
 		ID: r.gen.Next(), CaseID: s.CaseID, CaseVersion: s.CaseVersion,
 		Status: status, ResultText: truncateStr(logs, 400), Evidence: ev,

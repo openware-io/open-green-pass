@@ -48,6 +48,9 @@ func TestK8sRunner(t *testing.T) {
 	if results[0].Evidence == nil || results[0].Evidence.Hash == "" {
 		t.Fatalf("want evidence hash, got %+v", results[0].Evidence)
 	}
+	if len(results[0].Evidence.Screenshots) != 0 {
+		t.Fatalf("API runner must not publish synthetic screenshots: %+v", results[0].Evidence.Screenshots)
+	}
 	if !strings.Contains(results[0].ResultText, "gp-runner-ok") {
 		t.Fatalf("want log captured got text=%q", results[0].ResultText)
 	}
