@@ -12,10 +12,45 @@ import (
 	"github.com/openware-io/open-green-pass/internal/execution/application"
 	"github.com/openware-io/open-green-pass/internal/execution/domain"
 	"github.com/openware-io/open-green-pass/internal/gateway/httpx"
+	"github.com/openware-io/open-green-pass/internal/iam"
 	gperr "github.com/openware-io/open-green-pass/pkg/errors"
 )
 
-type runHandler struct{ svc *application.RunService }
+type runHandler struct {
+	svc        *application.RunService
+	authorizer iam.AuthorizationPort
+}
+
+// authorizeTarget checks the target-level permission of a run request. For
+// run-id routes the run is first read through the tenant-scoped service, so a
+// caller cannot turn a guessed run ID into authorization against another team.
+func (h *runHandler) authorizeTarget(w http.ResponseWriter, r *http.Request, action string, targetID int64) bool {
+	if h.authorizer == nil {
+		return true
+	}
+	principal, ok := iam.PrincipalFromContext(r.Context())
+	if !ok || h.authorizer.Authorize(r.Context(), principal, action, strconv.FormatInt(targetID, 10)) != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
+func (h *runHandler) findAndAuthorize(w http.ResponseWriter, r *http.Request, id int64, action string) (*domain.Run, bool) {
+	run, err := h.svc.GetRun(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, domain.ErrRunNotFound) {
+			httpx.WriteErr(w, gperr.NotFound("run not found"))
+		} else {
+			httpx.WriteErr(w, err)
+		}
+		return nil, false
+	}
+	if !h.authorizeTarget(w, r, action, run.TargetID) {
+		return nil, false
+	}
+	return run, true
+}
 
 func (h *runHandler) createRun(w http.ResponseWriter, r *http.Request) {
 	var req application.CreateRunRequest
@@ -25,6 +60,9 @@ func (h *runHandler) createRun(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ScenarioID == 0 || req.TargetID == 0 || req.TargetVersion == "" {
 		httpx.WriteErr(w, gperr.Validation("scenario_id, target_id, target_version required"))
+		return
+	}
+	if !h.authorizeTarget(w, r, "exec", req.TargetID) {
 		return
 	}
 	run, err := h.svc.CreateRun(r.Context(), req)
@@ -45,6 +83,16 @@ func (h *runHandler) listRuns(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		targetID = &id
+		if !h.authorizeTarget(w, r, "view", id) {
+			return
+		}
+	}
+	// Listing every run has no single target against which to make an explicit
+	// asset decision. Require callers to scope the request by target whenever
+	// authorization is enabled, rather than accidentally exposing all history.
+	if h.authorizer != nil && targetID == nil {
+		http.Error(w, "target_id required", http.StatusForbidden)
+		return
 	}
 	limit, _ := strconv.Atoi(query.Get("limit"))
 	runs, err := h.svc.ListRuns(r.Context(), targetID, query.Get("state"), limit)
@@ -64,13 +112,8 @@ func (h *runHandler) getRun(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	run, err := h.svc.GetRun(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, domain.ErrRunNotFound) {
-			httpx.WriteErr(w, gperr.NotFound("run not found"))
-			return
-		}
-		httpx.WriteErr(w, err)
+	run, ok := h.findAndAuthorize(w, r, id, "view")
+	if !ok {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, toRunResponse(run))
@@ -83,6 +126,9 @@ func (h *runHandler) getRun(w http.ResponseWriter, r *http.Request) {
 func (h *runHandler) events(w http.ResponseWriter, r *http.Request) {
 	id, ok := runID(w, r)
 	if !ok {
+		return
+	}
+	if _, ok := h.findAndAuthorize(w, r, id, "view"); !ok {
 		return
 	}
 	flusher, ok := w.(http.Flusher)
@@ -156,6 +202,9 @@ func (h *runHandler) caseResults(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if _, ok := h.findAndAuthorize(w, r, id, "view"); !ok {
+		return
+	}
 	results, err := h.svc.CaseResults(r.Context(), id)
 	if err != nil {
 		httpx.WriteErr(w, err)
@@ -169,6 +218,9 @@ func (h *runHandler) startVersionCheck(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if _, ok := h.findAndAuthorize(w, r, id, "exec"); !ok {
+		return
+	}
 	run, err := h.svc.StartVersionCheck(r.Context(), id)
 	if err != nil {
 		httpx.WriteErr(w, err)
@@ -180,6 +232,9 @@ func (h *runHandler) startVersionCheck(w http.ResponseWriter, r *http.Request) {
 func (h *runHandler) executeRun(w http.ResponseWriter, r *http.Request) {
 	id, ok := runID(w, r)
 	if !ok {
+		return
+	}
+	if _, ok := h.findAndAuthorize(w, r, id, "exec"); !ok {
 		return
 	}
 	run, results, err := h.svc.ExecuteRun(r.Context(), id)
@@ -202,6 +257,9 @@ func (h *runHandler) pauseRun(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if _, ok := h.findAndAuthorize(w, r, id, "exec"); !ok {
+		return
+	}
 	run, err := h.svc.PauseRun(r.Context(), id)
 	if err != nil {
 		httpx.WriteErr(w, err)
@@ -213,6 +271,9 @@ func (h *runHandler) pauseRun(w http.ResponseWriter, r *http.Request) {
 func (h *runHandler) resumeRun(w http.ResponseWriter, r *http.Request) {
 	id, ok := runID(w, r)
 	if !ok {
+		return
+	}
+	if _, ok := h.findAndAuthorize(w, r, id, "exec"); !ok {
 		return
 	}
 	run, err := h.svc.ResumeRun(r.Context(), id)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/openware-io/open-green-pass/internal/execution/application"
 	"github.com/openware-io/open-green-pass/internal/gateway/httpx"
+	"github.com/openware-io/open-green-pass/internal/iam"
 	gperr "github.com/openware-io/open-green-pass/pkg/errors"
 )
 
@@ -14,8 +15,19 @@ type envHandler struct{ svc *application.EnvService }
 
 // Register 注册执行域路由（版本校验 + 运行编排）。
 func Register(mux *http.ServeMux, envSvc *application.EnvService, runSvc *application.RunService, policySvc *application.PolicyService) {
+	register(mux, envSvc, runSvc, policySvc, nil)
+}
+
+// RegisterAuthorized registers execution routes with target-level RBAC.
+// The legacy Register entry point remains intentionally unauthenticated for
+// embedded/test compositions; production wiring should use this function.
+func RegisterAuthorized(mux *http.ServeMux, envSvc *application.EnvService, runSvc *application.RunService, policySvc *application.PolicyService, authorizer iam.AuthorizationPort) {
+	register(mux, envSvc, runSvc, policySvc, authorizer)
+}
+
+func register(mux *http.ServeMux, envSvc *application.EnvService, runSvc *application.RunService, policySvc *application.PolicyService, authorizer iam.AuthorizationPort) {
 	h := &envHandler{svc: envSvc}
-	rh := &runHandler{svc: runSvc}
+	rh := &runHandler{svc: runSvc, authorizer: authorizer}
 	ph := &policyHandler{svc: policySvc}
 	mux.HandleFunc("POST /targets/{id}/env/runtime", h.registerRuntime)
 	mux.HandleFunc("POST /targets/{id}/version-check", h.checkVersion)
