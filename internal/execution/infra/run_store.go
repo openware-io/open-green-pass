@@ -151,6 +151,7 @@ func (s *RunStore) CaseResults(ctx context.Context, teamID, runID int64) ([]*dom
 			if len(ev) > 0 && string(ev) != "null" {
 				_ = json.Unmarshal(ev, &c.Evidence)
 			}
+			c.TeamID = teamID
 			c.EndedAt = ended
 			out = append(out, &c)
 		}
