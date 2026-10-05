@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS gen_step;
+DROP TABLE IF EXISTS gen_review;
+DROP TABLE IF EXISTS gen_seed;
+DROP TABLE IF EXISTS gen_source_snapshot;
+DROP TABLE IF EXISTS gen_batch;
