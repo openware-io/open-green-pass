@@ -2,10 +2,12 @@ package middleware
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/openware-io/open-green-pass/internal/iam"
+	"github.com/openware-io/open-green-pass/pkg/protocol"
 )
 
 // PrincipalAuth validates a bearer credential through an injected provider.
@@ -30,6 +32,21 @@ func PrincipalAuth(provider iam.AuthenticationProvider, allowHeaderFallback bool
 			}
 			if !allowHeaderFallback {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			// Header identity is deliberately restricted to the explicit dev/test
+			// fallback. It is converted to the same Principal shape as a verified
+			// provider result, so RBAC cannot be silently bypassed in local e2e
+			// tests. Production composition always passes allowHeaderFallback=false.
+			teamID := strings.TrimSpace(r.Header.Get(protocol.HeaderTenantID))
+			userID := strings.TrimSpace(r.Header.Get(protocol.HeaderUserID))
+			if teamID != "" || userID != "" {
+				if _, err := strconv.ParseInt(teamID, 10, 64); err != nil || teamID == "" || userID == "" {
+					http.Error(w, "unauthorized", http.StatusUnauthorized)
+					return
+				}
+				principal := iam.Principal{Subject: userID, TenantID: teamID, Issuer: "gp-dev-header"}
+				next.ServeHTTP(w, r.WithContext(iam.WithPrincipal(r.Context(), principal)))
 				return
 			}
 			next.ServeHTTP(w, r)

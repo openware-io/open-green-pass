@@ -18,6 +18,36 @@ func TestPrincipalAuthRequiresCredentialWithoutFallback(t *testing.T) {
 	}
 }
 
+func TestPrincipalAuthBuildsDevPrincipalOnlyWhenFallbackExplicitlyEnabled(t *testing.T) {
+	h := PrincipalAuth(nil, true)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p, ok := iam.PrincipalFromContext(r.Context())
+		if !ok || p.Subject != "42" || p.TenantID != "10" || p.Issuer != "gp-dev-header" {
+			t.Fatalf("principal=%+v present=%v", p, ok)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("x-gp-team-id", "10")
+	r.Header.Set("x-gp-user-id", "42")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status=%d", w.Code)
+	}
+}
+
+func TestPrincipalAuthRejectsDevHeaderWhenFallbackDisabled(t *testing.T) {
+	h := PrincipalAuth(nil, false)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("x-gp-team-id", "10")
+	r.Header.Set("x-gp-user-id", "42")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d", w.Code)
+	}
+}
+
 func TestPrincipalAuthInjectsValidatedPrincipal(t *testing.T) {
 	h := PrincipalAuth(iam.StaticProvider{Credential: "ok", Principal: iam.Principal{Subject: "u", TenantID: "t"}}, false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := iam.PrincipalFromContext(r.Context()); !ok {

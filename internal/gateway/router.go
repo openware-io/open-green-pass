@@ -32,11 +32,10 @@ func NewRouterWithAuth(log *slog.Logger, provider iam.AuthenticationProvider, al
 	}
 
 	var h http.Handler = mux
-	if provider != nil || !allowHeaderFallback {
-		h = middleware.PrincipalAuth(provider, allowHeaderFallback)(h)
-	} else {
-		h = middleware.Auth(h)
-	}
+	// PrincipalAuth owns both verified provider credentials and the explicitly
+	// enabled development-header fallback. Keeping this single path ensures
+	// downstream RBAC never observes a header-only request without a Principal.
+	h = middleware.PrincipalAuth(provider, allowHeaderFallback)(h)
 	h = middleware.Tenant(h)
 	h = middleware.RequestID(h)
 	h = middleware.AccessLog(log)(h)
