@@ -26,17 +26,18 @@ import (
 
 // K8sRunnerConfig K8s Job 执行器配置。
 type K8sRunnerConfig struct {
-	Kubeconfig string // 空 = in-cluster
-	Namespace  string // 默认 gp-runner
-	Image      string // 默认 busybox
-	Timeout    time.Duration
+	Kubeconfig         string // 空 = in-cluster
+	Namespace          string // 默认 gp-runner
+	Image              string // 默认 busybox
+	ServiceAccountName string // runner sandbox identity; never use the controller identity
+	Timeout            time.Duration
 }
 
 // K8sRunner 基于 K8s Job 的沙箱执行器（gp-runner ns）。
 type K8sRunner struct {
-	gen  *id.Generator
-	cl   kubernetes.Interface
-	cfg  K8sRunnerConfig
+	gen *id.Generator
+	cl  kubernetes.Interface
+	cfg K8sRunnerConfig
 }
 
 // NewK8sRunner 创建 K8s Job 执行器。
@@ -46,6 +47,9 @@ func NewK8sRunner(gen *id.Generator, cfg K8sRunnerConfig) (*K8sRunner, error) {
 	}
 	if cfg.Image == "" {
 		cfg.Image = "busybox:1.36"
+	}
+	if cfg.ServiceAccountName == "" {
+		cfg.ServiceAccountName = "gp-runner-job"
 	}
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 5 * time.Minute
@@ -121,15 +125,42 @@ func (r *K8sRunner) executeOne(ctx context.Context, s *domain.CaseSpec) (*domain
 	}
 	jobName := fmt.Sprintf("gp-run-%d-%d", s.CaseID, time.Now().UnixNano()%1000000)
 	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: r.cfg.Namespace},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: r.cfg.Namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/name":      "greenpass-runner",
+				"app.kubernetes.io/part-of":   "greenpass",
+				"app.kubernetes.io/component": "sandbox",
+			},
+		},
 		Spec: batchv1.JobSpec{
+			ActiveDeadlineSeconds:   int64ptr(int64(r.cfg.Timeout.Seconds()) + 15),
 			BackoffLimit:            int32ptr(0),
 			TTLSecondsAfterFinished: int32ptr(120),
 			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
+					"app.kubernetes.io/name":      "greenpass-runner",
+					"app.kubernetes.io/part-of":   "greenpass",
+					"app.kubernetes.io/component": "sandbox",
+				}},
 				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
+					AutomountServiceAccountToken: boolptr(false),
+					RestartPolicy:                corev1.RestartPolicyNever,
+					ServiceAccountName:           r.cfg.ServiceAccountName,
+					SecurityContext: &corev1.PodSecurityContext{
+						RunAsNonRoot:   boolptr(true),
+						SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+					},
 					Containers: []corev1.Container{{
-						Name: "runner", Image: image, Command: cmd,
+						Name:            "runner",
+						Image:           image,
+						ImagePullPolicy: corev1.PullIfNotPresent,
+						Command:         cmd,
+						SecurityContext: &corev1.SecurityContext{
+							AllowPrivilegeEscalation: boolptr(false),
+							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+						},
 					}},
 				},
 			},
@@ -211,6 +242,10 @@ func (r *K8sRunner) podLogs(ctx context.Context, jobName string) (string, error)
 }
 
 func int32ptr(v int32) *int32 { return &v }
+
+func int64ptr(v int64) *int64 { return &v }
+
+func boolptr(v bool) *bool { return &v }
 
 func truncateStr(s string, n int) string {
 	if len(s) <= n {

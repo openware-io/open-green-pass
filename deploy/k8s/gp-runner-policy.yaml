@@ -108,3 +108,40 @@ spec:
       min:
         cpu: 50m
         memory: 64Mi
+---
+# Runner sandbox capacity is independently bounded so pathological test jobs
+# cannot consume capacity reserved for either the GP control plane or IM SUT.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: gp-runner-quota
+  namespace: gp-runner
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
+    count/jobs.batch: "10"
+    count/pods: "10"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: gp-runner-limitrange
+  namespace: gp-runner
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: 250m
+        memory: 256Mi
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+      max:
+        cpu: "1"
+        memory: 1Gi
+      min:
+        cpu: 25m
+        memory: 32Mi

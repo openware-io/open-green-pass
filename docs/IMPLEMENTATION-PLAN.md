@@ -3,7 +3,7 @@
 > 状态：待执行（v0.3，**全阶段可执行**：P0/P1 实现级 + P2–P4 任务级施工图）
 > 依据约束：**[ENGINEERING-SPEC.md](./ENGINEERING-SPEC.md)**（硬约束）+ **[TECH-DESIGN.md](./TECH-DESIGN.md)** §9（技术方案）+ **[DESIGN-SPEC.md](./DESIGN-SPEC.md)**（前端 UI/交互）。
 > 定位：**照单执行**——用户说「开始」即按本方案编号任务执行，每项含「实施步骤 / 关键文件 / 验证」，阶段含完成定义（DoD）。
-> 环境前提：本地 kind 集群已运行 **im saas（ns: im-saas，不动）**；GP 软隔离接入（ns: gp + ns: gp-runner）；**im saas 是 GP 首个被测对象（SUT）**；已确认：本地调试不用 docker 部署形态（go run + kind 依赖代理）、宿主机端口避让 im-saas。
+> 环境前提：本地 kind 集群已运行 **open-im-local（ns: open-im-local，不改动其工作负载）**；GP 软隔离接入（ns: gp + ns: gp-runner）；**open-im-local 是 GP 首个被测对象（SUT）**；已确认：本地调试不用 docker 部署形态（go run + kind 依赖代理）、宿主机端口避让 IM 系统。
 
 ---
 
@@ -85,7 +85,7 @@ helm install gp-redis  bitnami/redis          -n gp --set auth.password=...
 kubectl apply -f deploy/k8s/seaweedfs.yaml    # 对象存储：MinIO 社区版已归档(410 Gone)，改用 S3 兼容 SeaweedFS（svc/gp-seaweedfs，S3 on 9000）
 helm repo add temporalio https://helm.temporal.io && helm install gp-temporal temporalio/temporal -n gp --set server.config.storeProvider.postgres={...}
 ```
-4. 网络/资源隔离：`deploy/k8s/gp-runner-policy.yaml`（NetworkPolicy：仅出向 im-saas 被测服务 + gp 对象存储(SeaweedFS)；ResourceQuota + LimitRange 硬顶）。
+4. 网络/资源隔离：`deploy/k8s/gp-runner-policy.yaml`（NetworkPolicy：仅出向 `open-im-local` gateway:3002、GP 控制面和 DNS；ResourceQuota + LimitRange 硬顶）。
 **关键文件**
 - `deploy/k8s/namespaces.yaml`：`apiVersion v1 kind Namespace`，name `gp` / `gp-runner`。
 - `deploy/helm/gp/values*.yaml`：各 chart 覆盖（PG 库名 gp_、对象存储桶(SeaweedFS)、Temporal 指向 gp-postgres）。
@@ -98,7 +98,7 @@ kubectl port-forward -n gp svc/gp-temporal-web 8080:8080
 kubectl port-forward -n gp svc/gp-seaweedfs 9100:9000   # 对象存储 S3（SeaweedFS，无独立 console）
 ```
 `.env`：`DB_HOST=127.0.0.1:5433`、`RedisAddr=127.0.0.1:6380`、`TemporalAddr=127.0.0.1:7233`、`MinIOEndpoint=127.0.0.1:9100`。 建议落 `scripts/dev/kind-forward.ps1`：一次性后台拉起上述 port-forward（含 start/stop/cleanup），避免每次手工 kubectl；端口已避让 im-saas。
-**验证**：`helm ls -n gp` 全 deployed；`kubectl get pods -n gp` ready；`kubectl get ns` 含 im-saas(未动)/gp/gp-runner；NetworkPolicy/Quota 生效；`kubectl get svc -n im-saas` 核对 GP 宿主端口与其错开。
+**验证**：`helm ls -n gp` 全 deployed；`kubectl get pods -n gp` ready；`kubectl get ns` 含 `open-im-local`（不改动其工作负载）/gp/gp-runner；NetworkPolicy/Quota 生效；`kubectl get svc -n open-im-local` 核对 GP 宿主端口与其错开。
 
 ### GP0-04 迁移基线 + RLS
 **实施步骤**
@@ -213,7 +213,7 @@ jobs:
 **实施步骤**
 1. 迁移 `000005_run.up.sql`：`run_run` + `run_case_result`（含 `attempt_seq`，支持重试/重跑）+ RLS。
 2. execution/domain：`Run` 聚合（`StartRun`/`CollectEvidence`/`ApplyGate`/`ProduceReport`，状态机）+ `RunRepository`。
-3. K8s Job 沙箱：`deploy/k8s/gp-runner/job-template.yaml`（ns: gp-runner，NetworkPolicy 仅出向 im-saas + gp MinIO）；execution/infra `RunnerPort`（建 Job、轮询、回收、日志→MinIO）。
+3. K8s Job 沙箱：`deploy/k8s/gp-runner-rbac.yaml` + `execution/infra/RunnerPort`（ns: gp-runner）。控制面 `gp-controller` 仅获 Job 创建/读取/回收和 Pod 日志读取权；Job 使用无 token 的 `gp-runner-job` 身份，默认拒绝出站，仅按 SUT 的 gateway/端口最小放行。执行器建 Job、轮询、回收、日志→MinIO。
 4. api：`POST /runs`（支持当次用例勾选/用例树范围筛选——PRD）、`GET /runs/{id}`（实时 SSE）、`GET /runs/{id}/case-results`。
 5. `CollectEvidence`：截图/日志→MinIO + sha256；服务级截图开关（策略下发）。
 **验证**：状态机推进（Queued→VersionCheck→Scheduled→Running→Collect→Gate→Report→Done/Failed）；用例结果落 `run_case_result`（`attempt_seq` 递增支持重试）；证据在 MinIO；失败可重跑。

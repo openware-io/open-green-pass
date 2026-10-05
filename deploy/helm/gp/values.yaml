@@ -9,6 +9,10 @@ securityContext:
   seccompProfile:
     type: RuntimeDefault
 
+serviceAccount:
+  create: true
+  name: gp-controller
+
 secrets:
   existingSecret: ""
 

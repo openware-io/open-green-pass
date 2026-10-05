@@ -1,0 +1,40 @@
+# The controller runs in gp and can operate only disposable Jobs in gp-runner.
+# Sandboxed Jobs use a separate tokenless service account, so a test command
+# cannot use the Kubernetes API even when a case script is compromised.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gp-runner-job
+  namespace: gp-runner
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gp-runner-job-controller
+  namespace: gp-runner
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gp-runner-job-controller
+  namespace: gp-runner
+subjects:
+  - kind: ServiceAccount
+    name: gp-controller
+    namespace: gp
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: gp-runner-job-controller

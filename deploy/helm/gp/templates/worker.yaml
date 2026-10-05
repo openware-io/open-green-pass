@@ -20,6 +20,7 @@ spec:
         app.kubernetes.io/part-of: greenpass
         app.kubernetes.io/component: worker
     spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       securityContext:
         {{- toYaml .Values.securityContext | nindent 8 }}
       {{- with .Values.imagePullSecrets }}

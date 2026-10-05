@@ -33,7 +33,7 @@ func TestK8sRunner(t *testing.T) {
 	ctx := context.Background()
 	spec := []*domain.CaseSpec{{
 		CaseID: 4001, CaseVersion: 1, TargetID: 1003, Env: "test",
-		Script: map[string]any{"image": "busybox:1.36", "command": []any{"sh", "-c", "echo gp-runner-ok"}},
+		Script: map[string]any{"image": "curlimages/curl:8.10.1", "command": []any{"sh", "-c", "curl --fail --silent http://gateway.open-im-local.svc.cluster.local:3002/actuator/health && echo gp-runner-ok"}},
 	}}
 	results, err := r.Execute(ctx, spec)
 	if err != nil {
