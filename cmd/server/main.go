@@ -115,8 +115,8 @@ func main() {
 			gateway.RegisterSystem(mux, gateway.SystemStatus{Ready: func(ctx context.Context) error { return pool.Ping(ctx) }})
 		},
 		func(mux *http.ServeMux) { gapi.RegisterAuthorized(mux, treeSvc, iamAuthorizer) },
-		func(mux *http.ServeMux) { gapi.RegisterCases(mux, caseSvc) },
-		func(mux *http.ServeMux) { eapi.Register(mux, envSvc, runSvc, policySvc) },
+		func(mux *http.ServeMux) { gapi.RegisterCasesAuthorized(mux, caseSvc, iamAuthorizer) },
+		func(mux *http.ServeMux) { eapi.RegisterAuthorized(mux, envSvc, runSvc, policySvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc, costSvc, reportSvc) },
 	)
 	srv := &http.Server{
