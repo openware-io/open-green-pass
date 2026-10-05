@@ -9,20 +9,58 @@ import (
 	"github.com/openware-io/open-green-pass/internal/gateway/httpx"
 	"github.com/openware-io/open-green-pass/internal/governance/application"
 	"github.com/openware-io/open-green-pass/internal/governance/domain"
+	"github.com/openware-io/open-green-pass/internal/iam"
 	gperr "github.com/openware-io/open-green-pass/pkg/errors"
 )
 
-type caseHandler struct{ svc *application.CaseService }
+type caseHandler struct {
+	svc        *application.CaseService
+	authorizer iam.AuthorizationPort
+}
 
 // RegisterCases 注册用例版本化路由。
 func RegisterCases(mux *http.ServeMux, svc *application.CaseService) {
-	h := &caseHandler{svc: svc}
+	registerCases(mux, &caseHandler{svc: svc})
+}
+
+// RegisterCasesAuthorized enables target-level RBAC for case management.
+// Case permissions are evaluated against the target owning the case, rather
+// than against a case ID, because IAM grants are target-scoped.
+func RegisterCasesAuthorized(mux *http.ServeMux, svc *application.CaseService, authorizer iam.AuthorizationPort) {
+	registerCases(mux, &caseHandler{svc: svc, authorizer: authorizer})
+}
+
+func registerCases(mux *http.ServeMux, h *caseHandler) {
 	mux.HandleFunc("POST /cases", h.createCase)
 	mux.HandleFunc("POST /cases/{id}/versions", h.createVersion)
 	mux.HandleFunc("POST /cases/{id}/rollback", h.rollback)
 	mux.HandleFunc("DELETE /cases/{id}", h.deleteCase)
 	mux.HandleFunc("GET /cases", h.listCases)
 	mux.HandleFunc("GET /cases/{id}/history", h.history)
+}
+
+func (h *caseHandler) authorizeTarget(w http.ResponseWriter, r *http.Request, action string, targetID int64) bool {
+	if h.authorizer == nil {
+		return true
+	}
+	principal, ok := iam.PrincipalFromContext(r.Context())
+	if !ok || h.authorizer.Authorize(r.Context(), principal, action, strconv.FormatInt(targetID, 10)) != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
+func (h *caseHandler) authorizeCase(w http.ResponseWriter, r *http.Request, action string, caseID int64) bool {
+	if h.authorizer == nil {
+		return true
+	}
+	c, err := h.svc.FindCase(r.Context(), caseID)
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return false
+	}
+	return h.authorizeTarget(w, r, action, c.TargetID)
 }
 
 // createCaseRequest 新建用例请求。
@@ -42,6 +80,9 @@ func (h *caseHandler) createCase(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.TargetID == 0 || req.Code == "" || req.Title == "" {
 		httpx.WriteErr(w, gperr.Validation("target_id, code, title required"))
+		return
+	}
+	if !h.authorizeTarget(w, r, "edit", req.TargetID) {
 		return
 	}
 	cc := domain.Case{
@@ -68,6 +109,9 @@ func (h *caseHandler) createVersion(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, gperr.Validation("invalid case id"))
 		return
 	}
+	if !h.authorizeCase(w, r, "edit", id) {
+		return
+	}
 	var req updateVersionRequest
 	if err := httpx.DecodeJSON(r, &req); err != nil {
 		httpx.WriteErr(w, err)
@@ -90,6 +134,9 @@ func (h *caseHandler) rollback(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		httpx.WriteErr(w, gperr.Validation("invalid case id"))
+		return
+	}
+	if !h.authorizeCase(w, r, "edit", id) {
 		return
 	}
 	var req rollbackRequest
@@ -115,6 +162,9 @@ func (h *caseHandler) deleteCase(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, gperr.Validation("invalid case id"))
 		return
 	}
+	if !h.authorizeCase(w, r, "edit", id) {
+		return
+	}
 	if err := h.svc.MarkDeleted(r.Context(), id); err != nil {
 		httpx.WriteErr(w, err)
 		return
@@ -130,6 +180,15 @@ func (h *caseHandler) listCases(w http.ResponseWriter, r *http.Request) {
 			f.TargetID = &n
 		}
 	}
+	if h.authorizer != nil {
+		if f.TargetID == nil || *f.TargetID <= 0 {
+			httpx.WriteErr(w, gperr.Validation("target_id required when authorization is enabled"))
+			return
+		}
+		if !h.authorizeTarget(w, r, "view", *f.TargetID) {
+			return
+		}
+	}
 	cases, err := h.svc.ListCases(r.Context(), f)
 	if err != nil {
 		httpx.WriteErr(w, err)
@@ -142,6 +201,9 @@ func (h *caseHandler) history(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		httpx.WriteErr(w, gperr.Validation("invalid case id"))
+		return
+	}
+	if !h.authorizeCase(w, r, "view", id) {
 		return
 	}
 	hist, err := h.svc.History(r.Context(), id)
