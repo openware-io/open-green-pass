@@ -19,6 +19,8 @@ import (
 	gapi "github.com/openware-io/open-green-pass/internal/governance/api"
 	"github.com/openware-io/open-green-pass/internal/governance/application"
 	"github.com/openware-io/open-green-pass/internal/governance/infra"
+	iamapp "github.com/openware-io/open-green-pass/internal/iam/application"
+	iaminfra "github.com/openware-io/open-green-pass/internal/iam/infra"
 	"github.com/openware-io/open-green-pass/internal/platform/config"
 	"github.com/openware-io/open-green-pass/internal/platform/observability"
 	tapi "github.com/openware-io/open-green-pass/internal/trusted/api"
@@ -102,6 +104,7 @@ func main() {
 		log.Error("init report service", "error", err)
 		panic(err)
 	}
+	iamAuthorizer := iamapp.NewAuthorizer(iaminfra.NewRBACStore(db, gen))
 
 	addr := cfg.Addr
 	// Header identity is a development-only compatibility path. Production
@@ -111,7 +114,7 @@ func main() {
 		func(mux *http.ServeMux) {
 			gateway.RegisterSystem(mux, gateway.SystemStatus{Ready: func(ctx context.Context) error { return pool.Ping(ctx) }})
 		},
-		func(mux *http.ServeMux) { gapi.Register(mux, treeSvc) },
+		func(mux *http.ServeMux) { gapi.RegisterAuthorized(mux, treeSvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { gapi.RegisterCases(mux, caseSvc) },
 		func(mux *http.ServeMux) { eapi.Register(mux, envSvc, runSvc, policySvc) },
 		func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc, costSvc, reportSvc) },

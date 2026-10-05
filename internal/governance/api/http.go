@@ -9,21 +9,43 @@ import (
 	"github.com/openware-io/open-green-pass/internal/gateway/httpx"
 	"github.com/openware-io/open-green-pass/internal/governance/application"
 	"github.com/openware-io/open-green-pass/internal/governance/domain"
+	"github.com/openware-io/open-green-pass/internal/iam"
 	gperr "github.com/openware-io/open-green-pass/pkg/errors"
 )
 
 type handler struct {
-	svc *application.TargetTreeService
+	svc        *application.TargetTreeService
+	authorizer iam.AuthorizationPort
 }
 
 // Register 注册治理域被测对象树路由。
 func Register(mux *http.ServeMux, svc *application.TargetTreeService) {
-	h := &handler{svc: svc}
+	register(mux, &handler{svc: svc})
+}
+
+// RegisterAuthorized enables target-level RBAC for production composition.
+func RegisterAuthorized(mux *http.ServeMux, svc *application.TargetTreeService, authorizer iam.AuthorizationPort) {
+	register(mux, &handler{svc: svc, authorizer: authorizer})
+}
+
+func register(mux *http.ServeMux, h *handler) {
 	mux.HandleFunc("POST /targets", h.createTarget)
 	mux.HandleFunc("POST /targets/{id}/repo", h.attachRepo)
 	mux.HandleFunc("GET /targets/{id}/model-binding", h.getModelBinding)
 	mux.HandleFunc("PUT /targets/{id}/model-binding", h.setModelBinding)
 	mux.HandleFunc("GET /targets", h.listTargets)
+}
+
+func (h *handler) authorize(w http.ResponseWriter, r *http.Request, action string, targetID int64) bool {
+	if h.authorizer == nil {
+		return true
+	}
+	principal, ok := iam.PrincipalFromContext(r.Context())
+	if !ok || h.authorizer.Authorize(r.Context(), principal, action, strconv.FormatInt(targetID, 10)) != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
 }
 
 type modelBindingRequest struct {
@@ -36,6 +58,9 @@ func (h *handler) getModelBinding(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id <= 0 {
 		httpx.WriteErr(w, gperr.Validation("invalid target id"))
+		return
+	}
+	if !h.authorize(w, r, "view", id) {
 		return
 	}
 	target, err := h.svc.FindTarget(r.Context(), id)
@@ -54,6 +79,9 @@ func (h *handler) setModelBinding(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id <= 0 {
 		httpx.WriteErr(w, gperr.Validation("invalid target id"))
+		return
+	}
+	if !h.authorize(w, r, "edit", id) {
 		return
 	}
 	var req modelBindingRequest
@@ -109,6 +137,9 @@ func (h *handler) attachRepo(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		httpx.WriteErr(w, gperr.Validation("invalid target id"))
+		return
+	}
+	if !h.authorize(w, r, "edit", id) {
 		return
 	}
 	var req attachRepoRequest
