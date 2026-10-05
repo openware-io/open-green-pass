@@ -2,8 +2,11 @@
 package httperr
 
 import (
+	"errors"
 	"net/http"
 
+	"github.com/openware-io/open-green-pass/internal/iam"
+	iamapp "github.com/openware-io/open-green-pass/internal/iam/application"
 	gperr "github.com/openware-io/open-green-pass/pkg/errors"
 )
 
@@ -15,6 +18,12 @@ type Body struct {
 
 // Status 返回错误对应的 HTTP 状态码。
 func Status(err error) int {
+	if errors.Is(err, iam.ErrUnauthenticated) {
+		return http.StatusUnauthorized
+	}
+	if errors.Is(err, iam.ErrForbidden) || errors.Is(err, iamapp.ErrMembershipRequired) {
+		return http.StatusForbidden
+	}
 	switch gperr.KindOf(err) {
 	case gperr.KindNotFound:
 		return http.StatusNotFound
