@@ -164,6 +164,7 @@ func (r *K8sRunner) executeOne(ctx context.Context, s *domain.CaseSpec) (*domain
 						Command:         cmd,
 						SecurityContext: &corev1.SecurityContext{
 							AllowPrivilegeEscalation: boolptr(false),
+							ReadOnlyRootFilesystem:   boolptr(true),
 							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
 						},
 					}},

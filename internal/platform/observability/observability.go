@@ -19,7 +19,17 @@ func NewLogger(env string) *slog.Logger {
 	if env == "dev" || env == "test" {
 		level = slog.LevelDebug
 	}
-	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
+	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level:       level,
+		ReplaceAttr: redactAttr,
+	}))
+}
+
+func redactAttr(_ []string, attr slog.Attr) slog.Attr {
+	if sensitiveLogKey(attr.Key) {
+		return slog.String(attr.Key, "[REDACTED]")
+	}
+	return attr
 }
 
 // MetricRecorder 指标记录接口占位（后续接 Prometheus/OTel）。

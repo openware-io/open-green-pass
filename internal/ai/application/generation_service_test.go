@@ -47,3 +47,74 @@ func TestGenerationBatchTransitionUsesOptimisticVersion(t *testing.T) {
 		t.Fatalf("transition = %#v, %v", updated, err)
 	}
 }
+
+func TestGenerationReviewSignalsAndAuditsApprovedTransition(t *testing.T) {
+	repo := infra.NewMemoryGenerationBatchRepository()
+	svc := NewGenerationBatchService(repo)
+	ports := &generationReviewPorts{}
+	svc.SetReviewPorts(ports, ports)
+	batch, _, err := svc.Create(context.Background(), CreateGenerationBatchCommand{ID: 1, TeamID: 1, TargetID: 1, RepoID: 1, Branch: "main", IdempotencyKey: "review", ActorID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, state := range []domain.GenerationBatchState{domain.GenerationFetching, domain.GenerationParsing, domain.GenerationGenerating, domain.GenerationQualityCheck, domain.GenerationReview} {
+		batch, err = svc.Transition(context.Background(), 1, batch.ID, batch.StateVersion, state)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	batch, err = svc.Review(context.Background(), ReviewGenerationCommand{TeamID: 1, BatchID: 1, ActorID: 9, ExpectedVersion: batch.StateVersion, Decision: GenerationReviewApprove, RequestID: "request-1"})
+	if err != nil || batch.State != domain.GenerationCommitting {
+		t.Fatalf("review = %#v, %v", batch, err)
+	}
+	if len(ports.events) != 1 || ports.events[0].Action != "generation.review.approve" || len(ports.reviews) != 1 {
+		t.Fatalf("ports = %#v", ports)
+	}
+	if _, err := svc.Review(context.Background(), ReviewGenerationCommand{TeamID: 1, BatchID: 1, ActorID: 9, ExpectedVersion: batch.StateVersion, Decision: GenerationReviewReject, RequestID: "request-2"}); !errors.Is(err, domain.ErrInvalidGenerationTransition) {
+		t.Fatalf("second review error = %v", err)
+	}
+}
+
+func TestGenerationRollbackRequiresApprovedBatch(t *testing.T) {
+	repo := infra.NewMemoryGenerationBatchRepository()
+	svc := NewGenerationBatchService(repo)
+	ports := &generationReviewPorts{}
+	svc.SetReviewPorts(ports, ports)
+	batch, _, err := svc.Create(context.Background(), CreateGenerationBatchCommand{ID: 1, TeamID: 1, TargetID: 1, RepoID: 1, Branch: "main", IdempotencyKey: "rollback", ActorID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Rollback(context.Background(), RollbackGenerationCommand{TeamID: 1, BatchID: 1, ActorID: 9, ExpectedVersion: batch.StateVersion, RequestID: "request-1"}); !errors.Is(err, domain.ErrInvalidGenerationTransition) {
+		t.Fatalf("premature rollback error = %v", err)
+	}
+	for _, state := range []domain.GenerationBatchState{domain.GenerationFetching, domain.GenerationParsing, domain.GenerationGenerating, domain.GenerationQualityCheck, domain.GenerationReview, domain.GenerationCommitting, domain.GenerationApproved} {
+		batch, err = svc.Transition(context.Background(), 1, batch.ID, batch.StateVersion, state)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	batch, err = svc.Rollback(context.Background(), RollbackGenerationCommand{TeamID: 1, BatchID: 1, ActorID: 9, ExpectedVersion: batch.StateVersion, RequestID: "request-2"})
+	if err != nil || batch.State != domain.GenerationRolledBack || len(ports.rollbacks) != 1 || ports.events[len(ports.events)-1].Action != "generation.rollback" {
+		t.Fatalf("rollback = %#v, ports = %#v, err = %v", batch, ports, err)
+	}
+}
+
+type generationReviewPorts struct {
+	reviews, rollbacks []GenerationSignal
+	events             []GenerationAuditEvent
+}
+
+func (p *generationReviewPorts) SignalReview(_ context.Context, signal GenerationSignal) error {
+	p.reviews = append(p.reviews, signal)
+	return nil
+}
+
+func (p *generationReviewPorts) SignalRollback(_ context.Context, signal GenerationSignal) error {
+	p.rollbacks = append(p.rollbacks, signal)
+	return nil
+}
+
+func (p *generationReviewPorts) AppendGenerationAudit(_ context.Context, event GenerationAuditEvent) error {
+	p.events = append(p.events, event)
+	return nil
+}

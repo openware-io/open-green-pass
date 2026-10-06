@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -12,6 +13,7 @@ import (
 
 var ErrNoProvider = errors.New("no AI provider available")
 var ErrRequestIDRequired = errors.New("request id required")
+var ErrInvalidSecretRef = errors.New("secret reference must be an opaque supported URI")
 
 // Gateway routes to the preferred provider, then fallbacks in order. The
 // semaphore limits in-flight calls across all providers in one process.
@@ -44,6 +46,9 @@ func (g *Gateway) Generate(ctx context.Context, req domain.GenerateRequest) (dom
 	}
 	if req.MaxTokens < 0 {
 		return domain.GenerateResult{}, fmt.Errorf("%w: max tokens must not be negative", domain.ErrInvalidRequest)
+	}
+	if err := validateSecretRef(req.SecretRef); err != nil {
+		return domain.GenerateResult{}, fmt.Errorf("%w: %w", domain.ErrInvalidRequest, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return domain.GenerateResult{}, err
@@ -85,6 +90,22 @@ func (g *Gateway) Generate(ctx context.Context, req domain.GenerateRequest) (dom
 		last = ErrNoProvider
 	}
 	return domain.GenerateResult{}, fmt.Errorf("%w: %v", ErrNoProvider, last)
+}
+
+func validateSecretRef(ref string) error {
+	if ref == "" {
+		return nil
+	}
+	parsed, err := url.Parse(ref)
+	if err != nil || parsed.User != nil || parsed.Host == "" || strings.Trim(parsed.Path, "/") == "" {
+		return ErrInvalidSecretRef
+	}
+	switch parsed.Scheme {
+	case "secret", "k8s", "vault":
+		return nil
+	default:
+		return ErrInvalidSecretRef
+	}
 }
 
 func (g *Gateway) orderFor(preferred string) []string {

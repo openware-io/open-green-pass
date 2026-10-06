@@ -104,3 +104,12 @@ func TestGatewayCopiesOpaqueSecretRef(t *testing.T) {
 		t.Fatalf("result=%+v err=%v", r, err)
 	}
 }
+
+func TestGatewayRejectsPlaintextOrCredentialBearingSecretRef(t *testing.T) {
+	for _, ref := range []string{"raw-api-key", "https://user:pass@vault.local/key", "env://OPENAI_KEY"} {
+		_, err := NewGateway(1, nil, &fakeProvider{name: "p"}).Generate(context.Background(), domain.GenerateRequest{RequestID: "r", SecretRef: ref})
+		if !errors.Is(err, ErrInvalidSecretRef) {
+			t.Fatalf("SecretRef %q error = %v", ref, err)
+		}
+	}
+}

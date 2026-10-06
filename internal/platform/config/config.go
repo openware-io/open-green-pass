@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Config 应用级配置。
@@ -43,6 +44,9 @@ func Load() *Config {
 // the primary application connection with trusted writes.
 func (c *Config) TrustedDSN() (string, error) {
 	if c.TrustedDBDSN != "" {
+		if c.Env == "prod" && strings.TrimSpace(c.TrustedDBDSN) == strings.TrimSpace(c.DBDSN) {
+			return "", fmt.Errorf("GP_TRUSTED_DB_DSN must use a dedicated production credential")
+		}
 		return c.TrustedDBDSN, nil
 	}
 	if c.Env == "prod" {

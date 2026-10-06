@@ -27,11 +27,56 @@ type CreateGenerationBatchCommand struct {
 // governance case storage.
 type GenerationBatchService struct {
 	batches domain.GenerationBatchRepository
+	signals GenerationSignalPort
+	audit   GenerationAuditPort
 	now     func() time.Time
+}
+
+type GenerationReviewDecision string
+
+const (
+	GenerationReviewApprove GenerationReviewDecision = "approve"
+	GenerationReviewReject  GenerationReviewDecision = "reject"
+)
+
+type ReviewGenerationCommand struct {
+	TeamID, BatchID, ActorID, ExpectedVersion int64
+	Decision                                  GenerationReviewDecision
+	RequestID                                 string
+}
+
+type RollbackGenerationCommand struct {
+	TeamID, BatchID, ActorID, ExpectedVersion int64
+	RequestID                                 string
+}
+
+type GenerationSignal struct {
+	TeamID, BatchID, ActorID, StateVersion int64
+	Decision                               GenerationReviewDecision
+	RequestID                              string
+}
+
+type GenerationSignalPort interface {
+	SignalReview(context.Context, GenerationSignal) error
+	SignalRollback(context.Context, GenerationSignal) error
+}
+
+type GenerationAuditEvent struct {
+	TeamID, BatchID, ActorID, StateVersion int64
+	Action, RequestID                      string
+	OccurredAt                             time.Time
+}
+
+type GenerationAuditPort interface {
+	AppendGenerationAudit(context.Context, GenerationAuditEvent) error
 }
 
 func NewGenerationBatchService(batches domain.GenerationBatchRepository) *GenerationBatchService {
 	return &GenerationBatchService{batches: batches, now: func() time.Time { return time.Now().UTC() }}
+}
+
+func (s *GenerationBatchService) SetReviewPorts(signals GenerationSignalPort, audit GenerationAuditPort) {
+	s.signals, s.audit = signals, audit
 }
 
 // Create returns the existing batch for a repeated tenant-scoped idempotency
@@ -76,6 +121,58 @@ func (s *GenerationBatchService) Transition(ctx context.Context, teamID, batchID
 	}
 	if err := s.batches.CompareAndSwap(ctx, batch, expectedVersion); err != nil {
 		return nil, fmt.Errorf("persist generation batch transition: %w", err)
+	}
+	return batch, nil
+}
+
+func (s *GenerationBatchService) Review(ctx context.Context, cmd ReviewGenerationCommand) (*domain.GenerationBatch, error) {
+	if cmd.TeamID <= 0 || cmd.BatchID <= 0 || cmd.ActorID <= 0 || cmd.ExpectedVersion <= 0 || cmd.RequestID == "" {
+		return nil, errors.New("review requires tenant, batch, actor, version, and request id")
+	}
+	var next domain.GenerationBatchState
+	switch cmd.Decision {
+	case GenerationReviewApprove:
+		next = domain.GenerationCommitting
+	case GenerationReviewReject:
+		next = domain.GenerationRejected
+	default:
+		return nil, errors.New("review decision must be approve or reject")
+	}
+	batch, err := s.Transition(ctx, cmd.TeamID, cmd.BatchID, cmd.ExpectedVersion, next)
+	if err != nil {
+		return nil, err
+	}
+	event := GenerationAuditEvent{TeamID: cmd.TeamID, BatchID: cmd.BatchID, ActorID: cmd.ActorID, StateVersion: batch.StateVersion, Action: "generation.review." + string(cmd.Decision), RequestID: cmd.RequestID, OccurredAt: s.now()}
+	if s.audit != nil {
+		if err := s.audit.AppendGenerationAudit(ctx, event); err != nil {
+			return nil, fmt.Errorf("append generation review audit: %w", err)
+		}
+	}
+	if s.signals != nil {
+		if err := s.signals.SignalReview(ctx, GenerationSignal{TeamID: cmd.TeamID, BatchID: cmd.BatchID, ActorID: cmd.ActorID, StateVersion: batch.StateVersion, Decision: cmd.Decision, RequestID: cmd.RequestID}); err != nil {
+			return nil, fmt.Errorf("signal generation review: %w", err)
+		}
+	}
+	return batch, nil
+}
+
+func (s *GenerationBatchService) Rollback(ctx context.Context, cmd RollbackGenerationCommand) (*domain.GenerationBatch, error) {
+	if cmd.TeamID <= 0 || cmd.BatchID <= 0 || cmd.ActorID <= 0 || cmd.ExpectedVersion <= 0 || cmd.RequestID == "" {
+		return nil, errors.New("rollback requires tenant, batch, actor, version, and request id")
+	}
+	batch, err := s.Transition(ctx, cmd.TeamID, cmd.BatchID, cmd.ExpectedVersion, domain.GenerationRolledBack)
+	if err != nil {
+		return nil, err
+	}
+	if s.audit != nil {
+		if err := s.audit.AppendGenerationAudit(ctx, GenerationAuditEvent{TeamID: cmd.TeamID, BatchID: cmd.BatchID, ActorID: cmd.ActorID, StateVersion: batch.StateVersion, Action: "generation.rollback", RequestID: cmd.RequestID, OccurredAt: s.now()}); err != nil {
+			return nil, fmt.Errorf("append generation rollback audit: %w", err)
+		}
+	}
+	if s.signals != nil {
+		if err := s.signals.SignalRollback(ctx, GenerationSignal{TeamID: cmd.TeamID, BatchID: cmd.BatchID, ActorID: cmd.ActorID, StateVersion: batch.StateVersion, RequestID: cmd.RequestID}); err != nil {
+			return nil, fmt.Errorf("signal generation rollback: %w", err)
+		}
 	}
 	return batch, nil
 }
