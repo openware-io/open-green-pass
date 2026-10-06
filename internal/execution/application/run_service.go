@@ -29,11 +29,13 @@ type RunService struct {
 	workflow WorkflowController
 	conflict domain.ConflictPort
 	audit    domain.AuditPort
+	gate     domain.GatePort
+	report   domain.ReportPort
 }
 
 // NewRunService 创建运行编排服务。
 func NewRunService(repo domain.RunRepository, envSvc *EnvService, cases domain.CasePort, policy domain.PolicyPort, runner domain.RunnerPort, gen *id.Generator) *RunService {
-	return &RunService{repo: repo, envSvc: envSvc, cases: cases, policy: policy, runner: runner, gen: gen, log: slog.Default(), workflow: NoopWorkflowController{}, conflict: domain.NoopConflictPort{}, audit: domain.NoopAuditPort{}}
+	return &RunService{repo: repo, envSvc: envSvc, cases: cases, policy: policy, runner: runner, gen: gen, log: slog.Default(), workflow: NoopWorkflowController{}, conflict: domain.NoopConflictPort{}, audit: domain.NoopAuditPort{}, gate: domain.NoopGatePort{}, report: domain.NoopReportPort{}}
 }
 
 func (s *RunService) SetWorkflowController(controller WorkflowController) {
@@ -55,6 +57,20 @@ func (s *RunService) SetConflictPort(port domain.ConflictPort) {
 func (s *RunService) SetAuditPort(port domain.AuditPort) {
 	if port != nil {
 		s.audit = port
+	}
+}
+
+// SetGatePort wires the trusted quality decision into the Run completion path.
+func (s *RunService) SetGatePort(port domain.GatePort) {
+	if port != nil {
+		s.gate = port
+	}
+}
+
+// SetReportPort wires immutable report generation into the Run completion path.
+func (s *RunService) SetReportPort(port domain.ReportPort) {
+	if port != nil {
+		s.report = port
 	}
 }
 
@@ -212,15 +228,32 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 		}
 	}
 
-	// 推进状态机至 done（gate/report 由 GP1-05/07 接入）
+	// Gate and report are trusted-domain side effects. A non-pass gate is a
+	// quality outcome, not an execution infrastructure failure: the Run still
+	// reaches done and the generated report carries the authoritative decision.
 	if err := run.StartCollect(); err != nil {
+		return nil, nil, err
+	}
+	if err := s.repo.Save(ctx, run); err != nil {
 		return nil, nil, err
 	}
 	if err := run.StartGate(); err != nil {
 		return nil, nil, err
 	}
+	if err := s.repo.Save(ctx, run); err != nil {
+		return nil, nil, err
+	}
+	if _, err := s.gate.Evaluate(ctx, runID); err != nil {
+		return nil, nil, fmt.Errorf("evaluate gate: %w", err)
+	}
 	if err := run.StartReport(); err != nil {
 		return nil, nil, err
+	}
+	if err := s.repo.Save(ctx, run); err != nil {
+		return nil, nil, err
+	}
+	if err := s.report.Generate(ctx, runID); err != nil {
+		return nil, nil, fmt.Errorf("generate report: %w", err)
 	}
 	if err := run.Finish(); err != nil {
 		return nil, nil, err

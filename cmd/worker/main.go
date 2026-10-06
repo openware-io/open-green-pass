@@ -72,6 +72,17 @@ func main() {
 	runSvc.SetConflictPort(gpPool.NewConflictRegistry())
 	auditSvc := tapp.NewAuditService(tinfra.NewAuditStore(dbb, gen), gen)
 	runSvc.SetAuditPort(einfra.NewTrustedAuditPort(auditSvc))
+	gateStore := tinfra.NewGateStore(dbb, gen)
+	statReader := tinfra.NewRunStatReader(dbb)
+	gateSvc := tapp.NewGateService(gateStore, auditSvc, statReader, gen)
+	costStore := tinfra.NewCostStore(dbb, gen)
+	reportSvc, err := tapp.NewReportService(statReader, costStore, gateStore, tinfra.NewReportStore(dbb, gen), gen)
+	if err != nil {
+		log.Error("init report service", "error", err)
+		os.Exit(1)
+	}
+	runSvc.SetGatePort(einfra.NewTrustedGatePort(gateSvc))
+	runSvc.SetReportPort(einfra.NewTrustedReportPort(reportSvc))
 
 	// Temporal client + worker
 	addr := os.Getenv("GP_TEMPORAL_ADDR")

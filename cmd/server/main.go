@@ -104,6 +104,8 @@ func main() {
 		log.Error("init report service", "error", err)
 		panic(err)
 	}
+	runSvc.SetGatePort(einfra.NewTrustedGatePort(gateSvc))
+	runSvc.SetReportPort(einfra.NewTrustedReportPort(reportSvc))
 	iamAuthorizer := iamapp.NewAuthorizer(iaminfra.NewRBACStore(db, gen))
 
 	addr := cfg.Addr
