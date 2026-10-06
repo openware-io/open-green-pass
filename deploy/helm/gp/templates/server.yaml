@@ -31,6 +31,14 @@ spec:
         - name: server
           image: "{{ .Values.server.image.repository }}:{{ required "server.image.tag is required when server.enabled=true" .Values.server.image.tag }}"
           imagePullPolicy: {{ .Values.server.image.pullPolicy }}
+          {{- with .Values.server.command }}
+          command: {{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.server.args }}
+          args: {{ toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
           ports:
             - name: http
               containerPort: 8080

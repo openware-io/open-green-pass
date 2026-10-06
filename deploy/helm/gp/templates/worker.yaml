@@ -31,6 +31,14 @@ spec:
         - name: worker
           image: "{{ .Values.worker.image.repository }}:{{ required "worker.image.tag is required when worker.enabled=true" .Values.worker.image.tag }}"
           imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
+          {{- with .Values.worker.command }}
+          command: {{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.worker.args }}
+          args: {{ toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
           env:
             {{- range $name, $value := .Values.worker.env }}
             - name: {{ $name }}

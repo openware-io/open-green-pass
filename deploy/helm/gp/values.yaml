@@ -9,6 +9,12 @@ securityContext:
   seccompProfile:
     type: RuntimeDefault
 
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
 serviceAccount:
   create: true
   name: gp-controller
@@ -31,6 +37,8 @@ server:
     repository: ghcr.io/openware-io/open-green-pass
     tag: ""
     pullPolicy: IfNotPresent
+  command: []
+  args: []
   replicas: 1
   env: {}
   resources: {}
@@ -38,9 +46,13 @@ server:
 worker:
   enabled: false
   image:
-    repository: ghcr.io/openware-io/open-green-pass-worker
+    # Server and worker are built from the same signed release image. The
+    # explicit command selects the worker binary copied into that image.
+    repository: ghcr.io/openware-io/open-green-pass
     tag: ""
     pullPolicy: IfNotPresent
+  command: ["/usr/local/bin/gp-worker"]
+  args: []
   replicas: 1
   env: {}
   resources: {}

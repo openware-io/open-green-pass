@@ -1,0 +1,53 @@
+# Development-only values for the isolated kind GreenPass release.
+# The image is deliberately tagged with the Git release tag and loaded into
+# kind before Helm upgrade; it is never a replacement for a registry release.
+namespaceOverride: gp
+
+secrets:
+  existingSecret: gp-app-config
+
+server:
+  enabled: true
+  image:
+    repository: ghcr.io/openware-io/open-green-pass
+    tag: v0.1.1
+    pullPolicy: Never
+  env:
+    GP_ADDR: ":8080"
+    GP_ENV: dev
+    GP_ALLOW_HEADER_AUTH: "true"
+    GP_BUILD_REVISION: "v0.1.1"
+    GP_RUNNER_TYPE: k8s
+    GP_RUNNER_NS: gp-runner
+    GP_RUNNER_IMAGE: curlimages/curl:8.10.1
+    GP_TEMPORAL_ADDR: gp-temporal-frontend.gp.svc.cluster.local:7233
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+
+worker:
+  enabled: true
+  image:
+    repository: ghcr.io/openware-io/open-green-pass
+    tag: v0.1.1
+    pullPolicy: Never
+  env:
+    GP_ENV: dev
+    GP_ALLOW_HEADER_AUTH: "true"
+    GP_BUILD_REVISION: "v0.1.1"
+    GP_RUNNER_TYPE: k8s
+    GP_RUNNER_NS: gp-runner
+    GP_RUNNER_IMAGE: curlimages/curl:8.10.1
+    GP_TEMPORAL_ADDR: gp-temporal-frontend.gp.svc.cluster.local:7233
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+
+networkPolicy:
+  enabled: true
+
+resources:
+  quota:
+    enabled: true
+  limitRange:
+    enabled: true
