@@ -43,13 +43,23 @@ func (s *ReportStore) Save(ctx context.Context, r *domain.Report) error {
 
 // Find 查询报告（无行→ErrReportNotFound）。
 func (s *ReportStore) Find(ctx context.Context, teamID, id int64) (*domain.Report, error) {
+	return s.find(ctx, teamID, `WHERE team_id=$1 AND id=$2`, teamID, id)
+}
+
+// FindByRunKind is the idempotency read path for report generation. It keeps
+// retries from turning one completed run into many equivalent reports.
+func (s *ReportStore) FindByRunKind(ctx context.Context, teamID, runID int64, kind string) (*domain.Report, error) {
+	return s.find(ctx, teamID, `WHERE team_id=$1 AND run_id=$2 AND kind=$3 ORDER BY created_at, id LIMIT 1`, teamID, runID, kind)
+}
+
+func (s *ReportStore) find(ctx context.Context, teamID int64, clause string, args ...any) (*domain.Report, error) {
 	var r domain.Report
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		var sm, ev []byte
 		err := tx.QueryRow(ctx, `
 			SELECT id, team_id, run_id, target_id, kind, title, version, branch, scenario,
 				status, summary, evidence_ref, report_html, created_at
-			FROM rpt_report WHERE team_id=$1 AND id=$2`, teamID, id).
+			FROM rpt_report `+clause, args...).
 			Scan(&r.ID, &r.TeamID, &r.RunID, &r.TargetID, &r.Kind, &r.Title, &r.Version, &r.Branch,
 				&r.Scenario, &r.Status, &sm, &ev, &r.HTML, &r.CreatedAt)
 		if err != nil {

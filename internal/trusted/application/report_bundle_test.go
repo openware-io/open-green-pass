@@ -19,6 +19,9 @@ func (r *bundleRepo) Save(context.Context, *domain.Report) error { return nil }
 func (r *bundleRepo) Find(context.Context, int64, int64) (*domain.Report, error) {
 	return nil, domain.ErrReportNotFound
 }
+func (r *bundleRepo) FindByRunKind(context.Context, int64, int64, string) (*domain.Report, error) {
+	return nil, domain.ErrReportNotFound
+}
 func (r *bundleRepo) FindMany(context.Context, int64, []int64) ([]*domain.Report, error) {
 	return r.reports, nil
 }

@@ -19,12 +19,12 @@ var reportTemplates embed.FS
 
 // ReportService 测试报告应用服务（P1 单场景，结构预留跨场景合编 P2）。
 type ReportService struct {
-	stats    domain.RunStatPort
-	cost     domain.CostRepository
-	gates    domain.GateRepository
-	reports  domain.ReportRepository
-	gen      *id.Generator
-	tmpl     *template.Template
+	stats   domain.RunStatPort
+	cost    domain.CostRepository
+	gates   domain.GateRepository
+	reports domain.ReportRepository
+	gen     *id.Generator
+	tmpl    *template.Template
 }
 
 // NewReportService 创建报告服务。
@@ -83,6 +83,11 @@ func (s *ReportService) Generate(ctx context.Context, req GenerateRequest) (*dom
 	kind := req.Kind
 	if kind == "" {
 		kind = "service"
+	}
+	if existing, err := s.reports.FindByRunKind(ctx, teamID, req.RunID, kind); err == nil {
+		return existing, nil
+	} else if err != domain.ErrReportNotFound {
+		return nil, err
 	}
 	head, err := s.stats.RunHead(ctx, teamID, req.RunID)
 	if err != nil {

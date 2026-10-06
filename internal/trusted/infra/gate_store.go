@@ -86,6 +86,7 @@ func (s *GateStore) ResultsByRun(ctx context.Context, teamID, runID int64) ([]*d
 				return err
 			}
 			r.Result = domain.GateDecision(result)
+			r.TeamID = teamID
 			_ = json.Unmarshal(d, &r.Detail)
 			out = append(out, &r)
 		}

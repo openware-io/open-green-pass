@@ -32,6 +32,7 @@ type Report struct {
 type ReportRepository interface {
 	Save(ctx context.Context, r *Report) error
 	Find(ctx context.Context, teamID, id int64) (*Report, error)
+	FindByRunKind(ctx context.Context, teamID, runID int64, kind string) (*Report, error)
 }
 
 // ReportBundlePort supplies already-authorized reports for cross-scenario
