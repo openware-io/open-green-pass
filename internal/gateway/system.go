@@ -6,6 +6,7 @@ import (
 
 	"github.com/openware-io/open-green-pass/internal/gateway/httpx"
 	"github.com/openware-io/open-green-pass/internal/platform/buildinfo"
+	"github.com/openware-io/open-green-pass/internal/platform/observability"
 )
 
 // SystemChecker is a dependency health probe. It must not expose connection
@@ -13,10 +14,14 @@ import (
 type SystemChecker func(context.Context) error
 
 type SystemStatus struct {
-	Ready SystemChecker
+	Ready   SystemChecker
+	Metrics *observability.Recorder
 }
 
 func RegisterSystem(mux *http.ServeMux, status SystemStatus) {
+	if status.Metrics != nil {
+		mux.Handle("GET /metrics", status.Metrics.Handler())
+	}
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		if status.Ready == nil {
 			httpx.WriteJSON(w, http.StatusOK, map[string]any{"status": "ready", "checks": map[string]string{}})

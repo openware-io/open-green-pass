@@ -180,6 +180,8 @@ npm run build
 
 **门禁**：指标单测、敏感字段过滤、故障注入告警演练、固定 load profile 可复现；真实容量结论等待 D-11 和 GP2 共享基础设施。
 
+**当前代码状态（2026-10-06）**：已接入进程内 Prometheus exposition 骨架：`GET /metrics` 输出 HTTP 请求计数与时延的 count/sum，标签严格限制为 `method`、静态 `route` 与 `status` class；原始 URL、team/user/run/case/target ID 均不会进入指标。实现包含低基数与动态路径拒绝测试。该 recorder 是进程内、非持久化适配器，尚未接入 Prometheus/OTel、run/queue/worker/pool/依赖事件、告警规则、dashboard、load harness 或任何 SLO 阈值；因此不构成可用性或容量达标结论。
+
 ## 5. 推荐执行顺序与并行关系
 
 ```text

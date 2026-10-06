@@ -32,6 +32,7 @@ import (
 func main() {
 	cfg := config.Load()
 	log := observability.NewLogger(cfg.Env)
+	metricsRecorder := observability.NewRecorder()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -115,7 +116,7 @@ func main() {
 	allowHeaderFallback := cfg.Env != "prod" && os.Getenv("GP_ALLOW_HEADER_AUTH") == "true"
 	handler := gateway.NewRouterWithAuth(log, nil, allowHeaderFallback,
 		func(mux *http.ServeMux) {
-			gateway.RegisterSystem(mux, gateway.SystemStatus{Ready: func(ctx context.Context) error { return pool.Ping(ctx) }})
+			gateway.RegisterSystem(mux, gateway.SystemStatus{Ready: func(ctx context.Context) error { return pool.Ping(ctx) }, Metrics: metricsRecorder})
 		},
 		func(mux *http.ServeMux) { gapi.RegisterAuthorized(mux, treeSvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { gapi.RegisterCasesAuthorized(mux, caseSvc, iamAuthorizer) },
@@ -124,7 +125,7 @@ func main() {
 	)
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           middleware.CORS(cfg.CORSAllowedOrigins)(handler),
+		Handler:           middleware.CORS(cfg.CORSAllowedOrigins)(middleware.Metrics(metricsRecorder)(handler)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,
