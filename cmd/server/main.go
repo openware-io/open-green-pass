@@ -42,6 +42,17 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
+	trustedDSN, err := cfg.TrustedDSN()
+	if err != nil {
+		log.Error("trusted database configuration", "error", err)
+		os.Exit(1)
+	}
+	trustedPool, err := pgxpool.New(ctx, trustedDSN)
+	if err != nil {
+		log.Error("trusted pgxpool init failed", "err", err)
+		os.Exit(1)
+	}
+	defer trustedPool.Close()
 
 	// 治理域依赖组装（被测对象树 + 用例版本化）
 	gen, err := id.New(1, nil)
@@ -50,6 +61,7 @@ func main() {
 		os.Exit(1)
 	}
 	db := infra.NewDB(pool)
+	trustedDB := infra.NewDB(trustedPool)
 	store := infra.NewTargetStore(db, gen)
 	treeSvc := application.NewTargetTreeService(store, gen)
 	// GP3-05 reference policy is intentionally empty until the persistent
@@ -91,13 +103,15 @@ func main() {
 	runSvc.SetConflictPort(gpPool.NewConflictRegistry())
 
 	// 可信域依赖组装（审计哈希链 + 门禁判定 + 成本明细）
-	gateStore := tinfra.NewGateStore(db, gen)
-	auditStore := tinfra.NewAuditStore(db, gen)
+	gateStore := tinfra.NewGateStore(trustedDB, gen)
+	auditStore := tinfra.NewAuditStore(trustedDB, gen)
 	auditSvc := tapp.NewAuditService(auditStore, gen)
 	runSvc.SetAuditPort(einfra.NewTrustedAuditPort(auditSvc))
+	// Execution/run and report tables remain owned by their respective domains;
+	// the trusted connection is restricted to trusted writes only.
 	statReader := tinfra.NewRunStatReader(db)
 	gateSvc := tapp.NewGateService(gateStore, auditSvc, statReader, gen)
-	costStore := tinfra.NewCostStore(db, gen)
+	costStore := tinfra.NewCostStore(trustedDB, gen)
 	costSvc := tapp.NewCostService(costStore, auditSvc, gen)
 	reportStore := tinfra.NewReportStore(db, gen)
 	reportSvc, err := tapp.NewReportService(statReader, costStore, gateStore, reportStore, gen)

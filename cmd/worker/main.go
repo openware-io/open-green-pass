@@ -37,6 +37,17 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
+	trustedDSN, err := cfg.TrustedDSN()
+	if err != nil {
+		log.Error("trusted database configuration", "error", err)
+		os.Exit(1)
+	}
+	trustedPool, err := pgxpool.New(ctx, trustedDSN)
+	if err != nil {
+		log.Error("trusted pgxpool init failed", "err", err)
+		os.Exit(1)
+	}
+	defer trustedPool.Close()
 
 	gen, err := id.New(1, nil)
 	if err != nil {
@@ -44,6 +55,7 @@ func main() {
 		os.Exit(1)
 	}
 	dbb := db.NewDB(pool)
+	trustedDB := db.NewDB(trustedPool)
 
 	// 执行域依赖（与 cmd/server 一致）
 	envStore := einfra.NewEnvStore(dbb, gen)
@@ -70,12 +82,12 @@ func main() {
 	// Reference-only in-process exclusion. Replace with shared Redis/DB storage
 	// before running multiple worker replicas.
 	runSvc.SetConflictPort(gpPool.NewConflictRegistry())
-	auditSvc := tapp.NewAuditService(tinfra.NewAuditStore(dbb, gen), gen)
+	auditSvc := tapp.NewAuditService(tinfra.NewAuditStore(trustedDB, gen), gen)
 	runSvc.SetAuditPort(einfra.NewTrustedAuditPort(auditSvc))
-	gateStore := tinfra.NewGateStore(dbb, gen)
+	gateStore := tinfra.NewGateStore(trustedDB, gen)
 	statReader := tinfra.NewRunStatReader(dbb)
 	gateSvc := tapp.NewGateService(gateStore, auditSvc, statReader, gen)
-	costStore := tinfra.NewCostStore(dbb, gen)
+	costStore := tinfra.NewCostStore(trustedDB, gen)
 	costSvc := tapp.NewCostService(costStore, auditSvc, gen)
 	reportSvc, err := tapp.NewReportService(statReader, costStore, gateStore, tinfra.NewReportStore(dbb, gen), gen)
 	if err != nil {
