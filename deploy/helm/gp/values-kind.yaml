@@ -6,17 +6,16 @@ namespaceOverride: gp
 secrets:
   existingSecret: gp-app-config
 
-# Migrations are opt-in for an existing kind database. Build and load the
-# immutable migration image, inspect the current schema version, then enable
-# this hook for the controlled Helm upgrade.
+# Run the immutable migration image before every controlled Helm upgrade.
+# The hook is the single schema-upgrade path for the kind environment.
 migration:
-  enabled: false
+  enabled: true
   image:
     repository: ghcr.io/openware-io/open-green-pass-migrate
     tag: v0.1.6
     pullPolicy: Never
   resources:
-    requests: { cpu: 25m, memory: 32Mi }
+    requests: { cpu: 50m, memory: 64Mi }
     limits: { cpu: 100m, memory: 128Mi }
 
 server:
