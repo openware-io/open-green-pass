@@ -24,6 +24,26 @@ type ReportPort interface {
 	Generate(context.Context, int64) error
 }
 
+// CostRecord is an execution-side measurement. Tokens and unit price are
+// factual inputs supplied by the runner; zero is meaningful for a real API
+// probe that did not call an AI provider.
+type CostRecord struct {
+	RequestID string
+	TargetID  int64
+	RunID     int64
+	CaseID    int64
+	Attempt   int
+	Model     string
+	TokensIn  int64
+	TokensOut int64
+	UnitPrice float64
+}
+
+// CostPort is the only execution-to-trusted measurement boundary.
+type CostPort interface {
+	Record(context.Context, CostRecord) error
+}
+
 type NoopGatePort struct{}
 
 func (NoopGatePort) Evaluate(context.Context, int64) (GateDecision, error) { return GatePass, nil }
@@ -31,3 +51,7 @@ func (NoopGatePort) Evaluate(context.Context, int64) (GateDecision, error) { ret
 type NoopReportPort struct{}
 
 func (NoopReportPort) Generate(context.Context, int64) error { return nil }
+
+type NoopCostPort struct{}
+
+func (NoopCostPort) Record(context.Context, CostRecord) error { return nil }

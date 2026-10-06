@@ -65,6 +65,13 @@ func (r *pipelineReport) Generate(_ context.Context, runID int64) error {
 	return nil
 }
 
+type pipelineCost struct{ records []domain.CostRecord }
+
+func (c *pipelineCost) Record(_ context.Context, record domain.CostRecord) error {
+	c.records = append(c.records, record)
+	return nil
+}
+
 func TestExecuteRunInvokesTrustedGateAndReportBeforeDone(t *testing.T) {
 	gen, err := id.New(1, nil)
 	if err != nil {
@@ -75,16 +82,21 @@ func TestExecuteRunInvokesTrustedGateAndReportBeforeDone(t *testing.T) {
 	repo := &pipelineRepo{run: run}
 	gate := &pipelineGate{}
 	report := &pipelineReport{}
+	cost := &pipelineCost{}
 	svc := NewRunService(repo, nil, pipelineCases{}, pipelinePolicy{}, pipelineRunner{}, gen)
 	svc.SetGatePort(gate)
 	svc.SetReportPort(report)
+	svc.SetCostPort(cost)
 
 	completed, _, err := svc.ExecuteRun(rls.WithTenant(context.Background(), 100), run.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if completed.State != domain.RunDone || len(gate.calls) != 1 || len(report.calls) != 1 || gate.calls[0] != run.ID || report.calls[0] != run.ID {
-		t.Fatalf("run=%s gate=%v report=%v", completed.State, gate.calls, report.calls)
+	if completed.State != domain.RunDone || len(gate.calls) != 1 || len(report.calls) != 1 || len(cost.records) != 1 || gate.calls[0] != run.ID || report.calls[0] != run.ID {
+		t.Fatalf("run=%s gate=%v report=%v cost=%v", completed.State, gate.calls, report.calls, cost.records)
+	}
+	if got := cost.records[0]; got.RequestID != "run:9:case:4001:attempt:1" || got.Model != "k8s-api-runner" || got.TokensIn != 0 || got.TokensOut != 0 {
+		t.Fatalf("cost=%+v", got)
 	}
 	want := []domain.RunState{domain.RunCollect, domain.RunGate, domain.RunReport, domain.RunDone}
 	if len(repo.saves) < len(want) {

@@ -76,6 +76,7 @@ func main() {
 	statReader := tinfra.NewRunStatReader(dbb)
 	gateSvc := tapp.NewGateService(gateStore, auditSvc, statReader, gen)
 	costStore := tinfra.NewCostStore(dbb, gen)
+	costSvc := tapp.NewCostService(costStore, auditSvc, gen)
 	reportSvc, err := tapp.NewReportService(statReader, costStore, gateStore, tinfra.NewReportStore(dbb, gen), gen)
 	if err != nil {
 		log.Error("init report service", "error", err)
@@ -83,6 +84,7 @@ func main() {
 	}
 	runSvc.SetGatePort(einfra.NewTrustedGatePort(gateSvc))
 	runSvc.SetReportPort(einfra.NewTrustedReportPort(reportSvc))
+	runSvc.SetCostPort(einfra.NewTrustedCostPort(costSvc))
 
 	// Temporal client + worker
 	addr := os.Getenv("GP_TEMPORAL_ADDR")

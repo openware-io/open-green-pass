@@ -31,11 +31,12 @@ type RunService struct {
 	audit    domain.AuditPort
 	gate     domain.GatePort
 	report   domain.ReportPort
+	cost     domain.CostPort
 }
 
 // NewRunService 创建运行编排服务。
 func NewRunService(repo domain.RunRepository, envSvc *EnvService, cases domain.CasePort, policy domain.PolicyPort, runner domain.RunnerPort, gen *id.Generator) *RunService {
-	return &RunService{repo: repo, envSvc: envSvc, cases: cases, policy: policy, runner: runner, gen: gen, log: slog.Default(), workflow: NoopWorkflowController{}, conflict: domain.NoopConflictPort{}, audit: domain.NoopAuditPort{}, gate: domain.NoopGatePort{}, report: domain.NoopReportPort{}}
+	return &RunService{repo: repo, envSvc: envSvc, cases: cases, policy: policy, runner: runner, gen: gen, log: slog.Default(), workflow: NoopWorkflowController{}, conflict: domain.NoopConflictPort{}, audit: domain.NoopAuditPort{}, gate: domain.NoopGatePort{}, report: domain.NoopReportPort{}, cost: domain.NoopCostPort{}}
 }
 
 func (s *RunService) SetWorkflowController(controller WorkflowController) {
@@ -71,6 +72,13 @@ func (s *RunService) SetGatePort(port domain.GatePort) {
 func (s *RunService) SetReportPort(port domain.ReportPort) {
 	if port != nil {
 		s.report = port
+	}
+}
+
+// SetCostPort wires factual execution measurements into trusted accounting.
+func (s *RunService) SetCostPort(port domain.CostPort) {
+	if port != nil {
+		s.cost = port
 	}
 }
 
@@ -226,6 +234,18 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 		if err := s.repo.SaveCaseResult(ctx, c); err != nil {
 			return nil, nil, err
 		}
+		if err := s.cost.Record(ctx, domain.CostRecord{
+			RequestID: executionCostRequestID(runID, c.CaseID, c.AttemptSeq),
+			TargetID:  run.TargetID,
+			RunID:     runID,
+			CaseID:    c.CaseID,
+			Attempt:   c.AttemptSeq,
+			Model:     "k8s-api-runner",
+			TokensIn:  c.AITokensIn,
+			TokensOut: c.AITokensOut,
+		}); err != nil {
+			return nil, nil, fmt.Errorf("record execution cost: %w", err)
+		}
 	}
 
 	// Gate and report are trusted-domain side effects. A non-pass gate is a
@@ -288,6 +308,10 @@ func scenarioFromScript(script any) string {
 		}
 	}
 	return "api"
+}
+
+func executionCostRequestID(runID, caseID int64, attempt int) string {
+	return fmt.Sprintf("run:%d:case:%d:attempt:%d", runID, caseID, attempt)
 }
 
 // PauseRun 暂停运行。

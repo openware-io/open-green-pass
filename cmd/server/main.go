@@ -106,6 +106,7 @@ func main() {
 	}
 	runSvc.SetGatePort(einfra.NewTrustedGatePort(gateSvc))
 	runSvc.SetReportPort(einfra.NewTrustedReportPort(reportSvc))
+	runSvc.SetCostPort(einfra.NewTrustedCostPort(costSvc))
 	iamAuthorizer := iamapp.NewAuthorizer(iaminfra.NewRBACStore(db, gen))
 
 	addr := cfg.Addr
