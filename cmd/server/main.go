@@ -175,6 +175,7 @@ func main() {
 	runSvc.SetReportPort(einfra.NewTrustedReportPort(reportSvc))
 	runSvc.SetCostPort(einfra.NewTrustedCostPort(costSvc))
 	iamAuthorizer := iamapp.NewAuthorizer(iaminfra.NewRBACStore(db, gen))
+	iamAuthorizer.SetAuditPort(iaminfra.NewTrustedAuditPort(auditSvc))
 
 	addr := cfg.Addr
 	// Header identity is a development-only compatibility path. Production

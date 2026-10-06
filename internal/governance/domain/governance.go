@@ -143,6 +143,21 @@ type ModelGovernanceRepository interface {
 	ResolvePrice(context.Context, int64, int64, time.Time) (*PriceSnapshot, error)
 }
 
+// SecretResolver resolves an opaque reference at the infrastructure boundary.
+// Model governance and provider-independent code never handles secret values
+// or persists them; adapters consume this port only at call time.
+type SecretResolver interface {
+	Resolve(context.Context, string) (string, error)
+}
+
+// ResolvedModel is the immutable, provider-independent routing input returned
+// by governance. Prices are copied as a snapshot for auditable metering.
+type ResolvedModel struct {
+	Model      ModelConfig
+	Price      PriceSnapshot
+	ResolvedAt time.Time
+}
+
 // ModelBindingPolicy is the governance boundary for model approval. The
 // default application wiring uses NoopModelBindingPolicy until GP3-05's
 // persistent whitelist/approval store is selected.
