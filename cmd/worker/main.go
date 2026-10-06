@@ -17,6 +17,7 @@ import (
 	"github.com/openware-io/open-green-pass/internal/execution/infra/pgconflict"
 	gpQuota "github.com/openware-io/open-green-pass/internal/execution/infra/quota"
 	gpRedisQuota "github.com/openware-io/open-green-pass/internal/execution/infra/redisquota"
+	gpRedisRunBus "github.com/openware-io/open-green-pass/internal/execution/infra/redisrunbus"
 	gpRunner "github.com/openware-io/open-green-pass/internal/execution/infra/runner"
 	"github.com/openware-io/open-green-pass/internal/execution/workflow"
 	"github.com/openware-io/open-green-pass/internal/platform/config"
@@ -96,6 +97,13 @@ func main() {
 		os.Exit(1)
 	}
 	runSvc.SetQuotaPort(runQuota)
+	runEventBus, err := gpRedisRunBus.New(ctx, cfg.RedisAddr, os.Getenv("GP_REDIS_PASSWORD"))
+	if err != nil {
+		log.Error("init redis run event bus", "error", err)
+		os.Exit(1)
+	}
+	defer runEventBus.Close()
+	runSvc.SetRunEventBus(runEventBus)
 	conflicts, err := pgconflict.New(pool)
 	if err != nil {
 		log.Error("init postgres conflict registry", "error", err)

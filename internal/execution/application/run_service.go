@@ -33,6 +33,7 @@ type RunService struct {
 	gate     domain.GatePort
 	report   domain.ReportPort
 	cost     domain.CostPort
+	events   domain.RunEventBus
 }
 
 // NewRunService 创建运行编排服务。
@@ -90,6 +91,28 @@ func (s *RunService) SetCostPort(port domain.CostPort) {
 	}
 }
 
+// SetRunEventBus enables cross-process wakeups for run SSE streams.
+func (s *RunService) SetRunEventBus(bus domain.RunEventBus) { s.events = bus }
+
+func (s *RunService) SubscribeRunEvents(ctx context.Context, teamID, runID int64) (domain.RunEventSubscription, error) {
+	if s.events == nil {
+		return nil, nil
+	}
+	return s.events.Subscribe(ctx, teamID, runID)
+}
+
+func (s *RunService) saveRun(ctx context.Context, run *domain.Run) error {
+	if err := s.repo.Save(ctx, run); err != nil {
+		return err
+	}
+	if s.events != nil {
+		if err := s.events.Publish(ctx, run.TeamID, run.ID); err != nil {
+			s.log.Warn("publish run event failed; polling fallback remains active", "run_id", run.ID, "err", err)
+		}
+	}
+	return nil
+}
+
 // CreateRunRequest 创建运行请求。
 type CreateRunRequest struct {
 	ScenarioID    int64   `json:"scenario_id"`
@@ -121,7 +144,7 @@ func (s *RunService) CreateRun(ctx context.Context, req CreateRunRequest) (*doma
 	}
 	run := domain.NewRun(s.gen.Next(), teamID, req.ScenarioID, req.TargetID,
 		req.Env, req.TargetVersion, req.TargetBranch, mode, selected)
-	if err := s.repo.Save(ctx, run); err != nil {
+	if err := s.saveRun(ctx, run); err != nil {
 		return nil, err
 	}
 	return run, nil
@@ -150,7 +173,7 @@ func (s *RunService) StartVersionCheck(ctx context.Context, runID int64) (*domai
 		s.log.Error("run mark version checked failed", "run_id", runID, "err", err)
 		return nil, err
 	}
-	if err := s.repo.Save(ctx, run); err != nil {
+	if err := s.saveRun(ctx, run); err != nil {
 		s.log.Error("run save failed after version check", "run_id", runID, "err", err)
 		return nil, err
 	}
@@ -277,13 +300,13 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 	if err := run.StartCollect(); err != nil {
 		return nil, nil, err
 	}
-	if err := s.repo.Save(ctx, run); err != nil {
+	if err := s.saveRun(ctx, run); err != nil {
 		return nil, nil, err
 	}
 	if err := run.StartGate(); err != nil {
 		return nil, nil, err
 	}
-	if err := s.repo.Save(ctx, run); err != nil {
+	if err := s.saveRun(ctx, run); err != nil {
 		return nil, nil, err
 	}
 	if _, err := s.gate.Evaluate(ctx, runID); err != nil {
@@ -292,7 +315,7 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 	if err := run.StartReport(); err != nil {
 		return nil, nil, err
 	}
-	if err := s.repo.Save(ctx, run); err != nil {
+	if err := s.saveRun(ctx, run); err != nil {
 		return nil, nil, err
 	}
 	if err := s.report.Generate(ctx, runID); err != nil {
@@ -301,7 +324,7 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 	if err := run.Finish(); err != nil {
 		return nil, nil, err
 	}
-	if err := s.repo.Save(ctx, run); err != nil {
+	if err := s.saveRun(ctx, run); err != nil {
 		return nil, nil, err
 	}
 	return run, results, nil
@@ -371,7 +394,7 @@ func (s *RunService) transition(ctx context.Context, runID int64, fn func(*domai
 	if err := fn(run); err != nil {
 		return nil, err
 	}
-	if err := s.repo.Save(ctx, run); err != nil {
+	if err := s.saveRun(ctx, run); err != nil {
 		return nil, err
 	}
 	return run, nil

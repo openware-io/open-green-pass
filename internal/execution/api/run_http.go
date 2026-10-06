@@ -13,6 +13,7 @@ import (
 	"github.com/openware-io/open-green-pass/internal/execution/domain"
 	"github.com/openware-io/open-green-pass/internal/gateway/httpx"
 	"github.com/openware-io/open-green-pass/internal/iam"
+	"github.com/openware-io/open-green-pass/internal/platform/rls"
 	gperr "github.com/openware-io/open-green-pass/pkg/errors"
 )
 
@@ -119,10 +120,8 @@ func (h *runHandler) getRun(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, toRunResponse(run))
 }
 
-// events emits the current run snapshot immediately, then emits changed snapshots.
-// It polls the authoritative repository so the endpoint remains correct when the
-// workflow worker and HTTP server are separate processes. Shared pub/sub can be
-// added later to reduce polling for multi-replica deployments.
+// events emits authoritative snapshots. Redis notifications wake connections
+// across replicas; periodic reads remain as a correctness fallback.
 func (h *runHandler) events(w http.ResponseWriter, r *http.Request) {
 	id, ok := runID(w, r)
 	if !ok {
@@ -162,6 +161,13 @@ func (h *runHandler) events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	flusher.Flush()
+	teamID, _ := rls.TenantFrom(r.Context())
+	subscription, subscribeErr := h.svc.SubscribeRunEvents(r.Context(), teamID, id)
+	var notifications <-chan struct{}
+	if subscribeErr == nil && subscription != nil {
+		defer subscription.Close()
+		notifications = subscription.Events()
+	}
 	send := func() error {
 		run, err := h.svc.GetRun(r.Context(), id)
 		if err != nil {
@@ -183,12 +189,20 @@ func (h *runHandler) events(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 		return nil
 	}
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-r.Context().Done():
 			return
+		case _, open := <-notifications:
+			if !open {
+				notifications = nil
+				continue
+			}
+			if err := send(); err != nil {
+				return
+			}
 		case <-ticker.C:
 			if err := send(); err != nil {
 				return
