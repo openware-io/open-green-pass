@@ -3,7 +3,9 @@ package workflow
 
 import (
 	"context"
+	"errors"
 
+	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
 
@@ -27,6 +29,19 @@ func NewTemporalController(c client.Client) *TemporalController {
 
 func (c *TemporalController) Signal(ctx context.Context, runID, _ int64, signal string) error {
 	return c.client.SignalWorkflow(ctx, workflowID(runID), "", signal, struct{}{})
+}
+
+// Start creates the stable workflow for a queued run. Duplicate deliveries are
+// successful when the same workflow ID already exists.
+func (c *TemporalController) Start(ctx context.Context, runID, teamID int64) error {
+	_, err := c.client.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
+		ID: workflowID(runID), TaskQueue: "gp-execution",
+	}, ExecuteRunWorkflow, ExecuteRunInput{RunID: runID, TeamID: teamID})
+	var alreadyStarted *serviceerror.WorkflowExecutionAlreadyStarted
+	if errors.As(err, &alreadyStarted) {
+		return nil
+	}
+	return err
 }
 
 func workflowID(runID int64) string {

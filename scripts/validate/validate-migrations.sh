@@ -4,7 +4,7 @@
 set -euo pipefail
 MIG_DIR="${1:-migrations}"
 # ENGINEERING-SPEC §8 登记前缀
-prefixes="tgt_ cas_ ctr_ rpt_ tnt_ iam_ mdl_ repo_ run_ res_ env_ gen_ gate_ cost_ aud_ evd_ ts_"
+prefixes="tgt_ cas_ ctr_ rpt_ tnt_ iam_ mdl_ repo_ run_ res_ env_ gen_ gate_ cost_ aud_ evd_ ts_ svc_"
 err=0
 declare -A up down
 

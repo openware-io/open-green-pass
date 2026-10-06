@@ -24,6 +24,8 @@ secrets:
 
 migration:
   enabled: false
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 600
   image:
     repository: ghcr.io/openware-io/open-green-pass-migrate
     tag: ""

@@ -4,10 +4,14 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	redis "github.com/redis/go-redis/v9"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 
@@ -15,7 +19,9 @@ import (
 	edomain "github.com/openware-io/open-green-pass/internal/execution/domain"
 	einfra "github.com/openware-io/open-green-pass/internal/execution/infra"
 	"github.com/openware-io/open-green-pass/internal/execution/infra/pgconflict"
+	"github.com/openware-io/open-green-pass/internal/execution/infra/pgpool"
 	gpQuota "github.com/openware-io/open-green-pass/internal/execution/infra/quota"
+	gpRedisQueue "github.com/openware-io/open-green-pass/internal/execution/infra/redisqueue"
 	gpRedisQuota "github.com/openware-io/open-green-pass/internal/execution/infra/redisquota"
 	gpRedisRunBus "github.com/openware-io/open-green-pass/internal/execution/infra/redisrunbus"
 	gpRunner "github.com/openware-io/open-green-pass/internal/execution/infra/runner"
@@ -82,6 +88,19 @@ func main() {
 		runner = einfra.NewMockRunner(gen)
 	}
 	runSvc := eapp.NewRunService(runStore, envSvc, caseReader, policySvc, runner, gen)
+	if os.Getenv("GP_EXECUTION_POOL_ENABLED") == "true" {
+		registry, e := pgpool.New(pool)
+		if e != nil {
+			log.Error("init execution pool registry", "error", e)
+			os.Exit(1)
+		}
+		selector, e := pgpool.NewSelector(registry, pgpool.SelectorConfig{HeartbeatTTL: time.Duration(config.MustInt("GP_EXECUTION_POOL_HEARTBEAT_TTL_SECONDS", 30)) * time.Second, LeaseTTL: time.Duration(config.MustInt("GP_EXECUTION_POOL_LEASE_TTL_SECONDS", 600)) * time.Second})
+		if e != nil {
+			log.Error("init execution pool selector", "error", e)
+			os.Exit(1)
+		}
+		runSvc.SetExecutionPool(selector)
+	}
 	quotaClient, err := gpRedisQuota.NewClient(ctx, gpRedisQuota.ClientOptions{Address: cfg.RedisAddr, Password: os.Getenv("GP_REDIS_PASSWORD")})
 	if err != nil {
 		log.Error("init redis quota client", "error", err)
@@ -137,7 +156,8 @@ func main() {
 		os.Exit(1)
 	}
 	defer c.Close()
-	runSvc.SetWorkflowController(workflow.NewTemporalController(c))
+	temporalController := workflow.NewTemporalController(c)
+	runSvc.SetWorkflowController(temporalController)
 
 	w := worker.New(c, "gp-execution", worker.Options{})
 	workflow.SetDeps(runSvc)
@@ -151,6 +171,35 @@ func main() {
 	}
 	defer w.Stop()
 
+	scheduleClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr, Password: os.Getenv("GP_REDIS_PASSWORD")})
+	defer scheduleClient.Close()
+	scheduleQueue, err := gpRedisQueue.New(ctx, scheduleClient, "gp:execution:schedule", "gp-execution")
+	if err != nil {
+		log.Error("init redis schedule queue", "error", err)
+		os.Exit(1)
+	}
+	workerName := os.Getenv("GP_WORKER_NAME")
+	if workerName == "" {
+		workerName = os.Getenv("HOSTNAME")
+	}
+	if workerName == "" {
+		workerName = "worker"
+	}
+	consumer := fmt.Sprintf("%s-%d", workerName, os.Getpid())
+	dispatcher, err := eapp.NewScheduleDispatcher(scheduleQueue, temporalController, consumer, log)
+	if err != nil {
+		log.Error("init schedule dispatcher", "error", err)
+		os.Exit(1)
+	}
+	workerCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		if err := dispatcher.Run(workerCtx); err != nil {
+			log.Error("schedule dispatcher stopped", "error", err)
+			stop()
+		}
+	}()
+
 	log.Info("greenpass temporal worker started", "task_queue", "gp-execution", "temporal", addr)
-	select {}
+	<-workerCtx.Done()
 }

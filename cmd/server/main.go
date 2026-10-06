@@ -7,13 +7,16 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	redis "github.com/redis/go-redis/v9"
 
 	eapi "github.com/openware-io/open-green-pass/internal/execution/api"
 	eapp "github.com/openware-io/open-green-pass/internal/execution/application"
 	edomain "github.com/openware-io/open-green-pass/internal/execution/domain"
 	einfra "github.com/openware-io/open-green-pass/internal/execution/infra"
 	"github.com/openware-io/open-green-pass/internal/execution/infra/pgconflict"
+	"github.com/openware-io/open-green-pass/internal/execution/infra/pgpool"
 	gpQuota "github.com/openware-io/open-green-pass/internal/execution/infra/quota"
+	gpRedisQueue "github.com/openware-io/open-green-pass/internal/execution/infra/redisqueue"
 	gpRedisQuota "github.com/openware-io/open-green-pass/internal/execution/infra/redisquota"
 	gpRedisRunBus "github.com/openware-io/open-green-pass/internal/execution/infra/redisrunbus"
 	gpRunner "github.com/openware-io/open-green-pass/internal/execution/infra/runner"
@@ -101,6 +104,19 @@ func main() {
 		log.Info("runner", "type", "mock")
 	}
 	runSvc := eapp.NewRunService(runStore, envSvc, caseReader, policySvc, runner, gen)
+	if os.Getenv("GP_EXECUTION_POOL_ENABLED") == "true" {
+		registry, poolErr := pgpool.New(pool)
+		if poolErr != nil {
+			log.Error("init execution pool registry", "error", poolErr)
+			os.Exit(1)
+		}
+		selector, poolErr := pgpool.NewSelector(registry, pgpool.SelectorConfig{HeartbeatTTL: time.Duration(config.MustInt("GP_EXECUTION_POOL_HEARTBEAT_TTL_SECONDS", 30)) * time.Second, LeaseTTL: time.Duration(config.MustInt("GP_EXECUTION_POOL_LEASE_TTL_SECONDS", 600)) * time.Second})
+		if poolErr != nil {
+			log.Error("init execution pool selector", "error", poolErr)
+			os.Exit(1)
+		}
+		runSvc.SetExecutionPool(selector)
+	}
 	quotaClient, err := gpRedisQuota.NewClient(ctx, gpRedisQuota.ClientOptions{Address: cfg.RedisAddr, Password: os.Getenv("GP_REDIS_PASSWORD")})
 	if err != nil {
 		log.Error("init redis quota client", "error", err)
@@ -116,6 +132,14 @@ func main() {
 		os.Exit(1)
 	}
 	runSvc.SetQuotaPort(runQuota)
+	scheduleClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr, Password: os.Getenv("GP_REDIS_PASSWORD")})
+	defer scheduleClient.Close()
+	scheduleQueue, err := gpRedisQueue.New(ctx, scheduleClient, "gp:execution:schedule", "gp-execution")
+	if err != nil {
+		log.Error("init redis schedule queue", "error", err)
+		os.Exit(1)
+	}
+	runSvc.SetScheduleQueue(scheduleQueue)
 	runEventBus, err := gpRedisRunBus.New(ctx, cfg.RedisAddr, os.Getenv("GP_REDIS_PASSWORD"))
 	if err != nil {
 		log.Error("init redis run event bus", "error", err)

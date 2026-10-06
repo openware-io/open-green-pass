@@ -33,46 +33,59 @@ func (q *Queue) Enqueue(ctx context.Context, j domain.ScheduleJob) error {
 	if j.CreatedAt.IsZero() {
 		j.CreatedAt = time.Now().UTC()
 	}
-	ok, e := q.client.SetNX(ctx, q.state(j.ID), "queued", 0).Result()
+	// Millisecond epoch keeps the fractional weight representable in Redis'
+	// IEEE-754 score; nanoseconds would round every practical weight away.
+	score := float64(time.Now().UnixMilli()) + 1/float64(j.Weight)
+	result, e := q.client.Eval(ctx, enqueueScript, []string{q.state(j.ID), q.job(j.ID), q.wfq()},
+		j.ID, j.TeamID, j.Weight, j.Payload, j.CreatedAt.UnixNano(), score).Int()
 	if e != nil {
 		return e
 	}
-	if !ok {
+	if result == 0 {
 		return domain.ErrScheduleJobExists
 	}
-	_, e = q.client.HSet(ctx, q.job(j.ID), "id", j.ID, "team", j.TeamID, "weight", j.Weight, "payload", j.Payload, "created", j.CreatedAt.UnixNano()).Result()
-	if e != nil {
-		return e
-	}
-	score := float64(time.Now().UnixNano()) + 1/float64(j.Weight)
-	return q.client.ZAdd(ctx, q.wfq(), redis.Z{Score: score, Member: j.ID}).Err()
+	return nil
 }
 func (q *Queue) Promote(ctx context.Context, limit int) (int, error) {
 	if limit <= 0 {
 		return 0, domain.ErrInvalidScheduleJob
 	}
-	xs, e := q.client.ZPopMin(ctx, q.wfq(), int64(limit)).Result()
-	if e != nil {
-		return 0, e
-	}
 	n := 0
-	for _, x := range xs {
-		v, e := q.client.HMGet(ctx, q.job(fmt.Sprint(x.Member)), "id", "team", "weight", "payload", "created").Result()
+	for n < limit {
+		promoted, e := q.client.Eval(ctx, promoteScript, []string{q.wfq(), q.stream()}, q.prefix+":job:", q.prefix+":state:").Int()
 		if e != nil {
 			return n, e
 		}
-		if v[0] == nil {
-			continue
+		if promoted == 0 {
+			break
 		}
-		_, e = q.client.XAdd(ctx, &redis.XAddArgs{Stream: q.stream(), Values: map[string]any{"id": fmt.Sprint(v[0]), "team": fmt.Sprint(v[1]), "weight": fmt.Sprint(v[2]), "payload": fmt.Sprint(v[3]), "created": fmt.Sprint(v[4])}}).Result()
-		if e != nil {
-			return n, e
-		}
-		q.client.Set(ctx, q.state(fmt.Sprint(x.Member)), "stream", 0)
 		n++
 	}
 	return n, nil
 }
+
+const enqueueScript = `
+if redis.call('EXISTS', KEYS[1]) == 1 then return 0 end
+redis.call('SET', KEYS[1], 'queued')
+redis.call('HSET', KEYS[2], 'id', ARGV[1], 'team', ARGV[2], 'weight', ARGV[3], 'payload', ARGV[4], 'created', ARGV[5])
+redis.call('ZADD', KEYS[3], ARGV[6], ARGV[1])
+return 1`
+
+const promoteScript = `
+local entry = redis.call('ZRANGE', KEYS[1], 0, 0)
+if #entry == 0 then return 0 end
+local id = entry[1]
+local job = ARGV[1] .. id
+local values = redis.call('HMGET', job, 'id', 'team', 'weight', 'payload', 'created')
+if not values[1] then
+  redis.call('ZREM', KEYS[1], id)
+  return 1
+end
+redis.call('XADD', KEYS[2], '*', 'id', values[1], 'team', values[2], 'weight', values[3], 'payload', values[4], 'created', values[5])
+redis.call('SET', ARGV[2] .. id, 'stream')
+redis.call('ZREM', KEYS[1], id)
+return 1`
+
 func (q *Queue) Claim(ctx context.Context, c string, limit int, block time.Duration) ([]domain.ClaimedScheduleJob, error) {
 	if c == "" || limit <= 0 {
 		return nil, domain.ErrInvalidScheduleJob

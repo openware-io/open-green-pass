@@ -12,6 +12,8 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 1
+  activeDeadlineSeconds: {{ .Values.migration.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: {{ .Values.migration.ttlSecondsAfterFinished }}
   template:
     metadata:
       labels:
@@ -19,6 +21,7 @@ spec:
         app.kubernetes.io/part-of: greenpass
         app.kubernetes.io/component: migration
     spec:
+      automountServiceAccountToken: false
       restartPolicy: Never
       securityContext:
         {{- toYaml .Values.securityContext | nindent 8 }}
@@ -29,6 +32,9 @@ spec:
         - name: migrate
           image: "{{ .Values.migration.image.repository }}:{{ required "migration.image.tag is required when migration.enabled=true" .Values.migration.image.tag }}"
           imagePullPolicy: {{ .Values.migration.image.pullPolicy }}
+          securityContext:
+            {{- toYaml $.Values.containerSecurityContext | nindent 12 }}
+          command: ["/usr/local/bin/gp-migrate"]
           env:
             {{- range $name, $value := .Values.migration.env }}
             - name: {{ $name }}

@@ -51,6 +51,21 @@ func (pipelineRunner) Execute(_ context.Context, specs []*domain.CaseSpec) ([]*d
 	return []*domain.CaseResult{{CaseID: specs[0].CaseID, CaseVersion: specs[0].CaseVersion, Status: domain.CasePass, StartedAt: now, EndedAt: &now}}, nil
 }
 
+type pipelinePool struct {
+	requests []domain.ExecutionPoolRequest
+	released []domain.ExecutionPoolLease
+}
+
+func (p *pipelinePool) Reserve(_ context.Context, request domain.ExecutionPoolRequest) (domain.ExecutionPoolLease, error) {
+	p.requests = append(p.requests, request)
+	return domain.ExecutionPoolLease{Token: "lease", PoolID: "kind", Units: request.Units, FencingToken: 3}, nil
+}
+
+func (p *pipelinePool) Release(_ context.Context, lease domain.ExecutionPoolLease) error {
+	p.released = append(p.released, lease)
+	return nil
+}
+
 type pipelineGate struct{ calls []int64 }
 
 func (g *pipelineGate) Evaluate(_ context.Context, runID int64) (domain.GateDecision, error) {
@@ -107,5 +122,27 @@ func TestExecuteRunInvokesTrustedGateAndReportBeforeDone(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("states=%v want=%v", got, want)
 		}
+	}
+}
+
+func TestExecuteRunReservesAndReleasesConfiguredExecutionPool(t *testing.T) {
+	gen, err := id.New(1, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := domain.NewRun(10, 100, 1, 1003, "test", "v1", "main", "manual", []int64{4001})
+	run.State = domain.RunScheduled
+	pool := &pipelinePool{}
+	svc := NewRunService(&pipelineRepo{run: run}, nil, pipelineCases{}, pipelinePolicy{}, pipelineRunner{}, gen)
+	svc.SetExecutionPool(pool)
+
+	if _, _, err := svc.ExecuteRun(rls.WithTenant(context.Background(), 100), run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(pool.requests) != 1 || pool.requests[0].Resource != "api" || pool.requests[0].Units != 1 {
+		t.Fatalf("requests=%+v", pool.requests)
+	}
+	if len(pool.released) != 1 || pool.released[0].PoolID != "kind" || pool.released[0].FencingToken != 3 {
+		t.Fatalf("released=%+v", pool.released)
 	}
 }

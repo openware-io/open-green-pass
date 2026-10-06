@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"time"
 
 	"github.com/openware-io/open-green-pass/internal/execution/domain"
@@ -34,6 +35,8 @@ type RunService struct {
 	report   domain.ReportPort
 	cost     domain.CostPort
 	events   domain.RunEventBus
+	pool     domain.ExecutionPoolPort
+	schedule domain.ScheduleQueuePort
 }
 
 // NewRunService 创建运行编排服务。
@@ -94,6 +97,11 @@ func (s *RunService) SetCostPort(port domain.CostPort) {
 // SetRunEventBus enables cross-process wakeups for run SSE streams.
 func (s *RunService) SetRunEventBus(bus domain.RunEventBus) { s.events = bus }
 
+func (s *RunService) SetExecutionPool(port domain.ExecutionPoolPort) { s.pool = port }
+
+// SetScheduleQueue enables durable asynchronous dispatch for newly created runs.
+func (s *RunService) SetScheduleQueue(queue domain.ScheduleQueuePort) { s.schedule = queue }
+
 func (s *RunService) SubscribeRunEvents(ctx context.Context, teamID, runID int64) (domain.RunEventSubscription, error) {
 	if s.events == nil {
 		return nil, nil
@@ -146,6 +154,11 @@ func (s *RunService) CreateRun(ctx context.Context, req CreateRunRequest) (*doma
 		req.Env, req.TargetVersion, req.TargetBranch, mode, selected)
 	if err := s.saveRun(ctx, run); err != nil {
 		return nil, err
+	}
+	if s.schedule != nil {
+		if err := EnqueueRun(ctx, s.schedule, run); err != nil {
+			return nil, fmt.Errorf("enqueue run %d: %w", run.ID, err)
+		}
 	}
 	return run, nil
 }
@@ -258,6 +271,18 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 		})
 	}
 
+	poolLeases, err := s.reserveExecutionPools(ctx, spec)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer func() {
+		for i := len(poolLeases) - 1; i >= 0; i-- {
+			if releaseErr := s.pool.Release(context.Background(), poolLeases[i]); err == nil && releaseErr != nil {
+				err = releaseErr
+			}
+		}
+	}()
+
 	// 执行（P1 MockRunner；K8s Job Runner 接管真实执行）
 	results, err = s.runner.Execute(ctx, spec)
 	if err != nil {
@@ -328,6 +353,38 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 		return nil, nil, err
 	}
 	return run, results, nil
+}
+
+func (s *RunService) reserveExecutionPools(ctx context.Context, specs []*domain.CaseSpec) ([]domain.ExecutionPoolLease, error) {
+	if s.pool == nil {
+		return nil, nil
+	}
+	requests := make(map[string]int)
+	for _, spec := range specs {
+		resource := spec.Scenario
+		if resource == "" {
+			resource = "api"
+		}
+		requests[resource]++
+	}
+	leases := make([]domain.ExecutionPoolLease, 0, len(requests))
+	resources := make([]string, 0, len(requests))
+	for resource := range requests {
+		resources = append(resources, resource)
+	}
+	sort.Strings(resources)
+	for _, resource := range resources {
+		units := requests[resource]
+		lease, reserveErr := s.pool.Reserve(ctx, domain.ExecutionPoolRequest{Resource: resource, Units: units})
+		if reserveErr != nil {
+			for i := len(leases) - 1; i >= 0; i-- {
+				_ = s.pool.Release(context.Background(), leases[i])
+			}
+			return nil, fmt.Errorf("reserve execution pool for %s: %w", resource, reserveErr)
+		}
+		leases = append(leases, lease)
+	}
+	return leases, nil
 }
 
 func (s *RunService) recordResourceConflict(ctx context.Context, run *domain.Run, cause error) error {
