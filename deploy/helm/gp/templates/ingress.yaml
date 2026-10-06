@@ -2,7 +2,33 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: gp-server
+  name: gp-server-api
+  namespace: {{ .Values.namespaceOverride }}
+  labels:
+    {{- include "gp.labels" . | nindent 4 }}
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: gp-server
+                port:
+                  number: {{ $.Values.service.port }}
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gp-web
   namespace: {{ .Values.namespaceOverride }}
   labels:
     {{- include "gp.labels" . | nindent 4 }}
@@ -17,8 +43,8 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: gp-server
+                name: {{ if $.Values.web.enabled }}gp-web{{ else }}gp-server{{ end }}
                 port:
-                  number: {{ $.Values.service.port }}
+                  number: {{ if $.Values.web.enabled }}8080{{ else }}{{ $.Values.service.port }}{{ end }}
     {{- end }}
 {{- end }}

@@ -7,8 +7,16 @@ function configuredTeamId(): number | undefined {
   return Number.isSafeInteger(teamId) && teamId > 0 ? teamId : undefined;
 }
 
+function configuredUserId(): number | undefined {
+  const raw = import.meta.env.VITE_GP_USER_ID?.trim();
+  if (!raw) return undefined;
+  const userId = Number(raw);
+  return Number.isSafeInteger(userId) && userId > 0 ? userId : undefined;
+}
+
 const baseUrl = import.meta.env.VITE_GP_API_BASE?.trim();
 const teamId = configuredTeamId();
+const userId = configuredUserId();
 const mockApi = import.meta.env.VITE_GP_MOCK_API?.trim().toLowerCase() === 'true';
 
 /**
@@ -17,7 +25,7 @@ const mockApi = import.meta.env.VITE_GP_MOCK_API?.trim().toLowerCase() === 'true
  */
 export function configuredGreenPassClient(): GreenPassClient | undefined {
   if ((!baseUrl && !mockApi) || !teamId) return undefined;
-  return new GreenPassClient({ baseUrl: baseUrl ?? '', teamId });
+  return new GreenPassClient({ baseUrl: baseUrl ?? '', teamId, userId });
 }
 
 export function greenPassConnectionHint(): string {

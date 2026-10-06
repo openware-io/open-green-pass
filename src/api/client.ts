@@ -33,6 +33,7 @@ export class GreenPassApiError extends Error {
 export interface GreenPassClientOptions {
   baseUrl?: string;
   teamId: number;
+  userId?: number;
   fetcher?: typeof fetch;
 }
 
@@ -42,11 +43,13 @@ type JsonResponse<T> = Promise<T>;
 export class GreenPassClient {
   private readonly baseUrl: string;
   private readonly teamId: number;
+  private readonly userId?: number;
   private readonly fetcher: typeof fetch;
 
   constructor(options: GreenPassClientOptions) {
     this.baseUrl = (options.baseUrl ?? import.meta.env.VITE_GP_API_BASE ?? '').replace(/\/$/, '');
     this.teamId = options.teamId;
+    this.userId = options.userId;
     this.fetcher = options.fetcher ?? fetch;
   }
 
@@ -54,6 +57,7 @@ export class GreenPassClient {
     const headers = new Headers(init.headers);
     headers.set('Accept', 'application/json');
     headers.set('x-gp-team-id', String(this.teamId));
+    if (this.userId) headers.set('x-gp-user-id', String(this.userId));
     if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
     const response = await this.fetcher(`${this.baseUrl}${path}`, { ...init, headers });
     if (!response.ok) {
@@ -74,6 +78,7 @@ export class GreenPassClient {
     const headers = new Headers(init.headers);
     headers.set('Accept', 'text/html');
     headers.set('x-gp-team-id', String(this.teamId));
+    if (this.userId) headers.set('x-gp-user-id', String(this.userId));
     const response = await this.fetcher(`${this.baseUrl}${path}`, { ...init, headers });
     if (!response.ok) throw new GreenPassApiError(response.status, response.statusText);
     return response.text();
@@ -130,6 +135,7 @@ export class GreenPassClient {
   getRun(runId: number): JsonResponse<Run> { return this.request(`/runs/${runId}`); }
   async streamRunEvents(runId: number, onRun: (run: Run) => void, signal?: AbortSignal): Promise<void> {
     const headers = new Headers({ Accept: 'text/event-stream', 'x-gp-team-id': String(this.teamId) });
+    if (this.userId) headers.set('x-gp-user-id', String(this.userId));
     const response = await this.fetcher(`${this.baseUrl}/runs/${runId}/events`, { headers, signal });
     if (!response.ok || !response.body) throw new GreenPassApiError(response.status, response.statusText || 'SSE stream unavailable');
     const reader = response.body.getReader();
@@ -184,6 +190,7 @@ export class GreenPassClient {
         Accept: format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'Content-Type': 'application/json',
         'x-gp-team-id': String(this.teamId),
+        ...(this.userId ? { 'x-gp-user-id': String(this.userId) } : {}),
       },
       body: JSON.stringify({ report_ids: reportIds, format }),
     });
@@ -192,6 +199,6 @@ export class GreenPassClient {
   }
 }
 
-export function createGreenPassClient(teamId: number, baseUrl?: string): GreenPassClient {
-  return new GreenPassClient({ teamId, baseUrl });
+export function createGreenPassClient(teamId: number, baseUrl?: string, userId?: number): GreenPassClient {
+  return new GreenPassClient({ teamId, baseUrl, userId });
 }

@@ -43,6 +43,20 @@ worker:
     requests: { cpu: 100m, memory: 128Mi }
     limits: { cpu: 500m, memory: 512Mi }
 
+web:
+  enabled: true
+  image:
+    repository: ghcr.io/openware-io/open-green-pass-web
+    tag: v0.1.1
+    pullPolicy: Never
+  env:
+    VITE_GP_API_BASE: /api
+    VITE_GP_TEAM_ID: "1001"
+    VITE_GP_USER_ID: "42"
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 200m, memory: 256Mi }
+
 networkPolicy:
   enabled: true
 

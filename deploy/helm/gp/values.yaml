@@ -57,6 +57,19 @@ worker:
   env: {}
   resources: {}
 
+web:
+  enabled: false
+  image:
+    repository: ghcr.io/openware-io/open-green-pass-web
+    tag: ""
+    pullPolicy: IfNotPresent
+  replicas: 1
+  env:
+    VITE_GP_API_BASE: /api
+    VITE_GP_TEAM_ID: "1001"
+    VITE_GP_USER_ID: "42"
+  resources: {}
+
 service:
   type: ClusterIP
   port: 8080

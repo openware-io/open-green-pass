@@ -9,4 +9,7 @@ dev.err.log
 dev.log
 test
 deploy
+!deploy/
+!deploy/nginx/
+!deploy/nginx/web.conf
 docs
