@@ -49,6 +49,25 @@ func TestVerifyAuditChainRejectsMixedTeamExport(t *testing.T) {
 	}
 }
 
+func TestVerifyAuditChainFromAnchorAcceptsRange(t *testing.T) {
+	events := verificationEvents(t)
+	anchor := &domain.AuditAnchor{TeamID: 7, EventID: 1, Hash: events[0].Hash, CreatedAt: time.Now().UTC()}
+	rangeEvents := []domain.AuditEvent{events[1]}
+	result := VerifyAuditChainFromAnchor(rangeEvents, anchor)
+	if !result.Valid || result.LastHash != events[1].Hash {
+		t.Fatalf("anchored verification failed: %+v", result)
+	}
+}
+
+func TestVerifyAuditChainFromAnchorRejectsTamperedAnchor(t *testing.T) {
+	events := verificationEvents(t)
+	anchor := &domain.AuditAnchor{TeamID: 7, EventID: 1, Hash: zeroChainHead, CreatedAt: time.Now().UTC()}
+	result := VerifyAuditChainFromAnchor([]domain.AuditEvent{events[1]}, anchor)
+	if result.Valid || result.FirstInvalidEventID != events[1].ID {
+		t.Fatalf("expected tampered anchor to break range: %+v", result)
+	}
+}
+
 func verificationEvents(t *testing.T) []domain.AuditEvent {
 	t.Helper()
 	ts := time.Date(2026, time.October, 6, 1, 2, 3, 0, time.UTC)

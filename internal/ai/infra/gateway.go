@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/openware-io/open-green-pass/internal/ai/domain"
@@ -38,13 +39,20 @@ func NewGateway(concurrency int, meter domain.MeterPort, providers ...domain.Mod
 }
 
 func (g *Gateway) Generate(ctx context.Context, req domain.GenerateRequest) (domain.GenerateResult, error) {
-	if req.RequestID == "" {
-		return domain.GenerateResult{}, ErrRequestIDRequired
+	if strings.TrimSpace(req.RequestID) == "" {
+		return domain.GenerateResult{}, fmt.Errorf("%w: %w", domain.ErrInvalidRequest, ErrRequestIDRequired)
+	}
+	if req.MaxTokens < 0 {
+		return domain.GenerateResult{}, fmt.Errorf("%w: max tokens must not be negative", domain.ErrInvalidRequest)
 	}
 	if err := ctx.Err(); err != nil {
 		return domain.GenerateResult{}, err
 	}
-	g.semaphore <- struct{}{}
+	select {
+	case g.semaphore <- struct{}{}:
+	case <-ctx.Done():
+		return domain.GenerateResult{}, ctx.Err()
+	}
 	defer func() { <-g.semaphore }()
 	order := g.orderFor(req.Model)
 	var last error
@@ -62,6 +70,7 @@ func (g *Gateway) Generate(ctx context.Context, req domain.GenerateRequest) (dom
 			continue
 		}
 		res.RequestID = req.RequestID
+		res.SecretRef = req.SecretRef
 		if res.Model == "" {
 			res.Model = name
 		}
@@ -95,11 +104,15 @@ func (g *Gateway) orderFor(preferred string) []string {
 
 func (g *Gateway) recordOnce(ctx context.Context, res domain.GenerateResult) error {
 	g.mu.Lock()
+	defer g.mu.Unlock()
 	if _, ok := g.seen[res.RequestID]; ok {
-		g.mu.Unlock()
 		return nil
 	}
+	// Serialize the first record for a request ID. Mark it only after the
+	// meter succeeds, so transient meter failures can be retried safely.
+	if err := g.meter.Record(ctx, res); err != nil {
+		return err
+	}
 	g.seen[res.RequestID] = struct{}{}
-	g.mu.Unlock()
-	return g.meter.Record(ctx, res)
+	return nil
 }

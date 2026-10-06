@@ -6,6 +6,11 @@ import (
 )
 
 var ErrRetryable = errors.New("ai: retryable provider failure")
+var ErrInvalidRequest = errors.New("ai: invalid request")
+var ErrProviderUnavailable = errors.New("ai: provider unavailable")
+var ErrRateLimited = errors.New("ai: provider rate limited")
+var ErrProviderTimeout = errors.New("ai: provider timeout")
+var ErrProviderAuth = errors.New("ai: provider authentication failed")
 
 // RetryableError marks failures for which a fallback provider may be tried
 // (for example timeout, rate limit, or provider 5xx). Credential, request,
@@ -20,6 +25,9 @@ func IsRetryable(err error) bool { return errors.Is(err, ErrRetryable) }
 
 type GenerateRequest struct {
 	RequestID string
+	// SecretRef is an opaque reference resolved by the provider boundary. It
+	// must never contain a plaintext credential.
+	SecretRef string
 	Model     string
 	Prompt    string
 	MaxTokens int
@@ -27,6 +35,7 @@ type GenerateRequest struct {
 
 type GenerateResult struct {
 	RequestID string
+	SecretRef string
 	Model     string
 	Text      string
 	TokensIn  int

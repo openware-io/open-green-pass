@@ -27,6 +27,13 @@ type AuditVerification struct {
 // Anchor manifests/signatures are a separate GP3-04 integration because they
 // require a trusted external reference and read-only credential boundary.
 func VerifyAuditChain(events []domain.AuditEvent) AuditVerification {
+	return VerifyAuditChainFromAnchor(events, nil)
+}
+
+// VerifyAuditChainFromAnchor verifies an exported range against an internal
+// read-only checkpoint. The anchor is not written or refreshed by verification.
+// A nil anchor requires the range to begin at the zero chain head.
+func VerifyAuditChainFromAnchor(events []domain.AuditEvent, anchor *domain.AuditAnchor) AuditVerification {
 	result := AuditVerification{Valid: true}
 	if len(events) == 0 {
 		return result
@@ -38,11 +45,23 @@ func VerifyAuditChain(events []domain.AuditEvent) AuditVerification {
 	}
 
 	expectedPrev := zeroChainHead
+	if anchor != nil {
+		if anchor.TeamID == 0 || anchor.EventID == 0 || !isSHA256Hex(anchor.Hash) || anchor.CreatedAt.IsZero() {
+			return invalidAuditVerification(result, 0, "invalid audit anchor")
+		}
+		if anchor.TeamID != teamID {
+			return invalidAuditVerification(result, events[0].ID, "anchor team_id does not match export")
+		}
+		expectedPrev = anchor.Hash
+	}
 	seenIDs := make(map[int64]struct{}, len(events))
 	for _, event := range events {
 		result.CheckedCount++
 		if event.ID == 0 {
 			return invalidAuditVerification(result, event.ID, "event id is required")
+		}
+		if anchor != nil && event.ID <= anchor.EventID {
+			return invalidAuditVerification(result, event.ID, "event precedes or duplicates audit anchor")
 		}
 		if _, duplicate := seenIDs[event.ID]; duplicate {
 			return invalidAuditVerification(result, event.ID, "duplicate event id")
