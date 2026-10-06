@@ -46,6 +46,12 @@ worker:
 networkPolicy:
   enabled: true
 
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: localhost
+
 resources:
   quota:
     enabled: true
