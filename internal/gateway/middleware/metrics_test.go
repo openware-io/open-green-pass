@@ -26,3 +26,12 @@ func TestMetricsUsesRoutePatternAndStatusClass(t *testing.T) {
 		t.Fatalf("unexpected metrics: %s", body)
 	}
 }
+
+func TestStatusWriterPreservesFlusher(t *testing.T) {
+	writer := httptest.NewRecorder()
+	sw := &statusWriter{ResponseWriter: writer, status: http.StatusOK}
+	if _, ok := any(sw).(http.Flusher); !ok {
+		t.Fatal("statusWriter must preserve http.Flusher for SSE")
+	}
+	sw.Flush()
+}

@@ -17,6 +17,14 @@ type statusWriter struct {
 	status int
 }
 
+// Flush preserves streaming handlers such as SSE through the metrics and
+// access-log middleware wrappers.
+func (w *statusWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
 // Metrics records bounded HTTP request counters and latency observations.
 // It deliberately uses ServeMux's route pattern instead of the raw URL so
 // resource IDs never become metric labels. If a handler does not expose a
