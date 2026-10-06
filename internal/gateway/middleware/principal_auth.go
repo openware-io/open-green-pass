@@ -15,7 +15,10 @@ import (
 func PrincipalAuth(provider iam.AuthenticationProvider, allowHeaderFallback bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/version" {
+			// Metrics contain only the bounded platform labels enforced by the
+			// recorder. Scrape authorization is a deployment/NetworkPolicy concern,
+			// like liveness/readiness, so Prometheus does not need an end-user token.
+			if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/version" || r.URL.Path == "/metrics" {
 				next.ServeHTTP(w, r)
 				return
 			}

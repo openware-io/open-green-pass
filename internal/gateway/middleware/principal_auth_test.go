@@ -18,6 +18,15 @@ func TestPrincipalAuthRequiresCredentialWithoutFallback(t *testing.T) {
 	}
 }
 
+func TestPrincipalAuthAllowsMetricsWithoutEndUserCredential(t *testing.T) {
+	h := PrincipalAuth(nil, false)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status=%d, want %d", w.Code, http.StatusNoContent)
+	}
+}
+
 func TestPrincipalAuthBuildsDevPrincipalOnlyWhenFallbackExplicitlyEnabled(t *testing.T) {
 	h := PrincipalAuth(nil, true)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, ok := iam.PrincipalFromContext(r.Context())
