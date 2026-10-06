@@ -3,18 +3,24 @@ package application
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"sync"
 	"time"
 
 	"github.com/openware-io/open-green-pass/internal/cicd/domain"
 )
 
-type MemoryInbox struct{ seen map[string]struct{} }
+type MemoryInbox struct {
+	mu   sync.Mutex
+	seen map[string]struct{}
+}
 
 func NewMemoryInbox() *MemoryInbox { return &MemoryInbox{seen: map[string]struct{}{}} }
 func (m *MemoryInbox) Accept(d domain.InboxDelivery) error {
 	if err := d.Validate(); err != nil {
 		return err
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	key := d.Provider + ":" + d.DeliveryKey
 	if _, ok := m.seen[key]; ok {
 		return domain.ErrDuplicateDelivery

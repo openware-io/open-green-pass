@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: greenpass-observability
+  labels:
+    app.kubernetes.io/name: greenpass
+    app.kubernetes.io/component: observability
+spec:
+  groups:
+    - name: greenpass.recording
+      rules:
+        - record: gp:queue_wait_seconds:rate5m
+          expr: rate(gp_queue_wait_seconds_sum[5m]) / clamp_min(rate(gp_queue_wait_seconds_count[5m]), 1)
+        - record: gp:http_requests:rate5m
+          expr: sum by (status) (rate(gp_http_requests_total[5m]))
+        - record: gp:dependency_errors:rate5m
+          expr: sum by (dependency) (rate(gp_dependency_errors_total[5m]))

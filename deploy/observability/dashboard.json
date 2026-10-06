@@ -1,0 +1,13 @@
+{
+  "title": "GreenPass control plane (template)",
+  "tags": ["greenpass", "template"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "templating": {"list": [{"name": "namespace", "type": "query", "query": "label_values(kube_pod_info, namespace)", "current": {"text": "gp", "value": "gp"}}]},
+  "panels": [
+    {"type": "timeseries", "title": "HTTP request rate", "targets": [{"expr": "sum by (status) (rate(gp_http_requests_total{namespace=~\"$namespace\"}[5m]))", "legendFormat": "{{status}}"}]},
+    {"type": "timeseries", "title": "Queue wait (observed average)", "targets": [{"expr": "gp:queue_wait_seconds:rate5m{namespace=~\"$namespace\"}", "legendFormat": "seconds"}]},
+    {"type": "timeseries", "title": "Worker activities", "targets": [{"expr": "sum by (component,result) (rate(gp_worker_activities_total{namespace=~\"$namespace\"}[5m]))", "legendFormat": "{{component}} / {{result}}"}]},
+    {"type": "timeseries", "title": "Dependency errors", "targets": [{"expr": "gp:dependency_errors:rate5m{namespace=~\"$namespace\"}", "legendFormat": "{{dependency}}"}]}
+  ]
+}

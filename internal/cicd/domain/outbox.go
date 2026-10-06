@@ -60,3 +60,9 @@ type OutboxPort interface {
 	MarkDelivered(string) error
 	MarkFailed(string, string, time.Time) error
 }
+
+// SignatureVerifier authenticates the raw provider payload before decoding it.
+// Implementations must not log the payload or credential.
+type SignatureVerifier interface {
+	Verify(payload []byte, signature string, timestamp time.Time, now time.Time) error
+}
