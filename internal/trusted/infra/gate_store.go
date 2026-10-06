@@ -103,6 +103,8 @@ type AuditStore struct {
 	gen *id.Generator
 }
 
+const zeroAuditHash = "0000000000000000000000000000000000000000000000000000000000000000"
+
 // NewAuditStore 创建审计仓储。
 func NewAuditStore(db *db.DB, gen *id.Generator) *AuditStore {
 	return &AuditStore{db: db, gen: gen}
@@ -132,6 +134,34 @@ func (s *AuditStore) Append(ctx context.Context, e *domain.AuditEvent) error {
 			e.ID, e.TeamID, e.Actor, e.Op, e.Asset, e.AssetID, p, e.PrevHash, e.Hash, e.Ts)
 		return err
 	})
+}
+
+// AppendWithHead serializes head selection and append per tenant. Advisory
+// locks are transaction-scoped and do not leak across pooled connections.
+func (s *AuditStore) AppendWithHead(ctx context.Context, teamID int64, build func(string) (*domain.AuditEvent, error)) (*domain.AuditEvent, error) {
+	var event *domain.AuditEvent
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, teamID); err != nil {
+			return err
+		}
+		prev := zeroAuditHash
+		var latest string
+		err := tx.QueryRow(ctx, `SELECT hash FROM aud_event WHERE team_id=$1 ORDER BY ts DESC, id DESC LIMIT 1`, teamID).Scan(&latest)
+		if err == nil {
+			prev = latest
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		var buildErr error
+		event, buildErr = build(prev)
+		if buildErr != nil {
+			return buildErr
+		}
+		p, _ := json.Marshal(event.Payload)
+		_, err = tx.Exec(ctx, `INSERT INTO aud_event(id, team_id, actor, op, asset, asset_id, payload, prev_hash, hash, ts) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, event.ID, event.TeamID, event.Actor, event.Op, event.Asset, event.AssetID, p, event.PrevHash, event.Hash, event.Ts)
+		return err
+	})
+	return event, err
 }
 
 var _ domain.AuditRepository = (*AuditStore)(nil)

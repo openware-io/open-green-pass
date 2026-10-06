@@ -27,3 +27,11 @@ type AuditRepository interface {
 	// LatestHash 读当前租户最新审计事件 hash（首事件为全零链头）。
 	LatestHash(ctx context.Context, teamID int64) (string, error)
 }
+
+// AtomicAuditRepository serializes head selection and append in one database
+// transaction. Implementations use a tenant-scoped advisory lock; callers
+// must prefer this port whenever concurrent writers are possible.
+type AtomicAuditRepository interface {
+	AuditRepository
+	AppendWithHead(ctx context.Context, teamID int64, build func(prevHash string) (*AuditEvent, error)) (*AuditEvent, error)
+}

@@ -46,22 +46,36 @@ func (s *AuditService) Append(ctx context.Context, actor int64, op, asset string
 	if !ok {
 		return nil, ErrTenantRequired
 	}
+	if atomicRepo, ok := s.repo.(domain.AtomicAuditRepository); ok {
+		return atomicRepo.AppendWithHead(ctx, teamID, func(prev string) (*domain.AuditEvent, error) {
+			return s.buildEvent(teamID, actor, op, asset, assetID, payload, prev), nil
+		})
+	}
+	return s.appendLegacy(ctx, teamID, actor, op, asset, assetID, payload)
+}
+
+func (s *AuditService) appendLegacy(ctx context.Context, teamID, actor int64, op, asset string, assetID int64, payload map[string]any) (*domain.AuditEvent, error) {
 	prev := zeroChainHead
 	if h, err := s.repo.LatestHash(ctx, teamID); err == nil {
 		prev = h
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
 	}
+	e := s.buildEvent(teamID, actor, op, asset, assetID, payload, prev)
+	if err := s.repo.Append(ctx, e); err != nil {
+		return nil, err
+	}
+	return e, nil
+}
+
+func (s *AuditService) buildEvent(teamID, actor int64, op, asset string, assetID int64, payload map[string]any, prev string) *domain.AuditEvent {
 	ts := time.Now().UTC()
 	hash := ComputeAuditHash(prev, op, asset, assetID, payload, ts)
 	e := &domain.AuditEvent{
 		ID: s.gen.Next(), TeamID: teamID, Actor: actor, Op: op, Asset: asset, AssetID: assetID,
 		Payload: payload, PrevHash: prev, Hash: hash, Ts: ts,
 	}
-	if err := s.repo.Append(ctx, e); err != nil {
-		return nil, err
-	}
-	return e, nil
+	return e
 }
 
 // ComputeAuditHash 计算审计哈希链块 hash = sha256(prev || op || asset || asset_id || payload || ts)。
