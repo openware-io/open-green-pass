@@ -4,7 +4,7 @@ import { TEST_RUNS, RUN_SERVICE_REPORTS, EXEC_AUDIT_ROWS, CASE_COST_HISTORY, TES
 import { PageHeader, Card, ListFilter } from '@/components/shared';
 import { Activity, FileText, Image, FileJson, File, Video, ArrowUpRight, ArrowDownRight, Minus, ScanEye, Camera } from 'lucide-react';
 import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
-import type { Run } from '@/api/client';
+import type { CaseResult, GateResult, Run } from '@/api/client';
 
 const RESULT_BADGE: Record<string, string> = {
   '通过': 'bg-emerald-50 text-emerald-600',
@@ -375,16 +375,66 @@ export default function HistoryPage() {
 function RealHistoryPanel() {
   const client = useMemo(() => configuredGreenPassClient(), []);
   const [runs, setRuns] = useState<Run[]>([]);
+  const [selectedRunID, setSelectedRunID] = useState<number>();
+  const [caseResults, setCaseResults] = useState<CaseResult[]>([]);
+  const [gateResults, setGateResults] = useState<GateResult[]>([]);
+  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const load = async () => { if (client) setRuns(await client.listRuns({ limit: 50 })); };
+  const load = async () => {
+    if (!client) return;
+    setLoading(true);
+    setMessage('');
+    try {
+      const loaded = await client.listRuns({ limit: 50 });
+      setRuns(loaded);
+      setSelectedRunID((current) => current && loaded.some((item) => item.id === current) ? current : loaded[0]?.id);
+    } finally {
+      setLoading(false);
+    }
+  };
   useEffect(() => {
     if (!client) return;
     let active = true;
-    client.listRuns({ limit: 50 }).then((loaded) => { if (active) setRuns(loaded); }).catch((error: unknown) => { if (active) setMessage(error instanceof Error ? error.message : '读取真实运行历史失败'); });
+    client.listRuns({ limit: 50 }).then((loaded) => {
+      if (!active) return;
+      setRuns(loaded);
+      setSelectedRunID(loaded[0]?.id);
+    }).catch((error: unknown) => {
+      if (active) setMessage(error instanceof Error ? error.message : '读取真实运行历史失败');
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
     return () => { active = false; };
   }, [client]);
-  if (!client) return <Card title="真实运行历史" className="mb-5" extra={<span className="text-[11px] text-slate-400">原型模式</span>}><p className="p-5 text-sm text-slate-500">配置真实 API 或启用契约 Mock 后显示服务端运行列表；下方历史视图仍为原型展示。</p></Card>;
-  return <Card title="真实运行历史" className="mb-5" extra={<button type="button" onClick={() => void load().catch((error: unknown) => setMessage(error instanceof Error ? error.message : '刷新失败'))} className="text-[11px] text-emerald-700">刷新</button>}>
-    <div className="p-5"><p className="mb-3 text-[11px] text-slate-500">连接：{greenPassConnectionHint()}。列表来自 `GET /runs`，按服务端运行 ID 倒序。</p>{message && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{message}</div>}<div className="overflow-x-auto rounded-lg border border-slate-200"><table className="w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-3 py-2">运行</th><th className="px-3 py-2">对象</th><th className="px-3 py-2">场景</th><th className="px-3 py-2">环境</th><th className="px-3 py-2">状态</th><th className="px-3 py-2">用例数</th></tr></thead><tbody className="divide-y divide-slate-100">{runs.map((item) => <tr key={item.id}><td className="px-3 py-2 font-mono text-emerald-700">#{item.id}</td><td className="px-3 py-2">#{item.target_id}</td><td className="px-3 py-2">#{item.scenario_id}</td><td className="px-3 py-2">{item.env} · {item.target_version}</td><td className="px-3 py-2">{item.state}</td><td className="px-3 py-2">{item.selected_cases.length}</td></tr>)}</tbody></table>{runs.length === 0 && <div className="p-4 text-center text-xs text-slate-400">暂无真实运行记录</div>}</div></div>
+  useEffect(() => {
+    if (!client || !selectedRunID) return;
+    let active = true;
+    Promise.all([client.caseResults(selectedRunID), client.gateResults(selectedRunID)]).then(([results, gates]) => {
+      if (!active) return;
+      setCaseResults(results);
+      setGateResults(gates);
+    }).catch((error: unknown) => {
+      if (active) setMessage(error instanceof Error ? error.message : '读取运行详情失败');
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [client, selectedRunID]);
+  if (!client) return <Card title="真实运行历史" className="mb-5" extra={<span className="text-[11px] text-amber-600">原型模式（显式）</span>}><p className="p-5 text-sm text-slate-500">未配置真实 API，也未启用契约 Mock。下方历史视图使用原型数据；配置 <code className="rounded bg-slate-100 px-1">VITE_GP_API_BASE</code> 与 <code className="rounded bg-slate-100 px-1">VITE_GP_TEAM_ID</code> 后切换到真实数据。</p></Card>;
+  const selectedRun = runs.find((item) => item.id === selectedRunID);
+  const passed = caseResults.filter((item) => item.status === 'pass').length;
+  const failed = caseResults.filter((item) => item.status === 'fail').length;
+  const blocked = caseResults.filter((item) => item.status === 'blocked').length;
+  const gateResult = gateResults.at(-1)?.result ?? '未判定';
+  return <Card title="真实运行历史" className="mb-5" extra={<button type="button" disabled={loading} onClick={() => void load().catch((error: unknown) => setMessage(error instanceof Error ? error.message : '刷新失败'))} className="text-[11px] text-emerald-700 disabled:text-slate-400">{loading ? '加载中…' : '刷新'}</button>}>
+    <div className="p-5">
+      <p className="mb-3 text-[11px] text-slate-500">连接：{greenPassConnectionHint()}。运行、用例结果、门禁结论分别来自 <code>GET /runs</code>、<code>GET /runs/:id/case-results</code>、<code>GET /gates/results</code>。</p>
+      {message && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{message}</div>}
+      <div className="overflow-x-auto rounded-lg border border-slate-200"><table className="w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-3 py-2">运行</th><th className="px-3 py-2">对象</th><th className="px-3 py-2">分支 / 版本</th><th className="px-3 py-2">环境</th><th className="px-3 py-2">状态</th><th className="px-3 py-2">用例数</th></tr></thead><tbody className="divide-y divide-slate-100">{runs.map((item) => <tr key={item.id} onClick={() => setSelectedRunID(item.id)} className={`cursor-pointer ${selectedRunID === item.id ? 'bg-emerald-50/60' : 'hover:bg-slate-50'}`}><td className="px-3 py-2 font-mono text-emerald-700">#{item.id}</td><td className="px-3 py-2">#{item.target_id} / 场景 #{item.scenario_id}</td><td className="px-3 py-2 font-mono">{item.target_branch} / {item.target_version}</td><td className="px-3 py-2">{item.env} · {item.env_version}</td><td className="px-3 py-2">{item.state}</td><td className="px-3 py-2">{item.selected_cases.length}</td></tr>)}</tbody></table>{runs.length === 0 && <div className="p-4 text-center text-xs text-slate-400">暂无真实运行记录</div>}</div>
+      {selectedRun && <div className="mt-4 rounded-lg border border-slate-200">
+        <div className="grid grid-cols-2 gap-3 border-b border-slate-200 bg-slate-50 p-3 text-xs md:grid-cols-5"><div><span className="text-slate-400">运行</span><div className="font-mono text-emerald-700">#{selectedRun.id}</div></div><div><span className="text-slate-400">通过</span><div className="font-medium text-emerald-600">{passed}</div></div><div><span className="text-slate-400">失败</span><div className="font-medium text-red-600">{failed}</div></div><div><span className="text-slate-400">阻塞</span><div className="font-medium text-amber-600">{blocked}</div></div><div><span className="text-slate-400">门禁</span><div className="font-medium">{gateResult}</div></div></div>
+        <div className="overflow-x-auto"><table className="w-full text-xs"><thead className="text-left text-slate-500"><tr><th className="px-3 py-2">用例</th><th className="px-3 py-2">版本</th><th className="px-3 py-2">结果</th><th className="px-3 py-2">尝试</th><th className="px-3 py-2">结果说明</th><th className="px-3 py-2">结束时间</th></tr></thead><tbody className="divide-y divide-slate-100">{caseResults.map((item) => <tr key={item.id}><td className="px-3 py-2 font-mono">#{item.case_id}</td><td className="px-3 py-2">v{item.case_version}</td><td className="px-3 py-2">{item.status}</td><td className="px-3 py-2">{item.attempt_seq}</td><td className="max-w-xs truncate px-3 py-2 text-slate-500" title={item.result_text}>{item.result_text || '—'}</td><td className="px-3 py-2 text-slate-400">{item.ended_at ?? '—'}</td></tr>)}</tbody></table>{caseResults.length === 0 && <div className="p-3 text-center text-xs text-slate-400">该运行暂无用例结果</div>}</div>
+      </div>}
+    </div>
   </Card>;
 }

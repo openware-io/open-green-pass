@@ -58,9 +58,6 @@ func (q *MemoryQuota) Acquire(ctx context.Context, req domain.ResourceRequest) e
 	if !ok {
 		return fmt.Errorf("%w: resource=%s", ErrQuotaExceeded, req.Type)
 	}
-	if req.Units > lim.Global {
-		return ErrQuotaExceeded
-	}
 	u := q.used[req.Type]
 	if u == nil {
 		u = &resourceUsage{teams: make(map[int64]int), targets: make(map[string]int), owners: make(map[string]int)}

@@ -18,3 +18,10 @@ type QuotaPort interface {
 	Acquire(context.Context, ResourceRequest) error
 	Release(context.Context, ResourceRequest) error
 }
+
+// NoopQuotaPort keeps quota optional at composition roots that do not dispatch
+// work. Production dispatchers should replace it with a shared implementation.
+type NoopQuotaPort struct{}
+
+func (NoopQuotaPort) Acquire(context.Context, ResourceRequest) error { return nil }
+func (NoopQuotaPort) Release(context.Context, ResourceRequest) error { return nil }

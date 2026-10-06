@@ -12,7 +12,9 @@ import (
 	eapp "github.com/openware-io/open-green-pass/internal/execution/application"
 	edomain "github.com/openware-io/open-green-pass/internal/execution/domain"
 	einfra "github.com/openware-io/open-green-pass/internal/execution/infra"
-	gpPool "github.com/openware-io/open-green-pass/internal/execution/infra/pool"
+	"github.com/openware-io/open-green-pass/internal/execution/infra/pgconflict"
+	gpQuota "github.com/openware-io/open-green-pass/internal/execution/infra/quota"
+	gpRedisQuota "github.com/openware-io/open-green-pass/internal/execution/infra/redisquota"
 	gpRunner "github.com/openware-io/open-green-pass/internal/execution/infra/runner"
 	"github.com/openware-io/open-green-pass/internal/gateway"
 	"github.com/openware-io/open-green-pass/internal/gateway/middleware"
@@ -98,9 +100,27 @@ func main() {
 		log.Info("runner", "type", "mock")
 	}
 	runSvc := eapp.NewRunService(runStore, envSvc, caseReader, policySvc, runner, gen)
-	// Reference-only in-process exclusion. Replace with shared Redis/DB storage
-	// before running multiple server replicas.
-	runSvc.SetConflictPort(gpPool.NewConflictRegistry())
+	quotaClient, err := gpRedisQuota.NewClient(ctx, gpRedisQuota.ClientOptions{Address: cfg.RedisAddr, Password: os.Getenv("GP_REDIS_PASSWORD")})
+	if err != nil {
+		log.Error("init redis quota client", "error", err)
+		os.Exit(1)
+	}
+	defer quotaClient.Close()
+	runQuota, err := gpRedisQuota.New(quotaClient, map[string]gpQuota.Limits{"run": {
+		Global: config.MustInt("GP_QUOTA_RUN_GLOBAL", 50), Team: config.MustInt("GP_QUOTA_RUN_TEAM", 20),
+		Target: config.MustInt("GP_QUOTA_RUN_TARGET", 5), Owner: config.MustInt("GP_QUOTA_RUN_OWNER", 3),
+	}})
+	if err != nil {
+		log.Error("init redis quota", "error", err)
+		os.Exit(1)
+	}
+	runSvc.SetQuotaPort(runQuota)
+	conflicts, err := pgconflict.New(pool)
+	if err != nil {
+		log.Error("init postgres conflict registry", "error", err)
+		os.Exit(1)
+	}
+	runSvc.SetConflictPort(conflicts)
 
 	// 可信域依赖组装（审计哈希链 + 门禁判定 + 成本明细）
 	gateStore := tinfra.NewGateStore(trustedDB, gen)

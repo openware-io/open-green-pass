@@ -28,6 +28,7 @@ type RunService struct {
 	log      *slog.Logger
 	workflow WorkflowController
 	conflict domain.ConflictPort
+	quota    domain.QuotaPort
 	audit    domain.AuditPort
 	gate     domain.GatePort
 	report   domain.ReportPort
@@ -36,7 +37,14 @@ type RunService struct {
 
 // NewRunService 创建运行编排服务。
 func NewRunService(repo domain.RunRepository, envSvc *EnvService, cases domain.CasePort, policy domain.PolicyPort, runner domain.RunnerPort, gen *id.Generator) *RunService {
-	return &RunService{repo: repo, envSvc: envSvc, cases: cases, policy: policy, runner: runner, gen: gen, log: slog.Default(), workflow: NoopWorkflowController{}, conflict: domain.NoopConflictPort{}, audit: domain.NoopAuditPort{}, gate: domain.NoopGatePort{}, report: domain.NoopReportPort{}, cost: domain.NoopCostPort{}}
+	return &RunService{repo: repo, envSvc: envSvc, cases: cases, policy: policy, runner: runner, gen: gen, log: slog.Default(), workflow: NoopWorkflowController{}, conflict: domain.NoopConflictPort{}, quota: domain.NoopQuotaPort{}, audit: domain.NoopAuditPort{}, gate: domain.NoopGatePort{}, report: domain.NoopReportPort{}, cost: domain.NoopCostPort{}}
+}
+
+// SetQuotaPort injects the shared scheduling quota implementation.
+func (s *RunService) SetQuotaPort(port domain.QuotaPort) {
+	if port != nil {
+		s.quota = port
+	}
 }
 
 func (s *RunService) SetWorkflowController(controller WorkflowController) {
@@ -159,6 +167,21 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 	if err != nil {
 		return nil, nil, err
 	}
+	ownerID, ok := rls.UserFrom(ctx)
+	if !ok {
+		// Temporal activities created before owner propagation use the immutable
+		// run ID as an isolated owner scope. HTTP requests carry the real user ID.
+		ownerID = run.ID
+	}
+	quotaRequest := domain.ResourceRequest{TeamID: teamID, TargetID: run.TargetID, OwnerID: ownerID, Type: "run", Units: 1}
+	if err := s.quota.Acquire(ctx, quotaRequest); err != nil {
+		return nil, nil, err
+	}
+	defer func() {
+		if releaseErr := s.quota.Release(context.Background(), quotaRequest); err == nil && releaseErr != nil {
+			err = releaseErr
+		}
+	}()
 	// GP2-04 reference boundary: the target is exclusive by default. A shared
 	// implementation can use a finer resource scope without changing the
 	// application service contract.
