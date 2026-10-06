@@ -264,7 +264,7 @@ jobs:
 - **GP2-04 冲突检测 + Pause/Resume**：暂停/恢复控制边界已完成；目标级互斥已从进程内参考实现升级为 PostgreSQL session advisory lock，server/worker 跨进程共享，token 防误释放且进程退出自动释放；冲突返回 HTTP 409 并写 trusted 审计链，kind PostgreSQL 双连接排他验证通过。**当前剩余**：Temporal 多 worker 部署级并发与故障恢复验证；因此 GP2-04 DoD 尚未完成。
 - **GP2-05 截图开关策略下发 ✅ 已交付**：服务级截图开关按对象策略下发（防高并发性能开销，PRD R-TEST-13）。验证：策略生效；无截图场景证据=日志+hash。
 - **GP2-06 跨场景报告合编（PDF/Word）**：跨 run 合编查询、汇总和 HTML/Markdown 输出已完成（`POST /reports/bundle`，tenant scoped）；已新增 `POST /reports/bundle/export` 的 PDF/DOCX 下载契约、纯 Go 参考渲染器、OpenAPI 生成类型和前端客户端。**当前剩余**：真实字体/中文排版、Office/PDF 阅读器兼容性、证据资源嵌入和部署运行时集成验证；因此 GP2-06 阶段 DoD 尚未完成。
-- **GP2-07 水平扩展 P2（§10）**：server 多副本 + worker 多实例 + 调度器无状态化（P1 起无状态代码实装）。关键文件：`deploy/helm/gp`（replica）、SSE 共享订阅（Redis Pub/Sub）。验证：加副本吞吐线性上升（压测基线 §10.10）。
+- **GP2-07 水平扩展 P2（§10）**：kind Helm 已启用 server/worker 双副本，共享 Redis 原子配额和 PostgreSQL 冲突锁，滚动升级及多次 readiness 请求验证通过。**当前剩余**：SSE 共享订阅 Redis Pub/Sub、固定负载压测、吞吐/延迟线性扩展证据和故障切换演练；完成前不得宣称 GP2-07 DoD 完成。
 - **GP2-08 资源池注册 + 多执行集群**：本地资源池注册/能力选择/容量 reserve-release 参考实现已完成（`internal/execution/infra/pool`）；已补充显式心跳时间、TTL 存活筛选和心跳回归测试。**当前剩余**：Redis/PostgreSQL 持久化、跨进程心跳/租约 fencing 和真实多集群接入验证。
 
 ## 4. P3 AI 治理 + 生成管道 W1（任务级施工图）

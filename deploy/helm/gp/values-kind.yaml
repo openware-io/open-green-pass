@@ -8,6 +8,7 @@ secrets:
 
 server:
   enabled: true
+  replicas: 2
   image:
     repository: ghcr.io/openware-io/open-green-pass
     tag: v0.1.2
@@ -31,6 +32,7 @@ server:
 
 worker:
   enabled: true
+  replicas: 2
   image:
     repository: ghcr.io/openware-io/open-green-pass
     tag: v0.1.2
