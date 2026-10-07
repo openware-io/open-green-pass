@@ -14,6 +14,7 @@
 3. **口径自洽**（贯穿）：总览=Σ明细、版本可溯源、成本/审计单点计量。
 4. **依赖顺序**：P0 → P1 串行；P1 内先 governance（被测对象/用例）→ execution → trusted/AI。
 5. **部署形态与本地调试（硬约束）**：GP 全部组件（server/worker + 基础设施）以 **Helm 部署到 kind 集群内命名空间**（ns: gp 控制面+基础设施、ns: gp-runner 执行沙箱）；本地调试 = 直接部署到 kind，或 **`go run ./cmd/server` + 依赖经 kind 代理暴露后连接**（port-forward / NodePort / ingress-nginx + kind extraPortMappings）；**不使用 docker 部署形式做调试**。
+   - **发版与测试同一规范**：Docker 只负责构建并通过 `kind load docker-image` 导入节点；GP 应用不得用 `docker run`/`docker compose` 部署测试。每次发布必须经 `helm lint`、`helm template`、`helm upgrade --install --wait`、migration Job、readiness 和关键链路验证；失败必须回滚或明确标记未发布。
 6. **宿主机端口避让**：GP 依赖透传用独立宿主机端口段（PG 5433 / Redis 6380 / MinIO 9100+9101），避开 im-saas 占用（Temporal 为 GP 专属保留 7233/8080）。
 7. **里程碑确认点**：P0 完成 → 用户确认 → P1；P1 首个 SUT 闭环 → 用户验收 → P2–P4（已按任务级施工图预输出 GP2-*/GP3-*/GP4-*，按图执行，阶段 DoD → 用户验收 → 下一阶段）。
 
