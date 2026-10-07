@@ -328,7 +328,7 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 - CI 流水线：`lint+test` → `build` → `govulncheck` → `migcheck` → 镜像构建 → 推送；任一门禁失败不合并。
 - 镜像：多阶段 `Dockerfile`（builder 用固定 toolchain + `CGO_ENABLED=0` 静态二进制 + `go:embed` 打包配置/迁移/前端产物）；私有化可单二进制交付。
 - 部署：生产/私有化使用 Helm；本地和 kind 验收同样必须使用 Helm。Docker 不得作为应用部署运行时，只能用于镜像构建和 kind 导入；密钥经 Secret/受管环境注入，禁入库。
-- 发布制品命名固定为 `ghcr.io/openware-io/open-green-pass:X.Y.Z`、`ghcr.io/openware-io/open-green-pass-web:X.Y.Z`、`ghcr.io/openware-io/open-green-pass-migrate:X.Y.Z`；镜像 tag 直接使用版本号，不加 `v` 前缀。server/worker 必须使用同一后端版本，migration 必须与 schema 版本匹配。
+- 发布制品命名固定为 `ghcr.io/openware-io/open-green-pass:X.Y.Z`、`ghcr.io/openware-io/open-green-pass-web:X.Y.Z`、`ghcr.io/openware-io/open-green-pass-migrate:X.Y.Z`；镜像 tag 直接使用版本号，不加 `v` 前缀。开发/测试版本必须使用 `X.Y.Z-SNAPSHOT` 后缀（例如 `0.1.7-SNAPSHOT`），除非明确执行正式发布；正式版本才使用纯 `X.Y.Z`。server/worker 必须使用同一后端版本，migration 必须与 schema 版本匹配。
 - kind 发布记录必须包含 Git commit、镜像 tag/digest、Helm revision、迁移版本、readiness 结果和 `open-im-local` 不变更核对；缺任一项不得标记发布成功。
 - 发布后验证制品可启动、迁移成功、关键链路可观测；失败制品按策略撤回，不静默覆盖。
 
