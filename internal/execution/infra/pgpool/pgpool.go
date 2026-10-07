@@ -161,6 +161,31 @@ func (r *Registry) Release(ctx context.Context, lease Lease) error {
 	return nil
 }
 
+// Renew extends a live lease only when its fencing token still belongs to the
+// current pool generation. Expired or superseded leases cannot be resurrected.
+func (r *Registry) Renew(ctx context.Context, lease Lease, now time.Time, leaseTTL time.Duration) (Lease, error) {
+	if lease.Token == "" || lease.PoolID == "" || lease.FencingToken <= 0 || now.IsZero() || leaseTTL <= 0 {
+		return Lease{}, ErrStaleLease
+	}
+	var renewed Lease
+	renewed.Token, renewed.PoolID, renewed.Units, renewed.FencingToken = lease.Token, lease.PoolID, lease.Units, lease.FencingToken
+	renewed.ExpiresAt = now.UTC().Add(leaseTTL)
+	command, err := r.pool.Exec(ctx, `UPDATE res_res_execution_pool_lease l
+SET expires_at=$4
+FROM res_execution_pool p
+WHERE l.token=$1 AND l.pool_id=$2 AND l.fencing_token=$3
+  AND l.released_at IS NULL AND l.expires_at > $5
+  AND p.id=l.pool_id AND p.generation=l.fencing_token`,
+		lease.Token, lease.PoolID, lease.FencingToken, renewed.ExpiresAt, now.UTC())
+	if err != nil {
+		return Lease{}, fmt.Errorf("renew execution pool lease: %w", err)
+	}
+	if command.RowsAffected() == 0 {
+		return Lease{}, ErrStaleLease
+	}
+	return renewed, nil
+}
+
 func validateRegistration(registration resourcepool.Registration) error {
 	if registration.ID == "" || registration.Cluster == "" || registration.Capacity <= 0 || registration.Available < 0 || registration.Available > registration.Capacity || len(registration.Resources) == 0 {
 		return resourcepool.ErrPoolUnavailable

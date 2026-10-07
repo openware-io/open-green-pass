@@ -1,6 +1,9 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // ExecutionPoolRequest describes shared capacity required by a run.
 type ExecutionPoolRequest struct {
@@ -14,10 +17,12 @@ type ExecutionPoolLease struct {
 	PoolID       string
 	Units        int
 	FencingToken int64
+	ExpiresAt    time.Time
 }
 
 // ExecutionPoolPort selects and releases shared runner capacity.
 type ExecutionPoolPort interface {
 	Reserve(context.Context, ExecutionPoolRequest) (ExecutionPoolLease, error)
+	Renew(context.Context, ExecutionPoolLease) (ExecutionPoolLease, error)
 	Release(context.Context, ExecutionPoolLease) error
 }

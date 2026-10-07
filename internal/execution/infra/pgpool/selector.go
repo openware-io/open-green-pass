@@ -38,3 +38,12 @@ func (s *Selector) Reserve(ctx context.Context, request domain.ExecutionPoolRequ
 func (s *Selector) Release(ctx context.Context, lease domain.ExecutionPoolLease) error {
 	return s.registry.Release(ctx, Lease{Token: lease.Token, PoolID: lease.PoolID, Units: lease.Units, FencingToken: lease.FencingToken})
 }
+
+func (s *Selector) Renew(ctx context.Context, lease domain.ExecutionPoolLease) (domain.ExecutionPoolLease, error) {
+	renewed, err := s.registry.Renew(ctx, Lease{Token: lease.Token, PoolID: lease.PoolID, Units: lease.Units, FencingToken: lease.FencingToken}, s.now().UTC(), s.config.LeaseTTL)
+	if err != nil {
+		return domain.ExecutionPoolLease{}, err
+	}
+	lease.ExpiresAt = renewed.ExpiresAt
+	return lease, nil
+}

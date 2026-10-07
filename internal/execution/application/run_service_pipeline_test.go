@@ -66,6 +66,10 @@ func (p *pipelinePool) Release(_ context.Context, lease domain.ExecutionPoolLeas
 	return nil
 }
 
+func (p *pipelinePool) Renew(_ context.Context, lease domain.ExecutionPoolLease) (domain.ExecutionPoolLease, error) {
+	return lease, nil
+}
+
 type pipelineGate struct{ calls []int64 }
 
 func (g *pipelineGate) Evaluate(_ context.Context, runID int64) (domain.GateDecision, error) {
