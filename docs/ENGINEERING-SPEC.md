@@ -314,7 +314,7 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 - `.env` 是版本控制中的共享本地开发基线（映射 im：环境差异用受管环境变量覆盖，生产/共享凭据不入库）；`.env.example` 提供模板。
 - 本地一键调试：GP 组件以 **Helm 部署到 kind 集群内命名空间（ns: gp）**；本地调试 = 直接部署到 kind，或 `go run ./cmd/server` + 依赖经 kind 代理暴露后连接（port-forward / NodePort / ingress-nginx + kind extraPortMappings）。**不使用 docker 部署形态做调试**；`docker-compose` 仅保留给本机 testcontainers（集成测试回退，非首选）。
 - 本地测试部署唯一来源是 Helm：禁止用独立 `docker run`、`docker compose up` 或手工 `kubectl apply` 替代 GP 应用部署；基础设施和应用必须落在 `gp`/`gp-runner`，不得修改 `open-im-local` 工作负载。
-- Docker 的本地职责仅限构建镜像和 `kind load docker-image`；镜像必须使用正式仓库命名和不可变版本 tag，禁止使用 `latest`、临时镜像名或未记录的本地镜像运行测试。
+- Docker 的本地职责仅限构建 GreenPass 自研镜像和 `kind load docker-image`；GreenPass 自研镜像必须使用正式仓库命名和版本 tag，禁止使用 `latest`、临时镜像名或未记录的本地镜像运行测试。PostgreSQL、Redis、Temporal、SeaweedFS、Nginx 等中间件/第三方组件沿用其官方发布、兼容性和供应链规范，不套用 GreenPass 自研镜像命名规则。
 - 每次本地测试发布必须执行：构建 server/worker/web/migrate 镜像 → 加载 kind 所有节点 → `helm lint`/`helm template` → `helm upgrade --install --wait` → 迁移 Job → readiness/关键链路检查 → 失败时 Helm 回滚；不得绕过 Helm 直接替换 Pod。
 - 宿主机透传端口避让同环境既有服务（PG 5433 / Redis 6380 / 对象存储(SeaweedFS) 9100 / Temporal 专属 7233+8080）；`.env` 指向宿主机端口。
 - 调试输出统一 `.outputs/logs/`；禁把临时日志写仓库根。
