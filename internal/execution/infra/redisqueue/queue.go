@@ -134,6 +134,29 @@ func (q *Queue) Ack(ctx context.Context, jobs ...domain.ClaimedScheduleJob) erro
 	_, e := p.Exec(ctx)
 	return e
 }
+
+// DeadLetter preserves an unprocessable delivery before acknowledging it.
+func (q *Queue) DeadLetter(ctx context.Context, reason string, jobs ...domain.ClaimedScheduleJob) error {
+	if reason == "" || len(jobs) == 0 {
+		return domain.ErrInvalidScheduleJob
+	}
+	p := q.client.TxPipeline()
+	ids := make([]string, len(jobs))
+	for i, job := range jobs {
+		if job.ID == "" || job.DeliveryID == "" {
+			return domain.ErrInvalidScheduleJob
+		}
+		ids[i] = job.DeliveryID
+		p.XAdd(ctx, &redis.XAddArgs{Stream: q.deadLetter(), Values: map[string]any{
+			"id": job.ID, "team": job.TeamID, "delivery": job.DeliveryID,
+			"reason": reason, "payload": string(job.Payload), "created": job.CreatedAt.UnixNano(),
+		}})
+		p.Set(ctx, q.state(job.ID), "dead-letter", 0)
+	}
+	p.XAck(ctx, q.stream(), q.group, ids...)
+	_, err := p.Exec(ctx)
+	return err
+}
 func decode(ms []redis.XMessage) ([]domain.ClaimedScheduleJob, error) {
 	o := make([]domain.ClaimedScheduleJob, 0, len(ms))
 	for _, m := range ms {
@@ -158,6 +181,7 @@ func (q *Queue) wfq() string            { return q.prefix + ":wfq" }
 func (q *Queue) stream() string         { return q.prefix + ":stream" }
 func (q *Queue) job(id string) string   { return q.prefix + ":job:" + id }
 func (q *Queue) state(id string) string { return q.prefix + ":state:" + id }
+func (q *Queue) deadLetter() string     { return q.prefix + ":dead-letter" }
 func busy(e error) bool                 { return len(e.Error()) >= 9 && e.Error()[:9] == "BUSYGROUP" }
 
 var _ domain.ScheduleQueuePort = (*Queue)(nil)

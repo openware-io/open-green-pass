@@ -31,6 +31,11 @@ func (q *scheduleQueueStub) Ack(_ context.Context, jobs ...domain.ClaimedSchedul
 	return nil
 }
 
+func (q *scheduleQueueStub) DeadLetter(_ context.Context, _ string, jobs ...domain.ClaimedScheduleJob) error {
+	q.acked = append(q.acked, jobs...)
+	return nil
+}
+
 type workflowStarterStub struct {
 	err           error
 	runID, teamID int64

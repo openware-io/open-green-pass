@@ -28,4 +28,5 @@ type ScheduleQueuePort interface {
 	Claim(context.Context, string, int, time.Duration) ([]ClaimedScheduleJob, error)
 	Recover(context.Context, string, int, time.Duration) ([]ClaimedScheduleJob, error)
 	Ack(context.Context, ...ClaimedScheduleJob) error
+	DeadLetter(context.Context, string, ...ClaimedScheduleJob) error
 }
