@@ -39,6 +39,22 @@ type RetryPolicy struct {
 	BaseDelay   time.Duration
 }
 
+// ApplyFailure computes the next durable delivery state without performing an
+// external call. Once the attempt budget is exhausted the delivery is terminal
+// and must not be claimed again.
+func (p RetryPolicy) ApplyFailure(delivery domain.OutboxDelivery, reason string, now time.Time) (domain.OutboxDelivery, bool) {
+	delivery.LastError = reason
+	next, ok := p.Next(delivery.Attempt, now)
+	if !ok {
+		delivery.Status = domain.DeliveryFailed
+		delivery.NextAttemptAt = time.Time{}
+		return delivery, false
+	}
+	delivery.Status = domain.DeliveryPending
+	delivery.NextAttemptAt = next
+	return delivery, true
+}
+
 func (p RetryPolicy) Next(attempt int, now time.Time) (time.Time, bool) {
 	if p.MaxAttempts <= 0 || attempt >= p.MaxAttempts {
 		return time.Time{}, false
