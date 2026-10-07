@@ -183,7 +183,13 @@ func main() {
 	allowHeaderFallback := cfg.Env != "prod" && os.Getenv("GP_ALLOW_HEADER_AUTH") == "true"
 	handler := gateway.NewRouterWithAuth(log, nil, allowHeaderFallback,
 		func(mux *http.ServeMux) {
-			gateway.RegisterSystem(mux, gateway.SystemStatus{Ready: func(ctx context.Context) error { return pool.Ping(ctx) }, Metrics: metricsRecorder})
+			gateway.RegisterSystem(mux, gateway.SystemStatus{
+				Ready: func(ctx context.Context) error { return pool.Ping(ctx) },
+				Checks: map[string]gateway.SystemChecker{
+					"redis": func(ctx context.Context) error { return scheduleClient.Ping(ctx).Err() },
+				},
+				Metrics: metricsRecorder,
+			})
 		},
 		func(mux *http.ServeMux) { gapi.RegisterAuthorized(mux, treeSvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { gapi.RegisterCasesAuthorized(mux, caseSvc, iamAuthorizer) },

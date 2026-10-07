@@ -105,6 +105,9 @@ func (d *ScheduleDispatcher) consume(ctx context.Context, recoverPending bool) e
 		var payload scheduledRun
 		if err := json.Unmarshal(job.Payload, &payload); err != nil || payload.RunID <= 0 || payload.TeamID <= 0 || payload.TeamID != job.TeamID {
 			d.log.Error("invalid scheduled run payload", "job_id", job.ID, "delivery_id", job.DeliveryID, "err", err)
+			if ackErr := d.queue.Ack(ctx, job); ackErr != nil {
+				return fmt.Errorf("ack invalid scheduled run %s: %w", job.ID, ackErr)
+			}
 			continue
 		}
 		if err := d.starter.Start(ctx, payload.RunID, payload.TeamID); err != nil {
