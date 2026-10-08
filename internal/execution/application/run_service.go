@@ -20,28 +20,29 @@ var ErrResourceConflict = domain.ErrResourceConflict
 
 // RunService 运行编排应用服务实现。
 type RunService struct {
-	repo     domain.RunRepository
-	envSvc   *EnvService
-	cases    domain.CasePort
-	policy   domain.PolicyPort
-	runner   domain.RunnerPort
-	gen      *id.Generator
-	log      *slog.Logger
-	workflow WorkflowController
-	conflict domain.ConflictPort
-	quota    domain.QuotaPort
-	audit    domain.AuditPort
-	gate     domain.GatePort
-	report   domain.ReportPort
-	cost     domain.CostPort
-	events   domain.RunEventBus
-	pool     domain.ExecutionPoolPort
-	schedule domain.ScheduleQueuePort
+	repo               domain.RunRepository
+	envSvc             *EnvService
+	cases              domain.CasePort
+	policy             domain.PolicyPort
+	runner             domain.RunnerPort
+	gen                *id.Generator
+	log                *slog.Logger
+	workflow           WorkflowController
+	conflict           domain.ConflictPort
+	quota              domain.QuotaPort
+	audit              domain.AuditPort
+	gate               domain.GatePort
+	report             domain.ReportPort
+	cost               domain.CostPort
+	events             domain.RunEventBus
+	pool               domain.ExecutionPoolPort
+	schedule           domain.ScheduleQueuePort
+	leaseRenewInterval time.Duration
 }
 
 // NewRunService 创建运行编排服务。
 func NewRunService(repo domain.RunRepository, envSvc *EnvService, cases domain.CasePort, policy domain.PolicyPort, runner domain.RunnerPort, gen *id.Generator) *RunService {
-	return &RunService{repo: repo, envSvc: envSvc, cases: cases, policy: policy, runner: runner, gen: gen, log: slog.Default(), workflow: NoopWorkflowController{}, conflict: domain.NoopConflictPort{}, quota: domain.NoopQuotaPort{}, audit: domain.NoopAuditPort{}, gate: domain.NoopGatePort{}, report: domain.NoopReportPort{}, cost: domain.NoopCostPort{}}
+	return &RunService{repo: repo, envSvc: envSvc, cases: cases, policy: policy, runner: runner, gen: gen, log: slog.Default(), workflow: NoopWorkflowController{}, conflict: domain.NoopConflictPort{}, quota: domain.NoopQuotaPort{}, audit: domain.NoopAuditPort{}, gate: domain.NoopGatePort{}, report: domain.NoopReportPort{}, cost: domain.NoopCostPort{}, leaseRenewInterval: 30 * time.Second}
 }
 
 // SetQuotaPort injects the shared scheduling quota implementation.
@@ -54,6 +55,14 @@ func (s *RunService) SetQuotaPort(port domain.QuotaPort) {
 func (s *RunService) SetWorkflowController(controller WorkflowController) {
 	if controller != nil {
 		s.workflow = controller
+	}
+}
+
+// SetLeaseRenewInterval is intended for controlled deployment tuning and
+// deterministic tests; production should keep the default below the lease TTL.
+func (s *RunService) SetLeaseRenewInterval(interval time.Duration) {
+	if interval > 0 {
+		s.leaseRenewInterval = interval
 	}
 }
 
@@ -283,8 +292,10 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 		}
 	}()
 
-	// 执行（P1 MockRunner；K8s Job Runner 接管真实执行）
-	results, err = s.runner.Execute(ctx, spec)
+	// Keep shared resource leases alive while a real runner is executing. A
+	// stale fencing generation cancels the runner instead of allowing an old
+	// worker to continue using capacity after takeover.
+	results, err = s.executeWithLeaseRenewal(ctx, spec, poolLeases)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -353,6 +364,54 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 		return nil, nil, err
 	}
 	return run, results, nil
+}
+
+func (s *RunService) executeWithLeaseRenewal(ctx context.Context, specs []*domain.CaseSpec, leases []domain.ExecutionPoolLease) ([]*domain.CaseResult, error) {
+	if len(leases) == 0 || s.pool == nil {
+		return s.runner.Execute(ctx, specs)
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	renewErr := make(chan error, 1)
+	renewCtx, stopRenew := context.WithCancel(context.Background())
+	defer stopRenew()
+	go func() {
+		interval := s.leaseRenewInterval
+		if interval <= 0 {
+			interval = 30 * time.Second
+		}
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-renewCtx.Done():
+				return
+			case <-ticker.C:
+				for i := range leases {
+					lease, err := s.pool.Renew(renewCtx, leases[i])
+					if err != nil {
+						select {
+						case renewErr <- fmt.Errorf("renew execution pool lease %s: %w", leases[i].Token, err):
+						default:
+						}
+						cancel()
+						return
+					}
+					leases[i] = lease
+				}
+			}
+		}
+	}()
+	results, err := s.runner.Execute(runCtx, specs)
+	select {
+	case leaseErr := <-renewErr:
+		return nil, leaseErr
+	default:
+	}
+	if err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 func (s *RunService) reserveExecutionPools(ctx context.Context, specs []*domain.CaseSpec) ([]domain.ExecutionPoolLease, error) {
