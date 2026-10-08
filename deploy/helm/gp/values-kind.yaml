@@ -12,7 +12,7 @@ migration:
   enabled: true
   image:
     repository: ghcr.io/openware-io/open-green-pass-migrate
-    tag: 0.1.9-SNAPSHOT
+    tag: 0.1.10-SNAPSHOT
     pullPolicy: Never
   resources:
     requests: { cpu: 50m, memory: 64Mi }
@@ -23,13 +23,13 @@ server:
   replicas: 2
   image:
     repository: ghcr.io/openware-io/open-green-pass
-    tag: 0.1.9-SNAPSHOT
+    tag: 0.1.10-SNAPSHOT
     pullPolicy: Never
   env:
     GP_ADDR: ":8080"
     GP_ENV: dev
     GP_ALLOW_HEADER_AUTH: "true"
-    GP_BUILD_REVISION: "0.1.9-SNAPSHOT"
+    GP_BUILD_REVISION: "0.1.10-SNAPSHOT"
     GP_RUNNER_TYPE: k8s
     GP_RUNNER_NS: gp-runner
     GP_RUNNER_IMAGE: curlimages/curl:8.10.1
@@ -47,7 +47,7 @@ worker:
   replicas: 2
   image:
     repository: ghcr.io/openware-io/open-green-pass
-    tag: 0.1.9-SNAPSHOT
+    tag: 0.1.10-SNAPSHOT
     pullPolicy: Never
   env:
     GP_CICD_PROVIDER: ""
@@ -57,7 +57,7 @@ worker:
     GP_CICD_CLAIM_TIMEOUT_SECONDS: "120"
     GP_ENV: dev
     GP_ALLOW_HEADER_AUTH: "true"
-    GP_BUILD_REVISION: "0.1.9-SNAPSHOT"
+    GP_BUILD_REVISION: "0.1.10-SNAPSHOT"
     GP_RUNNER_TYPE: k8s
     GP_RUNNER_NS: gp-runner
     GP_RUNNER_IMAGE: curlimages/curl:8.10.1
@@ -74,7 +74,7 @@ web:
   enabled: true
   image:
     repository: ghcr.io/openware-io/open-green-pass-web
-    tag: 0.1.9-SNAPSHOT
+    tag: 0.1.10-SNAPSHOT
     pullPolicy: Never
   env:
     VITE_GP_API_BASE: /api
