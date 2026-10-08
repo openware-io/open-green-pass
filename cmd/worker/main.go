@@ -15,6 +15,8 @@ import (
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 
+	cicdapp "github.com/openware-io/open-green-pass/internal/cicd/application"
+	cicdinfra "github.com/openware-io/open-green-pass/internal/cicd/infra"
 	eapp "github.com/openware-io/open-green-pass/internal/execution/application"
 	edomain "github.com/openware-io/open-green-pass/internal/execution/domain"
 	einfra "github.com/openware-io/open-green-pass/internal/execution/infra"
@@ -197,6 +199,34 @@ func main() {
 		if err := dispatcher.Run(workerCtx); err != nil {
 			log.Error("schedule dispatcher stopped", "error", err)
 			stop()
+		}
+	}()
+
+	// CI outbox delivery is enabled only when an explicit webhook endpoint is
+	// configured. Missing configuration is a real unavailable-provider state;
+	// it is never treated as a successful delivery.
+	cicdStore := cicdinfra.NewOutboxStore(dbb)
+	connectors := map[string]cicdapp.Connector{}
+	if webhookURL := os.Getenv("GP_CICD_WEBHOOK_URL"); webhookURL != "" {
+		connectors[os.Getenv("GP_CICD_PROVIDER")] = cicdinfra.WebhookConnector{URL: webhookURL}
+	}
+	cicdDispatcher := &cicdapp.Dispatcher{
+		Outbox: cicdStore, Connectors: connectors,
+		Retry:        cicdapp.RetryPolicy{MaxAttempts: config.MustInt("GP_CICD_MAX_ATTEMPTS", 5), BaseDelay: time.Duration(config.MustInt("GP_CICD_RETRY_BASE_SECONDS", 5)) * time.Second},
+		ClaimTimeout: time.Duration(config.MustInt("GP_CICD_CLAIM_TIMEOUT_SECONDS", 120)) * time.Second,
+	}
+	go func() {
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-workerCtx.Done():
+				return
+			case <-ticker.C:
+				if _, err := cicdDispatcher.DispatchOne(workerCtx); err != nil {
+					log.Error("cicd outbox dispatch failed", "error", err)
+				}
+			}
 		}
 	}()
 

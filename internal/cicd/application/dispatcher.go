@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/openware-io/open-green-pass/internal/cicd/domain"
+	"github.com/openware-io/open-green-pass/internal/platform/rls"
 )
 
 var ErrConnectorUnavailable = errors.New("cicd: connector unavailable")
@@ -48,14 +49,17 @@ func (d *Dispatcher) DispatchOne(ctx context.Context) (bool, error) {
 	if delivery == nil {
 		return false, nil
 	}
+	// Claiming is a worker-only global operation. Every tenant-owned status
+	// update below re-enters the delivery's RLS scope.
+	deliveryCtx := rls.WithTenant(ctx, delivery.TeamID)
 	connector := d.Connectors[delivery.Provider]
 	if connector == nil {
-		return true, d.fail(ctx, *delivery, ErrConnectorUnavailable.Error(), now)
+		return true, d.fail(deliveryCtx, *delivery, ErrConnectorUnavailable.Error(), now)
 	}
 	if err := connector.Deliver(*delivery); err != nil {
-		return true, d.fail(ctx, *delivery, err.Error(), now)
+		return true, d.fail(deliveryCtx, *delivery, err.Error(), now)
 	}
-	if err := d.Outbox.MarkDelivered(ctx, delivery.DeliveryKey); err != nil {
+	if err := d.Outbox.MarkDelivered(deliveryCtx, delivery.DeliveryKey); err != nil {
 		return true, fmt.Errorf("mark delivery %s delivered: %w", delivery.DeliveryKey, err)
 	}
 	return true, nil

@@ -36,6 +36,7 @@ type OutboxDelivery struct {
 	NextAttemptAt time.Time
 	Status        DeliveryStatus
 	LastError     string
+	Payload       []byte
 }
 
 func (d InboxDelivery) Validate() error {

@@ -50,6 +50,11 @@ worker:
     tag: 0.1.6-SNAPSHOT
     pullPolicy: Never
   env:
+    GP_CICD_PROVIDER: ""
+    GP_CICD_WEBHOOK_URL: ""
+    GP_CICD_MAX_ATTEMPTS: "5"
+    GP_CICD_RETRY_BASE_SECONDS: "5"
+    GP_CICD_CLAIM_TIMEOUT_SECONDS: "120"
     GP_ENV: dev
     GP_ALLOW_HEADER_AUTH: "true"
     GP_BUILD_REVISION: "0.1.6-SNAPSHOT"

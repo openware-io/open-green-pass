@@ -24,34 +24,27 @@ func (s *OutboxStore) Enqueue(ctx context.Context, d domain.OutboxDelivery) erro
 		return err
 	}
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO cicd_outbox(team_id,event_id,delivery_key,provider,attempt,next_attempt_at,status,last_error)
-VALUES($1,$2,$3,$4,$5,COALESCE(NULLIF($6,'epoch'::timestamptz),now()),$7,$8)
-ON CONFLICT(team_id,delivery_key) DO NOTHING`, d.TeamID, d.EventID, d.DeliveryKey, d.Provider, d.Attempt, d.NextAttemptAt, d.Status, d.LastError)
+		_, err := tx.Exec(ctx, `INSERT INTO cicd_outbox(team_id,event_id,delivery_key,provider,attempt,next_attempt_at,status,last_error,payload)
+VALUES($1,$2,$3,$4,$5,COALESCE(NULLIF($6,'epoch'::timestamptz),now()),$7,$8,$9)
+ON CONFLICT(team_id,delivery_key) DO NOTHING`, d.TeamID, d.EventID, d.DeliveryKey, d.Provider, d.Attempt, d.NextAttemptAt, d.Status, d.LastError, d.Payload)
 		return err
 	})
 }
 
 func (s *OutboxStore) Claim(ctx context.Context, now time.Time) (*domain.OutboxDelivery, error) {
 	var delivery *domain.OutboxDelivery
-	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		row := tx.QueryRow(ctx, `WITH next AS (
-SELECT id FROM cicd_outbox WHERE status='pending' AND next_attempt_at <= $1 ORDER BY next_attempt_at,id FOR UPDATE SKIP LOCKED LIMIT 1
-) UPDATE cicd_outbox o SET status='dispatching', attempt=o.attempt+1, claimed_at=$1, updated_at=now()
-FROM next WHERE o.id=next.id
-RETURNING o.team_id,o.event_id,o.delivery_key,o.provider,o.attempt,o.next_attempt_at,o.status,o.last_error`, now.UTC())
-		item := &domain.OutboxDelivery{}
-		if err := row.Scan(&item.TeamID, &item.EventID, &item.DeliveryKey, &item.Provider, &item.Attempt, &item.NextAttemptAt, &item.Status, &item.LastError); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return nil
-			}
-			return err
+	// Claim is intentionally a worker-only cross-tenant operation. It invokes the
+	// migration-owned, narrowly scoped SECURITY DEFINER function; end-user paths
+	// use the RLS-scoped Enqueue/Mark methods instead.
+	row := s.db.Pool().QueryRow(ctx, `SELECT team_id,event_id,delivery_key,provider,attempt,next_attempt_at,status,last_error,payload FROM gp.claim_cicd_outbox($1)`, now.UTC())
+	item := &domain.OutboxDelivery{}
+	if err := row.Scan(&item.TeamID, &item.EventID, &item.DeliveryKey, &item.Provider, &item.Attempt, &item.NextAttemptAt, &item.Status, &item.LastError, &item.Payload); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
 		}
-		delivery = item
-		return nil
-	})
-	if err != nil {
 		return nil, fmt.Errorf("claim cicd outbox: %w", err)
 	}
+	delivery = item
 	return delivery, nil
 }
 
