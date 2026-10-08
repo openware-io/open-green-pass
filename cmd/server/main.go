@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	redis "github.com/redis/go-redis/v9"
+	temporalclient "go.temporal.io/sdk/client"
 
 	eapi "github.com/openware-io/open-green-pass/internal/execution/api"
 	eapp "github.com/openware-io/open-green-pass/internal/execution/application"
@@ -140,6 +141,14 @@ func main() {
 		os.Exit(1)
 	}
 	runSvc.SetScheduleQueue(scheduleQueue)
+	temporalCtx, temporalCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	temporalClient, err := temporalclient.DialContext(temporalCtx, temporalclient.Options{HostPort: cfg.TemporalAddr})
+	temporalCancel()
+	if err != nil {
+		log.Error("init temporal client", "error", err)
+		os.Exit(1)
+	}
+	defer temporalClient.Close()
 	runEventBus, err := gpRedisRunBus.New(ctx, cfg.RedisAddr, os.Getenv("GP_REDIS_PASSWORD"))
 	if err != nil {
 		log.Error("init redis run event bus", "error", err)
@@ -186,7 +195,8 @@ func main() {
 			gateway.RegisterSystem(mux, gateway.SystemStatus{
 				Ready: func(ctx context.Context) error { return pool.Ping(ctx) },
 				Checks: map[string]gateway.SystemChecker{
-					"redis": func(ctx context.Context) error { return scheduleClient.Ping(ctx).Err() },
+					"redis":    func(ctx context.Context) error { return scheduleClient.Ping(ctx).Err() },
+					"temporal": func(ctx context.Context) error { _, err := temporalClient.CheckHealth(ctx, nil); return err },
 				},
 				Metrics: metricsRecorder,
 			})
