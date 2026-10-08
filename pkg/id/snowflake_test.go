@@ -56,8 +56,8 @@ func TestNextConcurrent(t *testing.T) {
 }
 
 func TestInvalidNode(t *testing.T) {
-	if _, err := New(1024, clock.System()); err == nil {
-		t.Fatal("node=1024 应报错")
+	if _, err := New(8, clock.System()); err == nil {
+		t.Fatal("node=8 应报错")
 	}
 }
 
@@ -76,6 +76,19 @@ func TestMonotonicWithinMs(t *testing.T) {
 			t.Fatalf("非单调: %d <= %d", cur, prev)
 		}
 		prev = cur
+	}
+}
+
+func TestNextRemainsJavaScriptSafe(t *testing.T) {
+	g, err := New(1, clock.System())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const maxSafeInteger = int64(1<<53 - 1)
+	for i := 0; i < 10_000; i++ {
+		if got := g.Next(); got <= 0 || got > maxSafeInteger {
+			t.Fatalf("id %d is not safe for a JavaScript Number", got)
+		}
 	}
 }
 

@@ -10,10 +10,19 @@ import (
 )
 
 const (
-	nodeBits  uint64 = 10 // 1024 个节点
+	// The 53-bit total layout keeps IDs exact in browser JSON clients while
+	// retaining a 8.7-year millisecond clock from the 2024 epoch.
+	nodeBits  uint64 = 3  // 8 nodes
 	seqBits   uint64 = 12 // 每毫秒 4096 序列
+	// JavaScript clients use IEEE-754 numbers. Keep every externally visible
+	// identifier within Number.MAX_SAFE_INTEGER (2^53-1): 38 timestamp bits +
+	// 3 node bits + 12 sequence bits. With the 2024 epoch this remains valid
+	// until 2032, which is preferable to emitting values browsers silently
+	// round and then send back as a different resource ID.
+	timeBits  uint64 = 38
 	nodeMax   int64  = -1 ^ (-1 << nodeBits)
 	seqMask   int64  = -1 ^ (-1 << seqBits)
+	timeMax   int64  = -1 ^ (-1 << timeBits)
 	timeShift        = nodeBits + seqBits
 	nodeShift        = seqBits
 	// epoch = 2024-01-01 00:00:00 UTC（毫秒）
@@ -54,6 +63,9 @@ func (g *Generator) Next() int64 {
 	// 时钟回拨：沿用 last，保证时间戳不倒退、ID 单调不重复。
 	if now < g.last {
 		now = g.last
+	}
+	if now > timeMax {
+		panic("id: timestamp exceeds JavaScript-safe snowflake range")
 	}
 	if now == g.last {
 		g.seq++
