@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"errors"
 	"time"
 )
@@ -11,9 +12,10 @@ var ErrDuplicateDelivery = errors.New("cicd: duplicate delivery")
 type DeliveryStatus string
 
 const (
-	DeliveryPending   DeliveryStatus = "pending"
-	DeliveryDelivered DeliveryStatus = "delivered"
-	DeliveryFailed    DeliveryStatus = "failed"
+	DeliveryPending     DeliveryStatus = "pending"
+	DeliveryDispatching DeliveryStatus = "dispatching"
+	DeliveryDelivered   DeliveryStatus = "delivered"
+	DeliveryFailed      DeliveryStatus = "failed"
 )
 
 type InboxDelivery struct {
@@ -47,7 +49,7 @@ func (d OutboxDelivery) Validate() error {
 		return ErrInvalidDelivery
 	}
 	switch d.Status {
-	case DeliveryPending, DeliveryDelivered, DeliveryFailed:
+	case DeliveryPending, DeliveryDispatching, DeliveryDelivered, DeliveryFailed:
 		return nil
 	}
 	return ErrInvalidDelivery
@@ -55,10 +57,10 @@ func (d OutboxDelivery) Validate() error {
 
 type InboxPort interface{ Accept(InboxDelivery) error }
 type OutboxPort interface {
-	Enqueue(OutboxDelivery) error
-	Claim(time.Time) (*OutboxDelivery, error)
-	MarkDelivered(string) error
-	MarkFailed(string, string, time.Time) error
+	Enqueue(context.Context, OutboxDelivery) error
+	Claim(context.Context, time.Time) (*OutboxDelivery, error)
+	MarkDelivered(context.Context, string) error
+	MarkFailed(context.Context, string, string, time.Time) error
 }
 
 // SignatureVerifier authenticates the raw provider payload before decoding it.

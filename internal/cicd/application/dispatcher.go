@@ -1,6 +1,7 @@
 package application
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -26,7 +27,7 @@ type Dispatcher struct {
 	Now        func() time.Time
 }
 
-func (d *Dispatcher) DispatchOne() (bool, error) {
+func (d *Dispatcher) DispatchOne(ctx context.Context) (bool, error) {
 	if d == nil || d.Outbox == nil {
 		return false, ErrConnectorUnavailable
 	}
@@ -34,7 +35,7 @@ func (d *Dispatcher) DispatchOne() (bool, error) {
 	if d.Now != nil {
 		now = d.Now().UTC()
 	}
-	delivery, err := d.Outbox.Claim(now)
+	delivery, err := d.Outbox.Claim(ctx, now)
 	if err != nil {
 		return false, fmt.Errorf("claim outbox delivery: %w", err)
 	}
@@ -43,23 +44,23 @@ func (d *Dispatcher) DispatchOne() (bool, error) {
 	}
 	connector := d.Connectors[delivery.Provider]
 	if connector == nil {
-		return true, d.fail(*delivery, ErrConnectorUnavailable.Error(), now)
+		return true, d.fail(ctx, *delivery, ErrConnectorUnavailable.Error(), now)
 	}
 	if err := connector.Deliver(*delivery); err != nil {
-		return true, d.fail(*delivery, err.Error(), now)
+		return true, d.fail(ctx, *delivery, err.Error(), now)
 	}
-	if err := d.Outbox.MarkDelivered(delivery.DeliveryKey); err != nil {
+	if err := d.Outbox.MarkDelivered(ctx, delivery.DeliveryKey); err != nil {
 		return true, fmt.Errorf("mark delivery %s delivered: %w", delivery.DeliveryKey, err)
 	}
 	return true, nil
 }
 
-func (d *Dispatcher) fail(delivery domain.OutboxDelivery, reason string, now time.Time) error {
+func (d *Dispatcher) fail(ctx context.Context, delivery domain.OutboxDelivery, reason string, now time.Time) error {
 	updated, retry := d.Retry.ApplyFailure(delivery, reason, now)
 	if retry {
-		return d.Outbox.MarkFailed(updated.DeliveryKey, updated.LastError, updated.NextAttemptAt)
+		return d.Outbox.MarkFailed(ctx, updated.DeliveryKey, updated.LastError, updated.NextAttemptAt)
 	}
 	// OutboxPort has one failure method; a zero retry time is the durable
 	// terminal marker and implementations must persist status=failed.
-	return d.Outbox.MarkFailed(updated.DeliveryKey, updated.LastError, time.Time{})
+	return d.Outbox.MarkFailed(ctx, updated.DeliveryKey, updated.LastError, time.Time{})
 }

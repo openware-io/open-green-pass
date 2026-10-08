@@ -263,6 +263,7 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 | Trusted | 审计哈希链 | `aud_` | `aud_event`（append-only） |
 | Trusted | 测试证据 | `evd_` | `evd_evidence`（元数据，文件在 S3） |
 | — | 时序（趋势） | `ts_` | `ts_cost_trend`（hypertable） |
+| Platform | CI 连接与投递 | `cicd_` | `cicd_outbox`、`cicd_delivery` |
 
 ### 8.3 表/索引/审计字段
 

@@ -1,6 +1,7 @@
 package application
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -39,20 +40,20 @@ func TestMemoryOutboxRetryAndIdempotency(t *testing.T) {
 	o := NewMemoryOutbox()
 	now := time.Unix(0, 0)
 	d := domain.OutboxDelivery{TeamID: 1, EventID: "e1", DeliveryKey: "k1", Provider: "fake", Status: domain.DeliveryPending}
-	if err := o.Enqueue(d); err != nil {
+	if err := o.Enqueue(context.Background(), d); err != nil {
 		t.Fatal(err)
 	}
-	if err := o.Enqueue(d); err != domain.ErrDuplicateDelivery {
+	if err := o.Enqueue(context.Background(), d); err != domain.ErrDuplicateDelivery {
 		t.Fatalf("duplicate=%v", err)
 	}
-	claimed, err := o.Claim(now)
+	claimed, err := o.Claim(context.Background(), now)
 	if err != nil || claimed == nil || claimed.Attempt != 1 {
 		t.Fatalf("claim=%+v err=%v", claimed, err)
 	}
-	if err := o.MarkFailed("k1", "503", now.Add(time.Minute)); err != nil {
+	if err := o.MarkFailed(context.Background(), "k1", "503", now.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	if claimed, _ := o.Claim(now); claimed != nil {
+	if claimed, _ := o.Claim(context.Background(), now); claimed != nil {
 		t.Fatal("claimed before retry time")
 	}
 }
@@ -66,31 +67,31 @@ func (c *connectorStub) Deliver(domain.OutboxDelivery) error { c.calls++; return
 
 func TestDispatcherDeliversAndMarksSuccess(t *testing.T) {
 	o := NewMemoryOutbox()
-	if err := o.Enqueue(domain.OutboxDelivery{TeamID: 1, EventID: "e1", DeliveryKey: "k1", Provider: "fake", Status: domain.DeliveryPending}); err != nil {
+	if err := o.Enqueue(context.Background(), domain.OutboxDelivery{TeamID: 1, EventID: "e1", DeliveryKey: "k1", Provider: "fake", Status: domain.DeliveryPending}); err != nil {
 		t.Fatal(err)
 	}
 	c := &connectorStub{}
 	d := &Dispatcher{Outbox: o, Connectors: map[string]Connector{"fake": c}, Retry: RetryPolicy{MaxAttempts: 3}, Now: func() time.Time { return time.Unix(10, 0) }}
-	claimed, err := d.DispatchOne()
+	claimed, err := d.DispatchOne(context.Background())
 	if err != nil || !claimed || c.calls != 1 {
 		t.Fatalf("claimed=%v calls=%d err=%v", claimed, c.calls, err)
 	}
-	if next, _ := o.Claim(time.Unix(20, 0)); next != nil {
+	if next, _ := o.Claim(context.Background(), time.Unix(20, 0)); next != nil {
 		t.Fatalf("delivered item was claimable: %+v", next)
 	}
 }
 
 func TestDispatcherRetriesAndEventuallyFails(t *testing.T) {
 	o := NewMemoryOutbox()
-	if err := o.Enqueue(domain.OutboxDelivery{TeamID: 1, EventID: "e1", DeliveryKey: "k1", Provider: "fake", Status: domain.DeliveryPending}); err != nil {
+	if err := o.Enqueue(context.Background(), domain.OutboxDelivery{TeamID: 1, EventID: "e1", DeliveryKey: "k1", Provider: "fake", Status: domain.DeliveryPending}); err != nil {
 		t.Fatal(err)
 	}
 	c := &connectorStub{err: errors.New("provider unavailable")}
 	d := &Dispatcher{Outbox: o, Connectors: map[string]Connector{"fake": c}, Retry: RetryPolicy{MaxAttempts: 1, BaseDelay: time.Second}, Now: func() time.Time { return time.Unix(10, 0) }}
-	if _, err := d.DispatchOne(); err != nil {
+	if _, err := d.DispatchOne(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if next, _ := o.Claim(time.Unix(20, 0)); next != nil {
+	if next, _ := o.Claim(context.Background(), time.Unix(20, 0)); next != nil {
 		t.Fatalf("terminal failed item was claimable: %+v", next)
 	}
 }

@@ -1,6 +1,7 @@
 package application
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -18,7 +19,7 @@ func NewMemoryOutbox() *MemoryOutbox {
 	return &MemoryOutbox{items: make(map[string]domain.OutboxDelivery)}
 }
 
-func (o *MemoryOutbox) Enqueue(d domain.OutboxDelivery) error {
+func (o *MemoryOutbox) Enqueue(_ context.Context, d domain.OutboxDelivery) error {
 	if d.Status == "" {
 		d.Status = domain.DeliveryPending
 	}
@@ -34,7 +35,7 @@ func (o *MemoryOutbox) Enqueue(d domain.OutboxDelivery) error {
 	return nil
 }
 
-func (o *MemoryOutbox) Claim(now time.Time) (*domain.OutboxDelivery, error) {
+func (o *MemoryOutbox) Claim(_ context.Context, now time.Time) (*domain.OutboxDelivery, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	for key, item := range o.items {
@@ -42,6 +43,7 @@ func (o *MemoryOutbox) Claim(now time.Time) (*domain.OutboxDelivery, error) {
 			continue
 		}
 		item.Attempt++
+		item.Status = domain.DeliveryDispatching
 		o.items[key] = item
 		copy := item
 		return &copy, nil
@@ -49,7 +51,7 @@ func (o *MemoryOutbox) Claim(now time.Time) (*domain.OutboxDelivery, error) {
 	return nil, nil
 }
 
-func (o *MemoryOutbox) MarkDelivered(key string) error {
+func (o *MemoryOutbox) MarkDelivered(_ context.Context, key string) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	item, ok := o.items[key]
@@ -61,7 +63,7 @@ func (o *MemoryOutbox) MarkDelivered(key string) error {
 	return nil
 }
 
-func (o *MemoryOutbox) MarkFailed(key, reason string, next time.Time) error {
+func (o *MemoryOutbox) MarkFailed(_ context.Context, key, reason string, next time.Time) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	item, ok := o.items[key]
