@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -17,10 +18,12 @@ import (
 
 type auditExport struct {
 	Events []domain.AuditEvent `json:"events"`
+	Anchor *domain.AuditAnchor `json:"anchor,omitempty"`
 }
 
 func main() {
 	input := flag.String("input", "", "path to a JSON audit export; use - for stdin")
+	maxEvents := flag.Int("max-events", 100000, "maximum events accepted from one export")
 	flag.Parse()
 	if *input == "" {
 		fatal(2, "--input is required")
@@ -42,7 +45,11 @@ func main() {
 		fatal(2, "decode audit export: %v", err)
 	}
 
-	result := trustedapp.VerifyAuditChain(export.Events)
+	verifier := trustedapp.AuditVerifier{MaxEvents: *maxEvents}
+	result, verifyErr := verifier.Verify(context.Background(), export.Events, export.Anchor)
+	if verifyErr != nil {
+		fatal(2, "verify audit export: %v", verifyErr)
+	}
 	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
 		fatal(2, "write result: %v", err)
 	}
