@@ -36,6 +36,20 @@ The deployment verifies runtime wiring and schema application. It does not
 prove an external CI provider delivery, an external immutable audit anchor,
 or real browser/device/load-test capacity.
 
+## Additional implementation completed after the kind rollout
+
+- Redis schedule dead letters now have a real reviewed replay path. The
+  `gp-schedreplay` command requires a corrected `{run_id,team_id}` payload,
+  atomically changes the delivery state back to queued, re-adds it to the
+  weighted-fair queue, and appends a replay audit event. The original dead
+  letter is retained. A kind Redis verification replayed a dead letter and the
+  deployed worker consumed it, leaving the schedule state `done`.
+- The `0.1.8-SNAPSHOT` server/worker/web/migrate images were built, loaded into
+  every kind node, and deployed by Helm revision `3`; readiness remained 200.
+- The web image now packages both Vite's `dist/output` shell and
+  `dist/output_resource/assets`, and the emitted JavaScript asset returned 200
+  through the dedicated GreenPass ingress hostname.
+
 ## Rules for subsequent reporting
 
 1. “代码完成” means the implementation exists and its applicable local tests
