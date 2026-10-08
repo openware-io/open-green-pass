@@ -1,4 +1,4 @@
-CREATE TABLE cicd_outbox (
+CREATE TABLE gp.cicd_outbox (
   id bigserial PRIMARY KEY,
   team_id bigint NOT NULL,
   event_id text NOT NULL,
@@ -14,10 +14,10 @@ CREATE TABLE cicd_outbox (
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (team_id, delivery_key)
 );
-CREATE INDEX idx_cicd_outbox_due ON cicd_outbox(status, next_attempt_at, id);
-CREATE INDEX idx_cicd_outbox_team ON cicd_outbox(team_id, created_at DESC);
-ALTER TABLE cicd_outbox ENABLE ROW LEVEL SECURITY;
-CREATE POLICY p_cicd_outbox_rls ON cicd_outbox
+CREATE INDEX idx_cicd_outbox_due ON gp.cicd_outbox(status, next_attempt_at, id);
+CREATE INDEX idx_cicd_outbox_team ON gp.cicd_outbox(team_id, created_at DESC);
+ALTER TABLE gp.cicd_outbox ENABLE ROW LEVEL SECURITY;
+CREATE POLICY p_cicd_outbox_rls ON gp.cicd_outbox
   USING (team_id = current_setting('gp.team_id', true)::bigint)
   WITH CHECK (team_id = current_setting('gp.team_id', true)::bigint);
 
@@ -27,15 +27,15 @@ CREATE POLICY p_cicd_outbox_rls ON cicd_outbox
 CREATE OR REPLACE FUNCTION gp.claim_cicd_outbox(p_now timestamptz)
 RETURNS TABLE(team_id bigint, event_id text, delivery_key text, provider text,
   attempt integer, next_attempt_at timestamptz, status text, last_error text, payload jsonb)
-LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, gp AS $$
   WITH next AS (
-    SELECT id FROM public.cicd_outbox
+    SELECT id FROM gp.cicd_outbox
     WHERE status = 'pending' AND next_attempt_at <= p_now
     ORDER BY next_attempt_at, id
     FOR UPDATE SKIP LOCKED
     LIMIT 1
   )
-  UPDATE public.cicd_outbox o
+  UPDATE gp.cicd_outbox o
   SET status='dispatching', attempt=o.attempt+1, claimed_at=p_now, updated_at=now()
   FROM next WHERE o.id=next.id
   RETURNING o.team_id,o.event_id,o.delivery_key,o.provider,o.attempt,o.next_attempt_at,o.status,o.last_error,o.payload;
@@ -45,9 +45,9 @@ GRANT EXECUTE ON FUNCTION gp.claim_cicd_outbox(timestamptz) TO gp_worker;
 
 CREATE OR REPLACE FUNCTION gp.reclaim_cicd_outbox(p_now timestamptz, p_timeout interval)
 RETURNS integer
-LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, gp AS $$
   WITH reclaimed AS (
-    UPDATE public.cicd_outbox
+    UPDATE gp.cicd_outbox
     SET status='pending', next_attempt_at=p_now, updated_at=now()
     WHERE status='dispatching' AND claimed_at IS NOT NULL AND claimed_at <= p_now - p_timeout
     RETURNING 1

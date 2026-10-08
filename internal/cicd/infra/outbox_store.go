@@ -24,7 +24,7 @@ func (s *OutboxStore) Enqueue(ctx context.Context, d domain.OutboxDelivery) erro
 		return err
 	}
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO cicd_outbox(team_id,event_id,delivery_key,provider,attempt,next_attempt_at,status,last_error,payload)
+		_, err := tx.Exec(ctx, `INSERT INTO gp.cicd_outbox(team_id,event_id,delivery_key,provider,attempt,next_attempt_at,status,last_error,payload)
 VALUES($1,$2,$3,$4,$5,COALESCE(NULLIF($6,'epoch'::timestamptz),now()),$7,$8,$9)
 ON CONFLICT(team_id,delivery_key) DO NOTHING`, d.TeamID, d.EventID, d.DeliveryKey, d.Provider, d.Attempt, d.NextAttemptAt, d.Status, d.LastError, d.Payload)
 		return err
@@ -74,7 +74,7 @@ func (s *OutboxStore) update(ctx context.Context, key string, status domain.Deli
 		return domain.ErrInvalidDelivery
 	}
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		command, err := tx.Exec(ctx, `UPDATE cicd_outbox SET status=$2,last_error=$3,
+		command, err := tx.Exec(ctx, `UPDATE gp.cicd_outbox SET status=$2,last_error=$3,
 next_attempt_at=CASE WHEN $4='epoch'::timestamptz THEN next_attempt_at ELSE $4 END,updated_at=now()
 WHERE delivery_key=$1 AND status='dispatching'`, key, status, reason, next)
 		if err != nil {
