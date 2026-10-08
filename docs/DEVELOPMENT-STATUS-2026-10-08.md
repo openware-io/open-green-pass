@@ -16,6 +16,26 @@ local script, or unit test is not a production or kind acceptance result.
 | `470d75e` | Localhost-safe k6 smoke harness and runbook | No load execution, SLO, or capacity result |
 | `6effaba` | GP-only backup/restore scripts and runbook | Scripts not executed; no backup store, encryption, RPO/RTO, or recovery evidence |
 
+## 2026-10-08 kind integration evidence
+
+The isolated kind deployment was rebuilt only in the `gp` and `gp-runner`
+namespaces. `open-im-local` workloads were not modified.
+
+- Helm release `gp`, revision `2`, is deployed with server, worker and web
+  image tag `0.1.7-SNAPSHOT`.
+- The pre-upgrade migration job completed against the isolated GP PostgreSQL
+  service. `gp.schema_migrations` reports version `16`, `dirty=false`, and
+  `gp.cicd_outbox` exists with the worker-only claim/reclaim functions.
+- The real readiness endpoint returned 200 with PostgreSQL, Redis and Temporal
+  checks all `ok` at `http://greenpass.localhost:30080/api/readyz`.
+- The SPA shell and its emitted JavaScript asset were retrieved through the
+  kind ingress at `http://greenpass.localhost:30080/`; `greenpass.localhost`
+  is intentional, avoiding collision with the existing IM `localhost` routes.
+
+The deployment verifies runtime wiring and schema application. It does not
+prove an external CI provider delivery, an external immutable audit anchor,
+or real browser/device/load-test capacity.
+
 ## Rules for subsequent reporting
 
 1. “代码完成” means the implementation exists and its applicable local tests
