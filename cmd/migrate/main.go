@@ -41,7 +41,11 @@ func run(dsn string) error {
 	if err != nil {
 		return fmt.Errorf("open embedded migrations: %w", err)
 	}
-	databaseDriver, err := postgres.WithInstance(database, &postgres.Config{})
+	// GreenPass owns the gp schema. The shared PostgreSQL instance also hosts
+	// Temporal, whose public.schema_migrations is unrelated; pinning migrate's
+	// metadata table to gp prevents one service's migration state from being
+	// mistaken for the other's.
+	databaseDriver, err := postgres.WithInstance(database, &postgres.Config{SchemaName: "gp"})
 	if err != nil {
 		return fmt.Errorf("open postgres migration driver: %w", err)
 	}
