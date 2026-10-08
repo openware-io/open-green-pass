@@ -2,6 +2,8 @@ package application
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -54,6 +56,8 @@ func (pipelineRunner) Execute(_ context.Context, specs []*domain.CaseSpec) ([]*d
 type pipelinePool struct {
 	requests []domain.ExecutionPoolRequest
 	released []domain.ExecutionPoolLease
+	renewed  []domain.ExecutionPoolLease
+	renewErr error
 }
 
 func (p *pipelinePool) Reserve(_ context.Context, request domain.ExecutionPoolRequest) (domain.ExecutionPoolLease, error) {
@@ -67,7 +71,19 @@ func (p *pipelinePool) Release(_ context.Context, lease domain.ExecutionPoolLeas
 }
 
 func (p *pipelinePool) Renew(_ context.Context, lease domain.ExecutionPoolLease) (domain.ExecutionPoolLease, error) {
+	p.renewed = append(p.renewed, lease)
+	if p.renewErr != nil {
+		return domain.ExecutionPoolLease{}, p.renewErr
+	}
 	return lease, nil
+}
+
+type blockingPipelineRunner struct{ started chan struct{} }
+
+func (r blockingPipelineRunner) Execute(ctx context.Context, _ []*domain.CaseSpec) ([]*domain.CaseResult, error) {
+	close(r.started)
+	<-ctx.Done()
+	return nil, ctx.Err()
 }
 
 type pipelineGate struct{ calls []int64 }
@@ -148,5 +164,27 @@ func TestExecuteRunReservesAndReleasesConfiguredExecutionPool(t *testing.T) {
 	}
 	if len(pool.released) != 1 || pool.released[0].PoolID != "kind" || pool.released[0].FencingToken != 3 {
 		t.Fatalf("released=%+v", pool.released)
+	}
+}
+
+func TestExecuteRunRenewsLeaseAndCancelsRunnerOnRenewFailure(t *testing.T) {
+	gen, err := id.New(1, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := domain.NewRun(11, 100, 1, 1003, "test", "v1", "main", "manual", []int64{4001})
+	run.State = domain.RunScheduled
+	pool := &pipelinePool{renewErr: errors.New("fencing generation changed")}
+	runner := blockingPipelineRunner{started: make(chan struct{})}
+	svc := NewRunService(&pipelineRepo{run: run}, nil, pipelineCases{}, pipelinePolicy{}, runner, gen)
+	svc.SetExecutionPool(pool)
+	svc.SetLeaseRenewInterval(time.Millisecond)
+
+	_, _, err = svc.ExecuteRun(rls.WithTenant(context.Background(), 100), run.ID)
+	if err == nil || !strings.Contains(err.Error(), "renew execution pool lease") {
+		t.Fatalf("err=%v, want lease renewal failure", err)
+	}
+	if len(pool.renewed) == 0 {
+		t.Fatal("runner completed without a lease renewal")
 	}
 }
