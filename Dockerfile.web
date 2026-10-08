@@ -12,6 +12,11 @@ ENV VITE_GP_USER_ID=$VITE_GP_USER_ID
 RUN npm run build
 
 FROM nginxinc/nginx-unprivileged:1.29-alpine AS runtime
+# The repository's Vite plugin emits the application shell to dist/output and
+# its browser assets to dist/output_resource. Merge both produced directories
+# into nginx's static root; copying only the shell leaves /assets requests
+# broken in a real deployment.
 COPY --from=build /src/dist/output /usr/share/nginx/html
+COPY --from=build /src/dist/output_resource/assets /usr/share/nginx/html/assets
 COPY deploy/nginx/web.conf /etc/nginx/conf.d/default.conf
 EXPOSE 8080
