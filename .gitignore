@@ -17,6 +17,7 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 /logs/
+.outputs/
 
 # Runtime data
 pids
