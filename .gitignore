@@ -77,3 +77,4 @@ scripts/dev/.gp-portforward.pids
 
 # Go build output
 bin/
+*.exe
