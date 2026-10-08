@@ -2,6 +2,7 @@ package redisqueue
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/openware-io/open-green-pass/internal/execution/domain"
@@ -148,7 +149,7 @@ func (q *Queue) DeadLetter(ctx context.Context, reason string, jobs ...domain.Cl
 		}
 		ids[i] = job.DeliveryID
 		p.XAdd(ctx, &redis.XAddArgs{Stream: q.deadLetter(), Values: map[string]any{
-			"id": job.ID, "team": job.TeamID, "delivery": job.DeliveryID,
+			"id": job.ID, "team": job.TeamID, "weight": job.Weight, "delivery": job.DeliveryID,
 			"reason": reason, "payload": string(job.Payload), "created": job.CreatedAt.UnixNano(),
 		}})
 		p.Set(ctx, q.state(job.ID), "dead-letter", 0)
@@ -157,6 +158,67 @@ func (q *Queue) DeadLetter(ctx context.Context, reason string, jobs ...domain.Cl
 	_, err := p.Exec(ctx)
 	return err
 }
+
+// ReplayDeadLetter atomically restores one operator-reviewed dead-letter
+// entry to the weighted-fair queue. A replacement payload is mandatory:
+// current producers only dead-letter malformed schedule messages, so blindly
+// replaying the original payload would create an endless poison-message loop.
+// The original dead-letter entry remains immutable and a replay audit event is
+// appended to a separate Redis stream.
+func (q *Queue) ReplayDeadLetter(ctx context.Context, deliveryID string, correctedPayload []byte) error {
+	if deliveryID == "" || len(correctedPayload) == 0 {
+		return domain.ErrInvalidScheduleJob
+	}
+	entries, err := q.client.XRange(ctx, q.deadLetter(), deliveryID, deliveryID).Result()
+	if err != nil {
+		return err
+	}
+	if len(entries) != 1 {
+		return fmt.Errorf("dead-letter delivery %s not found", deliveryID)
+	}
+	entry := entries[0]
+	stringValue := func(key string) string { return fmt.Sprint(entry.Values[key]) }
+	id, teamRaw, weightRaw, createdRaw := stringValue("id"), stringValue("team"), stringValue("weight"), stringValue("created")
+	teamID, err := strconv.ParseInt(teamRaw, 10, 64)
+	if err != nil || id == "" || teamID <= 0 {
+		return fmt.Errorf("decode dead-letter %s: %w", deliveryID, domain.ErrInvalidScheduleJob)
+	}
+	weight, err := strconv.Atoi(weightRaw)
+	if err != nil || weight <= 0 {
+		return fmt.Errorf("dead-letter %s has no replayable weight: %w", deliveryID, domain.ErrInvalidScheduleJob)
+	}
+	createdAt, err := strconv.ParseInt(createdRaw, 10, 64)
+	if err != nil {
+		return fmt.Errorf("decode dead-letter %s created time: %w", deliveryID, err)
+	}
+	var payload struct {
+		RunID  int64 `json:"run_id"`
+		TeamID int64 `json:"team_id"`
+	}
+	if err := json.Unmarshal(correctedPayload, &payload); err != nil || payload.RunID <= 0 || payload.TeamID <= 0 || strconv.FormatInt(payload.RunID, 10) != id || payload.TeamID != teamID {
+		return fmt.Errorf("corrected payload must match dead-letter run and team: %w", domain.ErrInvalidScheduleJob)
+	}
+	score := float64(time.Now().UnixMilli()) + 1/float64(weight)
+	result, err := q.client.Eval(ctx, replayScript, []string{q.state(id), q.job(id), q.wfq(), q.replayAudit()},
+		id, teamID, weight, correctedPayload, createdAt, score, deliveryID, time.Now().UTC().Format(time.RFC3339Nano)).Text()
+	if err != nil {
+		return err
+	}
+	if result != "replayed" {
+		return fmt.Errorf("dead-letter %s cannot be replayed from state %q", deliveryID, result)
+	}
+	return nil
+}
+
+const replayScript = `
+if redis.call('GET', KEYS[1]) ~= 'dead-letter' then return redis.call('GET', KEYS[1]) or 'missing' end
+if redis.call('EXISTS', KEYS[2]) == 0 then return 'missing-job' end
+redis.call('HSET', KEYS[2], 'id', ARGV[1], 'team', ARGV[2], 'weight', ARGV[3], 'payload', ARGV[4], 'created', ARGV[5])
+redis.call('SET', KEYS[1], 'queued')
+redis.call('ZADD', KEYS[3], ARGV[6], ARGV[1])
+redis.call('XADD', KEYS[4], '*', 'delivery', ARGV[7], 'id', ARGV[1], 'team', ARGV[2], 'replayed_at', ARGV[8])
+return 'replayed'`
+
 func decode(ms []redis.XMessage) ([]domain.ClaimedScheduleJob, error) {
 	o := make([]domain.ClaimedScheduleJob, 0, len(ms))
 	for _, m := range ms {
@@ -182,6 +244,7 @@ func (q *Queue) stream() string         { return q.prefix + ":stream" }
 func (q *Queue) job(id string) string   { return q.prefix + ":job:" + id }
 func (q *Queue) state(id string) string { return q.prefix + ":state:" + id }
 func (q *Queue) deadLetter() string     { return q.prefix + ":dead-letter" }
+func (q *Queue) replayAudit() string    { return q.prefix + ":dead-letter-replay" }
 func busy(e error) bool                 { return len(e.Error()) >= 9 && e.Error()[:9] == "BUSYGROUP" }
 
 var _ domain.ScheduleQueuePort = (*Queue)(nil)
