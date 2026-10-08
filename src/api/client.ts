@@ -50,7 +50,12 @@ export class GreenPassClient {
     this.baseUrl = (options.baseUrl ?? import.meta.env.VITE_GP_API_BASE ?? '').replace(/\/$/, '');
     this.teamId = options.teamId;
     this.userId = options.userId;
-    this.fetcher = options.fetcher ?? fetch;
+    // Browser fetch is a Window method in several engines. Keeping an
+    // unbound reference and invoking it as this.fetcher(...) changes its
+    // receiver to GreenPassClient, which fails before any request reaches the
+    // API. Explicitly bind the production default while preserving injected
+    // fetchers for contract tests.
+    this.fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
   }
 
   private async request<T>(path: string, init: RequestInit = {}): JsonResponse<T> {
