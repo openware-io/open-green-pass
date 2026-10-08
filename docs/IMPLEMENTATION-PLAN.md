@@ -266,7 +266,7 @@ jobs:
 - **GP2-05 截图开关策略下发 ✅ 已交付**：服务级截图开关按对象策略下发（防高并发性能开销，PRD R-TEST-13）。验证：策略生效；无截图场景证据=日志+hash。
 - **GP2-06 跨场景报告合编（PDF/Word）**：跨 run 合编查询、汇总和 HTML/Markdown 输出已完成（`POST /reports/bundle`，tenant scoped）；已新增 `POST /reports/bundle/export` 的 PDF/DOCX 下载契约、纯 Go 参考渲染器、OpenAPI 生成类型和前端客户端。**当前剩余**：真实字体/中文排版、Office/PDF 阅读器兼容性、证据资源嵌入和部署运行时集成验证；因此 GP2-06 阶段 DoD 尚未完成。
 - **GP2-07 水平扩展 P2（§10）**：kind Helm 已启用 server/worker 双副本，共享 Redis 原子配额和 PostgreSQL 冲突锁，滚动升级及多次 readiness 请求验证通过。**当前剩余**：SSE 共享订阅 Redis Pub/Sub、固定负载压测、吞吐/延迟线性扩展证据和故障切换演练；完成前不得宣称 GP2-07 DoD 完成。
-- **GP2-08 资源池注册 + 多执行集群**：本地资源池注册/能力选择/容量 reserve-release 参考实现已完成（`internal/execution/infra/pool`）；已补充显式心跳时间、TTL 存活筛选和心跳回归测试。**当前剩余**：Redis/PostgreSQL 持久化、跨进程心跳/租约 fencing 和真实多集群接入验证。
+- **GP2-08 资源池注册 + 多执行集群**：本地资源池注册/能力选择/容量 reserve-release 参考实现已完成（`internal/execution/infra/pool`）；PostgreSQL registry 已提供 generation fencing、租约释放和续租代码。**当前仍未完成**：RunService 尚未使用租约续租；Redis/PostgreSQL 真实持久化验收、跨进程心跳/租约 fencing 集成测试和真实多集群接入验证均待完成。
 
 ## 4. P3 AI 治理 + 生成管道 W1（任务级施工图）
 
@@ -276,7 +276,7 @@ jobs:
 
 ## 5. P4 平台化（任务级施工图）
 
-- **GP4-01～GP4-06**：已补充规格 `docs/GP4-IMPLEMENTATION-SPEC-DRAFT.md`，并细化为可直接排期的批次清单 `docs/GP3-GP4-EXECUTION-BACKLOG.md`。GP4-04A 已开始编码：新增 `/readyz`（当前仅 PostgreSQL 探针）、`/version`、构建信息和前端契约；Redis/Temporal/对象存储探针、Helm、迁移 Job 和真实私有化验收仍待完成。当前仍不得宣称 GP4 完成：身份源/RBAC、CI 首批平台、私有化拓扑、租户分区策略和 SLO 需先定稿；不依赖这些决策的骨架批次可先开发。
+- **GP4-01～GP4-06**：已补充规格 `docs/GP4-IMPLEMENTATION-SPEC-DRAFT.md`，并细化为可直接排期的批次清单 `docs/GP3-GP4-EXECUTION-BACKLOG.md`。GP4-04A 已有 `/readyz`（PostgreSQL + Redis 探针）、`/version`、构建信息、Helm 和迁移 Job；GP4-05A 有 provider-independent placement dry-run；GP4-06A 有低基数 metrics、dashboard、runbook 和受限 k6 smoke harness。上述均是代码/交付骨架，尚未完成真实私有化、租户迁移、观测栈接入、压测或 SLO 验收。身份源/RBAC、CI 首批平台和私有化拓扑仍需先定稿；不依赖这些决策的骨架批次可先开发。
 - **GP4-02～GP4-06**：目标与验收保持不变，具体实施拆分、契约、迁移、分层边界和前置决策以 `docs/GP4-IMPLEMENTATION-SPEC-DRAFT.md` 为准；真实 provider、集群和容量验收仍待用户决策与环境准备。
 
 ---
