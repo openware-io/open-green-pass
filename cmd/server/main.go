@@ -141,9 +141,7 @@ func main() {
 		os.Exit(1)
 	}
 	runSvc.SetScheduleQueue(scheduleQueue)
-	temporalCtx, temporalCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	temporalClient, err := temporalclient.DialContext(temporalCtx, temporalclient.Options{HostPort: cfg.TemporalAddr})
-	temporalCancel()
+	temporalClient, err := temporalclient.Dial(temporalclient.Options{HostPort: cfg.TemporalAddr})
 	if err != nil {
 		log.Error("init temporal client", "error", err)
 		os.Exit(1)
