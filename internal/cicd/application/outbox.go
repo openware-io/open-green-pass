@@ -68,7 +68,11 @@ func (o *MemoryOutbox) MarkFailed(key, reason string, next time.Time) error {
 	if !ok {
 		return domain.ErrInvalidDelivery
 	}
-	item.Status = domain.DeliveryPending
+	if next.IsZero() {
+		item.Status = domain.DeliveryFailed
+	} else {
+		item.Status = domain.DeliveryPending
+	}
 	item.LastError = reason
 	item.NextAttemptAt = next
 	o.items[key] = item
