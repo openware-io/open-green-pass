@@ -37,6 +37,15 @@ tokens, prompts, or response bodies in the evidence bundle.
 
 ## Load harness
 
-`tools/load/smoke.js` is a k6 smoke skeleton. It only calls health and metrics
-endpoints by default and has no pass/fail SLO threshold. Supply `BASE_URL` and
-extend the scenario after agreeing on environment-specific limits.
+`tools/load/smoke.js` is a versioned k6 smoke harness. It calls only the
+GreenPass health and metrics endpoints, defaults to `localhost`, and rejects a
+remote target unless `ALLOW_REMOTE=true` is explicitly supplied for an approved
+isolated environment. It never targets `open-im-local`.
+
+```powershell
+k6 run -e BASE_URL=http://127.0.0.1:30080 -e VUS=1 -e DURATION=30s tools/load/smoke.js
+```
+
+The harness intentionally has no SLO thresholds until D-11 is decided. Record
+the command, harness version, Helm revision, image digests and `/metrics`
+snapshot together; do not treat a smoke run as a capacity conclusion.
