@@ -42,3 +42,16 @@ LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
 $$;
 REVOKE ALL ON FUNCTION gp.claim_cicd_outbox(timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION gp.claim_cicd_outbox(timestamptz) TO gp_worker;
+
+CREATE OR REPLACE FUNCTION gp.reclaim_cicd_outbox(p_now timestamptz, p_timeout interval)
+RETURNS integer
+LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+  WITH reclaimed AS (
+    UPDATE public.cicd_outbox
+    SET status='pending', next_attempt_at=p_now, updated_at=now()
+    WHERE status='dispatching' AND claimed_at IS NOT NULL AND claimed_at <= p_now - p_timeout
+    RETURNING 1
+  ) SELECT count(*)::integer FROM reclaimed;
+$$;
+REVOKE ALL ON FUNCTION gp.reclaim_cicd_outbox(timestamptz, interval) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION gp.reclaim_cicd_outbox(timestamptz, interval) TO gp_worker;

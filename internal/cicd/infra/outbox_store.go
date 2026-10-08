@@ -65,8 +65,7 @@ func (s *OutboxStore) ReclaimStale(ctx context.Context, now time.Time, timeout t
 	if timeout <= 0 {
 		return domain.ErrInvalidDelivery
 	}
-	_, err := s.db.Pool().Exec(ctx, `UPDATE cicd_outbox SET status='pending', next_attempt_at=$1, updated_at=now()
-WHERE status='dispatching' AND claimed_at IS NOT NULL AND claimed_at <= $2`, now.UTC(), now.Add(-timeout).UTC())
+	_, err := s.db.Pool().Exec(ctx, `SELECT gp.reclaim_cicd_outbox($1,$2::interval)`, now.UTC(), timeout.String())
 	return err
 }
 
