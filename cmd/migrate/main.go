@@ -36,6 +36,9 @@ func run(dsn string) error {
 	}
 	database := stdlib.OpenDB(*config)
 	defer database.Close()
+	if _, err := database.Exec(`CREATE SCHEMA IF NOT EXISTS gp`); err != nil {
+		return fmt.Errorf("create GreenPass schema: %w", err)
+	}
 
 	sourceDriver, err := iofs.New(appmigrations.Files, ".")
 	if err != nil {
