@@ -67,6 +67,16 @@ func (s *OutboxStore) MarkFailed(ctx context.Context, key, reason string, next t
 	return s.update(ctx, key, status, reason, next)
 }
 
+// ReclaimStale makes a crashed worker's dispatching rows eligible for retry.
+func (s *OutboxStore) ReclaimStale(ctx context.Context, now time.Time, timeout time.Duration) error {
+	if timeout <= 0 {
+		return domain.ErrInvalidDelivery
+	}
+	_, err := s.db.Pool().Exec(ctx, `UPDATE cicd_outbox SET status='pending', next_attempt_at=$1, updated_at=now()
+WHERE status='dispatching' AND claimed_at IS NOT NULL AND claimed_at <= $2`, now.UTC(), now.Add(-timeout).UTC())
+	return err
+}
+
 func (s *OutboxStore) update(ctx context.Context, key string, status domain.DeliveryStatus, reason string, next time.Time) error {
 	if key == "" {
 		return domain.ErrInvalidDelivery

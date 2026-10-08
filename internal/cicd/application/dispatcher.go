@@ -21,10 +21,11 @@ type Connector interface {
 // result. It is safe to call from a worker loop because claim and status writes
 // remain owned by the OutboxPort.
 type Dispatcher struct {
-	Outbox     domain.OutboxPort
-	Connectors map[string]Connector
-	Retry      RetryPolicy
-	Now        func() time.Time
+	Outbox       domain.OutboxPort
+	Connectors   map[string]Connector
+	Retry        RetryPolicy
+	Now          func() time.Time
+	ClaimTimeout time.Duration
 }
 
 func (d *Dispatcher) DispatchOne(ctx context.Context) (bool, error) {
@@ -34,6 +35,11 @@ func (d *Dispatcher) DispatchOne(ctx context.Context) (bool, error) {
 	now := time.Now().UTC()
 	if d.Now != nil {
 		now = d.Now().UTC()
+	}
+	if d.ClaimTimeout > 0 {
+		if err := d.Outbox.ReclaimStale(ctx, now, d.ClaimTimeout); err != nil {
+			return false, fmt.Errorf("reclaim stale outbox deliveries: %w", err)
+		}
 	}
 	delivery, err := d.Outbox.Claim(ctx, now)
 	if err != nil {

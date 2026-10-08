@@ -61,6 +61,7 @@ type OutboxPort interface {
 	Claim(context.Context, time.Time) (*OutboxDelivery, error)
 	MarkDelivered(context.Context, string) error
 	MarkFailed(context.Context, string, string, time.Time) error
+	ReclaimStale(context.Context, time.Time, time.Duration) error
 }
 
 // SignatureVerifier authenticates the raw provider payload before decoding it.

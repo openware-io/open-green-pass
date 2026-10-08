@@ -80,3 +80,7 @@ func (o *MemoryOutbox) MarkFailed(_ context.Context, key, reason string, next ti
 	o.items[key] = item
 	return nil
 }
+
+func (o *MemoryOutbox) ReclaimStale(_ context.Context, _ time.Time, _ time.Duration) error {
+	return nil
+}
