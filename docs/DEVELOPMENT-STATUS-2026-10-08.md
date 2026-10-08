@@ -8,7 +8,7 @@ local script, or unit test is not a production or kind acceptance result.
 
 | Commit | Actual code | Not completed by this commit |
 |---|---|---|
-| `fd0be0a` | PostgreSQL pool lease renewal with generation fencing | RunService does not renew leases; no kind PostgreSQL lease test |
+| `fd0be0a` + `5d35eca` | PostgreSQL pool lease renewal with generation fencing; RunService renews during execution and cancels on stale generation | No kind PostgreSQL lease/recovery evidence; no real multi-cluster integration |
 | `66fd0d7` | Redis dead-letter stream write + ACK path for malformed schedule payloads | No Redis integration/recovery evidence; no operator replay workflow |
 | `5a06519` | Provider-independent placement dry-run validation | No API, persistent placement registry, migration, or real cutover |
 | `3c82241` | Bounded read-only audit verifier service | No API/CLI wiring to this service; no external anchor |
