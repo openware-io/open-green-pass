@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ACCOUNTS, type IAccount } from '@/data/mock';
@@ -10,23 +10,6 @@ const FEATURES = [
   { icon: GitBranch, title: '可信审计', desc: '哈希链留痕，成本与执行全可溯' },
   { icon: Wallet, title: '成本治理', desc: '用例级成本明细，一目了然' },
 ];
-
-// 微信二维码占位（SVG 模拟码点，示意）
-function WechatQR() {
-  const cells = [] as { x: number; y: number }[];
-  for (let i = 0; i < 21; i++) for (let j = 0; j < 21; j++) if ((i * 7 + j * 13) % 3 !== 0) cells.push({ x: i, y: j });
-  return (
-    <svg viewBox="0 0 21 21" className="w-full h-full">
-      <rect width="21" height="21" fill="white" />
-      {cells.map((c, i) => (
-        <rect key={i} x={c.x} y={c.y} width="1" height="1" fill="#1f2937" />
-      ))}
-      <rect x="0" y="0" width="7" height="7" fill="white" stroke="#1f2937" strokeWidth="0.6" />
-      <rect x="14" y="0" width="7" height="7" fill="white" stroke="#1f2937" strokeWidth="0.6" />
-      <rect x="0" y="14" width="7" height="7" fill="white" stroke="#1f2937" strokeWidth="0.6" />
-    </svg>
-  );
-}
 
 function ApplyForm({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState('');
@@ -58,17 +41,18 @@ export default function LoginPage() {
   const [code, setCode] = useState('');
   const [applyOpen, setApplyOpen] = useState(false);
   const [sent, setSent] = useState(false);
+  const [wechatEnabled, setWechatEnabled] = useState(false);
+  useEffect(()=>{void fetch(`${(import.meta.env.VITE_GP_API_BASE??'').replace(/\/$/,'')}/auth/wechat/status?team_id=${encodeURIComponent(String(import.meta.env.VITE_GP_TEAM_ID??1001))}`).then((response)=>response.json()).then((body:{enabled?:boolean;configured?:boolean})=>setWechatEnabled(Boolean(body.enabled&&body.configured))).catch(()=>setWechatEnabled(false));},[]);
 
-  const enter = (u: IAccount, via: IAccount['via']) => {
-    loginStore.setCurrent({ ...u, via });
+  const enter = (u: IAccount, _via: IAccount['via']) => {
     toast.success('登录成功', { description: `欢迎回来，${u.name} · ${u.role}` });
     navigate('/scenarios');
   };
 
-  const loginByPassword = () => {
+  const loginByPassword = async () => {
     if (!username.trim() || !password.trim()) { toast.warning('请输入账号与密码'); return; }
-    const acc = ACCOUNTS.find((a) => a.username === username.trim().toLowerCase()) ?? ACCOUNTS[0];
-    enter(acc, 'password');
+    try { enter(await loginStore.login(username.trim(), password), 'password'); }
+    catch (error) { toast.error(error instanceof Error ? error.message : '登录失败'); }
   };
   const loginByPhone = () => {
     if (phone.trim().length < 11) { toast.warning('请输入 11 位手机号'); return; }
@@ -76,12 +60,6 @@ export default function LoginPage() {
     const acc = ACCOUNTS.find((a) => a.phone.replace('*', '').startsWith(phone.slice(0, 3))) ?? ACCOUNTS[2];
     enter({ ...acc, phone: phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') }, 'phone');
   };
-  const loginByWechat = () => {
-    // 扫码后：已绑定微信的账号直接进入；未绑定则新建并绑定微信（原型示意）
-    const bound = ACCOUNTS.find((a) => a.wechat);
-    enter(bound ?? { ...ACCOUNTS[2], wechat: 'wx_' + username || 'greenpass_user' }, 'wechat');
-  };
-
   return (
     <div className="min-h-screen flex bg-slate-50">
       {/* 左栏：品牌区 */}
@@ -120,7 +98,7 @@ export default function LoginPage() {
           <button type="button" onClick={() => navigate('/scenarios')} className="text-xs text-slate-400 hover:text-emerald-600 flex items-center gap-1 mb-6"><ArrowLeft className="w-3.5 h-3.5" />返回演示首页</button>
           <div className="card bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
             <h2 className="text-xl font-semibold text-slate-800">登录 GreenPass</h2>
-            <p className="text-[11px] text-slate-400 mt-1 mb-5">支持自有账号、手机号与微信扫码，账号可绑定手机 / 微信</p>
+            <p className="text-[11px] text-slate-400 mt-1 mb-5">账号密码登录已启用；手机号与微信登录需完成对应服务配置</p>
 
             <div className="flex rounded-lg bg-slate-100 p-0.5 text-[12px] mb-5">
               {([['password', '账号密码'], ['phone', '手机号'], ['wechat', '微信扫码']] as const).map(([k, label]) => (
@@ -159,18 +137,11 @@ export default function LoginPage() {
             )}
 
             {tab === 'wechat' && (
-              <div className="space-y-3">
-                <div className="flex justify-center">
-                  <div className="w-44 h-44 border-2 border-emerald-100 rounded-xl p-3 bg-white relative">
-                    <WechatQR />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="bg-white/90 rounded px-2 py-1 text-[10px] text-emerald-600 border border-emerald-200">示意二维码</div>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-center text-[11px] text-slate-400">使用微信扫一扫，扫码后关联自有账号登录</p>
-                <button type="button" onClick={loginByWechat} className="w-full py-2.5 text-sm font-medium text-white bg-[#07c160] hover:bg-[#06ad56] rounded-lg transition flex items-center justify-center gap-1.5"><ScanLine className="w-4 h-4" />模拟扫码成功，微信登录</button>
-                <p className="text-[11px] text-slate-400 text-center">已绑定微信的账号将直接进入；未绑定则自动创建账号并绑定该微信号</p>
+              <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-5 text-center">
+                <ScanLine className="mx-auto h-10 w-10 text-amber-500" />
+                <div className="text-sm font-medium text-slate-700">{wechatEnabled?'微信扫码登录':'微信登录尚未配置'}</div>
+                <p className="text-[11px] leading-relaxed text-slate-500">{wechatEnabled?'点击后进入微信开放平台官方扫码授权页面。':'需要管理员在系统设置中配置 AppID、AppSecret 和 OAuth 回调域名。'}</p>
+                {wechatEnabled&&<button type="button" onClick={()=>{window.location.href=`${(import.meta.env.VITE_GP_API_BASE??'').replace(/\/$/,'')}/auth/wechat/start?team_id=${encodeURIComponent(String(import.meta.env.VITE_GP_TEAM_ID??1001))}`;}} className="w-full rounded-lg bg-[#07c160] py-2.5 text-sm font-medium text-white hover:bg-[#06ad56]">前往微信扫码</button>}
               </div>
             )}
 

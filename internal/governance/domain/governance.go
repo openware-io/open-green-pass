@@ -28,6 +28,7 @@ type TargetNode struct {
 	TeamID   int64 // RLS 租户列
 	Type     TargetNodeType
 	Name     string
+	Remark   string
 	Kind     string // api_service / web_app / mobile_app / contract / ai_model / other
 	Status   string // active / archived（默认 active）
 	ParentID *int64 // 顶层为 nil

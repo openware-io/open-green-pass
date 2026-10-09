@@ -121,3 +121,14 @@ func (s *ModelStore) ResolvePrice(ctx context.Context, teamID, modelID int64, at
 }
 
 var _ domain.ModelGovernanceRepository = (*ModelStore)(nil)
+
+func (s *ModelStore) UpsertConnection(ctx context.Context, modelID, teamID, userID int64, name, provider, modelKey, protocol, baseURL, secretRef string, capabilities []string) error {
+	caps, err := json.Marshal(capabilities)
+	if err != nil {
+		return err
+	}
+	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO mdl_model(id,team_id,name,provider,model_key,capabilities,status,secret_ref,endpoint_ref,default_timeout_ms,max_tokens_in,max_tokens_out,revision,created_by,protocol,base_url,credential_status,configured_at) VALUES($1,$2,$3,$4,$5,$6,'approved',$7,NULL,30000,0,0,1,$8,$9,$10,'configured',now()) ON CONFLICT(team_id,provider,model_key) DO UPDATE SET name=EXCLUDED.name,capabilities=EXCLUDED.capabilities,secret_ref=EXCLUDED.secret_ref,protocol=EXCLUDED.protocol,base_url=EXCLUDED.base_url,credential_status='configured',configured_at=now(),revision=mdl_model.revision+1`, modelID, teamID, name, provider, modelKey, caps, secretRef, userID, protocol, baseURL)
+		return err
+	})
+}

@@ -55,6 +55,161 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/teams/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 当前登录会话的团队概览 */
+        get: operations["currentTeam"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/wechat/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 微信登录公开配置状态 */
+        get: operations["wechatAuthStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/auth/wechat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取微信登录配置 */
+        get: operations["getWechatAuthConfig"];
+        /** 保存微信登录配置 */
+        put: operations["saveWechatAuthConfig"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/account/wechat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 当前账号微信绑定状态 */
+        get: operations["getWechatBinding"];
+        put?: never;
+        post?: never;
+        /** 解绑当前账号微信 */
+        delete: operations["unbindWechat"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teams/current/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 当前团队成员 */
+        get: operations["listTeamMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teams/current/members/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** 修改当前团队成员角色或状态 */
+        patch: operations["updateTeamMember"];
+        trace?: never;
+    };
+    "/teams/current/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 当前团队被测对象 */
+        get: operations["listTeamAssets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teams/current/assets/{targetId}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 被测对象的成员授权 */
+        get: operations["listAssetPermissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/teams/current/assets/{targetId}/permissions/{memberId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 设置成员的被测对象权限及配额 */
+        put: operations["updateAssetPermission"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/targets": {
         parameters: {
             query?: never;
@@ -90,6 +245,216 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{id}/repositories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 列出项目仓库 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 项目仓库 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectRepository"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{id}/repositories:batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量添加项目仓库 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        repositories: components["schemas"]["ProjectRepositoryInput"][];
+                    };
+                };
+            };
+            responses: {
+                /** @description 逐条处理结果 */
+                207: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BatchResultResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{id}/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 列出项目目录子服务 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 子服务 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectService"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{id}/services:batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 按仓库目录批量创建子服务 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        services: components["schemas"]["ProjectServiceInput"][];
+                    };
+                };
+            };
+            responses: {
+                /** @description 逐条处理结果 */
+                207: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BatchResultResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{id}/services/{serviceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** 修改目录子服务类型 */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                    serviceId: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        kind: "api_service" | "gateway" | "websocket_service" | "web_app" | "mobile_app" | "desktop_app" | "other";
+                    };
+                };
+            };
+            responses: {
+                /** @description 已修改 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StatusResponse"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
     "/targets/{id}/model-binding": {
         parameters: {
             query?: never;
@@ -102,6 +467,89 @@ export interface paths {
         /** 设置被测对象模型绑定 */
         put: operations["setModelBinding"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/model-catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询可接入模型目录与团队已配置模型 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 模型目录 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ModelCatalog"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/model-connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 验证并保存团队模型连接 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ModelConnectionInput"];
+                };
+            };
+            responses: {
+                /** @description 已验证并保存 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StatusResponse"];
+                    };
+                };
+                /** @description 供应商连接失败 */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -573,6 +1021,117 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        WechatAuthConfig: {
+            /** Format: int64 */
+            team_id: number;
+            enabled: boolean;
+            app_id: string;
+            callback_uri: string;
+            secret_configured: boolean;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        WechatAuthConfigInput: {
+            enabled: boolean;
+            app_id: string;
+            app_secret?: string;
+            callback_uri: string;
+        };
+        WechatBinding: {
+            bound: boolean;
+            display_name?: string;
+            avatar_url?: string;
+        };
+        TeamSummary: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** Format: int64 */
+            member_count: number;
+            /** Format: int64 */
+            project_count: number;
+        };
+        TeamMember: {
+            /** Format: int64 */
+            id: number;
+            principal_id: string;
+            username: string;
+            display_name: string;
+            email: string;
+            /** @enum {string} */
+            role: "owner" | "admin" | "tester" | "viewer";
+            /** @enum {string} */
+            status: "active" | "disabled" | "invited";
+            /** Format: date-time */
+            last_active_at?: string;
+        };
+        TeamMemberUpdate: {
+            /** @enum {string} */
+            role: "owner" | "admin" | "tester" | "viewer";
+            /** @enum {string} */
+            status: "active" | "disabled" | "invited";
+        };
+        TeamAsset: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            kind: string;
+            /** Format: int64 */
+            owner_id?: number;
+            owner_name: string;
+        };
+        AssetGrant: {
+            /** Format: int64 */
+            member_id: number;
+            display_name: string;
+            email: string;
+            /** @enum {string} */
+            role: "owner" | "admin" | "tester" | "viewer";
+            /** @enum {string} */
+            permission: "full" | "edit" | "exec" | "view" | "none";
+            /** Format: int64 */
+            concurrent_quota: number;
+            /** Format: int64 */
+            sandbox_quota: number;
+            /** Format: int64 */
+            version: number;
+        };
+        AssetGrantUpdate: {
+            /** @enum {string} */
+            permission: "full" | "edit" | "exec" | "view" | "none";
+            /** Format: int64 */
+            concurrent_quota: number;
+            /** Format: int64 */
+            sandbox_quota: number;
+        };
+        ModelPreset: {
+            Provider: string;
+            Name: string;
+            ModelKey: string;
+            /** @enum {string} */
+            Protocol: "api" | "cc";
+            BaseURL: string;
+            Capabilities: string[];
+        };
+        ConfiguredModel: {
+            /** Format: int64 */
+            id: number;
+            provider: string;
+            model_key: string;
+            status: string;
+        };
+        ModelCatalog: {
+            presets: components["schemas"]["ModelPreset"][];
+            models: components["schemas"]["ConfiguredModel"][];
+        };
+        ModelConnectionInput: {
+            provider: string;
+            /** @enum {string} */
+            protocol: "api" | "cc";
+            token: string;
+            base_url?: string;
+            model_keys: string[];
+        };
         ReadinessResponse: {
             /** @enum {string} */
             status: "ready" | "not_ready";
@@ -596,13 +1155,60 @@ export interface components {
             team_id: number;
             type: string;
             name: string;
+            remark?: string;
             kind: string;
             status: string;
             /** Format: int64 */
             parent_id?: number | null;
-            /** Format: int64 */
-            repo_id?: number | null;
             model_binding?: components["schemas"]["ModelBinding"];
+        };
+        ProjectRepository: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            project_id: number;
+            url: string;
+            default_branch: string;
+        };
+        ProjectRepositoryInput: {
+            url: string;
+            /** @default main */
+            default_branch: string;
+        };
+        ProjectService: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            project_id: number;
+            /** Format: int64 */
+            repo_id: number;
+            name: string;
+            source_path: string;
+            /** @enum {string} */
+            kind: "api_service" | "gateway" | "websocket_service" | "web_app" | "mobile_app" | "desktop_app" | "other";
+            build_context: string;
+            dockerfile_path?: string | null;
+            manifest_path?: string | null;
+            status: string;
+        };
+        ProjectServiceInput: {
+            /** Format: int64 */
+            repo_id: number;
+            name: string;
+            source_path: string;
+            /** @enum {string} */
+            kind?: "api_service" | "gateway" | "websocket_service" | "web_app" | "mobile_app" | "desktop_app" | "other";
+            build_context?: string;
+            dockerfile_path?: string | null;
+            manifest_path?: string | null;
+        };
+        BatchResultResponse: {
+            results: {
+                index: number;
+                /** Format: int64 */
+                id?: number;
+                error?: string;
+            }[];
         };
         ModelBinding: {
             model: string;
@@ -894,6 +1500,255 @@ export interface operations {
             };
         };
     };
+    currentTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 团队概览 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamSummary"];
+                };
+            };
+        };
+    };
+    wechatAuthStatus: {
+        parameters: {
+            query: {
+                team_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 状态 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        configured: boolean;
+                        enabled: boolean;
+                    };
+                };
+            };
+        };
+    };
+    getWechatAuthConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 配置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WechatAuthConfig"];
+                };
+            };
+        };
+    };
+    saveWechatAuthConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WechatAuthConfigInput"];
+            };
+        };
+        responses: {
+            /** @description 已配置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+        };
+    };
+    getWechatBinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 绑定状态 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WechatBinding"];
+                };
+            };
+        };
+    };
+    unbindWechat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已解绑 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listTeamMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成员列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamMember"][];
+                };
+            };
+        };
+    };
+    updateTeamMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamMemberUpdate"];
+            };
+        };
+        responses: {
+            /** @description 已更新 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description 不能降级或停用最后一个拥有者 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listTeamAssets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 被测对象列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamAsset"][];
+                };
+            };
+        };
+    };
+    listAssetPermissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                targetId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 授权列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetGrant"][];
+                };
+            };
+        };
+    };
+    updateAssetPermission: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                targetId: number;
+                memberId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssetGrantUpdate"];
+            };
+        };
+        responses: {
+            /** @description 已更新 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetGrant"];
+                };
+            };
+        };
+    };
     listTargets: {
         parameters: {
             query?: never;
@@ -927,6 +1782,7 @@ export interface operations {
             content: {
                 "application/json": {
                     name: string;
+                    remark?: string;
                     /** @enum {string} */
                     type: "project" | "service_group" | "service" | "module";
                     parent_id?: number;

@@ -1,45 +1,24 @@
 import { useSyncExternalStore } from 'react';
-import { ACCOUNTS, type IAccount } from '@/data/mock';
+import type { IAccount } from '@/data/mock';
 
-const KEY = 'greenpass_current_user_id';
+const API_BASE = (import.meta.env.VITE_GP_API_BASE ?? '').replace(/\/$/, '');
+const ROLE_LABEL: Record<string,string> = { owner: '团队所有者', admin: '管理员', tester: '测试工程师', viewer: '访客' };
+type ApiUser = { id:number; username:string; display_name:string; email:string; team_id:number; role:string };
+function account(u:ApiUser):IAccount { return { id:String(u.id), name:u.display_name, email:u.email, role:ROLE_LABEL[u.role]??u.role, username:u.username, phone:'', wechat:'', avatarColor:'from-emerald-500 to-teal-600', via:'password' }; }
 
-function load(): IAccount {
-  try {
-    const id = localStorage.getItem(KEY);
-    const u = ACCOUNTS.find((a) => a.id === id);
-    if (u) return u;
-  } catch {
-    /* 忽略存储不可用 */
-  }
-  return ACCOUNTS[0];
-}
+let current:IAccount|null=null;
+let ready=false;
+const listeners=new Set<()=>void>();
+const emit=()=>listeners.forEach((l)=>l());
 
-let current: IAccount = load();
-const listeners = new Set<() => void>();
-function emit() {
-  listeners.forEach((l) => l());
-}
-
-export const loginStore = {
-  get: (): IAccount => current,
-  subscribe: (l: () => void) => {
-    listeners.add(l);
-    return () => {
-      listeners.delete(l);
-    };
-  },
-  /** 设置当前登录账号（登录 / 切换账号），并持久化到 localStorage 以跨刷新保留 */
-  setCurrent: (u: IAccount) => {
-    current = u;
-    try {
-      localStorage.setItem(KEY, u.id);
-    } catch {
-      /* 忽略存储不可用 */
-    }
-    emit();
-  },
+export const loginStore={
+  get:()=>current,
+  isReady:()=>ready,
+  subscribe:(l:()=>void)=>{listeners.add(l);return()=>{listeners.delete(l);};},
+  async restore(){ try { const r=await fetch(`${API_BASE}/auth/me`,{credentials:'same-origin'}); if(r.ok) current=account(((await r.json()) as {user:ApiUser}).user); } finally {ready=true;emit();} },
+  async login(username:string,password:string){ const r=await fetch(`${API_BASE}/auth/login`,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})}); if(!r.ok) throw new Error('账号或密码错误'); const body=await r.json() as {user:ApiUser}; current=account(body.user);ready=true;emit();return current; },
+  async logout(){ await fetch(`${API_BASE}/auth/logout`,{method:'POST',credentials:'same-origin'});current=null;ready=true;emit(); },
 };
-
-export function useCurrentUser(): IAccount {
-  return useSyncExternalStore(loginStore.subscribe, loginStore.get);
-}
+void loginStore.restore();
+export function useCurrentUser(){return useSyncExternalStore(loginStore.subscribe,loginStore.get);}
+export function useLoginReady(){return useSyncExternalStore(loginStore.subscribe,loginStore.isReady);}

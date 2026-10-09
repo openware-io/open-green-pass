@@ -25,6 +25,7 @@ type targetResponse struct {
 	TeamID       int64                 `json:"team_id"`
 	Type         string                `json:"type"`
 	Name         string                `json:"name"`
+	Remark       string                `json:"remark"`
 	Kind         string                `json:"kind"`
 	Status       string                `json:"status"`
 	ParentID     *int64                `json:"parent_id,omitempty"`
@@ -53,7 +54,7 @@ type caseResponse struct {
 func toTargetResponse(target *domain.Target) targetResponse {
 	node := target.Node
 	response := targetResponse{
-		ID: node.ID, TeamID: node.TeamID, Type: string(node.Type), Name: node.Name,
+		ID: node.ID, TeamID: node.TeamID, Type: string(node.Type), Name: node.Name, Remark: node.Remark,
 		Kind: node.Kind, Status: node.Status, ParentID: node.ParentID, RepoID: node.RepoID,
 	}
 	if target.ModelBinding != nil {

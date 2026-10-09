@@ -1,8 +1,11 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { useCurrentUser } from '@/context/login';
 import { PageHeader, PrimaryButton } from '@/components/shared';
 import { Building2, ShieldCheck, Wallet, Lock, Bell, Server, Save, ShieldAlert, Upload } from 'lucide-react';
+import { createGreenPassClient } from '@/api/client';
+
+const api = createGreenPassClient(Number(import.meta.env.VITE_GP_TEAM_ID ?? 1001), undefined, Number(import.meta.env.VITE_GP_USER_ID ?? 42));
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -39,33 +42,39 @@ const selectCls = 'px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounde
 
 export default function SettingsPage() {
   const user = useCurrentUser();
-  const isSuper = user.role === '团队所有者';
+  const isSuper = user.role === '团队所有者' || user.role === '管理员';
   const [maintenance, setMaintenance] = useState(false);
   const [antigCheat, setAntigCheat] = useState(true);
   const [pwLogin, setPwLogin] = useState(true);
   const [phoneLogin, setPhoneLogin] = useState(true);
-  const [wechatLogin, setWechatLogin] = useState(true);
+  const [wechatLogin, setWechatLogin] = useState(false);
+  const [wechatAppID, setWechatAppID] = useState('');
+  const [wechatAppSecret, setWechatAppSecret] = useState('');
+  const [wechatCallback, setWechatCallback] = useState('');
+  const [wechatSecretConfigured, setWechatSecretConfigured] = useState(false);
   const [sso, setSso] = useState(false);
   const [notifyBlock, setNotifyBlock] = useState(true);
   const [notifyReport, setNotifyReport] = useState(true);
   const [threshold, setThreshold] = useState('85');
+
+  useEffect(()=>{void api.wechatAuthConfig().then((config)=>{setWechatLogin(config.enabled);setWechatAppID(config.app_id);setWechatCallback(config.callback_uri);setWechatSecretConfigured(config.secret_configured);}).catch((error)=>toast.error('微信配置读取失败',{description:error instanceof Error?error.message:'服务不可用'}));},[]);
 
   if (!isSuper) {
     return (
       <div className="card bg-white rounded-xl border border-slate-200 p-10 text-center max-w-xl mx-auto mt-10">
         <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-3"><ShieldAlert className="w-6 h-6" /></div>
         <div className="text-base font-semibold text-slate-800">无权限访问</div>
-        <p className="text-[11px] text-slate-400 mt-2">系统设置为超级管理员专属，当前账号（{user.name} · {user.role}）无权访问。请切换为团队所有者账号。</p>
+        <p className="text-[11px] text-slate-400 mt-2">系统设置仅允许团队所有者或管理员访问，当前账号（{user.name} · {user.role}）无权访问。</p>
       </div>
     );
   }
 
-  const save = () => toast.success('配置已保存（原型示意）', { description: '系统设置已应用，涉及安全项将即时生效' });
+  const save = async () => { try { await api.saveWechatAuthConfig({enabled:wechatLogin,app_id:wechatAppID,app_secret:wechatAppSecret,callback_uri:wechatCallback});setWechatSecretConfigured(true);setWechatAppSecret('');toast.success('微信登录配置已安全保存'); } catch(error) { toast.error('微信配置保存失败',{description:error instanceof Error?error.message:'请求失败'}); } };
 
   return (
     <div>
-      <PageHeader title="系统设置" desc="超级管理员系统级配置 · 普通用户 / 无权限账号不可见">
-        <PrimaryButton onClick={save}><Save className="w-4 h-4" />保存全部设置</PrimaryButton>
+      <PageHeader title="系统设置" desc="团队所有者 / 管理员可配置系统级身份认证">
+        <PrimaryButton onClick={()=>void save()}><Save className="w-4 h-4" />保存微信配置</PrimaryButton>
       </PageHeader>
 
       <div className="grid grid-cols-2 gap-5">
@@ -118,7 +127,10 @@ export default function SettingsPage() {
           <div className="text-[10px] text-slate-400 mb-3">{SECTION_META[3].desc}</div>
           <Row label="账号密码登录"><Toggle on={pwLogin} onChange={setPwLogin} /></Row>
           <Row label="手机号登录" desc="短信验证码 + 自动绑定"><Toggle on={phoneLogin} onChange={setPhoneLogin} /></Row>
-          <Row label="微信扫码登录" desc="微信第三方授权"><Toggle on={wechatLogin} onChange={setWechatLogin} /></Row>
+          <Row label="微信扫码登录" desc="仅在完整配置后开启"><Toggle on={wechatLogin} onChange={setWechatLogin} /></Row>
+          <Row label="微信 AppID"><input className={inputCls} value={wechatAppID} onChange={(e)=>setWechatAppID(e.target.value)} placeholder="wx..." /></Row>
+          <Row label="微信 AppSecret" desc={wechatSecretConfigured?'已安全存储；留空表示不更新':'首次配置必填'}><input type="password" autoComplete="new-password" className={inputCls} value={wechatAppSecret} onChange={(e)=>setWechatAppSecret(e.target.value)} placeholder={wechatSecretConfigured?'已配置':'请输入 AppSecret'} /></Row>
+          <Row label="OAuth 回调地址" desc="须与微信开放平台登记地址一致"><input className={inputCls+' !w-80'} value={wechatCallback} onChange={(e)=>setWechatCallback(e.target.value)} placeholder="https://domain/api/auth/wechat/callback" /></Row>
           <Row label="企业 SSO" desc="对接企业统一身份"><Toggle on={sso} onChange={setSso} /></Row>
           <Row label="密码策略"><select className={selectCls} defaultValue="8 位以上含大小写"><option>8 位以上含大小写</option><option>10 位以上含符号</option><option>SSO 管理</option></select></Row>
         </div>

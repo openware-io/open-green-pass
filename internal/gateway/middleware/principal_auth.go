@@ -18,11 +18,14 @@ func PrincipalAuth(provider iam.AuthenticationProvider, allowHeaderFallback bool
 			// Metrics contain only the bounded platform labels enforced by the
 			// recorder. Scrape authorization is a deployment/NetworkPolicy concern,
 			// like liveness/readiness, so Prometheus does not need an end-user token.
-			if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/version" || r.URL.Path == "/metrics" {
+			if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" || r.URL.Path == "/version" || r.URL.Path == "/metrics" || r.URL.Path == "/auth/login" || r.URL.Path == "/auth/wechat/status" || r.URL.Path == "/auth/wechat/start" || r.URL.Path == "/auth/wechat/callback" {
 				next.ServeHTTP(w, r)
 				return
 			}
 			credential := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+			if credential == "" {
+				if cookie, err := r.Cookie("gp_session"); err == nil { credential = cookie.Value }
+			}
 			if provider != nil && credential != "" {
 				result := provider.Authenticate(r.Context(), credential)
 				if err := result.Validate(time.Now().UTC()); err != nil {

@@ -3,8 +3,10 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/openware-io/open-green-pass/internal/gateway/httpx"
 	"github.com/openware-io/open-green-pass/internal/governance/application"
@@ -100,6 +102,7 @@ func (h *handler) setModelBinding(w http.ResponseWriter, r *http.Request) {
 // createTargetRequest 建树节点请求。
 type createTargetRequest struct {
 	Name     string `json:"name"`
+	Remark   string `json:"remark,omitempty"`
 	Type     string `json:"type"` // project / service_group / service / module
 	ParentID *int64 `json:"parent_id,omitempty"`
 	Kind     string `json:"kind,omitempty"`
@@ -115,7 +118,7 @@ func (h *handler) createTarget(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, gperr.Validation("name required"))
 		return
 	}
-	node := domain.TargetNode{Name: req.Name, Type: domain.TargetNodeType(req.Type), ParentID: req.ParentID, Kind: req.Kind}
+	node := domain.TargetNode{Name: req.Name, Remark: strings.TrimSpace(req.Remark), Type: domain.TargetNodeType(req.Type), ParentID: req.ParentID, Kind: req.Kind}
 	tgt, err := h.svc.CreateTarget(r.Context(), node, nil)
 	if err != nil {
 		httpx.WriteErr(w, err)
@@ -170,6 +173,7 @@ func (h *handler) listTargets(w http.ResponseWriter, r *http.Request) {
 	}
 	tgts, err := h.svc.ListTargets(r.Context(), f)
 	if err != nil {
+		slog.Error("list targets failed", "error", err)
 		httpx.WriteErr(w, err)
 		return
 	}

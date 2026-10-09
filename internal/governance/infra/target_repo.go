@@ -54,10 +54,10 @@ func (s *TargetStore) SaveTarget(ctx context.Context, t *domain.Target) error {
 			mb = b
 		}
 		_, err := tx.Exec(ctx, `
-			INSERT INTO tgt_target(id, parent_id, level, name, kind, repo_id, model_binding, status, created_by)
+			INSERT INTO tgt_target(id, parent_id, level, name, remark, kind, model_binding, status, created_by)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-			id, t.Node.ParentID, nodeTypeLevel(t.Node.Type), t.Node.Name, t.Node.Kind,
-			t.Node.RepoID, mb, t.Node.Status, t.Node.OwnerID)
+			id, t.Node.ParentID, nodeTypeLevel(t.Node.Type), t.Node.Name, t.Node.Remark, t.Node.Kind,
+			mb, t.Node.Status, t.Node.OwnerID)
 		return err
 	})
 }
@@ -67,14 +67,8 @@ func (s *TargetStore) FindTarget(ctx context.Context, teamID, id int64) (*domain
 	var tgt domain.Target
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		row := tx.QueryRow(ctx, `
-			SELECT n.id, n.parent_id, n.level, n.name, n.kind, n.repo_id, n.model_binding, n.status, n.created_by,
-			       r.id, r.kind, r.url, r.default_branch, r.cred_ref,
-			       b.id, b.branch, b.version, b.head_sha
-			FROM tgt_target n
-			LEFT JOIN repo_repo r   ON r.id = n.repo_id
-			LEFT JOIN repo_branch b ON b.repo_id = r.id
-			WHERE n.id = $1 AND n.team_id = $2
-			ORDER BY b.created_at DESC LIMIT 1`,
+			SELECT n.id, n.parent_id, n.level, n.name, n.remark, n.kind, n.model_binding, n.status, n.created_by
+			FROM tgt_target n WHERE n.id = $1 AND n.team_id = $2`,
 			id, teamID)
 		return scanTarget(row, &tgt)
 	})
@@ -99,7 +93,7 @@ func (s *TargetStore) ListTargets(ctx context.Context, teamID int64, f domain.Ta
 	var out []*domain.Target
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
-			SELECT id, parent_id, level, name, kind, repo_id, model_binding, status, created_by
+			SELECT id, parent_id, level, name, remark, kind, model_binding, status, created_by
 			FROM tgt_target n WHERE `+where+` ORDER BY level, name`, args...)
 		if err != nil {
 			return err
@@ -132,8 +126,6 @@ func (s *TargetStore) SaveRepo(ctx context.Context, r *domain.Repo) error {
 		if err != nil {
 			return err
 		}
-		// 回填被测对象树节点的 repo_id（来源溯源 JOIN 依据）。
-		_, err = tx.Exec(ctx, `UPDATE tgt_target SET repo_id = $1, updated_at = now() WHERE id = $2`, id, r.TargetID)
 		return err
 	})
 }
@@ -174,30 +166,22 @@ func itoa(n int) string {
 	return string(b)
 }
 
-// scanTarget 扫描被测对象节点 + 绑定仓库/分支（FindTarget JOIN 结果）。
+// scanTarget 扫描被测对象节点。仓库改由项目目录接口独立查询。
 func scanTarget(row pgx.Row, tgt *domain.Target) error {
 	var (
-		nodeID, level, createdBy int64
-		parentID                 *int64
-		kind, name, status       string
-		repoID                   *int64
-		mb                       []byte
-		repoID2                  *int64
-		repoKind, repoURL        *string
-		repoDefaultBranch, repoCredRef *string
-		branchID                 *int64
-		branchName, branchVersion, branchHeadSHA *string
+		nodeID, level, createdBy   int64
+		parentID                   *int64
+		kind, name, remark, status string
+		mb                         []byte
 	)
 	if err := row.Scan(
-		&nodeID, &parentID, &level, &name, &kind, &repoID, &mb, &status, &createdBy,
-		&repoID2, &repoKind, &repoURL, &repoDefaultBranch, &repoCredRef,
-		&branchID, &branchName, &branchVersion, &branchHeadSHA,
+		&nodeID, &parentID, &level, &name, &remark, &kind, &mb, &status, &createdBy,
 	); err != nil {
 		return err
 	}
 	tgt.Node = domain.TargetNode{
-		ID: nodeID, Type: levelToNodeType(level), Name: name, Kind: kind,
-		Status: status, RepoID: repoID, OwnerID: createdBy,
+		ID: nodeID, Type: levelToNodeType(level), Name: name, Remark: remark, Kind: kind,
+		Status: status, OwnerID: createdBy,
 	}
 	tgt.Node.ParentID = parentID
 	if len(mb) > 0 {
@@ -206,35 +190,23 @@ func scanTarget(row pgx.Row, tgt *domain.Target) error {
 			tgt.ModelBinding = &b
 		}
 	}
-	if repoURL != nil && repoID2 != nil {
-		tgt.Repo = &domain.Repo{
-			ID: *repoID2, Kind: ptrStr(repoKind), URL: ptrStr(repoURL),
-			DefaultBranch: ptrStr(repoDefaultBranch), CredRef: repoCredRef,
-		}
-	}
-	if branchName != nil && repoID2 != nil {
-		tgt.Branch = &domain.RepoBranch{
-			RepoID: *repoID2, Branch: ptrStr(branchName), Version: ptrStr(branchVersion), HeadSHA: branchHeadSHA,
-		}
-	}
 	return nil
 }
 
 // scanNode 扫描单节点（ListTargets 行）。
 func scanNode(rows pgx.Rows, tgt *domain.Target) error {
 	var (
-		nodeID, level, createdBy int64
-		parentID                 *int64
-		kind, name, status       string
-		repoID                   *int64
-		mb                       []byte
+		nodeID, level, createdBy   int64
+		parentID                   *int64
+		kind, name, remark, status string
+		mb                         []byte
 	)
-	if err := rows.Scan(&nodeID, &parentID, &level, &name, &kind, &repoID, &mb, &status, &createdBy); err != nil {
+	if err := rows.Scan(&nodeID, &parentID, &level, &name, &remark, &kind, &mb, &status, &createdBy); err != nil {
 		return err
 	}
 	tgt.Node = domain.TargetNode{
-		ID: nodeID, Type: levelToNodeType(level), Name: name, Kind: kind,
-		Status: status, RepoID: repoID, OwnerID: createdBy,
+		ID: nodeID, Type: levelToNodeType(level), Name: name, Remark: remark, Kind: kind,
+		Status: status, OwnerID: createdBy,
 	}
 	tgt.Node.ParentID = parentID
 	if len(mb) > 0 {

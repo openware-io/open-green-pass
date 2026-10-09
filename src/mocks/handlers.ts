@@ -4,8 +4,8 @@ import type { CaseResult, CaseVersion, CostLineItem, CostOverview, GateResult, R
 const teamID = 100;
 let nextID = 9000;
 const targets: Target[] = [
-  { id: 1001, team_id: teamID, type: 'project', name: 'im-saas', kind: 'project', status: 'active', parent_id: null, repo_id: 2001 },
-  { id: 1003, team_id: teamID, type: 'service', name: 'im-saas-gateway', kind: 'api_service', status: 'active', parent_id: 1001, repo_id: 2001 },
+  { id: 1001, team_id: teamID, type: 'project', name: 'im-saas', kind: 'project', status: 'active', parent_id: null },
+  { id: 1003, team_id: teamID, type: 'service', name: 'im-saas-gateway', kind: 'api_service', status: 'active', parent_id: 1001 },
 ];
 const cases: TestCase[] = [
   { id: 4001, team_id: teamID, target_id: 1003, code: 'im-saas-gw-001', title: '健康检查接口', kind: 'api', current_version: 1, status: 'active' },
@@ -24,7 +24,7 @@ export const handlers = [
   http.get('/targets', () => json(targets)),
   http.post('/targets', async ({ request }) => {
     const body = await request.json() as { name: string; type: Target['type']; kind?: string; parent_id?: number };
-    const target: Target = { id: ++nextID, team_id: teamID, type: body.type, name: body.name, kind: body.kind ?? 'other', status: 'active', parent_id: body.parent_id ?? null, repo_id: null };
+    const target: Target = { id: ++nextID, team_id: teamID, type: body.type, name: body.name, kind: body.kind ?? 'other', status: 'active', parent_id: body.parent_id ?? null };
     targets.push(target);
     return json(target, 201);
   }),
@@ -32,7 +32,6 @@ export const handlers = [
     const target = targets.find((item) => item.id === parseID(params.id as string));
     if (!target) return json({ message: 'target not found' }, 404);
     const body = await request.json() as { url: string };
-    target.repo_id = target.repo_id ?? ++nextID;
     void body;
     return json({ status: 'ok' });
   }),

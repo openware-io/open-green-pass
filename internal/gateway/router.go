@@ -35,8 +35,10 @@ func NewRouterWithAuth(log *slog.Logger, provider iam.AuthenticationProvider, al
 	// PrincipalAuth owns both verified provider credentials and the explicitly
 	// enabled development-header fallback. Keeping this single path ensures
 	// downstream RBAC never observes a header-only request without a Principal.
-	h = middleware.PrincipalAuth(provider, allowHeaderFallback)(h)
+	// Authentication must run before tenant derivation so a verified session,
+	// rather than a client-supplied header, is the authority for RLS context.
 	h = middleware.Tenant(h)
+	h = middleware.PrincipalAuth(provider, allowHeaderFallback)(h)
 	h = middleware.RequestID(h)
 	h = middleware.AccessLog(log)(h)
 	return h

@@ -23,13 +23,20 @@ import CicdPage from '@/pages/CicdPage/CicdPage';
 import CicdTriggerPage from '@/pages/CicdTriggerPage/CicdTriggerPage';
 import CicdConnectorPage from '@/pages/CicdConnectorPage/CicdConnectorPage';
 import SettingsPage from '@/pages/SettingsPage/SettingsPage';
+import { useCurrentUser, useLoginReady } from '@/context/login';
+
+function ProtectedLayout() {
+  const user=useCurrentUser(); const ready=useLoginReady();
+  if(!ready) return <div className="min-h-screen grid place-items-center text-sm text-slate-500">正在验证登录状态…</div>;
+  return user ? <Layout /> : <Navigate to="/login" replace />;
+}
 
 export default function App() {
   return (
     <>
       <Routes>
       <Route path="login" element={<LoginPage />} />
-      <Route element={<Layout />}>
+      <Route element={<ProtectedLayout />}>
         <Route index element={<Navigate to="/scenarios" replace />} />
         <Route path="target" element={<TargetPage />} />
         <Route path="trace" element={<TracePage />} />

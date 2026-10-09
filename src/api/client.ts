@@ -16,6 +16,12 @@ export type EnvCheck = components['schemas']['EnvCheck'];
 export type ReadinessResponse = components['schemas']['ReadinessResponse'];
 export type VersionResponse = components['schemas']['VersionResponse'];
 export type ModelBinding = components['schemas']['ModelBinding'];
+export type TeamSummary = { id: number; name: string; member_count: number; project_count: number };
+export type TeamMember = { id: number; principal_id: string; username: string; display_name: string; email: string; role: 'owner'|'admin'|'tester'|'viewer'; status: 'active'|'disabled'|'invited'; last_active_at?: string };
+export type TeamAsset = { id: number; name: string; kind: string; owner_id?: number; owner_name: string };
+export type AssetGrant = { member_id: number; display_name: string; email: string; role: TeamMember['role']; permission: 'full'|'edit'|'exec'|'view'|'none'; concurrent_quota: number; sandbox_quota: number; version: number };
+export type WechatAuthConfig = { team_id:number; enabled:boolean; app_id:string; callback_uri:string; secret_configured:boolean; updated_at?:string };
+export type WechatBinding = { bound:boolean; display_name?:string; avatar_url?:string };
 
 export type CreateTargetInput = paths['/targets']['post']['requestBody']['content']['application/json'];
 export type CreateCaseInput = paths['/cases']['post']['requestBody']['content']['application/json'];
@@ -64,7 +70,7 @@ export class GreenPassClient {
     headers.set('x-gp-team-id', String(this.teamId));
     if (this.userId) headers.set('x-gp-user-id', String(this.userId));
     if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-    const response = await this.fetcher(`${this.baseUrl}${path}`, { ...init, headers });
+    const response = await this.fetcher(`${this.baseUrl}${path}`, { ...init, credentials: 'same-origin', headers });
     if (!response.ok) {
       let message = response.statusText;
       try {
@@ -103,6 +109,23 @@ export class GreenPassClient {
   attachRepo(targetId: number, input: paths['/targets/{id}/repo']['post']['requestBody']['content']['application/json']) {
     return this.request<{ status: string }>(`/targets/${targetId}/repo`, { method: 'POST', body: JSON.stringify(input) });
   }
+  listProjectRepositories(projectId: number): JsonResponse<Array<{id:number;project_id:number;url:string;default_branch:string}>> { return this.request(`/projects/${projectId}/repositories`); }
+  batchAddProjectRepositories(projectId:number,repositories:Array<{url:string;default_branch:string}>):JsonResponse<{results:Array<{index:number;id?:number;error?:string}>}>{return this.request(`/projects/${projectId}/repositories:batch`,{method:'POST',body:JSON.stringify({repositories})});}
+  listProjectServices(projectId:number):JsonResponse<Array<{id:number;project_id:number;repo_id:number;name:string;source_path:string;kind:string;status:string}>>{return this.request(`/projects/${projectId}/services`);}
+  batchAddProjectServices(projectId:number,services:Array<{repo_id:number;name:string;source_path:string;kind:string;build_context:string}>):JsonResponse<{results:Array<{index:number;id?:number;error?:string}>}>{return this.request(`/projects/${projectId}/services:batch`,{method:'POST',body:JSON.stringify({services})});}
+  updateProjectServiceKind(projectId:number,serviceId:number,kind:string):JsonResponse<{status:string}>{return this.request(`/projects/${projectId}/services/${serviceId}`,{method:'PATCH',body:JSON.stringify({kind})});}
+  modelCatalog():JsonResponse<{presets:Array<{Provider:string;Name:string;ModelKey:string;Protocol:string;BaseURL:string;Capabilities:string[]}>;models:Array<{id:number;provider:string;model_key:string;status:string}>}>{return this.request('/model-catalog');}
+  configureModels(input:{provider:string;protocol:string;token:string;base_url:string;model_keys:string[]}):JsonResponse<{status:string}>{return this.request('/model-connections',{method:'POST',body:JSON.stringify(input)});}
+  currentTeam(): JsonResponse<TeamSummary> { return this.request('/teams/current'); }
+  teamMembers(): JsonResponse<TeamMember[]> { return this.request('/teams/current/members'); }
+  updateTeamMember(memberId:number,input:{role:TeamMember['role'];status:TeamMember['status']}):JsonResponse<{status:string}>{return this.request(`/teams/current/members/${memberId}`,{method:'PATCH',body:JSON.stringify(input)});}
+  teamAssets(): JsonResponse<TeamAsset[]> { return this.request('/teams/current/assets'); }
+  assetPermissions(targetId:number): JsonResponse<AssetGrant[]> { return this.request(`/teams/current/assets/${targetId}/permissions`); }
+  updateAssetPermission(targetId:number,memberId:number,input:{permission:AssetGrant['permission'];concurrent_quota:number;sandbox_quota:number}):JsonResponse<AssetGrant|{status:string}>{return this.request(`/teams/current/assets/${targetId}/permissions/${memberId}`,{method:'PUT',body:JSON.stringify(input)});}
+  wechatAuthConfig():JsonResponse<WechatAuthConfig>{return this.request('/settings/auth/wechat');}
+  saveWechatAuthConfig(input:{enabled:boolean;app_id:string;app_secret:string;callback_uri:string}):JsonResponse<{status:string;secret_configured:boolean}>{return this.request('/settings/auth/wechat',{method:'PUT',body:JSON.stringify(input)});}
+  wechatBinding():JsonResponse<WechatBinding>{return this.request('/account/wechat');}
+  unbindWechat():JsonResponse<void>{return this.request('/account/wechat',{method:'DELETE'});}
   listCases(params: NonNullable<paths['/cases']['get']['parameters']['query']> = {}): JsonResponse<TestCase[]> {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => { if (value !== undefined) query.set(key, String(value)); });

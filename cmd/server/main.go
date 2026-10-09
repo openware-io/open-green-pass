@@ -26,6 +26,7 @@ import (
 	gapi "github.com/openware-io/open-green-pass/internal/governance/api"
 	"github.com/openware-io/open-green-pass/internal/governance/application"
 	"github.com/openware-io/open-green-pass/internal/governance/infra"
+	iamapi "github.com/openware-io/open-green-pass/internal/iam/api"
 	iamapp "github.com/openware-io/open-green-pass/internal/iam/application"
 	iaminfra "github.com/openware-io/open-green-pass/internal/iam/infra"
 	"github.com/openware-io/open-green-pass/internal/platform/config"
@@ -71,6 +72,8 @@ func main() {
 	trustedDB := infra.NewDB(trustedPool)
 	store := infra.NewTargetStore(db, gen)
 	treeSvc := application.NewTargetTreeService(store, gen)
+	projectCatalog := infra.NewProjectCatalog(db, gen)
+	modelStore := infra.NewModelStore(db)
 	// GP3-05 reference policy is intentionally empty until the persistent
 	// approval/whitelist store is configured; it can be injected here later.
 	caseStore := infra.NewCaseStore(db, gen)
@@ -181,14 +184,25 @@ func main() {
 	runSvc.SetGatePort(einfra.NewTrustedGatePort(gateSvc))
 	runSvc.SetReportPort(einfra.NewTrustedReportPort(reportSvc))
 	runSvc.SetCostPort(einfra.NewTrustedCostPort(costSvc))
-	iamAuthorizer := iamapp.NewAuthorizer(iaminfra.NewRBACStore(db, gen))
+	rbacStore := iaminfra.NewRBACStore(db, gen)
+	iamAuthorizer := iamapp.NewAuthorizer(rbacStore)
 	iamAuthorizer.SetAuditPort(iaminfra.NewTrustedAuditPort(auditSvc))
+	membershipService := iamapp.NewMembershipService(rbacStore)
+	membershipService.SetAuditPort(iaminfra.NewTrustedAuditPort(auditSvc))
+	teamStore := iaminfra.NewTeamStore(db)
+	authStore := iaminfra.NewAuthStore(pool)
+	wechatStore := iaminfra.NewWechatStore(db, pool)
 
 	addr := cfg.Addr
 	// Header identity is a development-only compatibility path. Production
 	// must wire a verified AuthenticationProvider before serving business APIs.
 	allowHeaderFallback := cfg.Env != "prod" && os.Getenv("GP_ALLOW_HEADER_AUTH") == "true"
-	handler := gateway.NewRouterWithAuth(log, nil, allowHeaderFallback,
+	handler := gateway.NewRouterWithAuth(log, authStore, allowHeaderFallback,
+		func(mux *http.ServeMux) { iamapi.RegisterAuth(mux, authStore, cfg.Env == "prod") },
+		func(mux *http.ServeMux) {
+			iamapi.RegisterWechat(mux, wechatStore, authStore, os.Getenv("GP_AUTH_SECRET_NAMESPACE"), cfg.Env == "prod")
+		},
+		func(mux *http.ServeMux) { iamapi.RegisterTeams(mux, teamStore, rbacStore, membershipService) },
 		func(mux *http.ServeMux) {
 			gateway.RegisterSystem(mux, gateway.SystemStatus{
 				Ready: func(ctx context.Context) error { return pool.Ping(ctx) },
@@ -200,6 +214,10 @@ func main() {
 			})
 		},
 		func(mux *http.ServeMux) { gapi.RegisterAuthorized(mux, treeSvc, iamAuthorizer) },
+		func(mux *http.ServeMux) { gapi.RegisterProjectCatalog(mux, projectCatalog) },
+		func(mux *http.ServeMux) {
+			gapi.RegisterModels(mux, modelStore, gen, os.Getenv("GP_MODEL_SECRET_NAMESPACE"))
+		},
 		func(mux *http.ServeMux) { gapi.RegisterCasesAuthorized(mux, caseSvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { eapi.RegisterAuthorized(mux, envSvc, runSvc, policySvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc, costSvc, reportSvc) },

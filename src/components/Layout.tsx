@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { SidebarProvider, SidebarInset, Sidebar } from '@/components/ui/sidebar';
-import { NAV_GROUPS, ASSET_TREE, CASES, REQUIREMENTS, CONTRACTS, TEAMS, CURRENT_TEAM_ID, ACCOUNTS, type IAssetNode } from '@/data/mock';
+import { NAV_GROUPS, ASSET_TREE, CASES, REQUIREMENTS, CONTRACTS, TEAMS, CURRENT_TEAM_ID, type IAssetNode } from '@/data/mock';
 import { cn } from '@/lib/utils';
 import { useCurrentUser, loginStore } from '@/context/login';
+import { createGreenPassClient } from '@/api/client';
+const accountApi = createGreenPassClient(Number(import.meta.env.VITE_GP_TEAM_ID ?? 1001), undefined, Number(import.meta.env.VITE_GP_USER_ID ?? 42));
 const LOGIN_LABEL: Record<string, string> = { password: '账号密码', phone: '手机号', wechat: '微信扫码' };
 import { AssetLevelContext, LEVEL_ORDER, LEVEL_LABEL, type AssetLevel } from '@/context';
 import { Target, Settings2, Files, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, ChevronRight, Search, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes, UserCircle, LogOut, Smartphone, MessageCircle, Workflow, Zap, Plug, Settings } from 'lucide-react';
@@ -186,7 +188,9 @@ export function Layout() {
   const [selectedAsset, setSelectedAsset] = useState<IAssetNode>(ASSET_TREE.children![0].children![0].children![0]);
   const [navOpen, setNavOpen] = useState<Record<string, boolean>>({});
   const [userMenu, setUserMenu] = useState(false);
-  const user = useCurrentUser();
+  const [wechatBinding, setWechatBinding] = useState<{bound:boolean;display_name?:string}>({bound:false});
+  useEffect(()=>{if(userMenu)void accountApi.wechatBinding().then(setWechatBinding).catch(()=>setWechatBinding({bound:false}));},[userMenu]);
+  const user = useCurrentUser()!;
   const isSuperAdmin = user.role === '团队所有者';
   const [level, setLevel] = useState<AssetLevel>('service');
   const [query, setQuery] = useState('');
@@ -392,12 +396,12 @@ export function Layout() {
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <span className="flex items-center gap-1.5 text-slate-600"><MessageCircle className="w-3.5 h-3.5" />微信号</span>
-                      <span>{user.wechat ? <span className="text-slate-500">{user.wechat}</span> : <button type="button" onClick={() => toast.success('绑定微信（原型示意）', { description: '将跳转微信授权并关联当前账号' })} className="text-emerald-600 hover:underline">去绑定</button>}</span>
+                      <span>{wechatBinding.bound ? <span className="inline-flex items-center gap-2 text-slate-500">{wechatBinding.display_name||'已绑定'}<button type="button" onClick={async()=>{await accountApi.unbindWechat();setWechatBinding({bound:false});toast.success('微信已解绑');}} className="text-red-500 hover:underline">解绑</button></span> : <button type="button" onClick={() => { window.location.href=`${(import.meta.env.VITE_GP_API_BASE??'').replace(/\/$/,'')}/account/wechat/start`; }} className="text-emerald-600 hover:underline">去绑定</button>}</span>
                     </div>
                   </div>
                   <div className="px-4 py-3 border-t border-slate-100 space-y-1">
                     <button type="button" onClick={() => { setUserMenu(false); navigate('/login'); }} className="w-full text-left text-xs text-slate-600 hover:text-emerald-600 py-1.5 flex items-center gap-2"><UserCircle className="w-3.5 h-3.5" />切换账号</button>
-                    <button type="button" onClick={() => { loginStore.setCurrent(ACCOUNTS[0]); setUserMenu(false); toast('已退出登录', { description: '请重新登录' }); navigate('/login'); }} className="w-full text-left text-xs text-red-500 hover:text-red-600 py-1.5 flex items-center gap-2"><LogOut className="w-3.5 h-3.5" />退出登录</button>
+                    <button type="button" onClick={async () => { await loginStore.logout(); setUserMenu(false); toast('已退出登录'); navigate('/login'); }} className="w-full text-left text-xs text-red-500 hover:text-red-600 py-1.5 flex items-center gap-2"><LogOut className="w-3.5 h-3.5" />退出登录</button>
                   </div>
                 </div>
               )}

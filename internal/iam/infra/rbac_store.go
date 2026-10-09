@@ -39,7 +39,7 @@ ON CONFLICT (team_id,principal_id) DO UPDATE SET role=EXCLUDED.role,status=EXCLU
 func (s *RBACStore) FindMember(ctx context.Context, teamID, memberID int64) (*iam.Member, error) {
 	var out iam.Member
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT id,team_id,principal_id,role,status,last_active_at,created_by,created_at,updated_by,updated_at
+		return tx.QueryRow(ctx, `SELECT id,team_id,principal_id,role,status,last_active_at,COALESCE(created_by,0),created_at,COALESCE(updated_by,0),updated_at
 FROM iam_member WHERE team_id=$1 AND id=$2`, teamID, memberID).Scan(&out.ID, &out.TeamID, &out.PrincipalID, &out.Role, &out.Status, &out.LastActiveAt, &out.CreatedBy, &out.CreatedAt, &out.UpdatedBy, &out.UpdatedAt)
 	})
 	if err != nil {
@@ -51,7 +51,7 @@ FROM iam_member WHERE team_id=$1 AND id=$2`, teamID, memberID).Scan(&out.ID, &ou
 func (s *RBACStore) FindMemberByPrincipal(ctx context.Context, teamID int64, principalID string) (*iam.Member, error) {
 	var out iam.Member
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT id,team_id,principal_id,role,status,last_active_at,created_by,created_at,updated_by,updated_at
+		return tx.QueryRow(ctx, `SELECT id,team_id,principal_id,role,status,last_active_at,COALESCE(created_by,0),created_at,COALESCE(updated_by,0),updated_at
 FROM iam_member WHERE team_id=$1 AND principal_id=$2`, teamID, principalID).Scan(&out.ID, &out.TeamID, &out.PrincipalID, &out.Role, &out.Status, &out.LastActiveAt, &out.CreatedBy, &out.CreatedAt, &out.UpdatedBy, &out.UpdatedAt)
 	})
 	if err != nil {
@@ -63,7 +63,7 @@ FROM iam_member WHERE team_id=$1 AND principal_id=$2`, teamID, principalID).Scan
 func (s *RBACStore) ListMembers(ctx context.Context, teamID int64, status iam.MemberStatus) ([]*iam.Member, error) {
 	var out []*iam.Member
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id,team_id,principal_id,role,status,last_active_at,created_by,created_at,updated_by,updated_at
+		rows, err := tx.Query(ctx, `SELECT id,team_id,principal_id,role,status,last_active_at,COALESCE(created_by,0),created_at,COALESCE(updated_by,0),updated_at
 FROM iam_member WHERE team_id=$1 AND ($2='' OR status=$2) ORDER BY id`, teamID, status)
 		if err != nil {
 			return err
