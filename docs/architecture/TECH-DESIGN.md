@@ -336,7 +336,7 @@ Queued → VersionCheck → Scheduled → Running → (Paused/Resumed) → Colle
 
 ## 9. 可执行落地（v1.0）：Go + Temporal 细化到可实现
 
-> 前置：技术栈已定（**Go + Temporal**，其余按 §3/§8 建议）。本章把方案细化到**可执行程度**——工程骨架、领域包结构、DDL 级数据模型、Temporal 工作流/Activity、API 清单、成本审计数据流、报告链路、前端整合、CI/CD 对接、里程碑。工程落地必须遵守 [ENGINEERING-SPEC.md](./ENGINEERING-SPEC.md)（Go 全量工程规范），UI/交互遵循 [DESIGN-SPEC.md](./DESIGN-SPEC.md)。
+> 前置：技术栈已定（**Go + Temporal**，其余按 §3/§8 建议）。本章把方案细化到**可执行程度**——工程骨架、领域包结构、DDL 级数据模型、Temporal 工作流/Activity、API 清单、成本审计数据流、报告链路、前端整合、CI/CD 对接、里程碑。工程落地必须遵守 [ENGINEERING-SPEC.md](../engineering/ENGINEERING-SPEC.md)（Go 全量工程规范），UI/交互遵循 [DESIGN-SPEC.md](./DESIGN-SPEC.md)。
 
 ### 9.1 Go 工程骨架（对照 ENGINEERING-SPEC）
 

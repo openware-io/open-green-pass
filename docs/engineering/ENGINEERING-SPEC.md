@@ -3,7 +3,7 @@
 > 状态：生效（v1.0）
 > 适用范围：`open-green-pass` 后端工作区（GreenPass 服务仓库）、构建脚本、CI 与本地开发环境
 > 定位：GreenPass 后端（Go + Temporal）的全量工程规范。参考 `open-im-server` 的 Java 工程治理骨架（模块边界 / 依赖方向 / 分层职责 / 日志埋点 / 构建门禁 / DB 表前缀 / 迁移只增不改 / 可观测 / 分层测试 / 发布），并按 Go 技术栈 + 业界工程实践（Google Go Style、Uber Go Style、字节 CloudWeGo 工程规范、golangci-lint 生态）**改写为 Go 原生表达**，非机械照抄。
-> 前端 UI/交互规范见 [DESIGN-SPEC.md](./DESIGN-SPEC.md)，本规范只约束后端工程与前后端接口契约。
+> 前端 UI/交互规范见 [DESIGN-SPEC.md](../architecture/DESIGN-SPEC.md)，本规范只约束后端工程与前后端接口契约。
 
 ---
 
@@ -163,6 +163,15 @@ GreenPass 后端按限界上下文组织，单体阶段各自清晰、需要时�
 2. 影响权限、一致性、顺序性、幂等、补偿、重试、降级、状态流转的代码必须解释"为什么这样设计"。
 3. 中文注释为主，禁止乱码、占位符残留、机翻不通顺、与实现不一致的注释；迁移代码时同步更新注释归属。
 4. 每个 `cmd/*` 服务与每个限界上下文在 `docs/services/README.md` 维护职责、入口、依赖与运行方式。
+
+### 5.1 文件与文档位置规范
+
+1. 仓库根目录只允许构建入口、依赖清单、许可证、贡献指南、变更日志与顶层 `README.md`；业务方案、运行手册和状态报告不得放根目录。
+2. 长期维护文档必须按 `docs/README.md` 进入 `product/`、`architecture/`、`engineering/`、`plans/`、`runbooks/`、`status/` 或 `services/`。
+3. 构建产物仅写 `dist/` 或 `bin/`；命令日志、测试证据、回放载荷统一写 `.outputs/<category>/`。这些目录均为本地可重建内容，不得提交。
+4. 临时视觉稿可放忽略目录 `design/`；形成有效规范后必须整理进入 `docs/architecture/`，不得长期依赖忽略文件。
+5. 真实环境变量和密钥只允许放在忽略的 `.env`、本地密钥管理器或 Kubernetes Secret；仓库只提交无真实凭证的 `.env.example`。
+6. 新增文件前必须先确定归属；没有明确归属时先更新 `docs/README.md`，禁止以“临时”为由堆放到根目录。
 
 ---
 

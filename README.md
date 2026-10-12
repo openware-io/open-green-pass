@@ -24,7 +24,7 @@
 - 图标：lucide-react
 - 路由：react-router-dom（**HashRouter**，兼容 `file://` 静态打开）
 - 提示：sonner（`<Toaster/>`）
-- 后端技术栈（规划）：Go + Temporal + PostgreSQL(RLS 多租户) + TimescaleDB + Redis + S3 兼容对象存储(SeaweedFS)，详见后端服务仓库 [`./docs/TECH-DESIGN.md`](./docs/TECH-DESIGN.md) 与 [`./docs/ENGINEERING-SPEC.md`](./docs/ENGINEERING-SPEC.md)
+- 后端技术栈（规划）：Go + Temporal + PostgreSQL(RLS 多租户) + TimescaleDB + Redis + S3 兼容对象存储(SeaweedFS)，详见 [`docs/architecture/TECH-DESIGN.md`](./docs/architecture/TECH-DESIGN.md) 与 [`docs/engineering/ENGINEERING-SPEC.md`](./docs/engineering/ENGINEERING-SPEC.md)
 
 ## 功能页面
 
@@ -59,13 +59,14 @@ src/
 └── data/
     └── mock.ts         # 单一数据源（含 assetToProfile 资产联动画像派生）
 docs/
-├── PRD.md                # 产品需求文档（随原型迭代同步更新）
-└── DESIGN-SPEC.md        # UI / 交互设计规范（设计 token + 状态语义）
-├── ENGINEERING-SPEC.md   # Go 后端全量工程规范（模块边界 / 依赖 / 门禁 / DB / 测试 / CI）
-├── TECH-DESIGN.md        # 技术方案与技术栈选型（Go + Temporal，可执行稿）
-└── IMPLEMENTATION-PLAN.md # 实施执行方案（P0 脚手架 / P1 最小闭环 · 照单执行）
-dist/
-└── GreenPass-standalone.html   # 可独立打开的单文件原型（内联 CSS/JS）
+├── README.md             # 文档分类、命名与位置规范
+├── product/              # 产品需求与业务口径
+├── architecture/         # 技术架构与 UI / 交互设计规范
+├── engineering/          # 工程、安全、发布规范
+├── plans/                # 实施方案与任务清单
+├── runbooks/             # 运维、恢复与故障处理手册
+├── status/               # 带日期的阶段进度快照
+└── services/             # 服务职责、依赖与运行方式
 ```
 
 ## 运行方式
@@ -77,7 +78,7 @@ npm run dev        # 开发服务（localhost:5173，URL 形如 #/target）
 
 ### 真实 API 开发接入
 
-默认不发起后端请求。要在“测试执行”页启用真实运行控制，创建本地 `.env.local`：
+本地环境变量从 `.env.example` 复制到忽略的 `.env`；前端仅使用 Vite 允许的公开变量，禁止把密钥写入 `VITE_*`。
 
 ```dotenv
 VITE_GP_API_BASE=http://127.0.0.1:8080
@@ -117,7 +118,7 @@ npm run lint:eslint    # eslint src
 ## 说明
 
 - 原型阶段**不做后端业务**，所有交互（重新判定、搜索、成员/模型配置、资产联动）均为前端 mock 反馈。
-- 产品需求文档见 [`docs/PRD.md`](./docs/PRD.md)、设计规范 [`docs/DESIGN-SPEC.md`](./docs/DESIGN-SPEC.md)；后端技术方案/工程规范/执行方案见后端服务仓库 [`./docs/`](./docs/)。
+- 产品需求文档见 [`docs/product/PRD.md`](./docs/product/PRD.md)、设计规范 [`docs/architecture/DESIGN-SPEC.md`](./docs/architecture/DESIGN-SPEC.md)；完整文档分类与位置规则见 [`docs/README.md`](./docs/README.md)。
 - 开源许可：[MIT](./LICENSE)。
 
 ---

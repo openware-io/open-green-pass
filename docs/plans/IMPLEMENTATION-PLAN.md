@@ -1,7 +1,7 @@
 # GreenPass · 实施执行方案（Implementation Plan）
 
 > 状态：待执行（v0.3，**全阶段可执行**：P0/P1 实现级 + P2–P4 任务级施工图）
-> 依据约束：**[ENGINEERING-SPEC.md](./ENGINEERING-SPEC.md)**（硬约束）+ **[TECH-DESIGN.md](./TECH-DESIGN.md)** §9（技术方案）+ **[DESIGN-SPEC.md](./DESIGN-SPEC.md)**（前端 UI/交互）。
+> 依据约束：**[ENGINEERING-SPEC.md](../engineering/ENGINEERING-SPEC.md)**（硬约束）+ **[TECH-DESIGN.md](../architecture/TECH-DESIGN.md)** §9（技术方案）+ **[DESIGN-SPEC.md](../architecture/DESIGN-SPEC.md)**（前端 UI/交互）。
 > 定位：**照单执行**——用户说「开始」即按本方案编号任务执行，每项含「实施步骤 / 关键文件 / 验证」，阶段含完成定义（DoD）。
 > 环境前提：本地 kind 集群已运行 **open-im-local（ns: open-im-local，不改动其工作负载）**；GP 软隔离接入（ns: gp + ns: gp-runner）；**open-im-local 是 GP 首个被测对象（SUT）**；已确认：本地调试不用 docker 部署形态（go run + kind 依赖代理）、宿主机端口避让 IM 系统。
 
@@ -270,14 +270,14 @@ jobs:
 
 ## 4. P3 AI 治理 + 生成管道 W1（任务级施工图）
 
-- **GP3-01～GP3-07**：已补充规格 `docs/GP3-DETAILED-IMPLEMENTATION-SPEC.md`，并细化为可直接排期的批次清单 `docs/GP3-GP4-EXECUTION-BACKLOG.md`。GP3-01 统一 AI 网关参考实现已完成，真实 LiteLLM/供应商、超时和成本接入待完成；GP3-02～GP3-07 均未达到阶段 DoD，按批次清单逐项开发和验收。
+- **GP3-01～GP3-07**：已补充规格 `docs/plans/GP3-DETAILED-IMPLEMENTATION-SPEC.md`，并细化为可直接排期的批次清单 `docs/plans/GP3-GP4-EXECUTION-BACKLOG.md`。GP3-01 统一 AI 网关参考实现已完成，真实 LiteLLM/供应商、超时和成本接入待完成；GP3-02～GP3-07 均未达到阶段 DoD，按批次清单逐项开发和验收。
 - **GP3-05A 当前进展**：已完成 provider-independent 的 `tgt_target.model_binding` 读写端点、领域输入校验、可注入 `ModelBindingPolicy`/静态参考白名单、OpenAPI/前端 client 和租户范围复用；持久模型白名单、审批、价格快照、Secret resolver 和真实 provider 仍未完成。
-- **GP3-02～GP3-07**：目标与验收保持不变，具体实施拆分、契约、迁移、分层边界和前置决策以 `docs/GP3-DETAILED-IMPLEMENTATION-SPEC.md` 为准；在真实依赖和用户决策未确定前，不宣称代码或 DoD 完成。
+- **GP3-02～GP3-07**：目标与验收保持不变，具体实施拆分、契约、迁移、分层边界和前置决策以 `docs/plans/GP3-DETAILED-IMPLEMENTATION-SPEC.md` 为准；在真实依赖和用户决策未确定前，不宣称代码或 DoD 完成。
 
 ## 5. P4 平台化（任务级施工图）
 
-- **GP4-01～GP4-06**：已补充规格 `docs/GP4-IMPLEMENTATION-SPEC-DRAFT.md`，并细化为可直接排期的批次清单 `docs/GP3-GP4-EXECUTION-BACKLOG.md`。GP4-04A 已有 `/readyz`（PostgreSQL + Redis 探针）、`/version`、构建信息、Helm 和迁移 Job；GP4-05A 有 provider-independent placement dry-run；GP4-06A 有低基数 metrics、dashboard、runbook 和受限 k6 smoke harness。上述均是代码/交付骨架，尚未完成真实私有化、租户迁移、观测栈接入、压测或 SLO 验收。身份源/RBAC、CI 首批平台和私有化拓扑仍需先定稿；不依赖这些决策的骨架批次可先开发。
-- **GP4-02～GP4-06**：目标与验收保持不变，具体实施拆分、契约、迁移、分层边界和前置决策以 `docs/GP4-IMPLEMENTATION-SPEC-DRAFT.md` 为准；真实 provider、集群和容量验收仍待用户决策与环境准备。
+- **GP4-01～GP4-06**：已补充规格 `docs/plans/GP4-IMPLEMENTATION-SPEC-DRAFT.md`，并细化为可直接排期的批次清单 `docs/plans/GP3-GP4-EXECUTION-BACKLOG.md`。GP4-04A 已有 `/readyz`（PostgreSQL + Redis 探针）、`/version`、构建信息、Helm 和迁移 Job；GP4-05A 有 provider-independent placement dry-run；GP4-06A 有低基数 metrics、dashboard、runbook 和受限 k6 smoke harness。上述均是代码/交付骨架，尚未完成真实私有化、租户迁移、观测栈接入、压测或 SLO 验收。身份源/RBAC、CI 首批平台和私有化拓扑仍需先定稿；不依赖这些决策的骨架批次可先开发。
+- **GP4-02～GP4-06**：目标与验收保持不变，具体实施拆分、契约、迁移、分层边界和前置决策以 `docs/plans/GP4-IMPLEMENTATION-SPEC-DRAFT.md` 为准；真实 provider、集群和容量验收仍待用户决策与环境准备。
 
 ---
 

@@ -18,7 +18,7 @@
 
 - 一个独立 commit，commit message 使用 `feat/fix/refactor: ...`。
 - 迁移（如有）、OpenAPI（如有）、生成类型（如有）、domain/application/infra/api 代码和测试。
-- `docs/IMPLEMENTATION-PLAN.md` 对应条目更新为“代码完成/真实验收待完成”，不能直接写“完成”。
+- `docs/plans/IMPLEMENTATION-PLAN.md` 对应条目更新为“代码完成/真实验收待完成”，不能直接写“完成”。
 - 证据：测试命令、依赖版本、未验证项和阻塞决策。
 
 ### 1.2 固定验证命令

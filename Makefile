@@ -39,3 +39,7 @@ tools:
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	go install golang.org/x/vuln/cmd/govulncheck@latest
 	go install honnef.co/go/tools/cmd/staticcheck@latest
+
+# Windows 本地清理：仅删除文档规范中列出的可重建产物。
+clean:
+	pwsh -NoProfile -File ./scripts/dev/clean-local.ps1

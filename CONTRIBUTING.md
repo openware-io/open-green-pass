@@ -6,7 +6,7 @@
 
 1. 安装依赖：`npm install`
 2. 启动开发服务：`npm run dev`（localhost:5173，URL 形如 `#/target`）
-3. 每次改动同步更新产品需求文档 [`docs/PRD.md`](./docs/PRD.md) 的变更记录表（追加一行 vX.Y.Z）。
+3. 产品行为变更同步更新 [`docs/product/PRD.md`](./docs/product/PRD.md) 的变更记录；文档必须遵守 [`docs/README.md`](./docs/README.md) 的分类与位置规范。
 4. 完成校验：
    - `npm run typecheck`
    - `npm run lint:eslint`（历史告警须清零）

@@ -9,6 +9,7 @@ build/
 */build/
 
 # Environment files
+.env
 .env.local
 
 # Logs
@@ -68,8 +69,12 @@ pnpm-lock.yaml
 dev.log
 dev.err.log
 
-# Design drafts (intermediate)
+# Local design drafts (intermediate)
 design/
+
+# Local binaries and replay inputs
+*.exe
+replay-payload.json
 
 # kind-forward.ps1 运行时 PID 状态文件
 *.pids
