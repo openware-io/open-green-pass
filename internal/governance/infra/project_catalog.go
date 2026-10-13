@@ -57,7 +57,9 @@ func (s *ProjectCatalog) AddRepository(ctx context.Context, projectID int64, url
 	return out, err
 }
 func (s *ProjectCatalog) ListRepositories(ctx context.Context, projectID int64) ([]ProjectRepository, error) {
-	var out []ProjectRepository
+	// Keep the HTTP contract array-shaped when a project has no repositories.
+	// A nil slice is encoded as JSON null, while clients consume this as a list.
+	out := make([]ProjectRepository, 0)
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT id,project_id,url,default_branch FROM repo_repo WHERE project_id=$1 AND deleted_at IS NULL ORDER BY created_at`, projectID)
 		if err != nil {
@@ -93,7 +95,9 @@ func (s *ProjectCatalog) AddService(ctx context.Context, v ProjectService) (Proj
 	return v, err
 }
 func (s *ProjectCatalog) ListServices(ctx context.Context, projectID int64) ([]ProjectService, error) {
-	var out []ProjectService
+	// Keep the HTTP contract array-shaped when a project has no services.
+	// A nil slice is encoded as JSON null, while clients consume this as a list.
+	out := make([]ProjectService, 0)
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT id,project_id,repo_id,name,source_path,kind,build_context,dockerfile_path,manifest_path,status FROM tgt_service WHERE project_id=$1 ORDER BY repo_id,source_path`, projectID)
 		if err != nil {
