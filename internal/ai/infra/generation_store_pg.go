@@ -172,7 +172,11 @@ func (s *GenerationBatchStore) CompareAndSwap(ctx context.Context, b *domain.Gen
 
 func scanBatch(row pgx.Row, b *domain.GenerationBatch) error {
 	var state string
-	return row.Scan(&b.ID, &b.TeamID, &b.TargetID, &b.RepoID, &b.Branch, &b.RequestedVersion, &b.HeadSHA, &state, &b.StateVersion, &b.WorkflowID, &b.IdempotencyKey, &b.ParentBatchID, &b.CreatedBy, &b.FailureSummary, &b.CreatedAt, &b.UpdatedAt)
+	if err := row.Scan(&b.ID, &b.TeamID, &b.TargetID, &b.RepoID, &b.Branch, &b.RequestedVersion, &b.HeadSHA, &state, &b.StateVersion, &b.WorkflowID, &b.IdempotencyKey, &b.ParentBatchID, &b.CreatedBy, &b.FailureSummary, &b.CreatedAt, &b.UpdatedAt); err != nil {
+		return err
+	}
+	b.State = domain.GenerationBatchState(state)
+	return nil
 }
 
 func nullString(v string) any {

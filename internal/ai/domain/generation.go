@@ -65,7 +65,7 @@ func NewGenerationBatch(id, teamID, targetID, repoID, createdBy int64, branch, r
 	return &GenerationBatch{
 		ID: id, TeamID: teamID, TargetID: targetID, RepoID: repoID,
 		Branch: branch, RequestedVersion: requestedVersion,
-		State: GenerationEnqueued, StateVersion: 1, IdempotencyKey: idempotencyKey,
+		State: GenerationEnqueued, StateVersion: 1, WorkflowID: fmt.Sprintf("generation/%d/%d", teamID, id), IdempotencyKey: idempotencyKey,
 		CreatedBy: createdBy, CreatedAt: now, UpdatedAt: now,
 	}, nil
 }
