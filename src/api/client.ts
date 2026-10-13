@@ -119,6 +119,7 @@ export class GreenPassClient {
   createGenerationBatch(input: paths['/generation/batches']['post']['requestBody']['content']['application/json']): JsonResponse<GenerationBatch> { return this.request('/generation/batches',{method:'POST',body:JSON.stringify(input)}); }
   getGenerationBatch(batchId:number): JsonResponse<GenerationBatch> { return this.request(`/generation/batches/${batchId}`); }
   reviewGenerationBatch(batchId:number,input: paths['/generation/batches/{id}/review']['post']['requestBody']['content']['application/json']): JsonResponse<GenerationBatch> { return this.request(`/generation/batches/${batchId}/review`,{method:'POST',body:JSON.stringify(input)}); }
+  listGenerationSeeds(batchId:number): JsonResponse<Array<{id:number;batch_id:number;source_locator:string;normalized_spec:Record<string,unknown>;quality_state:string;approval_state:string}>> { return this.request(`/generation/batches/${batchId}/seeds`); }
   modelCatalog():JsonResponse<{presets:Array<{Provider:string;Name:string;ModelKey:string;Protocol:string;BaseURL:string;Capabilities:string[]}>;models:Array<{id:number;provider:string;model_key:string;status:string}>}>{return this.request('/model-catalog');}
   configureModels(input:{provider:string;protocol:string;token:string;base_url:string;model_keys:string[]}):JsonResponse<{status:string}>{return this.request('/model-connections',{method:'POST',body:JSON.stringify(input)});}
   currentTeam(): JsonResponse<TeamSummary> { return this.request('/teams/current'); }

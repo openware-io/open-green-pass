@@ -2,6 +2,7 @@ package infra
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/jackc/pgx/v5"
@@ -15,6 +16,41 @@ import (
 // repository only provides tenant-scoped reads and compare-and-swap writes.
 type GenerationBatchStore struct {
 	db *governance.DB
+}
+
+type GenerationSeed struct {
+	ID             int64          `json:"id"`
+	BatchID        int64          `json:"batch_id"`
+	SourceLocator  string         `json:"source_locator"`
+	NormalizedSpec map[string]any `json:"normalized_spec"`
+	QualityState   string         `json:"quality_state"`
+	ApprovalState  string         `json:"approval_state"`
+}
+
+func (s *GenerationBatchStore) ListSeeds(ctx context.Context, teamID, batchID int64) ([]GenerationSeed, error) {
+	out := make([]GenerationSeed, 0)
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT id,batch_id,source_locator,normalized_spec,quality_state,approval_state FROM gen_seed WHERE team_id=$1 AND batch_id=$2 ORDER BY id`, teamID, batchID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var seed GenerationSeed
+			var normalized []byte
+			if err := rows.Scan(&seed.ID, &seed.BatchID, &seed.SourceLocator, &normalized, &seed.QualityState, &seed.ApprovalState); err != nil {
+				return err
+			}
+			if len(normalized) > 0 {
+				if err := json.Unmarshal(normalized, &seed.NormalizedSpec); err != nil {
+					return err
+				}
+			}
+			out = append(out, seed)
+		}
+		return rows.Err()
+	})
+	return out, err
 }
 
 func NewGenerationBatchStore(db *governance.DB) *GenerationBatchStore {

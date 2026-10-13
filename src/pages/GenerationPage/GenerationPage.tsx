@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { UPSTREAM_ADAPTERS, TESTED_REPOS, type IAssetNode } from '@/data/mock';
 import { PageHeader, GhostButton, PrimaryButton, Card, ListFilter } from '@/components/shared';
@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Sparkles, Plug, ShieldCheck, UserCheck, Database, GitBranch, BookOpen, CloudDownload, ChevronLeft, ChevronRight, Check, Crosshair, Layers } from 'lucide-react';
 import { configuredGreenPassClient } from '@/api/runtime';
 import type { GenerationBatch } from '@/api/client';
+type GenerationSeed = { id: number; batch_id: number; source_locator: string; normalized_spec: Record<string, unknown>; quality_state: string; approval_state: string };
 
 const QUALITY = [
   { label: '变异测试验证', val: '38 / 48', width: 79, color: 'bg-emerald-500', note: '10 条未通过，无法杀死代码变体' },
@@ -69,6 +70,9 @@ export default function GenerationPage() {
   const [realBatch, setRealBatch] = useState<GenerationBatch | null>(null);
   const [realBusy, setRealBusy] = useState(false);
   const [realError, setRealError] = useState('');
+  const [realSeeds, setRealSeeds] = useState<GenerationSeed[]>([]);
+  const [seedsLoading, setSeedsLoading] = useState(false);
+  const [reviewBusy, setReviewBusy] = useState(false);
   const cur = FLOW_STEPS[step - 1];
   const startRealBatch = async () => {
     if (!realClient) { setStep(1); return; }
@@ -83,6 +87,30 @@ export default function GenerationPage() {
       setRealBatch(batch); setStep(1);
     } catch (error) { setRealError(error instanceof Error ? error.message : '创建生成批次失败'); }
     finally { setRealBusy(false); }
+  };
+  useEffect(() => {
+    if (!realBatch || !realClient) return;
+    let cancelled = false;
+    setSeedsLoading(true);
+    void realClient.listGenerationSeeds(realBatch.id).then((items) => {
+      if (!cancelled) setRealSeeds(items);
+    }).catch((error) => {
+      if (!cancelled) setRealError(error instanceof Error ? error.message : '读取候选种子失败');
+    }).finally(() => { if (!cancelled) setSeedsLoading(false); });
+    return () => { cancelled = true; };
+  }, [realBatch, realClient]);
+  const submitRealReview = async (decision: 'approve' | 'reject') => {
+    if (!realBatch || !realClient) return;
+    setReviewBusy(true); setRealError('');
+    try {
+      const next = await realClient.reviewGenerationBatch(realBatch.id, {
+        decision,
+        expected_state_version: realBatch.state_version,
+        request_id: `ui-review-${realBatch.id}-${decision}`,
+      });
+      setRealBatch(next);
+    } catch (error) { setRealError(error instanceof Error ? error.message : '提交审核结果失败'); }
+    finally { setReviewBusy(false); }
   };
 
   return (
@@ -162,7 +190,7 @@ export default function GenerationPage() {
         )}
       </Card>
 
-      {realBatch && <Card title="真实生成批次" className="p-4 mb-5"><div className="flex flex-wrap items-center gap-3 text-xs"><span className="font-mono text-emerald-700">#{realBatch.id}</span><span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">{realBatch.state}</span><span className="text-slate-500">已创建真实批次，等待生成 worker 推进。</span></div></Card>}
+      {realBatch && <Card title="真实生成批次" className="p-4 mb-5"><div className="flex flex-wrap items-center gap-3 text-xs"><span className="font-mono text-emerald-700">#{realBatch.id}</span><span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">{realBatch.state}</span><span className="text-slate-500">批次状态来自服务端；候选种子仅在 worker 生成后显示。</span></div></Card>}
       {realError && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">{realError}</div>}
 
       {/* 用例生成流程向导（六步，围绕当前被测对象） */}
@@ -295,7 +323,17 @@ export default function GenerationPage() {
                 <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600"><UserCheck className="w-4 h-4" /></span>
                 人工审核 · {selectedAsset.name} 逐条确认用例
               </div>
-              <table className="w-full text-xs bg-white border border-slate-200 rounded-lg overflow-hidden">
+              {realBatch ? (
+                <>
+                  {seedsLoading ? <div className="text-xs text-slate-500 bg-white border border-slate-200 rounded-lg p-4">正在读取服务端候选种子…</div> : realSeeds.length === 0 ? <div className="text-xs text-slate-500 bg-white border border-slate-200 rounded-lg p-4">候选种子尚未生成，当前不能进行人工审核。请等待生成 worker 推进批次。</div> : <>
+                    <table className="w-full text-xs bg-white border border-slate-200 rounded-lg overflow-hidden">
+                      <thead className="bg-slate-50"><tr className="text-left text-slate-500"><th className="px-3 py-2 font-medium">种子</th><th className="px-3 py-2 font-medium">来源</th><th className="px-3 py-2 font-medium">质量</th><th className="px-3 py-2 font-medium">审核状态</th></tr></thead>
+                      <tbody className="divide-y divide-slate-100">{realSeeds.map((seed) => <tr key={seed.id}><td className="px-3 py-2 font-mono text-emerald-700">#{seed.id}</td><td className="px-3 py-2 text-slate-600">{seed.source_locator}</td><td className="px-3 py-2 text-slate-500">{seed.quality_state}</td><td className="px-3 py-2 text-slate-500">{seed.approval_state}</td></tr>)}</tbody>
+                    </table>
+                    {realBatch.state === 'review' && <div className="flex justify-end gap-2"><button type="button" disabled={reviewBusy} onClick={() => void submitRealReview('reject')} className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50">拒绝批次</button><button type="button" disabled={reviewBusy} onClick={() => void submitRealReview('approve')} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">{reviewBusy ? '提交中…' : '全部通过并入库'}</button></div>}
+                  </>}
+                </>
+              ) : <table className="w-full text-xs bg-white border border-slate-200 rounded-lg overflow-hidden">
                 <thead className="bg-slate-50">
                   <tr className="text-left text-slate-500">
                     <th className="px-3 py-2 font-medium">种子</th>
@@ -329,7 +367,7 @@ export default function GenerationPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table>}
             </div>
           )}
 

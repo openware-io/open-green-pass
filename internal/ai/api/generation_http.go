@@ -6,6 +6,7 @@ import (
 
 	"github.com/openware-io/open-green-pass/internal/ai/application"
 	"github.com/openware-io/open-green-pass/internal/ai/domain"
+	"github.com/openware-io/open-green-pass/internal/ai/infra"
 	"github.com/openware-io/open-green-pass/internal/gateway/httpx"
 	"github.com/openware-io/open-green-pass/internal/iam"
 	"github.com/openware-io/open-green-pass/internal/platform/rls"
@@ -13,16 +14,37 @@ import (
 )
 
 type generationHandler struct {
-	svc *application.GenerationBatchService
-	gen *id.Generator
+	svc   *application.GenerationBatchService
+	gen   *id.Generator
+	store *infra.GenerationBatchStore
 }
 
-func RegisterGeneration(mux *http.ServeMux, svc *application.GenerationBatchService, gen *id.Generator) {
-	h := &generationHandler{svc: svc, gen: gen}
+func RegisterGeneration(mux *http.ServeMux, svc *application.GenerationBatchService, gen *id.Generator, store *infra.GenerationBatchStore) {
+	h := &generationHandler{svc: svc, gen: gen, store: store}
 	mux.HandleFunc("POST /generation/batches", h.create)
 	mux.HandleFunc("GET /generation/batches/{id}", h.get)
+	mux.HandleFunc("GET /generation/batches/{id}/seeds", h.seeds)
 	mux.HandleFunc("POST /generation/batches/{id}/review", h.review)
 	mux.HandleFunc("POST /generation/batches/{id}/rollback", h.rollback)
+}
+
+func (h *generationHandler) seeds(w http.ResponseWriter, r *http.Request) {
+	team, ok := rls.TenantFrom(r.Context())
+	if !ok {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "tenant_required"})
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_batch_id"})
+		return
+	}
+	seeds, err := h.store.ListSeeds(r.Context(), team, id)
+	if err != nil {
+		httpx.WriteJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+	httpx.WriteJSON(w, 200, seeds)
 }
 
 type createBatchRequest struct {

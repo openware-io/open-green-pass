@@ -14,6 +14,11 @@ export interface paths {
         get: { parameters: { query?: never; header?: never; path: { id: number }; cookie?: never }; responses: { 200: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["GenerationBatch"] } } } };
         post?: never; put?: never; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
     };
+    "/generation/batches/{id}/seeds": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never };
+        get: { parameters: { query?: never; header?: never; path: { id: number }; cookie?: never }; responses: { 200: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["GenerationSeed"][] } } } };
+        post?: never; put?: never; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+    };
     "/generation/batches/{id}/review": {
         parameters: { query?: never; header?: never; path?: never; cookie?: never };
         post: { parameters: { query?: never; header?: never; path: { id: number }; cookie?: never }; requestBody: { content: { "application/json": components["schemas"]["GenerationReview"] } }; responses: { 200: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["GenerationBatch"] } } } };
@@ -1200,6 +1205,7 @@ export interface components {
         };
         GenerationBatchCreate: { target_id: number; repo_id: number; branch: string; version?: string; idempotency_key: string };
         GenerationReview: { decision: "approve" | "reject"; expected_state_version: number; request_id: string };
+        GenerationSeed: { id: number; batch_id: number; source_locator: string; normalized_spec: { [key: string]: unknown }; quality_state: "pending" | "passed" | "failed"; approval_state: "pending" | "approved" | "rejected" };
         ProjectService: {
             /** Format: int64 */
             id: number;

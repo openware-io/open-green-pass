@@ -27,6 +27,12 @@ paths:
       parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
       responses:
         '200': { description: 批次状态, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationBatch' } } } }
+  /generation/batches/{id}/seeds:
+    get:
+      summary: 查询候选用例种子
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      responses:
+        '200': { description: 候选种子, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/GenerationSeed' } } } } }
   /generation/batches/{id}/review:
     post:
       summary: 审核用例生成批次
@@ -851,6 +857,16 @@ components:
         decision: { type: string, enum: [ approve, reject ] }
         expected_state_version: { type: integer, format: int64 }
         request_id: { type: string }
+    GenerationSeed:
+      type: object
+      required: [ id, batch_id, source_locator, normalized_spec, quality_state, approval_state ]
+      properties:
+        id: { type: integer, format: int64 }
+        batch_id: { type: integer, format: int64 }
+        source_locator: { type: string }
+        normalized_spec: { type: object, additionalProperties: true }
+        quality_state: { type: string, enum: [ pending, passed, failed ] }
+        approval_state: { type: string, enum: [ pending, approved, rejected ] }
     ProjectRepositoryInput:
       type: object
       required: [ url ]
