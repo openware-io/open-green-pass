@@ -22,6 +22,7 @@ export type TeamAsset = { id: number; name: string; kind: string; owner_id?: num
 export type AssetGrant = { member_id: number; display_name: string; email: string; role: TeamMember['role']; permission: 'full'|'edit'|'exec'|'view'|'none'; concurrent_quota: number; sandbox_quota: number; version: number };
 export type WechatAuthConfig = { team_id:number; enabled:boolean; app_id:string; callback_uri:string; secret_configured:boolean; updated_at?:string };
 export type WechatBinding = { bound:boolean; display_name?:string; avatar_url?:string };
+export type GenerationBatch = components['schemas']['GenerationBatch'];
 
 export type CreateTargetInput = paths['/targets']['post']['requestBody']['content']['application/json'];
 export type CreateCaseInput = paths['/cases']['post']['requestBody']['content']['application/json'];
@@ -115,6 +116,9 @@ export class GreenPassClient {
   batchAddProjectServices(projectId:number,services:Array<{repo_id:number;name:string;source_path:string;kind:string;build_context:string}>):JsonResponse<{results:Array<{index:number;id?:number;error?:string}>}>{return this.request(`/projects/${projectId}/services:batch`,{method:'POST',body:JSON.stringify({services})});}
   updateProjectServiceKind(projectId:number,serviceId:number,kind:string):JsonResponse<{status:string}>{return this.request(`/projects/${projectId}/services/${serviceId}`,{method:'PATCH',body:JSON.stringify({kind})});}
   updateProjectServiceGenerationStatus(projectId:number,serviceId:number,status:'pending'|'confirmed'):JsonResponse<{status:string}>{return this.request(`/projects/${projectId}/services/${serviceId}`,{method:'PATCH',body:JSON.stringify({generation_status:status})});}
+  createGenerationBatch(input: paths['/generation/batches']['post']['requestBody']['content']['application/json']): JsonResponse<GenerationBatch> { return this.request('/generation/batches',{method:'POST',body:JSON.stringify(input)}); }
+  getGenerationBatch(batchId:number): JsonResponse<GenerationBatch> { return this.request(`/generation/batches/${batchId}`); }
+  reviewGenerationBatch(batchId:number,input: paths['/generation/batches/{id}/review']['post']['requestBody']['content']['application/json']): JsonResponse<GenerationBatch> { return this.request(`/generation/batches/${batchId}/review`,{method:'POST',body:JSON.stringify(input)}); }
   modelCatalog():JsonResponse<{presets:Array<{Provider:string;Name:string;ModelKey:string;Protocol:string;BaseURL:string;Capabilities:string[]}>;models:Array<{id:number;provider:string;model_key:string;status:string}>}>{return this.request('/model-catalog');}
   configureModels(input:{provider:string;protocol:string;token:string;base_url:string;model_keys:string[]}):JsonResponse<{status:string}>{return this.request('/model-connections',{method:'POST',body:JSON.stringify(input)});}
   currentTeam(): JsonResponse<TeamSummary> { return this.request('/teams/current'); }

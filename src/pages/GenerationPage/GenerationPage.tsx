@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { UPSTREAM_ADAPTERS, TESTED_REPOS, type IAssetNode } from '@/data/mock';
 import { PageHeader, GhostButton, PrimaryButton, Card, ListFilter } from '@/components/shared';
 import { toast } from 'sonner';
 import { Sparkles, Plug, ShieldCheck, UserCheck, Database, GitBranch, BookOpen, CloudDownload, ChevronLeft, ChevronRight, Check, Crosshair, Layers } from 'lucide-react';
+import { configuredGreenPassClient } from '@/api/runtime';
+import type { GenerationBatch } from '@/api/client';
 
 const QUALITY = [
   { label: '变异测试验证', val: '38 / 48', width: 79, color: 'bg-emerald-500', note: '10 条未通过，无法杀死代码变体' },
@@ -43,6 +45,7 @@ const TYPE_LABEL: Record<string, string> = { service: '服务', 'service-group':
 export default function GenerationPage() {
   const navigate = useNavigate();
   const { selectedAsset } = useOutletContext<{ selectedAsset: IAssetNode }>();
+  const realClient = useMemo(() => configuredGreenPassClient(), []);
   const [q, setQ] = useState('');
   const kw = q.trim().toLowerCase();
   const upFiltered = UPSTREAM_ADAPTERS.filter((a) => !kw || (a.source + a.status).toLowerCase().includes(kw));
@@ -63,13 +66,30 @@ export default function GenerationPage() {
   const [step, setStep] = useState(1);
   const [stored, setStored] = useState(false);
   const [audit, setAudit] = useState<Record<string, string>>({});
+  const [realBatch, setRealBatch] = useState<GenerationBatch | null>(null);
+  const [realBusy, setRealBusy] = useState(false);
+  const [realError, setRealError] = useState('');
   const cur = FLOW_STEPS[step - 1];
+  const startRealBatch = async () => {
+    if (!realClient) { setStep(1); return; }
+    setRealBusy(true); setRealError('');
+    try {
+      const projectID = Number(localStorage.getItem('greenpass_project_id') ?? 0);
+      if (!projectID) throw new Error('请先在被测对象页选择真实项目');
+      const repos = await realClient.listProjectRepositories(projectID);
+      const repo = repos[0];
+      if (!repo) throw new Error('当前项目暂无代码仓库');
+      const batch = await realClient.createGenerationBatch({ target_id: projectID, repo_id: repo.id, branch: repo.default_branch, idempotency_key: `ui-${projectID}-${Date.now()}` });
+      setRealBatch(batch); setStep(1);
+    } catch (error) { setRealError(error instanceof Error ? error.message : '创建生成批次失败'); }
+    finally { setRealBusy(false); }
+  };
 
   return (
     <div>
       <PageHeader title="生成用例" desc="针对当前被测对象的用例生成流程 · 适配解析 → AI 生成 → 质量验证 → 审核入库">
         <GhostButton onClick={() => toast('配置适配器', { description: '管理六类上游源的同步规则与解析策略（原型示意）' })}>配置适配器</GhostButton>
-        <PrimaryButton onClick={() => setStep(1)}>开始生成流程</PrimaryButton>
+        <PrimaryButton disabled={realBusy} onClick={() => void startRealBatch()}>{realBusy ? '创建批次…' : '开始生成流程'}</PrimaryButton>
       </PageHeader>
 
       {/* 被测对象 = 全局轴心：本流程围绕当前被测对象展开（切换用页首被测对象导航） */}
@@ -141,6 +161,9 @@ export default function GenerationPage() {
           </div>
         )}
       </Card>
+
+      {realBatch && <Card title="真实生成批次" className="p-4 mb-5"><div className="flex flex-wrap items-center gap-3 text-xs"><span className="font-mono text-emerald-700">#{realBatch.id}</span><span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">{realBatch.state}</span><span className="text-slate-500">已创建真实批次，等待生成 worker 推进。</span></div></Card>}
+      {realError && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">{realError}</div>}
 
       {/* 用例生成流程向导（六步，围绕当前被测对象） */}
       <Card title={`用例生成流程 · 批次 #GEN-2041 · 针对 ${selectedAsset.name}`} className="p-5 mb-5">

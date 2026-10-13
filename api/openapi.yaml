@@ -9,6 +9,33 @@ info:
 servers:
   - url: http://localhost:8080
 paths:
+  /generation/batches:
+    post:
+      summary: 创建用例生成批次
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerationBatchCreate'
+      responses:
+        '202': { description: 批次已创建, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationBatch' } } } }
+        '200': { description: 幂等返回已有批次, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationBatch' } } } }
+  /generation/batches/{id}:
+    get:
+      summary: 查询用例生成批次
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      responses:
+        '200': { description: 批次状态, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationBatch' } } } }
+  /generation/batches/{id}/review:
+    post:
+      summary: 审核用例生成批次
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GenerationReview' } } }
+      responses:
+        '200': { description: 审核完成, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationBatch' } } } }
   /healthz:
     get:
       summary: 健康检查
@@ -792,6 +819,38 @@ components:
         project_id: { type: integer, format: int64 }
         url: { type: string }
         default_branch: { type: string }
+    GenerationBatch:
+      type: object
+      required: [ id, team_id, target_id, repo_id, branch, state, state_version, workflow_id, idempotency_key, created_at, updated_at ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        target_id: { type: integer, format: int64 }
+        repo_id: { type: integer, format: int64 }
+        branch: { type: string }
+        version: { type: string }
+        state: { type: string, enum: [ enqueued, fetching, parsing, generating, quality_check, review, committing, approved, rejected, rolled_back, failed ] }
+        state_version: { type: integer, format: int64 }
+        workflow_id: { type: string }
+        idempotency_key: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    GenerationBatchCreate:
+      type: object
+      required: [ target_id, repo_id, branch, idempotency_key ]
+      properties:
+        target_id: { type: integer, format: int64 }
+        repo_id: { type: integer, format: int64 }
+        branch: { type: string }
+        version: { type: string }
+        idempotency_key: { type: string }
+    GenerationReview:
+      type: object
+      required: [ decision, expected_state_version, request_id ]
+      properties:
+        decision: { type: string, enum: [ approve, reject ] }
+        expected_state_version: { type: integer, format: int64 }
+        request_id: { type: string }
     ProjectRepositoryInput:
       type: object
       required: [ url ]

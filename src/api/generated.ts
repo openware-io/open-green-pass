@@ -4,6 +4,21 @@
  */
 
 export interface paths {
+    "/generation/batches": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never };
+        post: { parameters: { query?: never; header?: never; path?: never; cookie?: never }; requestBody: { content: { "application/json": components["schemas"]["GenerationBatchCreate"] } }; responses: { 202: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["GenerationBatch"] } }; 200: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["GenerationBatch"] } } } };
+        get?: never; put?: never; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+    };
+    "/generation/batches/{id}": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never };
+        get: { parameters: { query?: never; header?: never; path: { id: number }; cookie?: never }; responses: { 200: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["GenerationBatch"] } } } };
+        post?: never; put?: never; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+    };
+    "/generation/batches/{id}/review": {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never };
+        post: { parameters: { query?: never; header?: never; path: { id: number }; cookie?: never }; requestBody: { content: { "application/json": components["schemas"]["GenerationReview"] } }; responses: { 200: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["GenerationBatch"] } } } };
+        get?: never; put?: never; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -1178,6 +1193,13 @@ export interface components {
             /** @default main */
             default_branch: string;
         };
+        GenerationBatch: {
+            id: number; team_id: number; target_id: number; repo_id: number; branch: string; version?: string;
+            state: "enqueued" | "fetching" | "parsing" | "generating" | "quality_check" | "review" | "committing" | "approved" | "rejected" | "rolled_back" | "failed";
+            state_version: number; workflow_id: string; idempotency_key: string; created_at: string; updated_at: string;
+        };
+        GenerationBatchCreate: { target_id: number; repo_id: number; branch: string; version?: string; idempotency_key: string };
+        GenerationReview: { decision: "approve" | "reject"; expected_state_version: number; request_id: string };
         ProjectService: {
             /** Format: int64 */
             id: number;

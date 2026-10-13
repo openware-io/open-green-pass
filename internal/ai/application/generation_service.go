@@ -75,6 +75,13 @@ func NewGenerationBatchService(batches domain.GenerationBatchRepository) *Genera
 	return &GenerationBatchService{batches: batches, now: func() time.Time { return time.Now().UTC() }}
 }
 
+func (s *GenerationBatchService) Find(ctx context.Context, teamID, batchID int64) (*domain.GenerationBatch, error) {
+	if s == nil || s.batches == nil {
+		return nil, errors.New("generation batch repository is required")
+	}
+	return s.batches.Find(ctx, teamID, batchID)
+}
+
 func (s *GenerationBatchService) SetReviewPorts(signals GenerationSignalPort, audit GenerationAuditPort) {
 	s.signals, s.audit = signals, audit
 }

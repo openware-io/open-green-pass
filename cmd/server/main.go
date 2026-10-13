@@ -10,6 +10,9 @@ import (
 	redis "github.com/redis/go-redis/v9"
 	temporalclient "go.temporal.io/sdk/client"
 
+	aiapi "github.com/openware-io/open-green-pass/internal/ai/api"
+	aiapp "github.com/openware-io/open-green-pass/internal/ai/application"
+	aiinfra "github.com/openware-io/open-green-pass/internal/ai/infra"
 	eapi "github.com/openware-io/open-green-pass/internal/execution/api"
 	eapp "github.com/openware-io/open-green-pass/internal/execution/application"
 	edomain "github.com/openware-io/open-green-pass/internal/execution/domain"
@@ -73,6 +76,7 @@ func main() {
 	store := infra.NewTargetStore(db, gen)
 	treeSvc := application.NewTargetTreeService(store, gen)
 	projectCatalog := infra.NewProjectCatalog(db, gen)
+	generationSvc := aiapp.NewGenerationBatchService(aiinfra.NewGenerationBatchStore(db))
 	modelStore := infra.NewModelStore(db)
 	// GP3-05 reference policy is intentionally empty until the persistent
 	// approval/whitelist store is configured; it can be injected here later.
@@ -215,6 +219,7 @@ func main() {
 		},
 		func(mux *http.ServeMux) { gapi.RegisterAuthorized(mux, treeSvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { gapi.RegisterProjectCatalog(mux, projectCatalog) },
+		func(mux *http.ServeMux) { aiapi.RegisterGeneration(mux, generationSvc, gen) },
 		func(mux *http.ServeMux) {
 			gapi.RegisterModels(mux, modelStore, gen, os.Getenv("GP_MODEL_SECRET_NAMESPACE"))
 		},

@@ -680,7 +680,7 @@ function RealTargetsPanel({ client }: { client: ReturnType<typeof configuredGree
   const [serviceDrafts,setServiceDrafts]=useState([{repoID:'',name:'',path:'',kind:'api_service'}]);
 
   const refresh = async () => { if (client) setTargets(await client.listTargets()); };
-  const refreshProject = useCallback(async (raw=projectID) => { if(!client)return;const id=Number(raw);if(!Number.isSafeInteger(id)||id<=0){setRepos([]);setServices([]);return;}const [loadedRepos,loadedServices]=await Promise.all([client.listProjectRepositories(id),client.listProjectServices(id)]);setRepos(loadedRepos??[]);setServices(loadedServices??[]); },[client,projectID]);
+  const refreshProject = useCallback(async (raw=projectID) => { if(!client)return;const id=Number(raw);if(!Number.isSafeInteger(id)||id<=0){setRepos([]);setServices([]);return;} try { localStorage.setItem('greenpass_project_id', String(id)); } catch { /* ignore */ } const [loadedRepos,loadedServices]=await Promise.all([client.listProjectRepositories(id),client.listProjectServices(id)]);setRepos(loadedRepos??[]);setServices(loadedServices??[]); },[client,projectID]);
   useEffect(() => {
     if (!client) return;
     let active = true;
