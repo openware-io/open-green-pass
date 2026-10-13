@@ -61,13 +61,27 @@ func (s *GenerationBatchStore) CommitSeeds(ctx context.Context, teamID, batchID 
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		type seedRow struct {
+			id  int64
+			raw []byte
+		}
+		seeds := make([]seedRow, 0)
 		for rows.Next() {
 			var seedID int64
 			var raw []byte
 			if err := rows.Scan(&seedID, &raw); err != nil {
+				rows.Close()
 				return err
 			}
+			seeds = append(seeds, seedRow{id: seedID, raw: raw})
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return err
+		}
+		rows.Close()
+		for _, seed := range seeds {
+			seedID, raw := seed.id, seed.raw
 			var spec map[string]any
 			if err := json.Unmarshal(raw, &spec); err != nil {
 				return err
@@ -88,7 +102,7 @@ func (s *GenerationBatchStore) CommitSeeds(ctx context.Context, teamID, batchID 
 				return err
 			}
 		}
-		return rows.Err()
+		return nil
 	})
 }
 
