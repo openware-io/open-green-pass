@@ -42,6 +42,7 @@ const AUDIT_ROWS = [
 ];
 
 const TYPE_LABEL: Record<string, string> = { service: '服务', 'service-group': '服务组', module: '模块', app: '应用', end: '端', project: '工程' };
+const STAGE_LABEL: Record<string, string> = { enqueued: '待启动', fetching: '冻结源码', parsing: '解析归一化', generating: '生成候选', quality_check: '质量检查', review: '人工审核', committing: '写入用例库', approved: '已完成', rejected: '已拒绝', failed: '失败', rolled_back: '已回退' };
 
 export default function GenerationPage() {
   const navigate = useNavigate();
@@ -122,6 +123,16 @@ export default function GenerationPage() {
 
   return (
     <div>
+      <div className="mb-5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs shadow-sm">
+        <span className="font-semibold text-slate-700">{selectedAsset.name}</span>
+        <span className="text-slate-300">/</span>
+        <button type="button" onClick={() => navigate('/target')} className="text-slate-500 hover:text-emerald-600">定义对象</button>
+        <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+        <span className="rounded-md bg-emerald-600 px-2.5 py-1 font-medium text-white">生成用例</span>
+        <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+        <button type="button" onClick={() => navigate('/trace')} className="text-slate-500 hover:text-emerald-600">追溯覆盖</button>
+        <span className="ml-auto text-[11px] text-slate-400">{TYPE_LABEL[selectedAsset.type] ?? selectedAsset.type}</span>
+      </div>
       <PageHeader title="生成用例" desc="针对当前被测对象的用例生成流程 · 适配解析 → AI 生成 → 质量验证 → 审核入库">
         <GhostButton onClick={() => navigate('/target')}>管理被测对象</GhostButton>
         <PrimaryButton disabled={realBusy} onClick={() => void startRealBatch()}>{realBusy ? '创建批次…' : '开始生成流程'}</PrimaryButton>
@@ -197,7 +208,7 @@ export default function GenerationPage() {
         )}
       </Card>
 
-      {realBatch && <Card title="真实生成批次" className="p-4 mb-5"><div className="flex flex-wrap items-center gap-3 text-xs"><span className="font-mono text-emerald-700">#{realBatch.id}</span><span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">{realBatch.state}</span><span className="text-slate-500">批次状态来自服务端；候选种子仅在 worker 生成后显示。</span></div></Card>}
+      {realBatch && <Card title="当前生成批次" className="p-4 mb-5" extra={<span className="font-mono text-[11px] text-slate-400">#{realBatch.id}</span>}><div className="flex flex-wrap items-center gap-3 text-xs"><span className="rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">{STAGE_LABEL[realBatch.state] ?? realBatch.state}</span><span className="text-slate-500">服务端状态 · 自动刷新</span><span className="text-slate-400">状态版本 {realBatch.state_version}</span></div></Card>}
       {realError && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">{realError}</div>}
 
       {realClient && realBatch && <Card title="真实生成流程" className="p-5 mb-5">
@@ -207,10 +218,10 @@ export default function GenerationPage() {
             const current = order.indexOf(realBatch.state);
             const done = index < current || realBatch.state === 'approved';
             const active = state === realBatch.state;
-            return <div key={state} className={'flex items-center gap-1.5 text-[10px] ' + (active ? 'text-emerald-700 font-semibold' : done ? 'text-emerald-500' : 'text-slate-300')}><span className={'w-6 h-6 rounded-full flex items-center justify-center border ' + (active ? 'bg-emerald-600 text-white border-emerald-600' : done ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200')}>{done ? '✓' : index + 1}</span><span>{state === 'quality_check' ? '质量检查' : state === 'review' ? '人工审核' : state === 'approved' ? '已入库' : state}</span>{index < 7 && <span className="mx-1 text-slate-200">→</span>}</div>;
+            return <div key={state} className={'flex items-center gap-1.5 text-[10px] ' + (active ? 'text-emerald-700 font-semibold' : done ? 'text-emerald-500' : 'text-slate-300')}><span className={'w-6 h-6 rounded-full flex items-center justify-center border ' + (active ? 'bg-emerald-600 text-white border-emerald-600' : done ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200')}>{done ? '✓' : index + 1}</span><span>{STAGE_LABEL[state]}</span>{index < 7 && <span className="mx-1 text-slate-200">→</span>}</div>;
           })}
         </div>
-        <div className="mb-4 flex flex-wrap gap-3 text-xs text-slate-500"><span>批次 <b className="font-mono text-slate-700">#{realBatch.id}</b></span><span>分支 <b>{realBatch.branch}</b></span><span>候选种子 <b>{seedsLoading ? '读取中…' : realSeeds.length}</b></span></div>
+        <div className="mb-4 flex flex-wrap gap-3 text-xs text-slate-500"><span>分支 <b>{realBatch.branch}</b></span><span>候选种子 <b>{seedsLoading ? '读取中…' : realSeeds.length}</b></span><span>当前阶段 <b className="text-emerald-700">{STAGE_LABEL[realBatch.state] ?? realBatch.state}</b></span></div>
         {realSeeds.length === 0 ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-5 text-xs text-slate-500">worker 正在生成候选种子，页面每 2 秒自动刷新。</div> : <div className="rounded-lg border border-slate-200 overflow-hidden"><table className="w-full text-xs"><thead className="bg-slate-50"><tr className="text-left text-slate-500"><th className="px-3 py-2">种子</th><th className="px-3 py-2">来源</th><th className="px-3 py-2">质量</th><th className="px-3 py-2">审核</th></tr></thead><tbody className="divide-y divide-slate-100">{realSeeds.map((seed) => <tr key={seed.id}><td className="px-3 py-2 font-mono text-emerald-700">#{seed.id}</td><td className="px-3 py-2 text-slate-600">{seed.source_locator}</td><td className="px-3 py-2 text-slate-500">{seed.quality_state}</td><td className="px-3 py-2 text-slate-500">{seed.approval_state}</td></tr>)}</tbody></table></div>}
         {realBatch.state === 'review' && <div className="mt-4 flex justify-end gap-2"><button type="button" disabled={reviewBusy} onClick={() => void submitRealReview('reject')} className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50">拒绝批次</button><button type="button" disabled={reviewBusy} onClick={() => void submitRealReview('approve')} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">{reviewBusy ? '提交中…' : '审核通过并入库'}</button></div>}
         {realBatch.state === 'approved' && <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">本批次已审核通过，候选种子已生成正式版本化用例。</div>}
