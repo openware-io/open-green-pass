@@ -16,16 +16,17 @@ type ProjectRepository struct {
 	DefaultBranch string `json:"default_branch"`
 }
 type ProjectService struct {
-	ID             int64   `json:"id"`
-	ProjectID      int64   `json:"project_id"`
-	RepoID         int64   `json:"repo_id"`
-	Name           string  `json:"name"`
-	SourcePath     string  `json:"source_path"`
-	Kind           string  `json:"kind"`
-	BuildContext   string  `json:"build_context"`
-	DockerfilePath *string `json:"dockerfile_path,omitempty"`
-	ManifestPath   *string `json:"manifest_path,omitempty"`
-	Status         string  `json:"status"`
+	ID               int64   `json:"id"`
+	ProjectID        int64   `json:"project_id"`
+	RepoID           int64   `json:"repo_id"`
+	Name             string  `json:"name"`
+	SourcePath       string  `json:"source_path"`
+	Kind             string  `json:"kind"`
+	BuildContext     string  `json:"build_context"`
+	DockerfilePath   *string `json:"dockerfile_path,omitempty"`
+	ManifestPath     *string `json:"manifest_path,omitempty"`
+	Status           string  `json:"status"`
+	GenerationStatus string  `json:"generation_status"`
 }
 type ProjectCatalog struct {
 	db  *DB
@@ -99,14 +100,14 @@ func (s *ProjectCatalog) ListServices(ctx context.Context, projectID int64) ([]P
 	// A nil slice is encoded as JSON null, while clients consume this as a list.
 	out := make([]ProjectService, 0)
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id,project_id,repo_id,name,source_path,kind,build_context,dockerfile_path,manifest_path,status FROM tgt_service WHERE project_id=$1 ORDER BY repo_id,source_path`, projectID)
+		rows, err := tx.Query(ctx, `SELECT id,project_id,repo_id,name,source_path,kind,build_context,dockerfile_path,manifest_path,status,generation_status FROM tgt_service WHERE project_id=$1 ORDER BY repo_id,source_path`, projectID)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 		for rows.Next() {
 			var v ProjectService
-			if err := rows.Scan(&v.ID, &v.ProjectID, &v.RepoID, &v.Name, &v.SourcePath, &v.Kind, &v.BuildContext, &v.DockerfilePath, &v.ManifestPath, &v.Status); err != nil {
+			if err := rows.Scan(&v.ID, &v.ProjectID, &v.RepoID, &v.Name, &v.SourcePath, &v.Kind, &v.BuildContext, &v.DockerfilePath, &v.ManifestPath, &v.Status, &v.GenerationStatus); err != nil {
 				return err
 			}
 			out = append(out, v)
@@ -116,9 +117,9 @@ func (s *ProjectCatalog) ListServices(ctx context.Context, projectID int64) ([]P
 	return out, err
 }
 
-func (s *ProjectCatalog) UpdateServiceKind(ctx context.Context, projectID, serviceID int64, kind string) error {
+func (s *ProjectCatalog) UpdateService(ctx context.Context, projectID, serviceID int64, kind, generationStatus string) error {
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		command, err := tx.Exec(ctx, `UPDATE tgt_service SET kind=$3 WHERE id=$1 AND project_id=$2`, serviceID, projectID, kind)
+		command, err := tx.Exec(ctx, `UPDATE tgt_service SET kind=CASE WHEN $3 <> '' THEN $3 ELSE kind END, generation_status=CASE WHEN $4 <> '' THEN $4 ELSE generation_status END WHERE id=$1 AND project_id=$2`, serviceID, projectID, kind, generationStatus)
 		if err != nil {
 			return err
 		}

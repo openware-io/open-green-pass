@@ -437,7 +437,9 @@ export interface paths {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        kind: "api_service" | "gateway" | "websocket_service" | "web_app" | "mobile_app" | "desktop_app" | "other";
+                        kind?: "api_service" | "gateway" | "websocket_service" | "web_app" | "mobile_app" | "desktop_app" | "other";
+                        /** @enum {string} */
+                        generation_status?: "pending" | "confirmed";
                     };
                 };
             };
@@ -1118,6 +1120,7 @@ export interface components {
             id: number;
             provider: string;
             model_key: string;
+            /** @description 服务启用状态 */
             status: string;
         };
         ModelCatalog: {
@@ -1190,6 +1193,8 @@ export interface components {
             dockerfile_path?: string | null;
             manifest_path?: string | null;
             status: string;
+            /** @enum {string} */
+            generation_status: "pending" | "confirmed";
         };
         ProjectServiceInput: {
             /** Format: int64 */

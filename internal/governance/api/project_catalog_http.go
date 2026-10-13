@@ -30,7 +30,8 @@ type batchServiceRequest struct {
 	Services []batchServiceInput `json:"services"`
 }
 type updateServiceRequest struct {
-	Kind string `json:"kind"`
+	Kind             string `json:"kind"`
+	GenerationStatus string `json:"generation_status"`
 }
 type batchResult struct {
 	Index int    `json:"index"`
@@ -126,16 +127,20 @@ func RegisterProjectCatalog(mux *http.ServeMux, store *infra.ProjectCatalog) {
 		projectID, projectErr := strconv.ParseInt(r.PathValue("id"), 10, 64)
 		serviceID, serviceErr := strconv.ParseInt(r.PathValue("serviceID"), 10, 64)
 		var in updateServiceRequest
-		if projectErr != nil || serviceErr != nil || httpx.DecodeJSON(r, &in) != nil || !validServiceKind(in.Kind) {
+		if projectErr != nil || serviceErr != nil || httpx.DecodeJSON(r, &in) != nil || (in.Kind == "" && in.GenerationStatus == "") || (in.Kind != "" && !validServiceKind(in.Kind)) || (in.GenerationStatus != "" && !validGenerationStatus(in.GenerationStatus)) {
 			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_service_kind"})
 			return
 		}
-		if err := store.UpdateServiceKind(r.Context(), projectID, serviceID, in.Kind); err != nil {
+		if err := store.UpdateService(r.Context(), projectID, serviceID, in.Kind, in.GenerationStatus); err != nil {
 			httpx.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "service_not_found"})
 			return
 		}
 		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 	})
+}
+
+func validGenerationStatus(status string) bool {
+	return status == "pending" || status == "confirmed"
 }
 
 func validServiceKind(kind string) bool {

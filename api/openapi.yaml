@@ -195,13 +195,13 @@ paths:
         '207': { description: 逐条处理结果, content: { application/json: { schema: { $ref: '#/components/schemas/BatchResultResponse' } } } }
   /projects/{id}/services/{serviceId}:
     patch:
-      summary: 修改目录子服务类型
+      summary: 修改目录子服务类型或确认生效
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
         - { name: serviceId, in: path, required: true, schema: { type: integer, format: int64 } }
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, required: [ kind ], properties: { kind: { type: string, enum: [ api_service, gateway, websocket_service, web_app, mobile_app, desktop_app, other ] } } } } }
+        content: { application/json: { schema: { type: object, properties: { kind: { type: string, enum: [ api_service, gateway, websocket_service, web_app, mobile_app, desktop_app, other ] }, generation_status: { type: string, enum: [ pending, confirmed ] } } } } }
       responses:
         '200': { description: 已修改, content: { application/json: { schema: { $ref: '#/components/schemas/StatusResponse' } } } }
   /targets/{id}/model-binding:
@@ -736,7 +736,7 @@ components:
         id: { type: integer, format: int64 }
         provider: { type: string }
         model_key: { type: string }
-        status: { type: string }
+        status: { type: string, description: 服务启用状态 }
     ModelCatalog:
       type: object
       required: [ presets, models ]
@@ -800,7 +800,7 @@ components:
         default_branch: { type: string, default: main }
     ProjectService:
       type: object
-      required: [ id, project_id, repo_id, name, source_path, kind, build_context, status ]
+      required: [ id, project_id, repo_id, name, source_path, kind, build_context, status, generation_status ]
       properties:
         id: { type: integer, format: int64 }
         project_id: { type: integer, format: int64 }
@@ -812,6 +812,7 @@ components:
         dockerfile_path: { type: string, nullable: true }
         manifest_path: { type: string, nullable: true }
         status: { type: string }
+        generation_status: { type: string, enum: [ pending, confirmed ], description: 待确认或已生效 }
     ProjectServiceInput:
       type: object
       required: [ repo_id, name, source_path ]
