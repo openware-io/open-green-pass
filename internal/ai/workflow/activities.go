@@ -34,6 +34,11 @@ func transitionGeneration(ctx context.Context, input BatchActivityInput, next do
 	if err != nil {
 		return err
 	}
+	// Temporal retries may re-enter an activity after its state transition was
+	// committed. Treat the requested state as idempotently complete.
+	if batch.State == next {
+		return nil
+	}
 	_, err = generationDeps.svc.Transition(ctx, input.TeamID, input.BatchID, batch.StateVersion, next)
 	return err
 }
