@@ -2,6 +2,8 @@ package infra
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,8 +35,10 @@ func (s *GenerationBatchStore) CreateSeed(ctx context.Context, teamID int64, see
 	if err != nil {
 		return err
 	}
+	digest := md5.Sum(append([]byte(locator), payload...))
+	dedupeHash := hex.EncodeToString(digest[:])
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO gen_seed (id,team_id,batch_id,source_locator,normalized_spec,dedupe_hash) VALUES ($1,$2,$3,$4,$5,md5($4 || $5::text)) ON CONFLICT (batch_id,dedupe_hash) DO NOTHING`, seedID, teamID, batchID, locator, payload)
+		_, err := tx.Exec(ctx, `INSERT INTO gen_seed (id,team_id,batch_id,source_locator,normalized_spec,dedupe_hash) VALUES ($1,$2,$3,$4,$5::jsonb,$6) ON CONFLICT (batch_id,dedupe_hash) DO NOTHING`, seedID, teamID, batchID, locator, payload, dedupeHash)
 		return err
 	})
 }
