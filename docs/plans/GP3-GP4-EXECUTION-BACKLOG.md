@@ -47,7 +47,7 @@ npm run build
 | D-06 | 变异首批语言/框架、runner、阈值 | GP3-06 | 可做 provider-independent 静态规则和结果模型 |
 | D-07 | 首批身份源与 RBAC 继承/拒绝规则 | GP4-01/03 | 可做 Principal/Permission domain 和 fake auth |
 | D-08 | 首批 CI 平台和回写类型 | GP4-02 | 可做 connector/outbox/幂等投递和 fake provider |
-| D-09 | 私有化拓扑、K8s 版本、依赖由客户提供还是内置 | GP4-04/05 | 可做 Helm schema、readiness/version、dry-run |
+| D-09 | 私有化拓扑、K8s 版本、依赖由客户提供还是内置 | GP4-04/05 | 可做清单参数 schema、readiness/version、dry-run |
 | D-10 | 租户分区策略与 cutover/RPO/RTO | GP4-05 | 可做 route resolver、placement 状态机、校验 CLI |
 | D-11 | 压测目标、SLO、观测栈和 on-call | GP4-06 | 可做指标字典、load harness、dashboard/alert 模板 |
 
@@ -158,11 +158,11 @@ npm run build
 
 ### GP4-04A：私有化交付骨架（依赖 D-09，可先做）
 
-**交付物**：`deploy/helm/gp` Chart、values schema、server/worker、migration Job、readiness/version、Secret 引用、NetworkPolicy、非 root 默认、安装/升级/回滚 runbook。当前可先交付 `/readyz`（仅 PostgreSQL 探针）和 `/version`；Redis/Temporal/对象存储探针必须在对应客户端接入后逐项增加，不能以单一 DB 探针代表全部依赖。
+**交付物**：`deploy/k8s/gp-app.yaml`、`gp-migration.yaml`、脚本参数 schema、server/worker、migration Job、readiness/version、Secret 引用、NetworkPolicy、非 root 默认、安装/升级/回滚 runbook。当前可先交付 `/readyz`（仅 PostgreSQL 探针）和 `/version`；Redis/Temporal/对象存储探针必须在对应客户端接入后逐项增加，不能以单一 DB 探针代表全部依赖。
 
 **代码产物**：`cmd/migrate` 或受控 migration Job、`cmd/audit-verify`、build metadata、前端 embed/产物校验。
 
-**门禁**：干净 kind 安装、迁移、ready、最小闭环、N→N+1 升级和失败退出通过；未确定依赖拓扑时只交付 chart 骨架。
+**门禁**：干净 kind 安装、迁移、ready、最小闭环、N→N+1 升级和失败退出通过；未确定依赖拓扑时只交付静态清单和脚本骨架。
 
 ### GP4-05A：TenantRoute/Placement（依赖 D-10，可先做）
 
@@ -204,7 +204,7 @@ GP4-06A 依赖 D-11 + 稳定候选架构
 2. GP3-05A：模型/绑定/价格快照 domain、迁移、fake API。
 3. GP4-03A：Principal/认证 port、fake provider、安全测试。
 4. GP4-01A：RBAC domain、迁移、AuthorizationPort 和矩阵测试。
-5. GP4-04A：Helm/chart/readiness/version/migration skeleton。
+5. GP4-04A：Kubernetes 清单/脚本/readiness/version/migration skeleton。
 6. GP4-06A：指标字典和 load harness skeleton。
 
 ### 5.2 必须等待决策/环境的批次

@@ -23,7 +23,7 @@
 | 资源与任务编排 | 集中式调度器 + 多级配额（租户→工程→资产）+ Temporal 承载执行状态机；**多团队并行时防止单团队耗尽资源**（详见 §4.x） |
 | 可信审计 | **事件溯源 + 哈希链**（Append-only 表 + prev_hash，自实现，轻量） |
 | 报告导出 | 服务端模板：HTML / PDF(Chromium) / Word(docx) / Markdown |
-| 部署 | 微服务模块化 + 单体优先，Docker + Helm，私有化可单二进制 |
+| 部署 | 微服务模块化 + 单体优先，GHCR 镜像 + Kubernetes 清单/脚本，私有化可单二进制 |
 
 ---
 
@@ -207,7 +207,7 @@ CIWebhook / TriggerRule / Connector(门禁回写)
 | 多租户隔离漏洞 | RLS 强制 + 资产级鉴权 + 权限测试用例化 |
 | 审计性能 | append-only 分区 + 快照锚点，万亿级再上 Kafka/列存 |
 | 前端与后端节奏 | OpenAPI 契约先行，mock 演进为 MSW，前后端并行 |
-| 私有化交付 | Go 单二进制 + Docker/Helm + SeaweedFS/TimescaleDB 内网化 |
+| 私有化交付 | Go 单二进制或 GHCR 镜像 + Kubernetes 清单/脚本 + SeaweedFS/TimescaleDB 内网化 |
 
 ---
 
@@ -365,7 +365,7 @@ green-pass/
 ├── pkg/                        # 无业务纯技术：protocol、clock、hashchain、id
 ├── api/openapi.yaml            # 唯一前后端契约（生成前端类型）
 ├── migrations/                 # golang-migrate：000001_*.up/down.sql
-├── deploy/ docker/ helm/
+├── deploy/ docker/ k8s/ kind/
 ├── test/                       # 跨域集成 + e2e（testcontainers 全栈）
 ├── Makefile                    # make check 统一门禁
 └── .github/workflows/ci.yml

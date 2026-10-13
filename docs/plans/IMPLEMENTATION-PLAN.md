@@ -13,8 +13,8 @@
 2. **规范即底线**（ENGINEERING-SPEC）：`domain` 零三方依赖；`api→application→domain←infra`；表前缀登记；迁移只增不改；RLS 强制；分层测试；slog+OTel。
 3. **口径自洽**（贯穿）：总览=Σ明细、版本可溯源、成本/审计单点计量。
 4. **依赖顺序**：P0 → P1 串行；P1 内先 governance（被测对象/用例）→ execution → trusted/AI。
-5. **部署形态与本地调试（硬约束）**：GP 全部组件（server/worker + 基础设施）以 **Helm 部署到 kind 集群内命名空间**（ns: gp 控制面+基础设施、ns: gp-runner 执行沙箱）；本地调试 = 直接部署到 kind，或 **`go run ./cmd/server` + 依赖经 kind 代理暴露后连接**（port-forward / NodePort / ingress-nginx + kind extraPortMappings）；**不使用 docker 部署形式做调试**。
-   - **发版与测试同一规范**：Docker 只负责构建 GreenPass 自研镜像并通过 `kind load docker-image` 导入节点；GP 应用不得用 `docker run`/`docker compose` 部署测试。未明确正式发布前，所有 GreenPass 自研开发/测试镜像必须使用 `X.Y.Z-SNAPSHOT` tag；只有明确正式发布时才去掉 `-SNAPSHOT`。中间件和第三方组件沿用各自官方版本规范。每次发布必须经 `helm lint`、`helm template`、`helm upgrade --install --wait`、migration Job、readiness 和关键链路验证；失败必须回滚或明确标记未发布。
+5. **部署形态与本地调试（硬约束）**：GP 全部组件（server/worker + 基础设施）以 **版本化 Kubernetes 清单和部署脚本部署到 kind 集群内命名空间**（ns: gp 控制面+基础设施、ns: gp-runner 执行沙箱）；本地调试 = 直接部署到 kind，或 **`go run ./cmd/server` + 依赖经 kind 代理暴露后连接**（port-forward / NodePort / ingress-nginx + kind extraPortMappings）；**不使用 docker 部署形式做调试**。
+   - **发版与测试同一规范**：Docker 只负责构建 GreenPass 自研镜像；标准发布从 GHCR 拉取镜像并由脚本导入 kind 节点，GP 应用不得用 `docker run`/`docker compose` 部署测试。未明确正式发布前，所有 GreenPass 自研开发/测试镜像必须使用 `X.Y.Z-SNAPSHOT` tag；只有明确正式发布时才去掉 `-SNAPSHOT`。中间件和第三方组件沿用各自官方版本规范。每次发布必须经 `kubectl apply --dry-run=server`、应用清单 apply、版本化 migration Job、readiness 和关键链路验证；失败必须使用上一组镜像回退或明确标记未发布。
 6. **宿主机端口避让**：GP 依赖透传用独立宿主机端口段（PG 5433 / Redis 6380 / MinIO 9100+9101），避开 im-saas 占用（Temporal 为 GP 专属保留 7233/8080）。
 7. **里程碑确认点**：P0 完成 → 用户确认 → P1；P1 首个 SUT 闭环 → 用户验收 → P2–P4（已按任务级施工图预输出 GP2-*/GP3-*/GP4-*，按图执行，阶段 DoD → 用户验收 → 下一阶段）。
 
@@ -36,7 +36,7 @@ internal/ai{/api,/application,/domain,/infra}
 internal/trusted{/api,/application,/domain,/infra}
 internal/platform{/config,/errors,/paging,/observability,/rls}
 pkg/{protocol,clock,hashchain,id}
-api/ migrations/ deploy/{helm,k8s} scripts/validate test/
+api/ migrations/ deploy/{k8s,kind} scripts/validate test/
 ```
 **关键文件**
 - `go.mod`：`module github.com/openware-io/open-green-pass` / `go 1.24` / `toolchain go1.24.x`（固定）。
@@ -75,21 +75,15 @@ linters-settings:
 ```
 **验证**：`make check` 全绿；临时在 `governance/domain` 引入 `gorm.io/gorm` → depguard 报错（证明边界生效）后移除。
 
-### GP0-03 基础设施 kind + Helm + 命名空间 + 端口
+### GP0-03 基础设施 kind + Kubernetes 清单 + 命名空间 + 端口
 **实施步骤**
-1. kind 装 `local-path-provisioner`（或 hostPath PV）：`kubectl apply -f https://.../deploy.yaml` 或 `helm install local-path ...`。
+1. kind 装 `local-path-provisioner`（或 hostPath PV）：使用经过审查的 Kubernetes 清单；不要求 Helm。
 2. 建命名空间：`deploy/k8s/namespaces.yaml` → `kubectl apply -f`（含 `gp`、`gp-runner`）。
-3. 基础设施 Helm 到 ns: gp（各自独立，不复用 im-saas）：
-```
-helm repo add bitnami https://charts.bitnami.com/bitnami && helm install gp-postgres bitnami/postgresql -n gp --set auth.database=gp_,auth.postgresPassword=...
-helm install gp-redis  bitnami/redis          -n gp --set auth.password=...
-kubectl apply -f deploy/k8s/seaweedfs.yaml    # 对象存储：MinIO 社区版已归档(410 Gone)，改用 S3 兼容 SeaweedFS（svc/gp-seaweedfs，S3 on 9000）
-helm repo add temporalio https://helm.temporal.io && helm install gp-temporal temporalio/temporal -n gp --set server.config.storeProvider.postgres={...}
-```
+3. 使用版本化清单把基础设施部署到 ns: gp（各自独立，不复用 im-saas）：`gp-postgres.yaml`、`gp-redis.yaml`、`seaweedfs.yaml`、`gp-temporal.yaml`。对象存储使用 S3 兼容 SeaweedFS（svc/gp-seaweedfs，S3 on 9000）。Temporal 的数据库初始化和服务配置由对应清单及部署脚本完成。
 4. 网络/资源隔离：`deploy/k8s/gp-runner-policy.yaml`（NetworkPolicy：仅出向 `open-im-local` gateway:3002、GP 控制面和 DNS；ResourceQuota + LimitRange 硬顶）。
 **关键文件**
 - `deploy/k8s/namespaces.yaml`：`apiVersion v1 kind Namespace`，name `gp` / `gp-runner`。
-- `deploy/helm/gp/values*.yaml`：各 chart 覆盖（PG 库名 gp_、对象存储桶(SeaweedFS)、Temporal 指向 gp-postgres）。
+- `deploy/k8s/*.yaml`：基础设施和 GP 应用的版本化清单；`scripts/dev/deploy-kind.ps1` 注入镜像版本、创建 Secret 并按顺序执行迁移和滚动升级。
 **宿主机端口透传（避让 im-saas，见 §0-6）**：
 ```
 kubectl port-forward -n gp svc/gp-postgres-postgresql 5433:5432
@@ -99,7 +93,7 @@ kubectl port-forward -n gp svc/gp-temporal-web 8080:8080
 kubectl port-forward -n gp svc/gp-seaweedfs 9100:9000   # 对象存储 S3（SeaweedFS，无独立 console）
 ```
 `.env`：`DB_HOST=127.0.0.1:5433`、`RedisAddr=127.0.0.1:6380`、`TemporalAddr=127.0.0.1:7233`、`MinIOEndpoint=127.0.0.1:9100`。 建议落 `scripts/dev/kind-forward.ps1`：一次性后台拉起上述 port-forward（含 start/stop/cleanup），避免每次手工 kubectl；端口已避让 im-saas。
-**验证**：`helm ls -n gp` 全 deployed；`kubectl get pods -n gp` ready；`kubectl get ns` 含 `open-im-local`（不改动其工作负载）/gp/gp-runner；NetworkPolicy/Quota 生效；`kubectl get svc -n open-im-local` 核对 GP 宿主端口与其错开。
+**验证**：`kubectl get pods -n gp` 全部 ready；`kubectl get ns` 含 `open-im-local`（不改动其工作负载）/gp/gp-runner；NetworkPolicy/Quota 生效；`kubectl get svc -n open-im-local` 核对 GP 宿主端口与其错开。
 
 ### GP0-04 迁移基线 + RLS
 **实施步骤**
@@ -172,7 +166,7 @@ jobs:
 2. 有集群连真实 PG/Redis/MinIO/Temporal；CI 无集群时 `testcontainers-go` 仅作回退（非首选）。
 **验证**：一条连接真实 PG 的 Repository 集成测试跑通（隔离可重复）。
 
-**P0 完成定义（DoD）**：目录骨架 + `make check` 全绿；基础设施 Helm 到 kind（ns: gp）且代理暴露可连（`go run ./cmd/server` 连真实依赖通过）；软隔离命名空间 + RLS + 迁移基线就绪；四域骨架与端口契约建立；CI 就绪；im-saas 未被改动。**→ 交付 P0 小结，请用户确认后进入 P1。**
+**P0 完成定义（DoD）**：目录骨架 + `make check` 全绿；基础设施 Kubernetes 清单部署到 kind（ns: gp）且代理暴露可连（`go run ./cmd/server` 连真实依赖通过）；软隔离命名空间 + RLS + 迁移基线就绪；四域骨架与端口契约建立；CI 就绪；im-saas 未被改动。**→ 交付 P0 小结，请用户确认后进入 P1。**
 
 ---
 
@@ -265,7 +259,7 @@ jobs:
 - **GP2-04 冲突检测 + Pause/Resume**：暂停/恢复控制边界已完成；目标级互斥已从进程内参考实现升级为 PostgreSQL session advisory lock，server/worker 跨进程共享，token 防误释放且进程退出自动释放；冲突返回 HTTP 409 并写 trusted 审计链，kind PostgreSQL 双连接排他验证通过。**当前剩余**：Temporal 多 worker 部署级并发与故障恢复验证；因此 GP2-04 DoD 尚未完成。
 - **GP2-05 截图开关策略下发 ✅ 已交付**：服务级截图开关按对象策略下发（防高并发性能开销，PRD R-TEST-13）。验证：策略生效；无截图场景证据=日志+hash。
 - **GP2-06 跨场景报告合编（PDF/Word）**：跨 run 合编查询、汇总和 HTML/Markdown 输出已完成（`POST /reports/bundle`，tenant scoped）；已新增 `POST /reports/bundle/export` 的 PDF/DOCX 下载契约、纯 Go 参考渲染器、OpenAPI 生成类型和前端客户端。**当前剩余**：真实字体/中文排版、Office/PDF 阅读器兼容性、证据资源嵌入和部署运行时集成验证；因此 GP2-06 阶段 DoD 尚未完成。
-- **GP2-07 水平扩展 P2（§10）**：kind Helm 已启用 server/worker 双副本，共享 Redis 原子配额和 PostgreSQL 冲突锁，滚动升级及多次 readiness 请求验证通过。**当前剩余**：SSE 共享订阅 Redis Pub/Sub、固定负载压测、吞吐/延迟线性扩展证据和故障切换演练；完成前不得宣称 GP2-07 DoD 完成。
+- **GP2-07 水平扩展 P2（§10）**：kind 清单已启用 server/worker 双副本，共享 Redis 原子配额和 PostgreSQL 冲突锁，滚动升级及多次 readiness 请求验证通过。**当前剩余**：SSE 共享订阅 Redis Pub/Sub、固定负载压测、吞吐/延迟线性扩展证据和故障切换演练；完成前不得宣称 GP2-07 DoD 完成。
 - **GP2-08 资源池注册 + 多执行集群**：本地资源池注册/能力选择/容量 reserve-release 参考实现已完成（`internal/execution/infra/pool`）；PostgreSQL registry 已提供 generation fencing、租约释放和续租代码。**当前仍未完成**：RunService 尚未使用租约续租；Redis/PostgreSQL 真实持久化验收、跨进程心跳/租约 fencing 集成测试和真实多集群接入验证均待完成。
 
 ## 4. P3 AI 治理 + 生成管道 W1（任务级施工图）
@@ -276,7 +270,7 @@ jobs:
 
 ## 5. P4 平台化（任务级施工图）
 
-- **GP4-01～GP4-06**：已补充规格 `docs/plans/GP4-IMPLEMENTATION-SPEC-DRAFT.md`，并细化为可直接排期的批次清单 `docs/plans/GP3-GP4-EXECUTION-BACKLOG.md`。GP4-04A 已有 `/readyz`（PostgreSQL + Redis 探针）、`/version`、构建信息、Helm 和迁移 Job；GP4-05A 有 provider-independent placement dry-run；GP4-06A 有低基数 metrics、dashboard、runbook 和受限 k6 smoke harness。上述均是代码/交付骨架，尚未完成真实私有化、租户迁移、观测栈接入、压测或 SLO 验收。身份源/RBAC、CI 首批平台和私有化拓扑仍需先定稿；不依赖这些决策的骨架批次可先开发。
+- **GP4-01～GP4-06**：已补充规格 `docs/plans/GP4-IMPLEMENTATION-SPEC-DRAFT.md`，并细化为可直接排期的批次清单 `docs/plans/GP3-GP4-EXECUTION-BACKLOG.md`。GP4-04A 已有 `/readyz`（PostgreSQL + Redis 探针）、`/version`、构建信息、Kubernetes 清单和迁移 Job；GP4-05A 有 provider-independent placement dry-run；GP4-06A 有低基数 metrics、dashboard、runbook 和受限 k6 smoke harness。上述均是代码/交付骨架，尚未完成真实私有化、租户迁移、观测栈接入、压测或 SLO 验收。身份源/RBAC、CI 首批平台和私有化拓扑仍需先定稿；不依赖这些决策的骨架批次可先开发。
 - **GP4-02～GP4-06**：目标与验收保持不变，具体实施拆分、契约、迁移、分层边界和前置决策以 `docs/plans/GP4-IMPLEMENTATION-SPEC-DRAFT.md` 为准；真实 provider、集群和容量验收仍待用户决策与环境准备。
 
 ---

@@ -47,5 +47,5 @@ k6 run -e BASE_URL=http://127.0.0.1:30080 -e VUS=1 -e DURATION=30s tools/load/sm
 ```
 
 The harness intentionally has no SLO thresholds until D-11 is decided. Record
-the command, harness version, Helm revision, image digests and `/metrics`
+the command, harness version, deployment commit/version, image digests and `/metrics`
 snapshot together; do not treat a smoke run as a capacity conclusion.

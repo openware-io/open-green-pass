@@ -11,7 +11,7 @@
 - 租户：所有现有业务表均以 `team_id` + PostgreSQL RLS 做租户隔离；HTTP 目前仅解析 `x-gp-team-id` 与可选 `x-gp-user-id`。该头部不是可信身份凭证。
 - 执行：GP2 已具备本地配额、运行队列、资源池和冲突检测参考实现；跨进程 Redis / 多 worker 真实验证仍未完成。
 - 可信：`aud_event` 为 append-only 哈希链，门禁、成本、报告已有 trusted 域服务；尚无审计锚点或独立校验程序。
-- 部署：当前仅有 kind 命名空间、NetworkPolicy、资源配额和 Temporal values；没有 Helm chart、Ingress、生产 Secret、监控栈或私有化安装包。
+- 部署：当前提供 kind 命名空间、NetworkPolicy、资源配额、Temporal 清单、GP 应用清单和部署脚本；生产 Secret、监控栈和完整私有化安装包仍待完成。GP 不把 Helm 作为安装前置依赖。
 - 前端：团队、登录、CI/CD、系统设置页面仍是 mock 交互；`api/openapi.yaml` 尚未定义 `/auth`、`/teams`、`/members`、`/cicd`、运维接口。
 
 ### 不可突破的工程边界
@@ -205,14 +205,14 @@ Authorization bearer token 应包含稳定 `principal_id`、认证时间、issue
 
 ### 目标与范围
 
-交付一个可离线或受限网络环境安装、升级、验证与支持的 GreenPass 发行物：应用静态二进制/前端资源、版本化 migrations、Helm chart、依赖拓扑、配置/Secret 说明以及审计链独立校验工具。当前仓库没有 Helm chart，因此此任务不能仅补一个 README 即称完成。
+交付一个可离线或受限网络环境安装、升级、验证与支持的 GreenPass 发行物：应用静态二进制/前端资源、版本化 migrations、Kubernetes 清单与部署脚本、依赖拓扑、配置/Secret 说明以及审计链独立校验工具。GP 不把 Helm 作为发行物或安装前置依赖。
 
 ### 前置决策与外部依赖
 
-- **[用户决策]** 支持的 Kubernetes 发行版/版本、CPU 架构、是否必须 air-gapped、是否允许 Helm 拉取公网 chart/image。
-- **[用户决策]** PG/Timescale、Redis、Temporal、SeaweedFS 是内置子 chart、客户自带，还是两种均支持；备份、证书、存储类、镜像仓库、升级责任归属。
+- **[用户决策]** 支持的 Kubernetes 发行版/版本、CPU 架构、是否必须 air-gapped，以及镜像仓库和网络访问策略。
+- **[用户决策]** PG/Timescale、Redis、Temporal、SeaweedFS 是由 GP 提供清单、由客户提供服务，还是两种均支持；备份、证书、存储类、镜像仓库、升级责任归属。
 - **[用户决策]** 交付许可/激活是否在范围内；若不在范围，不建立伪造 license service。
-- **[用户决策]** 是否要求单二进制运行在非 Kubernetes 主机；若要求，需要单独定义依赖管理、TLS、systemd 和数据目录，不能将 Helm 方案硬套。
+- **[用户决策]** 是否要求单二进制运行在非 Kubernetes 主机；若要求，需要单独定义依赖管理、TLS、systemd 和数据目录，不能将 Kubernetes 方案硬套。
 
 ### 契约、管理接口与事件
 
@@ -227,9 +227,9 @@ Authorization bearer token 应包含稳定 `principal_id`、认证时间、issue
 
 ### 交付物、迁移与分层职责
 
-- `deploy/helm/gp/`：Chart、values schema、server/worker Deployment、Service、Ingress（可选）、NetworkPolicy、HPA/PDB（取决于拓扑）、Job migration、ServiceAccount/RBAC、Secret 引用。不得把密码放 values 默认值。
+- `deploy/k8s/gp-app.yaml` 与 `deploy/k8s/gp-migration.yaml`：server/worker Deployment、Service、Ingress（可选）、NetworkPolicy、HPA/PDB（取决于拓扑）、migration Job、ServiceAccount/RBAC、Secret 引用。`scripts/dev/deploy-kind.ps1` 负责版本注入、校验、升级、就绪检查和失败回退；不得把密码写入清单默认值。
 - `deploy/images/` 或构建流水线：固定 Go toolchain、多阶段构建、`go:embed` 包含前端产物与可执行 migration assets；镜像 tag 与 app/OpenAPI 版本可追溯。
-- `cmd/migrate` 或受控 Helm hook Job：只执行已编译/已挂载的 migrations，迁移锁、失败退出和回滚 runbook 明确；绝不在 server 请求路径 AutoMigrate。
+- `cmd/migrate` 或受控 Kubernetes Job：只执行已编译/已挂载的 migrations，迁移锁、失败退出和回滚 runbook 明确；绝不在 server 请求路径 AutoMigrate。
 - `cmd/audit-verify`：独立读取最小权限 DB 凭据或导出文件，验证 hash 链和后续锚点；不得与 server 共享 writer 权限。
 - 文档：`deploy/README`、values reference、air-gap 镜像清单、依赖矩阵、安装/升级/回滚/备份恢复/故障排查 runbook。
 
@@ -240,13 +240,13 @@ Authorization bearer token 应包含稳定 `principal_id`、认证时间、issue
 - 离线/目标网络的干净集群安装：image pull、Secret 注入、migrations、readiness、最小业务闭环均成功。
 - 升级：支持的 N→N+1 版本执行只增迁移、前后 API/worker 兼容、失败可按 runbook 恢复；恢复演练验证 RPO/RTO（指标需用户定）。
 - 安全：默认 NetworkPolicy、非 root/只读文件系统（若运行依赖允许）、最小 K8s RBAC、无敏感 values/日志、可信域写权限隔离。
-- 依赖：GP2 真实依赖服务、GP3 审计锚定/独立校验、GP4-03 Secret/认证模型。可以先开始 chart 骨架、values schema、构建与 install smoke；不应依赖尚不存在的真实执行集群去宣称完成。
+- 依赖：GP2 真实依赖服务、GP3 审计锚定/独立校验、GP4-03 Secret/认证模型。可以先完善清单参数、构建与 install smoke；不应依赖尚不存在的真实执行集群去宣称完成。
 
 ## 5. GP4-05 多租户分区 + 基础设施集群化
 
 ### 目标与范围
 
-在既有 shared database + `team_id` RLS 模型之上，提供可逆性受控的升级路径：普通团队共享库，符合阈值的大客户迁入专属 schema 或独立数据库/集群；PG、Redis、Temporal、对象存储按真实容量和故障域扩展。此项不是「把所有 Helm 副本调大」：数据路由、迁移编排、备份恢复、可观测与运行一致性必须完整。
+在既有 shared database + `team_id` RLS 模型之上，提供可逆性受控的升级路径：普通团队共享库，符合阈值的大客户迁入专属 schema 或独立数据库/集群；PG、Redis、Temporal、对象存储按真实容量和故障域扩展。此项不是「把所有 Deployment 副本调大」：数据路由、迁移编排、备份恢复、可观测与运行一致性必须完整。
 
 ### 前置决策与外部依赖
 
@@ -281,7 +281,7 @@ Authorization bearer token 应包含稳定 `principal_id`、认证时间、issue
 - 共享库 RLS、schema-per-tenant 或独立库的同一组 CRUD/run/gate/audit 契约测试；任意错误路由应 fail closed。
 - 迁移演练：源/目标 row count、hash/审计连续性、成本总览对账、对象存储 evidence 可读、Temporal run 不丢；切换和回退均有 trace/audit。
 - HA 演练：PG 主切、Redis failover、Temporal worker 重连、对象存储故障；多副本 server/worker 保持正确性。
-- 依赖：GP2-03/04/07/08 必须已落到 Redis/Temporal/持久资源事实实现；GP3-03/04 对时序和审计锚点的设计必须完成；GP4-04 提供 chart 与运行配置。可先开发 placement 模型、resolver 端口、迁移 dry-run/校验 CLI。
+- 依赖：GP2-03/04/07/08 必须已落到 Redis/Temporal/持久资源事实实现；GP3-03/04 对时序和审计锚点的设计必须完成；GP4-04 提供清单与运行配置。可先开发 placement 模型、resolver 端口、迁移 dry-run/校验 CLI。
 
 ## 6. GP4-06 多团队高并发压测 + 监控告警
 
@@ -313,7 +313,7 @@ Authorization bearer token 应包含稳定 `principal_id`、认证时间、issue
 
 - `internal/platform/observability`：OTel meter/tracer 注册、有限 labels、敏感字段过滤；不得把业务规则写入 metric callback。
 - `execution/application/infra`：在准入、排队、领取、dispatch、终态处发射指标和 trace；所有采集失败不可阻断真实 run。
-- `deploy/monitoring/`：PrometheusRule、Dashboard as code、Alertmanager routing templates、runbooks；部署与 Helm values 联动。
+- `deploy/monitoring/`：PrometheusRule、Dashboard as code、Alertmanager routing templates、runbooks；部署与脚本参数联动。
 - `test/load/`：k6/Locust/Gatling（工具待定）脚本、数据 seed、预检、清理、结果阈值；负载脚本和断言进版本库。
 
 ### 验收与依赖
@@ -331,7 +331,7 @@ Authorization bearer token 应包含稳定 `principal_id`、认证时间、issue
 2. **GP4-03 的 Principal/认证基础 + GP4-01 的授权模型**：可并行开发不依赖 provider 的 domain/application/迁移；认证中间件接入后完成真实强制授权。不要先将 UI 按钮隐藏当作 RBAC 完成。
 3. **GP2 真实共享调度基础完成后接 GP4-02**：先做 provider-independent connector/outbox/CLI 契约和 fake；再选定一个 CI provider 实现端到端闭环。
 4. **GP3 审计锚定与 GP4-04 打包一起完成**：独立 audit verifier 需要锚点定义、最小权限读取和可交付部署形态。
-5. **GP4-05**：在真实 Redis/Temporal/资源池以及私有化 chart 存在之后做分区/集群化。先 dry-run/resolver/迁移校验，最后才能 cutover。
+5. **GP4-05**：在真实 Redis/Temporal/资源池以及私有化清单/脚本存在之后做分区/集群化。先 dry-run/resolver/迁移校验，最后才能 cutover。
 6. **GP4-06**：以稳定的生产候选架构做容量与故障验证，结果反哺 HPA、资源池、数据库/Redis/Temporal 参数和告警阈值。
 
 ### 可以立即开始的低风险编码包
@@ -339,7 +339,7 @@ Authorization bearer token 应包含稳定 `principal_id`、认证时间、issue
 - GP4-01：固定角色/asset permission 的领域模型、PostgreSQL 迁移、应用授权门、fake/httptest、OpenAPI 草案；先用测试 Principal port，保留真实 Auth middleware 接口。
 - GP4-02：connector/delivery/outbox 领域与迁移、通用 idempotency、CLI 骨架、provider fixture 合同测试；真实 provider adapter 等用户选型。
 - GP4-03：identity ports、Principal context、session 抽象、开发环境 fake provider 和安全测试；真实 WeChat/SMS/IdP adapter 等外部凭证和回调信息。
-- GP4-04：Helm chart 目录与 values schema、build metadata、readiness/version、迁移 Job、安装/升级 runbook；不要假定依赖子 chart。
+- GP4-04：Kubernetes 清单与脚本参数 schema、build metadata、readiness/version、迁移 Job、安装/升级 runbook；不要假定依赖子 chart 或 Helm。
 - GP4-05：TenantRoute resolver 端口、placement registry 迁移、dry-run/consistency checker；不执行真实客户数据迁移。
 - GP4-06：OTel/Prometheus 指标骨架、load-test harness、dashboard/alert rule 模板；阈值均参数化等待 SLO。
 

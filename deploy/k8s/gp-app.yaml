@@ -1,0 +1,191 @@
+# GreenPass application resources. VERSION is substituted by scripts/dev/deploy-kind.ps1.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gp-controller
+  namespace: gp
+  labels: { app.kubernetes.io/part-of: greenpass }
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gp-managed-secrets
+  namespace: gp
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gp-managed-secrets
+  namespace: gp
+subjects:
+  - kind: ServiceAccount
+    name: gp-controller
+    namespace: gp
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: gp-managed-secrets }
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata: { name: gp-quota, namespace: gp }
+spec:
+  hard: { requests.cpu: "8", requests.memory: 16Gi, limits.cpu: "16", limits.memory: 32Gi, count/pods: "50", persistentvolumeclaims: "40" }
+---
+apiVersion: v1
+kind: LimitRange
+metadata: { name: gp-limitrange, namespace: gp }
+spec:
+  limits:
+    - type: Container
+      default: { cpu: 500m, memory: 512Mi }
+      defaultRequest: { cpu: 100m, memory: 128Mi }
+      min: { cpu: 50m, memory: 64Mi }
+      max: { cpu: "4", memory: 8Gi }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: gp-allow-internal, namespace: gp }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: gp-runner } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ingress-nginx } }
+      ports: [{ protocol: TCP, port: 8080 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: gp-server, namespace: gp }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app.kubernetes.io/name: gp, app.kubernetes.io/component: server } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: gp, app.kubernetes.io/part-of: greenpass, app.kubernetes.io/component: server } }
+    spec:
+      serviceAccountName: gp-controller
+      securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: server
+          image: IMAGE_REGISTRY/open-green-pass:VERSION
+          imagePullPolicy: IMAGE_PULL_POLICY
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          ports: [{ name: http, containerPort: 8080 }]
+          env:
+            - { name: GP_ADDR, value: ":8080" }
+            - { name: GP_ENV, value: dev }
+            - { name: GP_ALLOW_HEADER_AUTH, value: "true" }
+            - { name: GP_BUILD_REVISION, value: "VERSION" }
+            - { name: GP_RUNNER_TYPE, value: k8s }
+            - { name: GP_RUNNER_NS, value: gp-runner }
+            - { name: GP_RUNNER_IMAGE, value: curlimages/curl:8.10.1 }
+            - { name: GP_MODEL_SECRET_NAMESPACE, value: gp }
+            - { name: GP_AUTH_SECRET_NAMESPACE, value: gp }
+            - { name: GP_TEMPORAL_ADDR, value: gp-temporal-frontend.gp.svc.cluster.local:7233 }
+            - { name: GP_QUOTA_RUN_GLOBAL, value: "50" }
+            - { name: GP_QUOTA_RUN_TEAM, value: "20" }
+            - { name: GP_QUOTA_RUN_TARGET, value: "5" }
+            - { name: GP_QUOTA_RUN_OWNER, value: "3" }
+          envFrom: [{ secretRef: { name: gp-app-config } }]
+          readinessProbe: { httpGet: { path: /readyz, port: http } }
+          livenessProbe: { httpGet: { path: /readyz, port: http } }
+          resources: { requests: { cpu: 100m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: gp-server, namespace: gp }
+spec:
+  selector: { app.kubernetes.io/name: gp, app.kubernetes.io/component: server }
+  ports: [{ name: http, port: 8080, targetPort: http }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: gp-worker, namespace: gp }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app.kubernetes.io/name: gp, app.kubernetes.io/component: worker } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: gp, app.kubernetes.io/part-of: greenpass, app.kubernetes.io/component: worker } }
+    spec:
+      serviceAccountName: gp-controller
+      securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: worker
+          image: IMAGE_REGISTRY/open-green-pass:VERSION
+          imagePullPolicy: IMAGE_PULL_POLICY
+          command: ["/usr/local/bin/gp-worker"]
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          env:
+            - { name: GP_ENV, value: dev }
+            - { name: GP_ALLOW_HEADER_AUTH, value: "true" }
+            - { name: GP_BUILD_REVISION, value: "VERSION" }
+            - { name: GP_RUNNER_TYPE, value: k8s }
+            - { name: GP_RUNNER_NS, value: gp-runner }
+            - { name: GP_RUNNER_IMAGE, value: curlimages/curl:8.10.1 }
+            - { name: GP_TEMPORAL_ADDR, value: gp-temporal-frontend.gp.svc.cluster.local:7233 }
+            - { name: GP_CICD_MAX_ATTEMPTS, value: "5" }
+            - { name: GP_CICD_RETRY_BASE_SECONDS, value: "5" }
+            - { name: GP_CICD_CLAIM_TIMEOUT_SECONDS, value: "120" }
+          envFrom: [{ secretRef: { name: gp-app-config } }]
+          resources: { requests: { cpu: 100m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: gp-web, namespace: gp }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app.kubernetes.io/name: gp, app.kubernetes.io/component: web } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: gp, app.kubernetes.io/part-of: greenpass, app.kubernetes.io/component: web } }
+    spec:
+      serviceAccountName: gp-controller
+      securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: web
+          image: IMAGE_REGISTRY/open-green-pass-web:VERSION
+          imagePullPolicy: IMAGE_PULL_POLICY
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          ports: [{ name: http, containerPort: 8080 }]
+          env:
+            - { name: VITE_GP_API_BASE, value: /api }
+            - { name: VITE_GP_TEAM_ID, value: "1001" }
+            - { name: VITE_GP_USER_ID, value: "42" }
+          volumeMounts: [{ name: nginx-tmp, mountPath: /tmp }]
+          readinessProbe: { httpGet: { path: /, port: http } }
+          livenessProbe: { httpGet: { path: /, port: http } }
+          resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 200m, memory: 256Mi } }
+      volumes: [{ name: nginx-tmp, emptyDir: {} }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: gp-web, namespace: gp }
+spec:
+  selector: { app.kubernetes.io/name: gp, app.kubernetes.io/component: web }
+  ports: [{ name: http, port: 8080, targetPort: http }]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gp-server-api
+  namespace: gp
+  annotations: { nginx.ingress.kubernetes.io/use-regex: "true", nginx.ingress.kubernetes.io/rewrite-target: /$2 }
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: greenpass.localhost
+      http:
+        paths: [{ path: /api(/|$)(.*), pathType: ImplementationSpecific, backend: { service: { name: gp-server, port: { number: 8080 } } } }]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: { name: gp-web, namespace: gp }
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: greenpass.localhost
+      http:
+        paths: [{ path: /, pathType: Prefix, backend: { service: { name: gp-web, port: { number: 8080 } } } }]

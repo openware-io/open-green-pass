@@ -14,7 +14,7 @@ Create a directory outside the repository for recovery artifacts, then run:
 
 The script requires exactly one `app=gp-postgres` pod in `gp`, reads its
 credential only inside the Pod, and refuses to overwrite an existing file.
-Record the Git commit, Helm revision, image digests, migration version and the
+Record the Git commit, deployment version, image digests, migration version and the
 artifact checksum with the backup.
 
 ## Restore rehearsal
@@ -29,7 +29,7 @@ literal confirmation below and never addresses another namespace or database.
   -ConfirmRestore RESTORE_GP_DATABASE
 ```
 
-After restore, use the normal Helm-owned migration path rather than running
+After restore, use the normal `scripts/dev/deploy-kind.ps1` migration path rather than running
 application migrations by hand. Verify `schema_migrations`, `GET /api/readyz`,
 and the GP smoke flow. A rehearsal is not a production RPO/RTO claim; those
 targets remain dependent on the approved backup store and recovery objective.

@@ -370,7 +370,7 @@ Temporal signal 固定为 `generation-review` 与 `generation-rollback`，payloa
 
 ### 8.2 必须确认的环境决策
 
-- 生产数据库角色由迁移用户创建，还是由 DBA/Helm bootstrap job 预建；受管 PG 往往不允许应用迁移创建角色。
+- 生产数据库角色由迁移用户创建，还是由 DBA/受控 bootstrap Job 预建；受管 PG 往往不允许应用迁移创建角色。
 - `gp_server`、`gp_worker`、`gp_trusted_writer`、只读 verifier/report reader 的实际连接字符串/Secret 命名和 rotation 流程。
 - 哪些 trusted 表必须独占写：至少 `aud_event`、`cost_line_item`、`gate_result`；`gate_rule` 的编辑也应由 trusted application 承担，是否同角色写需确认。
 - 备份目的地、RPO/RTO、恢复演练频率、加密/KMS、对象存储 WORM 与 sandbox 的网络/服务账号策略。
@@ -388,7 +388,7 @@ Temporal signal 固定为 `generation-review` 与 `generation-rollback`，payloa
 ### 8.4 安全最小交付物
 
 - **密钥**：配置中仅允许 `*_SECRET_REF`/Secret mount；启动期拒绝明显明文 key；日志、panic 和审计 payload 统一脱敏；轮换后旧凭据失效的 smoke。
-- **备份恢复**：加密备份、权限隔离、至少一次从备份恢复至隔离库并运行迁移/审计验证；记录实际 RPO/RTO，而不是只存在 Helm values。
+- **备份恢复**：加密备份、权限隔离、至少一次从备份恢复至隔离库并运行迁移/审计验证；记录实际 RPO/RTO，而不是只存在部署参数中。
 - **Sandbox**：runner pod 使用 non-root、read-only root filesystem、drop capabilities、资源 limit、独立 service account、NetworkPolicy 默认拒绝且只允许明确 SUT/必要依赖出站；不挂载控制面 DB/Temporal/Secret 凭据。
 - **供应链**：镜像固定来源/扫描、依赖漏洞门禁、K8s manifests 不提交秘钥。具体工具可选，但结果必须可复查。
 

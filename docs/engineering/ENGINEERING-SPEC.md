@@ -36,7 +36,7 @@ green-pass/
 ├── pkg/                     # 可复用纯技术包（无业务语义）：协议常量 / 时钟 / 哈希链工具
 ├── api/                     # 对外契约：OpenAPI(openapi.yaml) + 生成类型（前端/BFF 消费）
 ├── migrations/              # 数据库迁移（golang-migrate：000001_xxx.up/down.sql）
-├── deploy/                  # docker / helm / k8s / 私有化单二进制打包
+├── deploy/                  # docker / k8s / kind / 私有化单二进制打包
 ├── scripts/                 # validate 门禁脚本（单文件入口）
 ├── test/                    # 跨域集成 / e2e（testcontainers 拉起依赖）
 ├── .github/workflows/       # CI
@@ -322,10 +322,12 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 ## 11. 环境与本地开发
 
 - `.env` 是版本控制中的共享本地开发基线（映射 im：环境差异用受管环境变量覆盖，生产/共享凭据不入库）；`.env.example` 提供模板。
-- 本地一键调试：GP 组件以 **Helm 部署到 kind 集群内命名空间（ns: gp）**；本地调试 = 直接部署到 kind，或 `go run ./cmd/server` + 依赖经 kind 代理暴露后连接（port-forward / NodePort / ingress-nginx + kind extraPortMappings）。**不使用 docker 部署形态做调试**；`docker-compose` 仅保留给本机 testcontainers（集成测试回退，非首选）。
-- 本地测试部署唯一来源是 Helm：禁止用独立 `docker run`、`docker compose up` 或手工 `kubectl apply` 替代 GP 应用部署；基础设施和应用必须落在 `gp`/`gp-runner`，不得修改 `open-im-local` 工作负载。
+- 本地一键调试：GP 组件以 **版本化 Kubernetes 清单和部署脚本部署到 kind 集群内命名空间（ns: gp）**；本地调试 = 直接部署到 kind，或 `go run ./cmd/server` + 依赖经 kind 代理暴露后连接（port-forward / NodePort / ingress-nginx + kind extraPortMappings）。**不使用 docker 部署形态做调试**；`docker-compose` 仅保留给本机 testcontainers（集成测试回退，非首选）。
+- 本地测试部署唯一来源是 `scripts/dev/init-kind.ps1`/`deploy-kind.ps1`：禁止用独立 `docker run`、`docker compose up` 或未审查的手工 `kubectl apply` 替代 GP 应用部署；基础设施和应用必须落在 `gp`/`gp-runner`，不得修改 `open-im-local` 工作负载。
+- 一键初始化唯一入口为 `scripts/dev/init-kind.ps1`（`make kind-init`）：kind 集群不存在时按 `deploy/kind/cluster.yaml` 创建；已有一个集群时复用；有多个时优先复用唯一已部署 GP 的集群，其次复用唯一承载 `open-im-local` 被测对象的集群，仍不能唯一判定时必须显式指定 `-KindCluster`。创建新集群时才安装固定版本 ingress-nginx；复用集群必须已具备就绪的 ingress-nginx 和 `30080 -> 30080` HTTP 入口，否则预检失败且不部署。初始化脚本调用 `deploy-kind.ps1` 完成清单部署，禁止另建平行发布流程。
+- 初始化脚本首次创建 GP Secret 时使用随机本地凭据，重复执行必须保留现有 Secret，不得重置密码或覆盖应用配置。发布后必须验证首页、health/ready、账号密码登录及认证态接口；验收失败时恢复已有 Deployment 的上一组镜像。kind 集群是否新建不改变 IM 工作负载只读快照核对要求。
 - Docker 的本地职责仅限构建 GreenPass 自研镜像和 `kind load docker-image`；GreenPass 自研镜像必须使用正式仓库命名和版本 tag，禁止使用 `latest`、临时镜像名或未记录的本地镜像运行测试。PostgreSQL、Redis、Temporal、SeaweedFS、Nginx 等中间件/第三方组件沿用其官方发布、兼容性和供应链规范，不套用 GreenPass 自研镜像命名规则。
-- 每次本地测试发布必须执行：构建 server/worker/web/migrate 镜像 → 加载 kind 所有节点 → `helm lint`/`helm template` → `helm upgrade --install --wait` → 迁移 Job → readiness/关键链路检查 → 失败时 Helm 回滚；不得绕过 Helm 直接替换 Pod。
+- 每次本地测试发布必须执行：构建 server/worker/web/migrate 镜像 → 加载 kind 所有节点 → `kubectl apply --dry-run=server` → 应用清单 apply → 版本化迁移 Job → rollout/readiness/关键链路检查 → 失败时恢复上一版本镜像；不得绕过发布脚本直接替换 Pod。
 - 宿主机透传端口避让同环境既有服务（PG 5433 / Redis 6380 / 对象存储(SeaweedFS) 9100 / Temporal 专属 7233+8080）；`.env` 指向宿主机端口。
 - 调试输出统一 `.outputs/logs/`；禁把临时日志写仓库根。
 - Windows PowerShell 批量改写源码必须显式 UTF-8（禁裸 `Set-Content`/`Out-File` 缺编码）。
@@ -337,9 +339,9 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 - **语义化版本 + git tag**：`vX.Y.Z`；发布前跑全量 `make check`；正式镜像用 tag，禁 `image@sha256` 运行时依赖。
 - CI 流水线：`lint+test` → `build` → `govulncheck` → `migcheck` → 镜像构建 → 推送；任一门禁失败不合并。
 - 镜像：多阶段 `Dockerfile`（builder 用固定 toolchain + `CGO_ENABLED=0` 静态二进制 + `go:embed` 打包配置/迁移/前端产物）；私有化可单二进制交付。
-- 部署：生产/私有化使用 Helm；本地和 kind 验收同样必须使用 Helm。Docker 不得作为应用部署运行时，只能用于镜像构建和 kind 导入；密钥经 Secret/受管环境注入，禁入库。
+- 部署：GP 不把 Helm 作为运行或部署前置依赖；生产、私有化、本地 kind 均提供 Kubernetes 清单和脚本入口，使用者可自行选择 kubectl、Kustomize 或其他编排工具。Docker 不得作为应用部署运行时，只能用于镜像构建和 kind 导入；密钥经 Secret/受管环境注入，禁入库。
 - 发布制品命名固定为 `ghcr.io/openware-io/open-green-pass:X.Y.Z`、`ghcr.io/openware-io/open-green-pass-web:X.Y.Z`、`ghcr.io/openware-io/open-green-pass-migrate:X.Y.Z`；镜像 tag 直接使用版本号，不加 `v` 前缀。开发/测试版本必须使用 `X.Y.Z-SNAPSHOT` 后缀（例如 `0.1.7-SNAPSHOT`），除非明确执行正式发布；正式版本才使用纯 `X.Y.Z`。server/worker 必须使用同一后端版本，migration 必须与 schema 版本匹配。
-- kind 发布记录必须包含 Git commit、镜像 tag/digest、Helm revision、迁移版本、readiness 结果和 `open-im-local` 不变更核对；缺任一项不得标记发布成功。
+- kind 发布记录必须包含 Git commit、部署版本、镜像 tag/digest、迁移版本、readiness 结果和 `open-im-local` 不变更核对；缺任一项不得标记发布成功。
 - 发布后验证制品可启动、迁移成功、关键链路可观测；失败制品按策略撤回，不静默覆盖。
 
 ---

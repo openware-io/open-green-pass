@@ -1,21 +1,5 @@
-# GP0-03 软隔离策略：gp 命名空间内 NetworkPolicy + 资源配额（ResourceQuota/LimitRange）。
-# 约束：gp 与 gp-runner 仅内部互访、禁止跨命名空间（除 kube-system DNS）；资源受限保障与 im 共存。
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: gp-allow-internal
-  namespace: gp
-spec:
-  podSelector: {}
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        - podSelector: {} # 同命名空间内互通（GP 服务间）
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: gp-runner
----
+# GP0-03 软隔离策略：gp-runner 仅能访问 GP 控制面和已批准的 SUT 入口。
+# gp 命名空间的 ingress NetworkPolicy 由 deploy/k8s/gp-app.yaml 管理。
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -73,41 +57,6 @@ spec:
       ports:
         - protocol: TCP
           port: 3002
----
-apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: gp-quota
-  namespace: gp
-spec:
-  hard:
-    requests.cpu: "8"
-    requests.memory: 16Gi
-    limits.cpu: "16"
-    limits.memory: 32Gi
-    persistentvolumeclaims: "40"
-    count/pods: "50"
----
-apiVersion: v1
-kind: LimitRange
-metadata:
-  name: gp-limitrange
-  namespace: gp
-spec:
-  limits:
-    - type: Container
-      default:
-        cpu: 500m
-        memory: 512Mi
-      defaultRequest:
-        cpu: 100m
-        memory: 128Mi
-      max:
-        cpu: "4"
-        memory: 8Gi
-      min:
-        cpu: 50m
-        memory: 64Mi
 ---
 # Runner sandbox capacity is independently bounded so pathological test jobs
 # cannot consume capacity reserved for either the GP control plane or IM SUT.

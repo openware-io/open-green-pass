@@ -21,9 +21,9 @@ This document records the executable GP3-07 baseline. It does not claim that an 
 
 - Runner Jobs use a dedicated service account, disable token automount, run as a numeric non-root user, use `RuntimeDefault` seccomp, drop all Linux capabilities, forbid privilege escalation, and use a read-only root filesystem.
 - The controller service account may create and observe Jobs only through reviewed RBAC. It must not be reused by runner Jobs.
-- The Helm NetworkPolicy currently restricts ingress but does not claim egress isolation. Before production, define DNS plus explicit provider/object-store/repository destinations, test those allow-lists in a staging namespace, and only then enable default-deny egress.
+- The GP NetworkPolicy in `deploy/k8s/gp-app.yaml` currently restricts ingress but does not claim egress isolation. Before production, define DNS plus explicit provider/object-store/repository destinations, test those allow-lists in a staging namespace, and only then enable default-deny egress.
 - Untrusted test commands must execute in runner Jobs or a dedicated pool, never in the server or worker container.
 
 ## Release checks
 
-Run `go test ./...`, `go vet ./cmd/... ./internal/... ./pkg/...`, `helm lint deploy/helm/gp -f deploy/helm/gp/values-kind.yaml`, and the migration contract checks. Production acceptance additionally requires database role integration tests, image/SBOM scanning, and a staged egress-policy exercise.
+Run `go test ./...`, `go vet ./cmd/... ./internal/... ./pkg/...`, `kubectl apply --dry-run=server -f deploy/k8s/gp-app.yaml`, and the migration contract checks. Production acceptance additionally requires database role integration tests, image/SBOM scanning, and a staged egress-policy exercise.

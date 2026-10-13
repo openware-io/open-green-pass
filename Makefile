@@ -4,7 +4,7 @@ GO      := go
 GOSRC   := ./cmd/... ./internal/... ./pkg/... ./test/...
 GODIRS  := ./cmd ./internal ./pkg ./test
 
-.PHONY: validate lint test build vuln migcheck api-contract check tools clean
+.PHONY: validate lint test build vuln migcheck api-contract check tools clean kind-init
 
 validate:
 	gofumpt -l $(GODIRS)
@@ -43,3 +43,7 @@ tools:
 # Windows 本地清理：仅删除文档规范中列出的可重建产物。
 clean:
 	pwsh -NoProfile -File ./scripts/dev/clean-local.ps1
+
+# 唯一的本地 kind 初始化/发布入口；Docker 仅用于构建和 kind load。
+kind-init:
+	pwsh -NoProfile -File ./scripts/dev/init-kind.ps1
