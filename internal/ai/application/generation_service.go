@@ -26,10 +26,11 @@ type CreateGenerationBatchCommand struct {
 // transitions. It intentionally has no dependency on Temporal, SCM, AI, or
 // governance case storage.
 type GenerationBatchService struct {
-	batches domain.GenerationBatchRepository
-	signals GenerationSignalPort
-	audit   GenerationAuditPort
-	now     func() time.Time
+	batches  domain.GenerationBatchRepository
+	signals  GenerationSignalPort
+	audit    GenerationAuditPort
+	workflow GenerationWorkflowPort
+	now      func() time.Time
 }
 
 type GenerationReviewDecision string
@@ -61,6 +62,13 @@ type GenerationSignalPort interface {
 	SignalRollback(context.Context, GenerationSignal) error
 }
 
+// GenerationWorkflowPort starts the durable non-human generation pipeline.
+// Keeping it behind an application port prevents HTTP handlers from depending
+// directly on Temporal.
+type GenerationWorkflowPort interface {
+	Start(context.Context, int64, int64) error
+}
+
 type GenerationAuditEvent struct {
 	TeamID, BatchID, ActorID, StateVersion int64
 	Action, RequestID                      string
@@ -86,6 +94,10 @@ func (s *GenerationBatchService) SetReviewPorts(signals GenerationSignalPort, au
 	s.signals, s.audit = signals, audit
 }
 
+func (s *GenerationBatchService) SetWorkflowPort(workflow GenerationWorkflowPort) {
+	s.workflow = workflow
+}
+
 // Create returns the existing batch for a repeated tenant-scoped idempotency
 // key. Repository implementations must enforce the same uniqueness in durable
 // storage to preserve this guarantee across processes.
@@ -95,6 +107,11 @@ func (s *GenerationBatchService) Create(ctx context.Context, cmd CreateGeneratio
 	}
 	existing, err := s.batches.FindByIdempotencyKey(ctx, cmd.TeamID, cmd.IdempotencyKey)
 	if err == nil {
+		if s.workflow != nil && existing.State == domain.GenerationEnqueued {
+			if startErr := s.workflow.Start(ctx, existing.ID, existing.TeamID); startErr != nil {
+				return nil, false, fmt.Errorf("start generation workflow: %w", startErr)
+			}
+		}
 		return existing, false, nil
 	}
 	if !errors.Is(err, domain.ErrGenerationNotFound) {
@@ -111,6 +128,11 @@ func (s *GenerationBatchService) Create(ctx context.Context, cmd CreateGeneratio
 			return got, false, nil
 		}
 		return nil, false, err
+	}
+	if s.workflow != nil {
+		if err := s.workflow.Start(ctx, batch.ID, batch.TeamID); err != nil {
+			return nil, false, fmt.Errorf("start generation workflow: %w", err)
+		}
 	}
 	return batch, true, nil
 }

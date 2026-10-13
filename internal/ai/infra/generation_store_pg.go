@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 
@@ -25,6 +26,66 @@ type GenerationSeed struct {
 	NormalizedSpec map[string]any `json:"normalized_spec"`
 	QualityState   string         `json:"quality_state"`
 	ApprovalState  string         `json:"approval_state"`
+}
+
+func (s *GenerationBatchStore) CreateSeed(ctx context.Context, teamID int64, seedID int64, batchID int64, locator string, spec map[string]any) error {
+	payload, err := json.Marshal(spec)
+	if err != nil {
+		return err
+	}
+	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO gen_seed (id,team_id,batch_id,source_locator,normalized_spec,dedupe_hash) VALUES ($1,$2,$3,$4,$5,md5($4 || $5::text)) ON CONFLICT (batch_id,dedupe_hash) DO NOTHING`, seedID, teamID, batchID, locator, payload)
+		return err
+	})
+}
+
+func (s *GenerationBatchStore) MarkSeedsQuality(ctx context.Context, teamID, batchID int64, state string) error {
+	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE gen_seed SET quality_state=$3 WHERE team_id=$1 AND batch_id=$2`, teamID, batchID, state)
+		return err
+	})
+}
+
+func (s *GenerationBatchStore) CommitSeeds(ctx context.Context, teamID, batchID int64, genNext func() int64) error {
+	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		var targetID, repoID int64
+		var branch string
+		if err := tx.QueryRow(ctx, `SELECT target_id,repo_id,branch FROM gen_batch WHERE team_id=$1 AND id=$2`, teamID, batchID).Scan(&targetID, &repoID, &branch); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `SELECT id,normalized_spec FROM gen_seed WHERE team_id=$1 AND batch_id=$2 AND quality_state='passed'`, teamID, batchID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var seedID int64
+			var raw []byte
+			if err := rows.Scan(&seedID, &raw); err != nil {
+				return err
+			}
+			var spec map[string]any
+			if err := json.Unmarshal(raw, &spec); err != nil {
+				return err
+			}
+			code := fmt.Sprintf("GEN-%d-%d", batchID, seedID)
+			title, _ := spec["title"].(string)
+			if title == "" {
+				title = fmt.Sprintf("生成候选种子 %d", seedID)
+			}
+			caseID, versionID := genNext(), genNext()
+			if _, err := tx.Exec(ctx, `INSERT INTO cas_case (id,team_id,target_id,code,title,kind,created_by) VALUES ($1,$2,$3,$4,$5,'api',1) ON CONFLICT (team_id,target_id,code) DO NOTHING`, caseID, teamID, targetID, code, title); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO cas_version (id,team_id,case_id,version,change_type,source_repo_id,source_branch,script_json,approved_at) SELECT $1,$2,id,1,'added',$3,$4,$5,now() FROM cas_case WHERE team_id=$2 AND target_id=$6 AND code=$7 ON CONFLICT DO NOTHING`, versionID, teamID, repoID, branch, raw, targetID, code); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `UPDATE gen_seed SET approval_state='approved' WHERE team_id=$1 AND batch_id=$2 AND id=$3`, teamID, batchID, seedID); err != nil {
+				return err
+			}
+		}
+		return rows.Err()
+	})
 }
 
 func (s *GenerationBatchStore) ListSeeds(ctx context.Context, teamID, batchID int64) ([]GenerationSeed, error) {

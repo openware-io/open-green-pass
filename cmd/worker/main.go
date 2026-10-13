@@ -15,6 +15,9 @@ import (
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 
+	aiapp "github.com/openware-io/open-green-pass/internal/ai/application"
+	aiinfra "github.com/openware-io/open-green-pass/internal/ai/infra"
+	aiworkflow "github.com/openware-io/open-green-pass/internal/ai/workflow"
 	cicdapp "github.com/openware-io/open-green-pass/internal/cicd/application"
 	cicdinfra "github.com/openware-io/open-green-pass/internal/cicd/infra"
 	eapp "github.com/openware-io/open-green-pass/internal/execution/application"
@@ -158,6 +161,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer c.Close()
+	generationStore := aiinfra.NewGenerationBatchStore(dbb)
+	generationSvc := aiapp.NewGenerationBatchService(generationStore)
+	generationController := aiworkflow.NewTemporalController(c)
+	generationSvc.SetReviewPorts(generationController, nil)
+	aiworkflow.SetGenerationDeps(generationSvc, generationStore, gen)
 	temporalController := workflow.NewTemporalController(c)
 	runSvc.SetWorkflowController(temporalController)
 
@@ -167,11 +175,27 @@ func main() {
 	w.RegisterActivity(workflow.ActivityRunVersionCheck)
 	w.RegisterActivity(workflow.ActivityExecuteRun)
 
+	gw := worker.New(c, "gp-generation", worker.Options{})
+	gw.RegisterWorkflow(aiworkflow.GenerationPipelineWorkflow)
+	gw.RegisterActivity(aiworkflow.FetchSource)
+	gw.RegisterActivity(aiworkflow.ParseAndNormalize)
+	gw.RegisterActivity(aiworkflow.GenerateSeeds)
+	gw.RegisterActivity(aiworkflow.QualityGate)
+	gw.RegisterActivity(aiworkflow.RecordReview)
+	gw.RegisterActivity(aiworkflow.CommitVersions)
+	gw.RegisterActivity(aiworkflow.ApplyRollback)
+	gw.RegisterActivity(aiworkflow.EmitAudit)
+
 	if err := w.Start(); err != nil {
 		log.Error("temporal worker start failed", "err", err)
 		os.Exit(1)
 	}
 	defer w.Stop()
+	if err := gw.Start(); err != nil {
+		log.Error("generation temporal worker start failed", "err", err)
+		os.Exit(1)
+	}
+	defer gw.Stop()
 
 	scheduleClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr, Password: os.Getenv("GP_REDIS_PASSWORD")})
 	defer scheduleClient.Close()

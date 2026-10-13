@@ -24,6 +24,7 @@ type GenerationPipelineInput struct {
 // ReviewSignalPayload is intentionally metadata-only. The HTTP/application
 // command performs authorization and optimistic state checks before signaling.
 type ReviewSignalPayload struct {
+	TeamID       int64
 	BatchID      int64
 	Decision     string // approve or reject
 	ActorID      int64
@@ -32,6 +33,7 @@ type ReviewSignalPayload struct {
 }
 
 type RollbackSignalPayload struct {
+	TeamID       int64
 	BatchID      int64
 	ActorID      int64
 	RequestID    string

@@ -13,6 +13,7 @@ import (
 	aiapi "github.com/openware-io/open-green-pass/internal/ai/api"
 	aiapp "github.com/openware-io/open-green-pass/internal/ai/application"
 	aiinfra "github.com/openware-io/open-green-pass/internal/ai/infra"
+	aiworkflow "github.com/openware-io/open-green-pass/internal/ai/workflow"
 	eapi "github.com/openware-io/open-green-pass/internal/execution/api"
 	eapp "github.com/openware-io/open-green-pass/internal/execution/application"
 	edomain "github.com/openware-io/open-green-pass/internal/execution/domain"
@@ -155,6 +156,9 @@ func main() {
 		os.Exit(1)
 	}
 	defer temporalClient.Close()
+	generationController := aiworkflow.NewTemporalController(temporalClient)
+	generationSvc.SetWorkflowPort(generationController)
+	generationSvc.SetReviewPorts(generationController, nil)
 	runEventBus, err := gpRedisRunBus.New(ctx, cfg.RedisAddr, os.Getenv("GP_REDIS_PASSWORD"))
 	if err != nil {
 		log.Error("init redis run event bus", "error", err)
