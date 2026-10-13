@@ -1,8 +1,10 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { REQUIREMENTS, TRACE_CHAINS, type IAssetNode } from '@/data/mock';
 import { PageHeader, GhostButton, ListFilter as FilterBar } from '@/components/shared';
 import { ScanSearch, ShieldCheck, ShieldAlert, ShieldX, ChevronRight, CheckCircle2, CircleX, CircleAlert, Camera, GitBranch, Info } from 'lucide-react';
+import { configuredGreenPassClient } from '@/api/runtime';
+import type { TestCase } from '@/api/client';
 
 // 覆盖状态徽章：业务语义 = 该需求是否有用例覆盖
 const COVER_BADGE: Record<string, { label: string; cls: string }> = {
@@ -34,6 +36,23 @@ const ORDER: Record<string, number> = { '缺口': 0, '部分': 1, '完整': 2 };
 
 export default function TracePage() {
   const { selectedAsset } = useOutletContext<{ selectedAsset: IAssetNode }>();
+  const realClient = useMemo(() => configuredGreenPassClient(), []);
+  const [liveCases, setLiveCases] = useState<TestCase[]>([]);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveError, setLiveError] = useState('');
+  useEffect(() => {
+    if (!realClient) return;
+    const targetID = Number(localStorage.getItem('greenpass_project_id') ?? 0);
+    if (!targetID) { setLiveError('请先在被测对象页选择真实项目'); return; }
+    let cancelled = false;
+    setLiveLoading(true); setLiveError('');
+    void realClient.listCases({ target_id: targetID }).then((items) => {
+      if (!cancelled) setLiveCases(items);
+    }).catch((error) => {
+      if (!cancelled) setLiveError(error instanceof Error ? error.message : '读取真实用例失败');
+    }).finally(() => { if (!cancelled) setLiveLoading(false); });
+    return () => { cancelled = true; };
+  }, [realClient]);
   const [activeReq, setActiveReq] = useState('REQ-103'); // 默认选中「部分覆盖」需求，让用户第一眼看到业务问题
   const [gapOnly, setGapOnly] = useState(false);
   const [batch, setBatch] = useState('全部');
@@ -63,6 +82,22 @@ export default function TracePage() {
 
   const activeMeta = REQUIREMENTS.find((r) => r.id === activeReq);
   const activeChain = TRACE_CHAINS[activeReq];
+
+  if (realClient) {
+    return (
+      <div>
+        <PageHeader title="追溯覆盖" desc="真实用例覆盖读取 · 需求 → 测试点 → 用例追溯数据接入中">
+          <GhostButton onClick={() => window.location.reload()}>刷新</GhostButton>
+        </PageHeader>
+        {liveError && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">{liveError}</div>}
+        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700"><Info className="inline w-4 h-4 mr-1" />当前已接入真实用例接口；系统尚未提供真实需求/测试点追溯关系，因此不再使用 mock 数据冒充追溯结果。</div>
+        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between"><h2 className="font-semibold text-slate-700 text-sm">真实用例</h2><span className="text-[11px] text-slate-400">{liveLoading ? '读取中…' : `共 ${liveCases.length} 条`}</span></div>
+          {!liveLoading && liveCases.length === 0 ? <div className="p-8 text-center text-xs text-slate-500">暂无真实用例，完成生成批次审核并入库后将在此显示。</div> : <table className="w-full text-xs"><thead className="bg-slate-50"><tr className="text-left text-slate-500"><th className="px-5 py-2.5">编号</th><th className="px-5 py-2.5">标题</th><th className="px-5 py-2.5">类型</th><th className="px-5 py-2.5">版本</th><th className="px-5 py-2.5">状态</th></tr></thead><tbody className="divide-y divide-slate-100">{liveCases.map((item) => <tr key={item.id}><td className="px-5 py-3 font-mono text-emerald-700">{item.code}</td><td className="px-5 py-3 text-slate-700">{item.title}</td><td className="px-5 py-3 text-slate-500">{item.kind}</td><td className="px-5 py-3 text-slate-500">v{item.current_version}</td><td className="px-5 py-3 text-slate-500">{item.status}</td></tr>)}</tbody></table>}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
