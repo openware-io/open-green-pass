@@ -48,21 +48,41 @@ export default function GenerationPage() {
   const navigate = useNavigate();
   const { selectedAsset } = useOutletContext<{ selectedAsset: IAssetNode }>();
   const realClient = useMemo(() => configuredGreenPassClient(), []);
+  const [realProjectRepos, setRealProjectRepos] = useState<Array<{ id:number; project_id:number; url:string; default_branch:string }>>([]);
+  const [realProjectServices, setRealProjectServices] = useState<Array<{ id:number; project_id:number; repo_id:number; name:string; source_path:string; kind:string; status:string; generation_status:'pending'|'confirmed' }>>([]);
+  const [realCatalogLoading, setRealCatalogLoading] = useState(false);
   const [q, setQ] = useState('');
   const kw = q.trim().toLowerCase();
   const upFiltered = UPSTREAM_ADAPTERS.filter((a) => !kw || (a.source + a.status).toLowerCase().includes(kw));
 
   // 被测对象 = 全局轴心（页首被测对象导航切换），生成流程围绕它展开
-  const repo = TESTED_REPOS.find((r) => r.name === selectedAsset.name) ?? null;
+  const mockRepo = TESTED_REPOS.find((r) => r.name === selectedAsset.name) ?? null;
+  const selectedService = realProjectServices.find((service) => service.name === selectedAsset.name);
+  const realRepo = realProjectRepos.find((item) => item.id === selectedService?.repo_id) ?? realProjectRepos[0] ?? null;
+  const repo = realClient
+    ? (realRepo ? { name: selectedService?.name ?? selectedAsset.name, source: '代码仓库', url: realRepo.url, branches: [realRepo.default_branch], versions: [] as string[], src: [] as string[], owner: '' } : null)
+    : mockRepo;
   // 生成输入的分支 / 版本（对象切换时 render 期重置为该对象默认分支/版本）
-  const [genBranch, setGenBranch] = useState(() => repo?.branches?.[0] ?? 'main');
-  const [genVer, setGenVer] = useState(() => repo?.versions?.[0] ?? 'v2.4.1');
+  const [genBranch, setGenBranch] = useState(() => repo?.branches?.[0] ?? '');
+  const [genVer, setGenVer] = useState(() => repo?.versions?.[0] ?? '');
   const [prevAssetId, setPrevAssetId] = useState(selectedAsset.id);
   if (prevAssetId !== selectedAsset.id) {
     setPrevAssetId(selectedAsset.id);
-    setGenBranch(repo?.branches?.[0] ?? 'main');
-    setGenVer(repo?.versions?.[0] ?? 'v2.4.1');
+    setGenBranch(repo?.branches?.[0] ?? '');
+    setGenVer(repo?.versions?.[0] ?? '');
   }
+  useEffect(() => {
+    if (!realClient) return;
+    const projectID = Number(localStorage.getItem('greenpass_project_id') ?? 0);
+    if (!projectID) return;
+    let cancelled = false;
+    setRealCatalogLoading(true);
+    Promise.all([realClient.listProjectRepositories(projectID), realClient.listProjectServices(projectID)])
+      .then(([repos, services]) => { if (!cancelled) { setRealProjectRepos(repos); setRealProjectServices(services); } })
+      .catch(() => { if (!cancelled) { setRealProjectRepos([]); setRealProjectServices([]); } })
+      .finally(() => { if (!cancelled) setRealCatalogLoading(false); });
+    return () => { cancelled = true; };
+  }, [realClient, selectedAsset.id]);
 
   // 生成流程向导状态
   const [step, setStep] = useState(1);
@@ -81,8 +101,9 @@ export default function GenerationPage() {
     try {
       const projectID = Number(localStorage.getItem('greenpass_project_id') ?? 0);
       if (!projectID) throw new Error('请先在被测对象页选择真实项目');
-      const repos = await realClient.listProjectRepositories(projectID);
-      const repo = repos[0];
+      const repos = realProjectRepos.length ? realProjectRepos : await realClient.listProjectRepositories(projectID);
+      const selectedServiceForBatch = realProjectServices.find((service) => service.name === selectedAsset.name);
+      const repo = repos.find((item) => item.id === selectedServiceForBatch?.repo_id) ?? repos[0];
       if (!repo) throw new Error('当前项目暂无代码仓库');
       const batch = await realClient.createGenerationBatch({ target_id: projectID, repo_id: repo.id, branch: repo.default_branch, idempotency_key: `ui-${projectID}-${Date.now()}` });
       setRealBatch(batch); setStep(1);
@@ -139,9 +160,10 @@ export default function GenerationPage() {
       </PageHeader>
 
       {/* 被测对象 = 全局轴心：本流程围绕当前被测对象展开（切换用页首被测对象导航） */}
-      <Card title="当前被测对象 · 生成轴心" className="p-5 mb-5">
-        <div className="flex flex-wrap items-start gap-4">
-          <div className="flex items-center gap-3 flex-1 min-w-[260px]">
+      <Card title="当前被测对象 · 生成轴心" className="p-0 mb-5 overflow-hidden">
+        <div className="p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(260px,1fr)_minmax(360px,1.5fr)_auto] gap-5 items-start">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shrink-0">
               <Crosshair className="w-6 h-6" />
             </div>
@@ -156,23 +178,25 @@ export default function GenerationPage() {
           </div>
 
           {repo ? (
-            <div className="flex items-center gap-3 bg-slate-50 rounded-xl border border-slate-200 px-4 py-3 flex-1 min-w-[320px] flex-wrap">
-              <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600"><GitBranch className="w-3.5 h-3.5 text-emerald-500" />{repo.source}</span>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 min-w-0">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-600"><GitBranch className="w-3.5 h-3.5 text-emerald-500" />仓库配置</div>
+              <div className="mt-2 truncate text-xs text-slate-700" title={'url' in repo ? repo.url : repo.name}>{'url' in repo ? repo.url : repo.name}</div>
+              <div className="mt-3 flex flex-wrap items-end gap-4">
               <div>
                 <div className="text-[10px] text-slate-400">分支（生成输入）</div>
                 <select value={genBranch} onChange={(e) => setGenBranch(e.target.value)}
                   className="text-xs border border-slate-200 rounded-md px-2 py-1 bg-white text-slate-700 focus:outline-none focus:border-emerald-400">
-                  {repo.branches.map((b) => <option key={b} value={b}>{b}</option>)}
+                  {repo.branches.length ? repo.branches.map((b) => <option key={b} value={b}>{b}</option>) : <option value="">未配置</option>}
                 </select>
               </div>
               <div>
                 <div className="text-[10px] text-slate-400">目标版本（执行前校验）</div>
                 <select value={genVer} onChange={(e) => setGenVer(e.target.value)}
                   className="text-xs border border-slate-200 rounded-md px-2 py-1 bg-white text-slate-700 focus:outline-none focus:border-emerald-400">
-                  {repo.versions.map((v) => <option key={v} value={v}>{v}</option>)}
+                  {repo.versions.length ? repo.versions.map((v) => <option key={v} value={v}>{v}</option>) : <option value="">未配置版本</option>}
                 </select>
               </div>
-              <span className="text-[11px] text-emerald-600 ml-auto">{repo.src.length}/{UPSTREAM_ADAPTERS.length} 类上游源接入</span>
+              </div>
             </div>
           ) : (
             <div className="flex items-center gap-3 bg-amber-50 rounded-xl border border-amber-200 px-4 py-3 text-[12px] text-amber-700 flex-1 min-w-[300px]">
@@ -189,10 +213,10 @@ export default function GenerationPage() {
         {repo && (
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-start gap-2 text-[11px] text-slate-500">
             <CloudDownload className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
-            <span>关联被测对象后获取<b>仓库代码与版本</b>（{repo.name}@{genBranch}@{genVer}），作为 AI 生成用例的输入；分支/版本将用于执行前环境版本校验。下方为该对象已接入的上游源。</span>
+            <span>当前生成输入：<b>{'url' in repo ? repo.url : repo.name}</b> · 分支 <b>{genBranch || '未配置'}</b> · 服务目录 <b>{selectedService?.source_path || '项目级目录'}</b>。版本信息由项目目录接口提供，当前为“未配置”。</span>
           </div>
         )}
-        {repo && (
+        {repo && !realClient && (
           <div className="mt-3 flex flex-wrap gap-2">
             {UPSTREAM_ADAPTERS.map((sc) => {
               const on = repo.src.includes(sc.source);
@@ -206,6 +230,7 @@ export default function GenerationPage() {
             })}
           </div>
         )}
+        </div>
       </Card>
 
       {realBatch && <Card title="当前生成批次" className="p-4 mb-5" extra={<span className="font-mono text-[11px] text-slate-400">#{realBatch.id}</span>}><div className="flex flex-wrap items-center gap-3 text-xs"><span className="rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">{STAGE_LABEL[realBatch.state] ?? realBatch.state}</span><span className="text-slate-500">服务端状态 · 自动刷新</span><span className="text-slate-400">状态版本 {realBatch.state_version}</span></div></Card>}
@@ -451,14 +476,15 @@ export default function GenerationPage() {
         <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
             <h2 className="font-semibold text-slate-700 text-sm">上游源适配器 · 明细</h2>
-            <span className="text-[11px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-medium">被测对象 {selectedAsset.name} · 已接入 {repo?.src.length ?? 0}/{UPSTREAM_ADAPTERS.length}</span>
+            {!realClient && <span className="text-[11px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-medium">被测对象 {selectedAsset.name} · 已接入 {repo?.src.length ?? 0}/{UPSTREAM_ADAPTERS.length}</span>}
           </div>
-          <span className="text-[11px] text-slate-400">共 {upFiltered.length} / {UPSTREAM_ADAPTERS.length} 个上游源</span>
+          <span className="text-[11px] text-slate-400">{realClient ? '暂无真实上游源接口' : `共 ${upFiltered.length} / ${UPSTREAM_ADAPTERS.length} 个上游源`}</span>
         </div>
         <div className="px-5 py-2.5 bg-slate-50/50 border-b border-slate-100 flex items-center gap-2 text-[11px] text-slate-500">
           <Crosshair className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
           <span>适配器明细随<b>当前被测对象</b>联动：页首切换被测对象，此处即展示该对象已接入的上游源；未接入源灰显（到被测对象页配置接入）。</span>
         </div>
+        {realClient ? <div className="px-5 py-8 text-center text-xs text-slate-500">当前项目接口尚未提供上游源适配器明细，页面不展示模拟数据。</div> : <>
         <div className="flex items-center justify-between px-5 pt-3">
           <ListFilter search={q} onSearch={setQ} />
         </div>
@@ -508,6 +534,7 @@ export default function GenerationPage() {
             })}
           </tbody>
         </table>
+        </>}
       </div>
     </div>
   );
