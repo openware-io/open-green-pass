@@ -152,12 +152,12 @@ const PREP_STEPS = [
 ];
 const PREP_ROUTES = ['/target', '/generation', '/trace'];
 
-function PrepStepBar({ asset, current }: { asset: IAssetNode; current: string }) {
+function PrepStepBar({ asset, current, realServiceName }: { asset: IAssetNode; current: string; realServiceName?: string }) {
   return (
     <div className="mb-5 rounded-xl border border-slate-200 bg-white px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-2">
       <span className="inline-flex items-center gap-2.5">
         <span className="w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center"><Target className="w-4 h-4" /></span>
-        <span className="text-sm font-semibold text-slate-800">{asset.name}</span>
+        <span className="text-sm font-semibold text-slate-800">{realServiceName || asset.name}</span>
         <span className="text-[10px] text-slate-400">被测对象 · 测试准备流程</span>
       </span>
       <span className="w-px h-5 bg-slate-200" />
@@ -186,6 +186,8 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [selectedAsset, setSelectedAsset] = useState<IAssetNode>(ASSET_TREE.children![0].children![0].children![0]);
+  const [realServiceName, setRealServiceName] = useState(() => { try { return localStorage.getItem('greenpass_active_service_name') ?? ''; } catch { return ''; } });
+  useEffect(() => { const onService = (event: Event) => setRealServiceName((event as CustomEvent<string>).detail ?? ''); window.addEventListener('greenpass-service-context', onService); return () => window.removeEventListener('greenpass-service-context', onService); }, []);
   const [navOpen, setNavOpen] = useState<Record<string, boolean>>({});
   const [userMenu, setUserMenu] = useState(false);
   const [wechatBinding, setWechatBinding] = useState<{bound:boolean;display_name?:string}>({bound:false});
@@ -410,7 +412,7 @@ export function Layout() {
         </header>
         <main className="flex-1 overflow-y-auto p-6">
           {!isPlatform && (PREP_ROUTES.includes(location.pathname)
-            ? <PrepStepBar asset={selectedAsset} current={location.pathname} />
+            ? <PrepStepBar asset={selectedAsset} current={location.pathname} realServiceName={realServiceName} />
             : <ObjectStageBar asset={selectedAsset} current={location.pathname} />)}
           <Outlet context={{ selectedAsset, setSelectedAsset }} />
         </main>

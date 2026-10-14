@@ -46,7 +46,7 @@ const STAGE_LABEL: Record<string, string> = { enqueued: '待启动', fetching: '
 
 export default function GenerationPage() {
   const navigate = useNavigate();
-  const { selectedAsset } = useOutletContext<{ selectedAsset: IAssetNode }>();
+  const { selectedAsset, setSelectedAsset } = useOutletContext<{ selectedAsset: IAssetNode; setSelectedAsset?: (asset: IAssetNode) => void }>();
   const realClient = useMemo(() => configuredGreenPassClient(), []);
   const [realProjectRepos, setRealProjectRepos] = useState<Array<{ id:number; project_id:number; url:string; default_branch:string }>>([]);
   const [realProjectServices, setRealProjectServices] = useState<Array<{ id:number; project_id:number; repo_id:number; name:string; source_path:string; kind:string; status:string; generation_status:'pending'|'confirmed' }>>([]);
@@ -63,6 +63,13 @@ export default function GenerationPage() {
     ?? realProjectServices[0]
     ?? null;
   const displayName = realClient ? (selectedService?.name ?? '请选择目录服务') : selectedAsset.name;
+  const syncGlobalService = (service: typeof selectedService) => {
+    if (!service) return;
+    try { localStorage.setItem('greenpass_active_service_name', service.name); } catch { /* ignore */ }
+    window.dispatchEvent(new CustomEvent('greenpass-service-context', { detail: service.name }));
+    if (setSelectedAsset && !realClient) setSelectedAsset({ id: String(service.id), name: service.name, type: 'service', coverage: 0, gateRate: 0, repo: service.name });
+  };
+  useEffect(() => { if (realClient && selectedService) syncGlobalService(selectedService); }, [realClient, selectedService?.id]);
   const realRepo = realProjectRepos.find((item) => item.id === selectedService?.repo_id) ?? realProjectRepos[0] ?? null;
   const repo = realClient
     ? (realRepo ? { name: selectedService?.name ?? selectedAsset.name, source: '代码仓库', url: realRepo.url, branches: [realRepo.default_branch], versions: [] as string[], src: [] as string[], owner: '' } : null)
@@ -103,7 +110,7 @@ export default function GenerationPage() {
       .catch(() => { if (!cancelled) { setRealProjectRepos([]); setRealProjectServices([]); } })
       .finally(() => { if (!cancelled) setRealCatalogLoading(false); });
     return () => { cancelled = true; };
-  }, [realClient, selectedAsset.id]);
+  }, [realClient]);
 
   // 生成流程向导状态
   const [step, setStep] = useState(1);
@@ -167,7 +174,7 @@ export default function GenerationPage() {
   return (
     <div>
       <div className="mb-5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs shadow-sm">
-        <span className="font-semibold text-slate-700">{displayName}</span>
+        <span className="font-semibold text-slate-700">{realClient ? displayName : selectedAsset.name}</span>
         <span className="text-slate-300">/</span>
         <button type="button" onClick={() => navigate('/target')} className="text-slate-500 hover:text-emerald-600">定义对象</button>
         <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
@@ -196,7 +203,7 @@ export default function GenerationPage() {
               </div>
               <div className="text-xl font-bold text-slate-800">{displayName}</div>
               <div className="text-[11px] text-slate-500 mt-0.5">{realClient ? '真实项目目录中的被测服务，生成范围限定为该服务源码目录。' : '本用例生成流程的轴心对象 · 切换对象请用页首「被测对象」导航（面包屑 / 层次筛选）'}</div>
-              {realClient && <div className="mt-3"><label className="mb-1 block text-[10px] text-slate-400">选择目录服务（仅显示“生成测试用例 = 是”）</label><select value={selectedService?.id ?? ''} onChange={(event) => setActiveServiceId(Number(event.target.value))} className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"><option value="">请选择目录服务</option>{realProjectServices.filter((service) => service.generation_status === 'confirmed').map((service) => <option key={service.id} value={service.id}>{service.name} · {service.source_path}</option>)}</select></div>}
+              {realClient && <div className="mt-3"><label className="mb-1 block text-[10px] text-slate-400">选择目录服务（仅显示“生成测试用例 = 是”）</label><select value={selectedService?.id ?? ''} onChange={(event) => { const id = Number(event.target.value); setActiveServiceId(id); syncGlobalService(realProjectServices.find((service) => service.id === id) ?? null); }} className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"><option value="">请选择目录服务</option>{realProjectServices.filter((service) => service.generation_status === 'confirmed').map((service) => <option key={service.id} value={service.id}>{service.name} · {service.source_path}</option>)}</select></div>}
             </div>
           </div>
 
