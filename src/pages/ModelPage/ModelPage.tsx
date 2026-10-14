@@ -45,8 +45,28 @@ export default function ModelPage() {
     );
   const effectiveKeys = protocol === "cc" && customModel.trim() ? [customModel.trim()] : keys;
   const providerLabel = (value: string) => value === "cc-proxy" ? "CC 代理" : value;
+  const isValidBaseURL = (value: string) => {
+    try {
+      const parsed = new URL(value.trim());
+      return (parsed.protocol === "http:" || parsed.protocol === "https:") && Boolean(parsed.host);
+    } catch {
+      return false;
+    }
+  };
   const save = async () => {
     if (!c) return;
+    if (!token.trim()) {
+      toast.error("请填写 Token / API Key");
+      return;
+    }
+    if (protocol === "cc" && !customModel.trim()) {
+      toast.error("请填写 CC 代理模型名");
+      return;
+    }
+    if (url.trim() && !isValidBaseURL(url)) {
+      toast.error("Base URL 格式不正确", { description: "请输入 http:// 或 https:// 开头的代理地址，例如 http://127.0.0.1:8080/v1" });
+      return;
+    }
     setBusy(true);
     try {
       await c.configureModels({
@@ -61,7 +81,15 @@ export default function ModelPage() {
       setOpen(false);
       await load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "保存失败");
+      const message = e instanceof Error ? e.message : "保存失败";
+      const friendly = message === "provider_connection_failed"
+        ? "模型服务连接失败"
+        : message === "invalid_model_selection"
+          ? "模型配置不完整"
+          : message === "invalid_base_url"
+            ? "Base URL 格式不正确"
+          : message;
+      toast.error(friendly, { description: friendly === "模型服务连接失败" ? "请检查 Base URL、Token，以及代理是否已启动并兼容对应接口。" : undefined });
     } finally {
       setBusy(false);
     }
@@ -222,12 +250,14 @@ export default function ModelPage() {
                   </label>
                 </div>
               ) : (
-                <input
-                  value={url}
-                  onChange={(e) => setURL(e.target.value)}
-                  placeholder="自定义 Base URL（可选，留空使用厂商地址）"
-                  className="w-full rounded-lg border p-2"
-                />
+                <label className="block text-xs font-medium text-slate-700">API Base URL <span className="font-normal text-slate-400">可选</span>
+                  <input
+                    value={url}
+                    onChange={(e) => setURL(e.target.value)}
+                    placeholder="留空使用厂商地址，例如 https://api.openai.com/v1"
+                    className="mt-1 w-full rounded-lg border p-2"
+                  />
+                </label>
               )}
               <label className="block text-xs font-medium text-slate-700">Token / API Key <span className="text-rose-500">*</span>
                 <input

@@ -76,6 +76,12 @@ func RegisterModels(mux *http.ServeMux, store *infra.ModelStore, gen *id.Generat
 		}
 		principal, _ := iam.PrincipalFromContext(r.Context())
 		team := tenantID(r)
+		if strings.TrimSpace(in.BaseURL) != "" {
+			if _, valid := validBaseURL(in.BaseURL); !valid {
+				httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_base_url"})
+				return
+			}
+		}
 		baseURL, ok := selectedBaseURL(in)
 		if !ok || len(in.ModelKeys) == 0 {
 			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_model_selection"})
@@ -117,22 +123,26 @@ func findPreset(provider, protocol, key string) (modelPreset, bool) {
 }
 func selectedBaseURL(in modelConnectRequest) (string, bool) {
 	if in.Protocol == "cc" && strings.TrimSpace(in.BaseURL) != "" && len(in.ModelKeys) > 0 {
-		candidate := strings.TrimRight(strings.TrimSpace(in.BaseURL), "/")
-		parsed, err := url.Parse(candidate)
-		if err != nil || parsed.Scheme == "" || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-			return "", false
-		}
-		return candidate, true
+		return validBaseURL(in.BaseURL)
 	}
 	for _, preset := range modelPresets {
 		if preset.Provider == in.Provider && preset.Protocol == in.Protocol && contains(in.ModelKeys, preset.ModelKey) {
 			if strings.TrimSpace(in.BaseURL) != "" {
-				return strings.TrimRight(in.BaseURL, "/"), true
+				return validBaseURL(in.BaseURL)
 			}
 			return preset.BaseURL, true
 		}
 	}
 	return "", false
+}
+
+func validBaseURL(raw string) (string, bool) {
+	candidate := strings.TrimRight(strings.TrimSpace(raw), "/")
+	parsed, err := url.Parse(candidate)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", false
+	}
+	return candidate, true
 }
 func probeModelConnection(ctx context.Context, protocol, baseURL, token, model string) error {
 	if protocol == "cc" {
