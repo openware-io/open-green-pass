@@ -18,7 +18,9 @@ type Authorizer struct {
 	audit AuditPort
 }
 
-func NewAuthorizer(repo iam.RBACRepository) *Authorizer { return &Authorizer{repo: repo, audit: NoopAuditPort{}} }
+func NewAuthorizer(repo iam.RBACRepository) *Authorizer {
+	return &Authorizer{repo: repo, audit: NoopAuditPort{}}
+}
 
 // SetAuditPort records denied decisions without making the audit store part of
 // the authorization availability path. Payloads contain only bounded policy
@@ -55,6 +57,16 @@ func (a *Authorizer) Authorize(ctx context.Context, principal iam.Principal, act
 	}
 	if m.Status != iam.MemberActive {
 		return a.deny(ctx, principal, action, resource, "inactive_membership", ErrMembershipRequired)
+	}
+	// Team owners and admins already have team-wide management authority. A
+	// target-level grant is optional for them; requiring one makes seeded/local
+	// projects appear inaccessible even though the signed-in user is the team
+	// owner. Viewers/testers still require an explicit asset grant below.
+	if m.Role == iam.RoleOwner || m.Role == iam.RoleAdmin {
+		if !m.Role.Allows(action) {
+			return a.deny(ctx, principal, action, resource, "role_denied", iam.ErrForbidden)
+		}
+		return nil
 	}
 	targetID, err := strconv.ParseInt(resource, 10, 64)
 	if err != nil || targetID <= 0 {
