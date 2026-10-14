@@ -38,17 +38,19 @@ export default function ModelPage() {
       setMs(data.models);
     });
   }, [c]);
-  const providers = [...new Set(ps.map((p) => p.Provider))],
+  const apiProviders = [...new Set(ps.filter((p) => p.Protocol === "api").map((p) => p.Provider))],
+    providers = [...new Set([...ps.map((p) => p.Provider), ...ms.map((m) => m.provider)])],
     available = ps.filter(
       (p) => p.Provider === provider && p.Protocol === protocol,
     );
   const effectiveKeys = protocol === "cc" && customModel.trim() ? [customModel.trim()] : keys;
+  const providerLabel = (value: string) => value === "cc-proxy" ? "CC 代理" : value;
   const save = async () => {
     if (!c) return;
     setBusy(true);
     try {
       await c.configureModels({
-        provider,
+        provider: protocol === "cc" ? "cc-proxy" : provider,
         protocol,
         token,
         base_url: url,
@@ -82,7 +84,7 @@ export default function ModelPage() {
           <div className="rounded-xl border bg-white p-5" key={v}>
             <div className="flex gap-2 font-semibold">
               <Cpu className="h-4 w-4 text-emerald-500" />
-              {v}
+              {providerLabel(v)}
             </div>
             <div className="mt-2 text-xs text-slate-400">
               {ps.filter((p) => p.Provider === v).length} 个版本 ·{" "}
@@ -105,7 +107,7 @@ export default function ModelPage() {
           <tbody>
             {ps.map((p) => (
               <tr className="border-t" key={p.ModelKey}>
-                <td className="p-4">{p.Provider}</td>
+                <td className="p-4">{providerLabel(p.Provider)}</td>
                 <td>
                   {p.Name}
                   <div className="font-mono text-[10px] text-slate-400">
@@ -133,6 +135,20 @@ export default function ModelPage() {
                 </td>
               </tr>
             ))}
+            {ms.filter((m) => m.provider === "cc-proxy" && !ps.some((p) => p.Provider === m.provider && p.ModelKey === m.model_key)).map((m) => (
+              <tr className="border-t bg-emerald-50/30" key={`configured-${m.id}`}>
+                <td className="p-4">CC 代理</td>
+                <td>
+                  {m.model_key}
+                  <div className="font-mono text-[10px] text-slate-400">{m.model_key}</div>
+                </td>
+                <td>CC / Anthropic Messages</td>
+                <td>code</td>
+                <td>
+                  <span className="flex gap-1 text-emerald-600"><ShieldCheck className="h-4 w-4" />已配置</span>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -147,47 +163,82 @@ export default function ModelPage() {
             </div>
             <div className="space-y-4 p-5">
               <div className="grid grid-cols-2 gap-3">
-                <select
-                  value={provider}
-                  onChange={(e) => {
-                    setProvider(e.target.value);
-                    setKeys([]);
-                  }}
-                  className="rounded-lg border p-2"
-                >
-                  {providers.map((v) => (
-                    <option key={v}>{v}</option>
-                  ))}
-                </select>
+                {protocol === "cc" ? (
+                  <div className="rounded-lg border bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    <div className="text-[10px] text-slate-400">连接类型</div>
+                    <div className="font-medium">自定义 CC 代理</div>
+                  </div>
+                ) : (
+                  <select
+                    value={provider}
+                    onChange={(e) => {
+                      setProvider(e.target.value);
+                      setKeys([]);
+                    }}
+                    className="rounded-lg border p-2"
+                  >
+                    {apiProviders.map((v) => (
+                      <option key={v}>{v}</option>
+                    ))}
+                  </select>
+                )}
                 <select
                   value={protocol}
                   onChange={(e) => {
                     setProtocol(e.target.value);
-                    if (e.target.value === "cc") setProvider("anthropic");
-                    setKeys([]);
+                    if (e.target.value === "cc") {
+                      setProvider("cc-proxy");
+                      setKeys([]);
+                    } else {
+                      setProvider(apiProviders[0] ?? "openai");
+                    }
                   }}
                   className="rounded-lg border p-2"
                 >
                   <option value="api">API / OpenAI-compatible</option>
-                  <option value="cc">CC / Anthropic</option>
+                  <option value="cc">CC / Anthropic Messages</option>
                 </select>
               </div>
-              {protocol === "cc" && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">CC 代理只要求 Anthropic Messages 兼容接口：Base URL 填代理地址（例如 http://127.0.0.1:xxxx/v1），模型名填代理实际接受的 GPT 模型名。</div>}
-              <input
-                value={url}
-                onChange={(e) => setURL(e.target.value)}
-                placeholder="自定义 Base URL（可选）"
-                className="w-full rounded-lg border p-2"
-              />
-              {protocol === "cc" && <input value={customModel} onChange={(e) => { setCustomModel(e.target.value); setKeys([]); }} placeholder="CC 代理模型名，例如 gpt-4o / gpt-5" className="w-full rounded-lg border p-2" />}
-              <input
-                type="password"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                placeholder="Token / API Key"
-                className="w-full rounded-lg border p-2"
-              />
-              <div className="grid grid-cols-2 gap-2">
+              {protocol === "cc" ? (
+                <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <div className="text-[11px] leading-5 text-amber-800">
+                    代理需要兼容 Anthropic Messages API。GreenPass 会调用 <code>POST {"{Base URL}"}/messages</code>，代理后端可以实际转发到 GPT。
+                  </div>
+                  <label className="block text-xs font-medium text-slate-700">CC 代理 Base URL <span className="text-rose-500">*</span>
+                    <input
+                      value={url}
+                      onChange={(e) => setURL(e.target.value)}
+                      placeholder="例如 http://127.0.0.1:8080/v1"
+                      className="mt-1 w-full rounded-lg border bg-white p-2"
+                    />
+                  </label>
+                  <label className="block text-xs font-medium text-slate-700">CC 代理模型名 <span className="text-rose-500">*</span>
+                    <input
+                      value={customModel}
+                      onChange={(e) => { setCustomModel(e.target.value); setKeys([]); }}
+                      placeholder="例如 gpt-5 或 gpt-5-codex"
+                      className="mt-1 w-full rounded-lg border bg-white p-2"
+                    />
+                  </label>
+                </div>
+              ) : (
+                <input
+                  value={url}
+                  onChange={(e) => setURL(e.target.value)}
+                  placeholder="自定义 Base URL（可选，留空使用厂商地址）"
+                  className="w-full rounded-lg border p-2"
+                />
+              )}
+              <label className="block text-xs font-medium text-slate-700">Token / API Key <span className="text-rose-500">*</span>
+                <input
+                  type="password"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder="请输入代理鉴权 Token"
+                  className="mt-1 w-full rounded-lg border p-2"
+                />
+              </label>
+              {protocol === "api" && <div className="grid grid-cols-2 gap-2">
                 {available.map((p) => (
                   <label className="rounded-lg border p-3" key={p.ModelKey}>
                     <input
@@ -204,7 +255,7 @@ export default function ModelPage() {
                     {p.Name}
                   </label>
                 ))}
-              </div>
+              </div>}
             </div>
             <div className="flex justify-end gap-2 border-t p-4">
               <button onClick={() => setOpen(false)}>取消</button>

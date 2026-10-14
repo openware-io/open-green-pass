@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -80,7 +81,7 @@ func RegisterModels(mux *http.ServeMux, store *infra.ModelStore, gen *id.Generat
 			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_model_selection"})
 			return
 		}
-		if err := probeModelConnection(r.Context(), in.Protocol, baseURL, in.Token); err != nil {
+		if err := probeModelConnection(r.Context(), in.Protocol, baseURL, in.Token, in.ModelKeys[0]); err != nil {
 			httpx.WriteJSON(w, http.StatusBadGateway, map[string]string{"error": "provider_connection_failed"})
 			return
 		}
@@ -116,7 +117,12 @@ func findPreset(provider, protocol, key string) (modelPreset, bool) {
 }
 func selectedBaseURL(in modelConnectRequest) (string, bool) {
 	if in.Protocol == "cc" && strings.TrimSpace(in.BaseURL) != "" && len(in.ModelKeys) > 0 {
-		return strings.TrimRight(in.BaseURL, "/"), true
+		candidate := strings.TrimRight(strings.TrimSpace(in.BaseURL), "/")
+		parsed, err := url.Parse(candidate)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			return "", false
+		}
+		return candidate, true
 	}
 	for _, preset := range modelPresets {
 		if preset.Provider == in.Provider && preset.Protocol == in.Protocol && contains(in.ModelKeys, preset.ModelKey) {
@@ -128,9 +134,9 @@ func selectedBaseURL(in modelConnectRequest) (string, bool) {
 	}
 	return "", false
 }
-func probeModelConnection(ctx context.Context, protocol, baseURL, token string) error {
+func probeModelConnection(ctx context.Context, protocol, baseURL, token, model string) error {
 	if protocol == "cc" {
-		payload := strings.NewReader(`{"model":"claude-compat","max_tokens":1,"messages":[{"role":"user","content":"ping"}]}`)
+		payload := strings.NewReader(fmt.Sprintf(`{"model":%q,"max_tokens":1,"messages":[{"role":"user","content":"ping"}]}`, model))
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(baseURL, "/")+"/messages", payload)
 		if err != nil {
 			return err
