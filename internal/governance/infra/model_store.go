@@ -17,6 +17,15 @@ type ModelStore struct {
 	db *DB
 }
 
+// ModelConnectionDetail contains only operator-visible connection metadata.
+// The credential itself remains in Kubernetes Secret and is never returned.
+type ModelConnectionDetail struct {
+	ID, ConfiguredBy             int64
+	Provider, ModelKey, Protocol string
+	BaseURL, CredentialStatus    string
+	ConfiguredAt                 *time.Time
+}
+
 func NewModelStore(db *DB) *ModelStore { return &ModelStore{db: db} }
 
 func (s *ModelStore) CreateModel(ctx context.Context, m *domain.ModelConfig) error {
@@ -82,6 +91,27 @@ func (s *ModelStore) ListModels(ctx context.Context, teamID int64) ([]*domain.Mo
 				return err
 			}
 			out = append(out, &m)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+func (s *ModelStore) ListConnectionDetails(ctx context.Context, teamID int64) ([]ModelConnectionDetail, error) {
+	var out []ModelConnectionDetail
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT id,provider,model_key,protocol,base_url,credential_status,configured_at,created_by
+			FROM mdl_model WHERE team_id=$1 ORDER BY configured_at DESC NULLS LAST,name,id`, teamID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var item ModelConnectionDetail
+			if err := rows.Scan(&item.ID, &item.Provider, &item.ModelKey, &item.Protocol, &item.BaseURL, &item.CredentialStatus, &item.ConfiguredAt, &item.ConfiguredBy); err != nil {
+				return err
+			}
+			out = append(out, item)
 		}
 		return rows.Err()
 	})

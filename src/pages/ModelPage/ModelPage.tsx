@@ -12,10 +12,12 @@ type P = {
   Capabilities: string[];
 };
 type M = { id: number; provider: string; model_key: string; status: string };
+type Connection = { id: number; provider: string; model_key: string; protocol: "api" | "cc"; base_url: string; credential_status: string; configured_at?: string; token_configured: boolean };
 export default function ModelPage() {
   const c = useMemo(() => configuredGreenPassClient(), []),
     [ps, setPs] = useState<P[]>([]),
     [ms, setMs] = useState<M[]>([]),
+    [connections, setConnections] = useState<Connection[]>([]),
     [open, setOpen] = useState(false),
     [provider, setProvider] = useState("openai"),
     [protocol, setProtocol] = useState("api"),
@@ -26,17 +28,19 @@ export default function ModelPage() {
     [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     if (c) {
-      const d = await c.modelCatalog();
+      const [d, detail] = await Promise.all([c.modelCatalog(), c.modelConnections()]);
       setPs(d.presets);
       setMs(d.models);
+      setConnections(detail.connections);
     }
   }, [c]);
   useEffect(() => {
     if (!c) return;
-    void c.modelCatalog().then((data) => {
+    void Promise.all([c.modelCatalog(), c.modelConnections()]).then(([data, detail]) => {
       setPs(data.presets);
       setMs(data.models);
-    });
+      setConnections(detail.connections);
+    }).catch(() => setConnections([]));
   }, [c]);
   const apiProviders = [...new Set(ps.filter((p) => p.Protocol === "api").map((p) => p.Provider))],
     providers = [...new Set([...ps.map((p) => p.Provider), ...ms.map((m) => m.provider)])],
@@ -45,6 +49,8 @@ export default function ModelPage() {
     );
   const effectiveKeys = protocol === "cc" && customModel.trim() ? [customModel.trim()] : keys;
   const providerLabel = (value: string) => value === "cc-proxy" ? "CC 代理" : value;
+  const connectionFor = (provider: string, modelKey: string) => connections.find((item) => item.provider === provider && item.model_key === modelKey);
+  const formatConfiguredAt = (value?: string) => value ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—";
   const isValidBaseURL = (value: string) => {
     try {
       const parsed = new URL(value.trim());
@@ -142,25 +148,12 @@ export default function ModelPage() {
                     {p.ModelKey}
                   </div>
                 </td>
-                <td>
-                  {p.Protocol === "cc"
-                    ? "CC / Anthropic"
-                    : "API / OpenAI-compatible"}
-                </td>
+                <td>{p.Protocol === "cc" ? "CC / Anthropic Messages" : "API / OpenAI-compatible"}</td>
                 <td>{p.Capabilities.join(" · ")}</td>
-                <td>
-                  {ms.some(
-                    (m) =>
-                      m.provider === p.Provider && m.model_key === p.ModelKey,
-                  ) ? (
-                    <span className="flex gap-1 text-emerald-600">
-                      <ShieldCheck className="h-4 w-4" />
-                      已配置
-                    </span>
-                  ) : (
-                    "未配置"
-                  )}
-                </td>
+                <td>{(() => {
+                  const connection = connectionFor(p.Provider, p.ModelKey);
+                  return connection ? <div className="space-y-1"><span className="flex gap-1 text-emerald-600"><ShieldCheck className="h-4 w-4" />已配置</span><div className="max-w-80 truncate text-[10px] text-slate-500" title={connection.base_url}>{connection.base_url}</div><div className="text-[10px] text-slate-400">Token 已安全保存 · {formatConfiguredAt(connection.configured_at)}</div></div> : "未配置";
+                })()}</td>
               </tr>
             ))}
             {ms.filter((m) => m.provider === "cc-proxy" && !ps.some((p) => p.Provider === m.provider && p.ModelKey === m.model_key)).map((m) => (
@@ -172,9 +165,7 @@ export default function ModelPage() {
                 </td>
                 <td>CC / Anthropic Messages</td>
                 <td>code</td>
-                <td>
-                  <span className="flex gap-1 text-emerald-600"><ShieldCheck className="h-4 w-4" />已配置</span>
-                </td>
+                <td>{(() => { const connection = connectionFor(m.provider, m.model_key); return <div className="space-y-1"><span className="flex gap-1 text-emerald-600"><ShieldCheck className="h-4 w-4" />已配置</span><div className="max-w-80 truncate text-[10px] text-slate-500" title={connection?.base_url}>{connection?.base_url ?? "—"}</div><div className="text-[10px] text-slate-400">Token 已安全保存 · {formatConfiguredAt(connection?.configured_at)}</div></div>; })()}</td>
               </tr>
             ))}
           </tbody>

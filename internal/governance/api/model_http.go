@@ -52,6 +52,17 @@ type configuredModelResponse struct {
 	Status   string `json:"status"`
 }
 
+type modelConnectionDetailResponse struct {
+	ID               int64      `json:"id"`
+	Provider         string     `json:"provider"`
+	ModelKey         string     `json:"model_key"`
+	Protocol         string     `json:"protocol"`
+	BaseURL          string     `json:"base_url"`
+	CredentialStatus string     `json:"credential_status"`
+	ConfiguredAt     *time.Time `json:"configured_at,omitempty"`
+	TokenConfigured  bool       `json:"token_configured"`
+}
+
 func RegisterModels(mux *http.ServeMux, store *infra.ModelStore, gen *id.Generator, namespace string) {
 	mux.HandleFunc("GET /model-catalog", func(w http.ResponseWriter, r *http.Request) {
 		models, err := store.ListModels(r.Context(), tenantID(r))
@@ -64,6 +75,25 @@ func RegisterModels(mux *http.ServeMux, store *infra.ModelStore, gen *id.Generat
 			configured = append(configured, configuredModelResponse{ID: model.ID, Provider: model.Provider, ModelKey: model.ModelKey, Status: string(model.Status)})
 		}
 		httpx.WriteJSON(w, 200, map[string]any{"presets": modelPresets, "models": configured})
+	})
+	mux.HandleFunc("GET /model-connections", func(w http.ResponseWriter, r *http.Request) {
+		if !catalogEditor(w, r) {
+			return
+		}
+		details, err := store.ListConnectionDetails(r.Context(), tenantID(r))
+		if err != nil {
+			httpx.WriteJSON(w, 500, map[string]string{"error": err.Error()})
+			return
+		}
+		out := make([]modelConnectionDetailResponse, 0, len(details))
+		for _, item := range details {
+			out = append(out, modelConnectionDetailResponse{
+				ID: item.ID, Provider: item.Provider, ModelKey: item.ModelKey, Protocol: item.Protocol,
+				BaseURL: item.BaseURL, CredentialStatus: item.CredentialStatus, ConfiguredAt: item.ConfiguredAt,
+				TokenConfigured: item.CredentialStatus == "configured" || item.CredentialStatus == "verified",
+			})
+		}
+		httpx.WriteJSON(w, 200, map[string]any{"connections": out})
 	})
 	mux.HandleFunc("POST /model-connections", func(w http.ResponseWriter, r *http.Request) {
 		if !catalogEditor(w, r) {
