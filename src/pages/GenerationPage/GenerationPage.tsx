@@ -50,7 +50,9 @@ export default function GenerationPage() {
   const realClient = useMemo(() => configuredGreenPassClient(), []);
   const [realProjectRepos, setRealProjectRepos] = useState<Array<{ id:number; project_id:number; url:string; default_branch:string }>>([]);
   const [realProjectServices, setRealProjectServices] = useState<Array<{ id:number; project_id:number; repo_id:number; name:string; source_path:string; kind:string; status:string; generation_status:'pending'|'confirmed' }>>([]);
-  const [activeServiceId, setActiveServiceId] = useState<number | null>(null);
+  const [activeServiceId, setActiveServiceId] = useState<number | null>(() => {
+    try { return Number(localStorage.getItem('greenpass_active_service_id') ?? 0) || null; } catch { return null; }
+  });
   const [realCatalogLoading, setRealCatalogLoading] = useState(false);
   const [q, setQ] = useState('');
   const kw = q.trim().toLowerCase();
@@ -65,7 +67,7 @@ export default function GenerationPage() {
   const displayName = realClient ? (selectedService?.name ?? '请选择目录服务') : selectedAsset.name;
   const syncGlobalService = (service: typeof selectedService) => {
     if (!service) return;
-    try { localStorage.setItem('greenpass_active_service_name', service.name); } catch { /* ignore */ }
+    try { localStorage.setItem('greenpass_active_service_name', service.name); localStorage.setItem('greenpass_active_service_id', String(service.id)); } catch { /* ignore */ }
     window.dispatchEvent(new CustomEvent('greenpass-service-context', { detail: service.name }));
     if (setSelectedAsset && !realClient) setSelectedAsset({ id: String(service.id), name: service.name, type: 'service', coverage: 0, gateRate: 0, repo: service.name });
   };
@@ -102,7 +104,10 @@ export default function GenerationPage() {
       if (!cancelled) {
         setRealProjectRepos(repos);
         setRealProjectServices(services);
-        setActiveServiceId((current) => current ?? services.find((service) => service.generation_status === 'confirmed')?.id ?? services[0]?.id ?? null);
+        setActiveServiceId((current) => {
+          const remembered = Number(localStorage.getItem('greenpass_active_service_id') ?? 0) || 0;
+          return services.some((service) => service.id === current) ? current : services.find((service) => service.id === remembered)?.id ?? services.find((service) => service.generation_status === 'confirmed')?.id ?? services[0]?.id ?? null;
+        });
         if (!services.length) setRealError('当前项目暂无目录服务，请先在被测对象页登记子服务');
       }
     };
