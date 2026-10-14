@@ -888,6 +888,10 @@ components:
         source_path: { type: string }
         kind: { type: string, enum: [ api_service, gateway, websocket_service, web_app, mobile_app, desktop_app, other ] }
         build_context: { type: string }
+        language: { type: string, description: 服务主要编程语言；未登记时不得假设 }
+        framework: { type: string, description: 服务框架或前端运行时 }
+        test_tool: { type: string, description: 计划使用的测试工具或执行器 }
+        test_command: { type: string, description: 可执行的测试命令 }
         dockerfile_path: { type: string, nullable: true }
         manifest_path: { type: string, nullable: true }
         status: { type: string }
@@ -901,6 +905,10 @@ components:
         source_path: { type: string }
         kind: { type: string, enum: [ api_service, gateway, websocket_service, web_app, mobile_app, desktop_app, other ] }
         build_context: { type: string }
+        language: { type: string }
+        framework: { type: string }
+        test_tool: { type: string }
+        test_command: { type: string }
         dockerfile_path: { type: string, nullable: true }
         manifest_path: { type: string, nullable: true }
     BatchResultResponse:

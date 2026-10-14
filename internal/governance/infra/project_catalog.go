@@ -23,6 +23,10 @@ type ProjectService struct {
 	SourcePath       string  `json:"source_path"`
 	Kind             string  `json:"kind"`
 	BuildContext     string  `json:"build_context"`
+	Language         string  `json:"language"`
+	Framework        string  `json:"framework"`
+	TestTool         string  `json:"test_tool"`
+	TestCommand      string  `json:"test_command"`
 	DockerfilePath   *string `json:"dockerfile_path,omitempty"`
 	ManifestPath     *string `json:"manifest_path,omitempty"`
 	Status           string  `json:"status"`
@@ -91,7 +95,7 @@ func (s *ProjectCatalog) AddService(ctx context.Context, v ProjectService) (Proj
 	}
 	v.Status = "active"
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `INSERT INTO tgt_service(id,project_id,repo_id,name,source_path,kind,build_context,dockerfile_path,manifest_path,created_by) SELECT $1,$2,r.id,$4,$5,$6,$7,$8,$9,NULL FROM repo_repo r WHERE r.id=$3 AND r.project_id=$2 RETURNING project_id`, v.ID, v.ProjectID, v.RepoID, v.Name, v.SourcePath, v.Kind, v.BuildContext, v.DockerfilePath, v.ManifestPath).Scan(&v.ProjectID)
+		return tx.QueryRow(ctx, `INSERT INTO tgt_service(id,project_id,repo_id,name,source_path,kind,build_context,language,framework,test_tool,test_command,dockerfile_path,manifest_path,created_by) SELECT $1,$2,r.id,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NULL FROM repo_repo r WHERE r.id=$3 AND r.project_id=$2 RETURNING project_id`, v.ID, v.ProjectID, v.RepoID, v.Name, v.SourcePath, v.Kind, v.BuildContext, v.Language, v.Framework, v.TestTool, v.TestCommand, v.DockerfilePath, v.ManifestPath).Scan(&v.ProjectID)
 	})
 	return v, err
 }
@@ -100,14 +104,14 @@ func (s *ProjectCatalog) ListServices(ctx context.Context, projectID int64) ([]P
 	// A nil slice is encoded as JSON null, while clients consume this as a list.
 	out := make([]ProjectService, 0)
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id,project_id,repo_id,name,source_path,kind,build_context,dockerfile_path,manifest_path,status,generation_status FROM tgt_service WHERE project_id=$1 ORDER BY repo_id,source_path`, projectID)
+		rows, err := tx.Query(ctx, `SELECT id,project_id,repo_id,name,source_path,kind,build_context,language,framework,test_tool,test_command,dockerfile_path,manifest_path,status,generation_status FROM tgt_service WHERE project_id=$1 ORDER BY repo_id,source_path`, projectID)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 		for rows.Next() {
 			var v ProjectService
-			if err := rows.Scan(&v.ID, &v.ProjectID, &v.RepoID, &v.Name, &v.SourcePath, &v.Kind, &v.BuildContext, &v.DockerfilePath, &v.ManifestPath, &v.Status, &v.GenerationStatus); err != nil {
+			if err := rows.Scan(&v.ID, &v.ProjectID, &v.RepoID, &v.Name, &v.SourcePath, &v.Kind, &v.BuildContext, &v.Language, &v.Framework, &v.TestTool, &v.TestCommand, &v.DockerfilePath, &v.ManifestPath, &v.Status, &v.GenerationStatus); err != nil {
 				return err
 			}
 			out = append(out, v)
@@ -117,9 +121,9 @@ func (s *ProjectCatalog) ListServices(ctx context.Context, projectID int64) ([]P
 	return out, err
 }
 
-func (s *ProjectCatalog) UpdateService(ctx context.Context, projectID, serviceID int64, kind, generationStatus string) error {
+func (s *ProjectCatalog) UpdateService(ctx context.Context, projectID, serviceID int64, kind, generationStatus, language, framework, testTool, testCommand string) error {
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		command, err := tx.Exec(ctx, `UPDATE tgt_service SET kind=CASE WHEN $3 <> '' THEN $3 ELSE kind END, generation_status=CASE WHEN $4 <> '' THEN $4 ELSE generation_status END WHERE id=$1 AND project_id=$2`, serviceID, projectID, kind, generationStatus)
+		command, err := tx.Exec(ctx, `UPDATE tgt_service SET kind=CASE WHEN $3 <> '' THEN $3 ELSE kind END, generation_status=CASE WHEN $4 <> '' THEN $4 ELSE generation_status END, language=CASE WHEN $5 <> '' THEN $5 ELSE language END, framework=CASE WHEN $6 <> '' THEN $6 ELSE framework END, test_tool=CASE WHEN $7 <> '' THEN $7 ELSE test_tool END, test_command=CASE WHEN $8 <> '' THEN $8 ELSE test_command END WHERE id=$1 AND project_id=$2`, serviceID, projectID, kind, generationStatus, language, framework, testTool, testCommand)
 		if err != nil {
 			return err
 		}

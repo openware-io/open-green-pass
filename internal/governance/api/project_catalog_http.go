@@ -18,6 +18,10 @@ type batchRepoRequest struct {
 	Repositories []batchRepoInput `json:"repositories"`
 }
 type batchServiceInput struct {
+	Language       string  `json:"language"`
+	Framework      string  `json:"framework"`
+	TestTool       string  `json:"test_tool"`
+	TestCommand    string  `json:"test_command"`
 	RepoID         int64   `json:"repo_id"`
 	Name           string  `json:"name"`
 	SourcePath     string  `json:"source_path"`
@@ -32,6 +36,10 @@ type batchServiceRequest struct {
 type updateServiceRequest struct {
 	Kind             string `json:"kind"`
 	GenerationStatus string `json:"generation_status"`
+	Language         string `json:"language"`
+	Framework        string `json:"framework"`
+	TestTool         string `json:"test_tool"`
+	TestCommand      string `json:"test_command"`
 }
 type batchResult struct {
 	Index int    `json:"index"`
@@ -111,7 +119,7 @@ func RegisterProjectCatalog(mux *http.ServeMux, store *infra.ProjectCatalog) {
 		}
 		results := make([]batchResult, 0, len(in.Services))
 		for i, item := range in.Services {
-			v, e := store.AddService(r.Context(), infra.ProjectService{ProjectID: id, RepoID: item.RepoID, Name: item.Name, SourcePath: item.SourcePath, Kind: item.Kind, BuildContext: item.BuildContext, DockerfilePath: item.DockerfilePath, ManifestPath: item.ManifestPath})
+			v, e := store.AddService(r.Context(), infra.ProjectService{ProjectID: id, RepoID: item.RepoID, Name: item.Name, SourcePath: item.SourcePath, Kind: item.Kind, BuildContext: item.BuildContext, Language: item.Language, Framework: item.Framework, TestTool: item.TestTool, TestCommand: item.TestCommand, DockerfilePath: item.DockerfilePath, ManifestPath: item.ManifestPath})
 			if e != nil {
 				results = append(results, batchResult{Index: i, Error: e.Error()})
 			} else {
@@ -127,11 +135,11 @@ func RegisterProjectCatalog(mux *http.ServeMux, store *infra.ProjectCatalog) {
 		projectID, projectErr := strconv.ParseInt(r.PathValue("id"), 10, 64)
 		serviceID, serviceErr := strconv.ParseInt(r.PathValue("serviceID"), 10, 64)
 		var in updateServiceRequest
-		if projectErr != nil || serviceErr != nil || httpx.DecodeJSON(r, &in) != nil || (in.Kind == "" && in.GenerationStatus == "") || (in.Kind != "" && !validServiceKind(in.Kind)) || (in.GenerationStatus != "" && !validGenerationStatus(in.GenerationStatus)) {
+		if projectErr != nil || serviceErr != nil || httpx.DecodeJSON(r, &in) != nil || (in.Kind == "" && in.GenerationStatus == "" && in.Language == "" && in.Framework == "" && in.TestTool == "" && in.TestCommand == "") || (in.Kind != "" && !validServiceKind(in.Kind)) || (in.GenerationStatus != "" && !validGenerationStatus(in.GenerationStatus)) {
 			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_service_kind"})
 			return
 		}
-		if err := store.UpdateService(r.Context(), projectID, serviceID, in.Kind, in.GenerationStatus); err != nil {
+		if err := store.UpdateService(r.Context(), projectID, serviceID, in.Kind, in.GenerationStatus, in.Language, in.Framework, in.TestTool, in.TestCommand); err != nil {
 			httpx.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "service_not_found"})
 			return
 		}
