@@ -3,12 +3,19 @@ package infra
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/openware-io/open-green-pass/internal/governance/domain"
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
 
 // TargetStore 被测对象树仓储实现（RLS 租户由 DB.WithTenant 注入）。
 type TargetStore struct {
@@ -58,6 +65,10 @@ func (s *TargetStore) SaveTarget(ctx context.Context, t *domain.Target) error {
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 			id, t.Node.ParentID, nodeTypeLevel(t.Node.Type), t.Node.Name, t.Node.Remark, t.Node.Kind,
 			mb, t.Node.Status, t.Node.OwnerID)
+		if err != nil && isUniqueViolation(err) {
+			_, err = tx.Exec(ctx, `UPDATE tgt_target SET parent_id=$2,level=$3,name=$4,remark=$5,kind=$6,model_binding=$7,status=$8,updated_by=$9
+				WHERE id=$1`, id, t.Node.ParentID, nodeTypeLevel(t.Node.Type), t.Node.Name, t.Node.Remark, t.Node.Kind, mb, t.Node.Status, t.Node.OwnerID)
+		}
 		return err
 	})
 }
