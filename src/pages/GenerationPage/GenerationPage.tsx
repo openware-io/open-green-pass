@@ -89,8 +89,15 @@ export default function GenerationPage() {
         if (projectID) localStorage.setItem('greenpass_project_id', String(projectID));
       }
       if (!projectID) throw new Error('暂无可用的真实项目');
-      const [repos, services] = await Promise.all([realClient.listProjectRepositories(projectID), realClient.listProjectServices(projectID)]);
-      if (!cancelled) { setRealProjectRepos(repos); setRealProjectServices(services); setActiveServiceId((current) => current ?? services.find((service) => service.generation_status === 'confirmed')?.id ?? services[0]?.id ?? null); }
+      const results = await Promise.allSettled([realClient.listProjectRepositories(projectID), realClient.listProjectServices(projectID)]);
+      const repos = results[0].status === 'fulfilled' ? results[0].value : [];
+      const services = results[1].status === 'fulfilled' ? results[1].value : [];
+      if (!cancelled) {
+        setRealProjectRepos(repos);
+        setRealProjectServices(services);
+        setActiveServiceId((current) => current ?? services.find((service) => service.generation_status === 'confirmed')?.id ?? services[0]?.id ?? null);
+        if (!services.length) setRealError('当前项目暂无目录服务，请先在被测对象页登记子服务');
+      }
     };
     void load()
       .catch(() => { if (!cancelled) { setRealProjectRepos([]); setRealProjectServices([]); } })
@@ -169,7 +176,7 @@ export default function GenerationPage() {
         <button type="button" onClick={() => navigate('/trace')} className="text-slate-500 hover:text-emerald-600">追溯覆盖</button>
         <span className="ml-auto text-[11px] text-slate-400">{realClient ? '目录服务' : (TYPE_LABEL[selectedAsset.type] ?? selectedAsset.type)}</span>
       </div>
-      <PageHeader title="生成用例" desc="针对当前被测对象的用例生成流程 · 适配解析 → AI 生成 → 质量验证 → 审核入库">
+      <PageHeader title="生成用例" desc={realClient ? '选择一个已确认的目录服务，锁定仓库分支与源码目录后生成候选用例' : '针对当前被测对象的用例生成流程 · 适配解析 → AI 生成 → 质量验证 → 审核入库'}>
         <GhostButton onClick={() => navigate('/target')}>管理被测对象</GhostButton>
         <PrimaryButton disabled={realBusy} onClick={() => void startRealBatch()}>{realBusy ? '创建批次…' : '开始生成流程'}</PrimaryButton>
       </PageHeader>
@@ -189,7 +196,7 @@ export default function GenerationPage() {
               </div>
               <div className="text-xl font-bold text-slate-800">{displayName}</div>
               <div className="text-[11px] text-slate-500 mt-0.5">{realClient ? '真实项目目录中的被测服务，生成范围限定为该服务源码目录。' : '本用例生成流程的轴心对象 · 切换对象请用页首「被测对象」导航（面包屑 / 层次筛选）'}</div>
-              {realClient && <div className="mt-3"><label className="mb-1 block text-[10px] text-slate-400">选择目录服务</label><select value={selectedService?.id ?? ''} onChange={(event) => setActiveServiceId(Number(event.target.value))} className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"><option value="">请选择目录服务</option>{realProjectServices.filter((service) => service.generation_status === 'confirmed').map((service) => <option key={service.id} value={service.id}>{service.name} · {service.source_path}</option>)}</select></div>}
+              {realClient && <div className="mt-3"><label className="mb-1 block text-[10px] text-slate-400">选择目录服务（仅显示“生成测试用例 = 是”）</label><select value={selectedService?.id ?? ''} onChange={(event) => setActiveServiceId(Number(event.target.value))} className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"><option value="">请选择目录服务</option>{realProjectServices.filter((service) => service.generation_status === 'confirmed').map((service) => <option key={service.id} value={service.id}>{service.name} · {service.source_path}</option>)}</select></div>}
             </div>
           </div>
 
@@ -214,6 +221,8 @@ export default function GenerationPage() {
               </div>
               </div>
             </div>
+          ) : realClient ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700 min-w-0">{realCatalogLoading ? '正在读取 im-saas 项目目录…' : realError || '请选择一个已确认的目录服务后继续。'}</div>
           ) : (
             <div className="flex items-center gap-3 bg-amber-50 rounded-xl border border-amber-200 px-4 py-3 text-[12px] text-amber-700 flex-1 min-w-[300px]">
               <CloudDownload className="w-4 h-4 shrink-0" />
