@@ -78,12 +78,21 @@ export default function GenerationPage() {
   }
   useEffect(() => {
     if (!realClient) return;
-    const projectID = Number(localStorage.getItem('greenpass_project_id') ?? 0);
-    if (!projectID) return;
     let cancelled = false;
     setRealCatalogLoading(true);
-    Promise.all([realClient.listProjectRepositories(projectID), realClient.listProjectServices(projectID)])
-      .then(([repos, services]) => { if (!cancelled) { setRealProjectRepos(repos); setRealProjectServices(services); setActiveServiceId((current) => current ?? services[0]?.id ?? null); } })
+    const load = async () => {
+      let projectID = Number(localStorage.getItem('greenpass_project_id') ?? 0);
+      if (!projectID) {
+        const targets = await realClient.listTargets();
+        const project = targets.find((target) => target.type === 'project' && target.name === 'im-saas') ?? targets.find((target) => target.type === 'project');
+        projectID = project?.id ?? 0;
+        if (projectID) localStorage.setItem('greenpass_project_id', String(projectID));
+      }
+      if (!projectID) throw new Error('暂无可用的真实项目');
+      const [repos, services] = await Promise.all([realClient.listProjectRepositories(projectID), realClient.listProjectServices(projectID)]);
+      if (!cancelled) { setRealProjectRepos(repos); setRealProjectServices(services); setActiveServiceId((current) => current ?? services.find((service) => service.generation_status === 'confirmed')?.id ?? services[0]?.id ?? null); }
+    };
+    void load()
       .catch(() => { if (!cancelled) { setRealProjectRepos([]); setRealProjectServices([]); } })
       .finally(() => { if (!cancelled) setRealCatalogLoading(false); });
     return () => { cancelled = true; };
