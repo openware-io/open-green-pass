@@ -831,8 +831,10 @@ components:
       properties:
         id: { type: integer, format: int64 }
         team_id: { type: integer, format: int64 }
-        target_id: { type: integer, format: int64 }
+                target_id: { type: integer, format: int64 }
         repo_id: { type: integer, format: int64 }
+                service_id: { type: integer, format: int64, description: 项目目录中的被测子服务 }
+                source_path: { type: string, description: 被测子服务在仓库中的源码目录 }
         branch: { type: string }
         version: { type: string }
         state: { type: string, enum: [ enqueued, fetching, parsing, generating, quality_check, review, committing, approved, rejected, rolled_back, failed ] }
@@ -847,6 +849,8 @@ components:
       properties:
         target_id: { type: integer, format: int64 }
         repo_id: { type: integer, format: int64 }
+        service_id: { type: integer, format: int64, description: 项目目录中的被测子服务 }
+        source_path: { type: string, description: 被测子服务在仓库中的源码目录 }
         branch: { type: string }
         version: { type: string }
         idempotency_key: { type: string }

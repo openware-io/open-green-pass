@@ -16,6 +16,8 @@ type CreateGenerationBatchCommand struct {
 	TeamID           int64
 	TargetID         int64
 	RepoID           int64
+	ServiceID        *int64
+	SourcePath       string
 	Branch           string
 	RequestedVersion string
 	IdempotencyKey   string
@@ -121,6 +123,8 @@ func (s *GenerationBatchService) Create(ctx context.Context, cmd CreateGeneratio
 	if err != nil {
 		return nil, false, err
 	}
+	batch.ServiceID = cmd.ServiceID
+	batch.SourcePath = cmd.SourcePath
 	if err := s.batches.Create(ctx, batch); err != nil {
 		// A competing create may have won. Re-read instead of leaking a
 		// duplicate-key error as a failed idempotent request.

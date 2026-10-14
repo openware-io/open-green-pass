@@ -39,6 +39,8 @@ type GenerationBatch struct {
 	TeamID           int64
 	TargetID         int64
 	RepoID           int64
+	ServiceID        *int64
+	SourcePath       string
 	Branch           string
 	RequestedVersion string
 	HeadSHA          string

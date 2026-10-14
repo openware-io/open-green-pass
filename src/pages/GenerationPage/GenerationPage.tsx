@@ -50,6 +50,7 @@ export default function GenerationPage() {
   const realClient = useMemo(() => configuredGreenPassClient(), []);
   const [realProjectRepos, setRealProjectRepos] = useState<Array<{ id:number; project_id:number; url:string; default_branch:string }>>([]);
   const [realProjectServices, setRealProjectServices] = useState<Array<{ id:number; project_id:number; repo_id:number; name:string; source_path:string; kind:string; status:string; generation_status:'pending'|'confirmed' }>>([]);
+  const [activeServiceId, setActiveServiceId] = useState<number | null>(null);
   const [realCatalogLoading, setRealCatalogLoading] = useState(false);
   const [q, setQ] = useState('');
   const kw = q.trim().toLowerCase();
@@ -57,7 +58,11 @@ export default function GenerationPage() {
 
   // 被测对象 = 全局轴心（页首被测对象导航切换），生成流程围绕它展开
   const mockRepo = TESTED_REPOS.find((r) => r.name === selectedAsset.name) ?? null;
-  const selectedService = realProjectServices.find((service) => service.name === selectedAsset.name);
+  const selectedService = realProjectServices.find((service) => service.id === activeServiceId)
+    ?? realProjectServices.find((service) => service.name === selectedAsset.name)
+    ?? realProjectServices[0]
+    ?? null;
+  const displayName = realClient ? (selectedService?.name ?? '请选择目录服务') : selectedAsset.name;
   const realRepo = realProjectRepos.find((item) => item.id === selectedService?.repo_id) ?? realProjectRepos[0] ?? null;
   const repo = realClient
     ? (realRepo ? { name: selectedService?.name ?? selectedAsset.name, source: '代码仓库', url: realRepo.url, branches: [realRepo.default_branch], versions: [] as string[], src: [] as string[], owner: '' } : null)
@@ -78,7 +83,7 @@ export default function GenerationPage() {
     let cancelled = false;
     setRealCatalogLoading(true);
     Promise.all([realClient.listProjectRepositories(projectID), realClient.listProjectServices(projectID)])
-      .then(([repos, services]) => { if (!cancelled) { setRealProjectRepos(repos); setRealProjectServices(services); } })
+      .then(([repos, services]) => { if (!cancelled) { setRealProjectRepos(repos); setRealProjectServices(services); setActiveServiceId((current) => current ?? services[0]?.id ?? null); } })
       .catch(() => { if (!cancelled) { setRealProjectRepos([]); setRealProjectServices([]); } })
       .finally(() => { if (!cancelled) setRealCatalogLoading(false); });
     return () => { cancelled = true; };
@@ -101,11 +106,12 @@ export default function GenerationPage() {
     try {
       const projectID = Number(localStorage.getItem('greenpass_project_id') ?? 0);
       if (!projectID) throw new Error('请先在被测对象页选择真实项目');
+      if (!selectedService) throw new Error('请先选择一个已确认的目录服务');
       const repos = realProjectRepos.length ? realProjectRepos : await realClient.listProjectRepositories(projectID);
-      const selectedServiceForBatch = realProjectServices.find((service) => service.name === selectedAsset.name);
-      const repo = repos.find((item) => item.id === selectedServiceForBatch?.repo_id) ?? repos[0];
-      if (!repo) throw new Error('当前项目暂无代码仓库');
-      const batch = await realClient.createGenerationBatch({ target_id: projectID, repo_id: repo.id, branch: repo.default_branch, idempotency_key: `ui-${projectID}-${Date.now()}` });
+      const selectedServiceForBatch = selectedService;
+      const repo = repos.find((item) => item.id === selectedServiceForBatch?.repo_id);
+      if (!repo) throw new Error('当前目录服务没有关联代码仓库');
+      const batch = await realClient.createGenerationBatch({ target_id: projectID, repo_id: repo.id, service_id: selectedServiceForBatch?.id, source_path: selectedServiceForBatch?.source_path, branch: repo.default_branch, idempotency_key: `ui-${projectID}-${Date.now()}` });
       setRealBatch(batch); setStep(1);
     } catch (error) { setRealError(error instanceof Error ? error.message : '创建生成批次失败'); }
     finally { setRealBusy(false); }
@@ -145,14 +151,14 @@ export default function GenerationPage() {
   return (
     <div>
       <div className="mb-5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs shadow-sm">
-        <span className="font-semibold text-slate-700">{selectedAsset.name}</span>
+        <span className="font-semibold text-slate-700">{displayName}</span>
         <span className="text-slate-300">/</span>
         <button type="button" onClick={() => navigate('/target')} className="text-slate-500 hover:text-emerald-600">定义对象</button>
         <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
         <span className="rounded-md bg-emerald-600 px-2.5 py-1 font-medium text-white">生成用例</span>
         <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
         <button type="button" onClick={() => navigate('/trace')} className="text-slate-500 hover:text-emerald-600">追溯覆盖</button>
-        <span className="ml-auto text-[11px] text-slate-400">{TYPE_LABEL[selectedAsset.type] ?? selectedAsset.type}</span>
+        <span className="ml-auto text-[11px] text-slate-400">{realClient ? '目录服务' : (TYPE_LABEL[selectedAsset.type] ?? selectedAsset.type)}</span>
       </div>
       <PageHeader title="生成用例" desc="针对当前被测对象的用例生成流程 · 适配解析 → AI 生成 → 质量验证 → 审核入库">
         <GhostButton onClick={() => navigate('/target')}>管理被测对象</GhostButton>
@@ -169,11 +175,12 @@ export default function GenerationPage() {
             </div>
             <div>
               <div className="text-[11px] text-slate-400 flex items-center gap-2">
-                <Layers className="w-3 h-3 text-emerald-500" />被测对象 · {TYPE_LABEL[selectedAsset.type] ?? selectedAsset.type}
-                <span className="text-[9px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-full">覆盖率 {selectedAsset.coverage}%</span>
+                <Layers className="w-3 h-3 text-emerald-500" />被测对象 · {realClient ? '服务' : (TYPE_LABEL[selectedAsset.type] ?? selectedAsset.type)}
+                {!realClient && <span className="text-[9px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-full">覆盖率 {selectedAsset.coverage}%</span>}
               </div>
-              <div className="text-xl font-bold text-slate-800">{selectedAsset.name}</div>
-              <div className="text-[11px] text-slate-500 mt-0.5">本用例生成流程的轴心对象 · 切换对象请用页首「被测对象」导航（面包屑 / 层次筛选）</div>
+              <div className="text-xl font-bold text-slate-800">{displayName}</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">{realClient ? '真实项目目录中的被测服务，生成范围限定为该服务源码目录。' : '本用例生成流程的轴心对象 · 切换对象请用页首「被测对象」导航（面包屑 / 层次筛选）'}</div>
+              {realClient && <div className="mt-3"><label className="mb-1 block text-[10px] text-slate-400">选择目录服务</label><select value={selectedService?.id ?? ''} onChange={(event) => setActiveServiceId(Number(event.target.value))} className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"><option value="">请选择目录服务</option>{realProjectServices.filter((service) => service.generation_status === 'confirmed').map((service) => <option key={service.id} value={service.id}>{service.name} · {service.source_path}</option>)}</select></div>}
             </div>
           </div>
 
@@ -213,7 +220,7 @@ export default function GenerationPage() {
         {repo && (
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-start gap-2 text-[11px] text-slate-500">
             <CloudDownload className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
-            <span>当前生成输入：<b>{'url' in repo ? repo.url : repo.name}</b> · 分支 <b>{genBranch || '未配置'}</b> · 服务目录 <b>{selectedService?.source_path || '项目级目录'}</b>。版本信息由项目目录接口提供，当前为“未配置”。</span>
+            <span>当前生成输入：<b>{'url' in repo ? repo.url : repo.name}</b> · 分支 <b>{genBranch || '未配置'}</b> · 服务目录 <b>{selectedService?.source_path || '项目级目录'}</b>。目标版本：<b>未配置</b>（需由 CI/CD 推送版本或在版本目录登记后才能执行环境校验）。</span>
           </div>
         )}
         {repo && !realClient && (
