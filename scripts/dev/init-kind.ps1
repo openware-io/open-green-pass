@@ -16,6 +16,39 @@ $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 $deployScript = Join-Path $PSScriptRoot "deploy-kind.ps1"
 
+function Remove-LocalImageHistory {
+    param(
+        [Parameter(Mandatory = $true)][string] $Registry,
+        [Parameter(Mandatory = $true)][string] $KeepTag
+    )
+
+    $repositories = @(
+        "$Registry/open-green-pass",
+        "$Registry/open-green-pass-web",
+        "$Registry/open-green-pass-migrate"
+    )
+    foreach ($repository in $repositories) {
+        $images = @(docker image ls $repository --format '{{.Repository}}|{{.Tag}}' 2>$null)
+        foreach ($image in $images) {
+            $parts = $image -split '\|', 2
+            if ($parts.Count -ne 2) { continue }
+            $tag = $parts[1]
+            if ($tag -and $tag -ne $KeepTag) {
+                Write-Host "Removing old local image $repository`:$tag"
+                docker image rm "$repository`:$tag" | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Warning "Unable to remove local image $repository`:$tag; it may still be referenced by a running container."
+                }
+            }
+        }
+    }
+
+    # The user explicitly requested cleanup of untagged images. This only removes
+    # dangling layers and does not touch any tagged image.
+    docker image prune --force | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Unable to prune dangling local Docker images." }
+}
+
 foreach ($command in @("docker", "kind", "kubectl")) {
     if (-not (Get-Command $command -ErrorAction SilentlyContinue)) { throw "Required command not found: $command" }
 }
@@ -109,6 +142,8 @@ try {
     if ($SkipBuild) { $deployParameters.SkipBuild = $true }
     & $deployScript @deployParameters
     if ($LASTEXITCODE -ne 0) { throw "GreenPass kind deployment failed." }
+    Remove-LocalImageHistory -Registry $ImageRegistry -KeepTag $Version
+    Write-Host "Local GreenPass image cleanup succeeded: retained tag $Version and removed older tags/dangling images."
 } finally {
     Pop-Location
 }
