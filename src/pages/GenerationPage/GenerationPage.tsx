@@ -151,8 +151,17 @@ export default function GenerationPage() {
       desktop_app: { language: '未登记', tool: '未登记', framework: '未登记' },
     };
     const fallback = defaults[service.kind] ?? defaults.api_service;
-    return { language: service.language || fallback.language, framework: service.framework || fallback.framework, tool: service.test_tool || fallback.tool, command: service.test_command || '未登记' };
+    const language = service.language || fallback.language;
+    const framework = service.framework || fallback.framework;
+    const tool = service.test_tool || fallback.tool;
+    const command = service.test_command || '未登记';
+    return { language, framework, tool, command, complete: [service.language, service.framework, service.test_tool, service.test_command].every(Boolean) };
   };
+  const strategyFor = (kind: string) => ({
+    api_service: 'API 契约 + 单元/集成', gateway: '路由 + 鉴权 + 契约', websocket_service: '连接 + 消息协议', web_app: '组件 + 浏览器 E2E', mobile_app: '端到端 + 弱网', desktop_app: '桌面 UI + 集成', other: '通用黑盒候选',
+  } as Record<string, string>)[kind] ?? '通用黑盒候选';
+  const selectedServices = useMemo(() => confirmedServices.filter((service) => selectedServiceIds.includes(service.id)), [confirmedServices, selectedServiceIds]);
+  const incompleteSelected = selectedServices.filter((service) => !profileFor(service).complete);
   const toggleService = (id: number) => setSelectedServiceIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const openBatchConfirmation = () => {
     if (!realClient) { setStep(1); return; }
@@ -257,8 +266,9 @@ export default function GenerationPage() {
 
       {batchConfirmOpen && <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm">
         <div className="flex items-start justify-between gap-3"><div><div className="text-sm font-semibold text-slate-800">确认批量创建</div><div className="mt-1 text-xs text-slate-500">将为以下 {selectedServiceIds.length} 个服务分别创建生成批次，创建后可逐个审核。</div></div><button type="button" onClick={() => setBatchConfirmOpen(false)} className="text-xs text-slate-500 hover:text-slate-700">取消</button></div>
-        <div className="mt-4 grid gap-2 md:grid-cols-2">{confirmedServices.filter((service) => selectedServiceIds.includes(service.id)).map((service) => { const serviceRepo = realProjectRepos.find((item) => item.id === service.repo_id); const profile = profileFor(service); return <div key={service.id} className="rounded-lg border border-emerald-100 bg-white px-3 py-2.5 text-xs"><div className="font-semibold text-slate-700">{service.name}</div><div className="mt-1 truncate text-[11px] text-slate-500">{service.source_path}</div><div className="mt-1 text-[10px] text-slate-500">类型 {service.kind} · 语言 {profile.language} · 框架 {profile.framework}</div><div className="mt-1 text-[10px] text-slate-400">工具 {profile.tool} · 命令 {profile.command} · {serviceRepo?.default_branch ?? '未配置分支'} · 目标版本：未配置</div></div>; })}</div>
-        <div className="mt-4 flex justify-end"><button type="button" disabled={realBusy || !selectedServiceIds.length} onClick={() => void startRealBatch()} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{realBusy ? '正在创建…' : `确认创建 ${selectedServiceIds.length} 个批次`}</button></div>
+        <div className="mt-4 grid gap-2 md:grid-cols-2">{selectedServices.map((service) => { const serviceRepo = realProjectRepos.find((item) => item.id === service.repo_id); const profile = profileFor(service); return <div key={service.id} className="rounded-lg border border-emerald-100 bg-white px-3 py-2.5 text-xs"><div className="flex items-center justify-between gap-2"><div className="font-semibold text-slate-700">{service.name}</div><span className={'rounded-full px-2 py-0.5 text-[10px] ' + (profile.complete ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>{profile.complete ? '条件完整' : '条件不完整'}</span></div><div className="mt-1 truncate text-[11px] text-slate-500">{service.source_path}</div><div className="mt-1 text-[10px] text-slate-500">类型 {service.kind} · 生成策略 {strategyFor(service.kind)}</div><div className="mt-1 text-[10px] text-slate-500">语言 {profile.language} · 框架 {profile.framework}</div><div className="mt-1 text-[10px] text-slate-400">工具 {profile.tool} · 命令 {profile.command} · {serviceRepo?.default_branch ?? '未配置分支'} · 目标版本：未配置</div></div>; })}</div>
+        {incompleteSelected.length > 0 && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">有 {incompleteSelected.length} 个服务未登记完整技术栈或测试命令。本次可以创建“候选用例生成批次”，但生成后不能直接作为可执行测试，需先补齐服务语言、框架、测试工具和命令。</div>}
+        <div className="mt-4 flex items-center justify-between gap-3"><span className="text-[11px] text-slate-500">创建批次只冻结输入；执行工具策略将在条件完整后确定。</span><button type="button" disabled={realBusy || !selectedServiceIds.length} onClick={() => void startRealBatch()} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{realBusy ? '正在创建…' : `确认创建 ${selectedServiceIds.length} 个批次`}</button></div>
       </div>}
 
       {/* 被测对象 = 全局轴心：本流程围绕当前被测对象展开（切换用页首被测对象导航） */}
