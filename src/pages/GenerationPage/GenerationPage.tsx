@@ -54,6 +54,8 @@ export default function GenerationPage() {
     try { return Number(localStorage.getItem('greenpass_active_service_id') ?? 0) || null; } catch { return null; }
   });
   const [realCatalogLoading, setRealCatalogLoading] = useState(false);
+  const [configuredModels, setConfiguredModels] = useState<Array<{ id:number; provider:string; model_key:string; status:string }>>([]);
+  const [modelBinding, setModelBinding] = useState<{ provider:string; model:string } | null>(null);
   const [q, setQ] = useState('');
   const kw = q.trim().toLowerCase();
   const upFiltered = UPSTREAM_ADAPTERS.filter((a) => !kw || (a.source + a.status).toLowerCase().includes(kw));
@@ -119,6 +121,14 @@ export default function GenerationPage() {
       .finally(() => { if (!cancelled) setRealCatalogLoading(false); });
     return () => { cancelled = true; };
   }, [realClient]);
+  useEffect(() => {
+    if (!realClient) return;
+    const projectID = Number(localStorage.getItem('greenpass_project_id') ?? 0);
+    void Promise.all([realClient.modelCatalog(), projectID ? realClient.getModelBinding(projectID) : Promise.resolve(null)]).then(([catalog, binding]) => {
+      setConfiguredModels(catalog.models.filter((model) => model.status === 'approved'));
+      setModelBinding(binding ? { provider: binding.provider, model: binding.model } : null);
+    }).catch(() => { setConfiguredModels([]); setModelBinding(null); });
+  }, [realClient, realProjectServices.length]);
 
   // 生成流程向导状态
   const [step, setStep] = useState(1);
@@ -166,6 +176,7 @@ export default function GenerationPage() {
   const openBatchConfirmation = () => {
     if (!realClient) { setStep(1); return; }
     if (!selectedServiceIds.length && selectedService) setSelectedServiceIds([selectedService.id]);
+    if (!modelBinding) { setRealError('请先在 AI 模型配置中配置并绑定一个已验证模型，再生成用例'); return; }
     setBatchConfirmOpen(true);
     setRealError('');
   };
@@ -175,6 +186,7 @@ export default function GenerationPage() {
     try {
       const projectID = Number(localStorage.getItem('greenpass_project_id') ?? 0);
       if (!projectID) throw new Error('请先在被测对象页选择真实项目');
+      if (!modelBinding) throw new Error('当前项目未绑定已验证模型，无法生成真实用例');
       const repos = realProjectRepos.length ? realProjectRepos : await realClient.listProjectRepositories(projectID);
       const services = confirmedServices.filter((service) => selectedServiceIds.includes(service.id));
       if (!services.length) throw new Error('请至少选择一个已确认的目录服务');
@@ -241,6 +253,7 @@ export default function GenerationPage() {
         <GhostButton onClick={() => navigate('/target')}>管理被测对象</GhostButton>
         <PrimaryButton disabled={realBusy || !realClient} onClick={openBatchConfirmation}>{realBusy ? '创建批次…' : `批量生成用例${selectedServiceIds.length ? `（${selectedServiceIds.length}）` : ''}`}</PrimaryButton>
       </PageHeader>
+      {realClient && <div className={'mb-5 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 text-xs ' + (modelBinding ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800')}><span className="font-semibold">模型生成</span>{modelBinding ? <span>当前绑定：{modelBinding.provider} / {modelBinding.model} · 已配置模型 {configuredModels.length} 个</span> : <><span>当前项目未绑定已验证模型，暂不能生成真实用例。</span><button type="button" onClick={() => navigate('/models')} className="font-medium underline">去配置模型</button></>}</div>}
 
       {realClient && <Card title="选择生成范围" className="p-0 mb-5 overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex flex-wrap items-center gap-3">
@@ -374,7 +387,8 @@ export default function GenerationPage() {
         <div className="mb-4 flex flex-wrap gap-3 text-xs text-slate-500"><span>分支 <b>{realBatch.branch}</b></span><span>候选种子 <b>{seedsLoading ? '读取中…' : realSeeds.length}</b></span><span>当前阶段 <b className="text-emerald-700">{STAGE_LABEL[realBatch.state] ?? realBatch.state}</b></span></div>
         {realSeeds.length === 0 ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-5 text-xs text-slate-500">worker 正在生成候选种子，页面每 2 秒自动刷新。</div> : <div className="rounded-lg border border-slate-200 overflow-hidden"><table className="w-full text-xs"><thead className="bg-slate-50"><tr className="text-left text-slate-500"><th className="px-3 py-2">种子</th><th className="px-3 py-2">来源</th><th className="px-3 py-2">质量</th><th className="px-3 py-2">审核</th></tr></thead><tbody className="divide-y divide-slate-100">{realSeeds.map((seed) => <tr key={seed.id}><td className="px-3 py-2 font-mono text-emerald-700">#{seed.id}</td><td className="px-3 py-2 text-slate-600">{seed.source_locator}</td><td className="px-3 py-2 text-slate-500">{seed.quality_state}</td><td className="px-3 py-2 text-slate-500">{seed.approval_state}</td></tr>)}</tbody></table></div>}
         {realBatch.state === 'review' && <div className="mt-4 flex justify-end gap-2"><button type="button" disabled={reviewBusy} onClick={() => void submitRealReview('reject')} className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50">拒绝批次</button><button type="button" disabled={reviewBusy} onClick={() => void submitRealReview('approve')} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">{reviewBusy ? '提交中…' : '审核通过并入库'}</button></div>}
-        {realBatch.state === 'approved' && <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">本批次已审核通过，候选种子已生成正式版本化用例。</div>}
+        {realBatch.state === 'approved' && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700"><span>本批次已审核通过，模型生成的候选已写入版本化用例库（cas_case / cas_version）。</span><button type="button" onClick={() => navigate('/cases')} className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 font-medium text-emerald-700 hover:bg-emerald-50">查看用例库</button></div>}
+        {realBatch.state === 'failed' && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">模型生成失败：请检查项目模型绑定、模型连接状态和模型服务日志；本批次没有写入正式用例。</div>}
       </Card>}
 
       {/* 用例生成流程向导（六步，围绕当前被测对象） */}

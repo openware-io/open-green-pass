@@ -101,6 +101,7 @@ export class GreenPassClient {
   ready(): JsonResponse<ReadinessResponse> { return this.request('/readyz'); }
   version(): JsonResponse<VersionResponse> { return this.request('/version'); }
   getModelBinding(targetId: number): JsonResponse<ModelBinding | null> { return this.request(`/targets/${targetId}/model-binding`); }
+  listConfiguredModels(): JsonResponse<{ models: Array<{ id:number; provider:string; model_key:string; status:string }> }> { return this.modelCatalog(); }
   setModelBinding(targetId: number, input: ModelBinding): JsonResponse<Target> {
     return this.request(`/targets/${targetId}/model-binding`, { method: 'PUT', body: JSON.stringify(input) });
   }

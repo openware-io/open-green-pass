@@ -60,6 +60,7 @@ func GenerationPipelineWorkflow(ctx workflow.Context, input GenerationPipelineIn
 	activityInput := BatchActivityInput{BatchID: input.BatchID, TeamID: input.TeamID}
 	for _, activityName := range []string{"FetchSource", "ParseAndNormalize", "GenerateSeeds", "QualityGate"} {
 		if err := workflow.ExecuteActivity(ctx, activityName, activityInput).Get(ctx, nil); err != nil {
+			_ = workflow.ExecuteActivity(ctx, "FailGeneration", activityInput).Get(ctx, nil)
 			return err
 		}
 	}

@@ -7,8 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"github.com/openware-io/open-green-pass/internal/ai/domain"
 	governance "github.com/openware-io/open-green-pass/internal/governance/infra"
@@ -29,6 +37,115 @@ type GenerationSeed struct {
 	QualityState   string         `json:"quality_state"`
 	ApprovalState  string         `json:"approval_state"`
 }
+
+type modelInput struct{ Provider, Model, Protocol, BaseURL, SecretRef string }
+
+// GenerateModelSeed calls the model selected on the target. A batch is never
+// marked complete from a local/demo adapter: without a bound and configured
+// model this method returns an actionable error.
+func (s *GenerationBatchStore) GenerateModelSeed(ctx context.Context, teamID, batchID, seedID int64) error {
+	var targetID, repoID int64
+	var sourcePath, branch string
+	var input modelInput
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT target_id,repo_id,COALESCE(source_path,''),branch FROM gen_batch WHERE team_id=$1 AND id=$2`, teamID, batchID).Scan(&targetID, &repoID, &sourcePath, &branch); err != nil {
+			return err
+		}
+		var binding []byte
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(model_binding,'{}'::jsonb) FROM tgt_target WHERE team_id=$1 AND id=$2`, teamID, targetID).Scan(&binding); err != nil {
+			return err
+		}
+		var selected struct{ Provider, Model string }
+		if err := json.Unmarshal(binding, &selected); err != nil || strings.TrimSpace(selected.Provider) == "" || strings.TrimSpace(selected.Model) == "" {
+			return fmt.Errorf("generation model is not bound to target")
+		}
+		return tx.QueryRow(ctx, `SELECT provider,model_key,protocol,base_url,COALESCE(secret_ref,'') FROM mdl_model WHERE team_id=$1 AND provider=$2 AND model_key=$3 AND status='approved' AND credential_status IN ('configured','verified')`, teamID, selected.Provider, selected.Model).Scan(&input.Provider, &input.Model, &input.Protocol, &input.BaseURL, &input.SecretRef)
+	})
+	if err != nil {
+		return err
+	}
+	token, err := resolveModelToken(ctx, input.SecretRef)
+	if err != nil {
+		return err
+	}
+	prompt := fmt.Sprintf("You are a software test engineer. Generate one high-value executable test-case candidate for service kind and source path. Return strict JSON with title, kind, preconditions, steps, expected, and source_locator. Service source path: %s; branch: %s; repository id: %d.", sourcePath, branch, repoID)
+	text, err := callModel(ctx, input, token, prompt)
+	if err != nil {
+		return err
+	}
+	var parsed map[string]any
+	if json.Unmarshal([]byte(text), &parsed) != nil {
+		parsed = map[string]any{"title": "模型生成候选用例", "kind": "model-generated", "content": text}
+	}
+	parsed["batch_id"], parsed["model"], parsed["provider"], parsed["source_path"] = batchID, input.Model, input.Provider, sourcePath
+	return s.CreateSeed(ctx, teamID, seedID, batchID, "model://"+input.Provider+"/"+input.Model+"?source_path="+sourcePath, parsed)
+}
+
+func resolveModelToken(ctx context.Context, ref string) (string, error) {
+	if v := strings.TrimSpace(getenv("GP_MODEL_TOKEN")); v != "" {
+		return v, nil
+	}
+	parts := strings.Split(strings.TrimPrefix(ref, "k8s://"), "/")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("model credential is not available")
+	}
+	name, key := parts[1], "token"
+	if p := strings.SplitN(name, "#", 2); len(p) == 2 {
+		name, key = p[0], p[1]
+	}
+	cfg, err := rest.InClusterConfig()
+	if err != nil {
+		return "", fmt.Errorf("model credential cannot be resolved: %w", err)
+	}
+	client, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return "", err
+	}
+	secret, err := client.CoreV1().Secrets(parts[0]).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	if value := secret.Data[key]; len(value) > 0 {
+		return string(value), nil
+	}
+	return "", fmt.Errorf("model credential key %q is missing", key)
+}
+
+func callModel(ctx context.Context, input modelInput, token, prompt string) (string, error) {
+	if input.Protocol != "api" {
+		return "", fmt.Errorf("model protocol %s is not supported by generation worker", input.Protocol)
+	}
+	payload, _ := json.Marshal(map[string]any{"model": input.Model, "temperature": 0.2, "messages": []map[string]string{{"role": "user", "content": prompt}}})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(input.BaseURL, "/")+"/chat/completions", strings.NewReader(string(payload)))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 90 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("model request failed: %s", strings.TrimSpace(string(body)))
+	}
+	var out struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil || len(out.Choices) == 0 || strings.TrimSpace(out.Choices[0].Message.Content) == "" {
+		return "", fmt.Errorf("model returned no content")
+	}
+	return out.Choices[0].Message.Content, nil
+}
+
+func getenv(key string) string { return strings.TrimSpace(os.Getenv(key)) }
 
 func (s *GenerationBatchStore) CreateSeed(ctx context.Context, teamID int64, seedID int64, batchID int64, locator string, spec map[string]any) error {
 	payload, err := json.Marshal(spec)

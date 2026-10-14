@@ -181,6 +181,7 @@ func main() {
 	gw.RegisterActivity(aiworkflow.ParseAndNormalize)
 	gw.RegisterActivity(aiworkflow.GenerateSeeds)
 	gw.RegisterActivity(aiworkflow.QualityGate)
+	gw.RegisterActivity(aiworkflow.FailGeneration)
 	gw.RegisterActivity(aiworkflow.RecordReview)
 	gw.RegisterActivity(aiworkflow.CommitVersions)
 	gw.RegisterActivity(aiworkflow.ApplyRollback)

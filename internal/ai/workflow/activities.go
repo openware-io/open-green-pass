@@ -56,19 +56,7 @@ func GenerateSeeds(ctx context.Context, input BatchActivityInput) error {
 	if err := transitionGeneration(actCtx, input, domain.GenerationGenerating); err != nil {
 		return err
 	}
-	// Development adapter: persist a deterministic candidate seed from the
-	// frozen source identifiers. Production adapters replace this payload with
-	// normalized SCM/OpenAPI/requirement output without changing the workflow.
-	batch, err := generationDeps.svc.Find(actCtx, input.TeamID, input.BatchID)
-	if err != nil {
-		return err
-	}
-	locator := "dev://generation/" + itoa(input.BatchID)
-	if batch.SourcePath != "" {
-		locator += "?source_path=" + batch.SourcePath
-	}
-	spec := map[string]any{"title": fmt.Sprintf("%s 生成候选用例", batch.SourcePath), "kind": "api", "batch_id": input.BatchID, "repo_id": batch.RepoID, "service_id": batch.ServiceID, "source_path": batch.SourcePath, "branch": batch.Branch, "version": batch.RequestedVersion}
-	return generationDeps.store.CreateSeed(actCtx, input.TeamID, generationDeps.gen.Next(), input.BatchID, locator, spec)
+	return generationDeps.store.GenerateModelSeed(actCtx, input.TeamID, input.BatchID, generationDeps.gen.Next())
 }
 
 func QualityGate(ctx context.Context, input BatchActivityInput) error {
@@ -80,6 +68,19 @@ func QualityGate(ctx context.Context, input BatchActivityInput) error {
 		return err
 	}
 	return transitionGeneration(actCtx, input, domain.GenerationReview)
+}
+
+func FailGeneration(ctx context.Context, input BatchActivityInput) error {
+	actCtx := generationContext(ctx, input)
+	batch, err := generationDeps.svc.Find(actCtx, input.TeamID, input.BatchID)
+	if err != nil {
+		return err
+	}
+	if batch.State == domain.GenerationFailed || batch.State == domain.GenerationApproved || batch.State == domain.GenerationRejected {
+		return nil
+	}
+	_, err = generationDeps.svc.Transition(actCtx, input.TeamID, input.BatchID, batch.StateVersion, domain.GenerationFailed)
+	return err
 }
 
 func RecordReview(ctx context.Context, payload ReviewSignalPayload) error {
