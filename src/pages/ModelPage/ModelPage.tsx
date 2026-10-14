@@ -22,6 +22,7 @@ export default function ModelPage() {
     [token, setToken] = useState(""),
     [url, setURL] = useState(""),
     [keys, setKeys] = useState<string[]>([]),
+    [customModel, setCustomModel] = useState(""),
     [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     if (c) {
@@ -41,6 +42,7 @@ export default function ModelPage() {
     available = ps.filter(
       (p) => p.Provider === provider && p.Protocol === protocol,
     );
+  const effectiveKeys = protocol === "cc" && customModel.trim() ? [customModel.trim()] : keys;
   const save = async () => {
     if (!c) return;
     setBusy(true);
@@ -50,7 +52,7 @@ export default function ModelPage() {
         protocol,
         token,
         base_url: url,
-        model_keys: keys,
+        model_keys: effectiveKeys,
       });
       toast.success("模型连接已验证并保存");
       setToken("");
@@ -161,6 +163,7 @@ export default function ModelPage() {
                   value={protocol}
                   onChange={(e) => {
                     setProtocol(e.target.value);
+                    if (e.target.value === "cc") setProvider("anthropic");
                     setKeys([]);
                   }}
                   className="rounded-lg border p-2"
@@ -169,12 +172,14 @@ export default function ModelPage() {
                   <option value="cc">CC / Anthropic</option>
                 </select>
               </div>
+              {protocol === "cc" && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">CC 代理只要求 Anthropic Messages 兼容接口：Base URL 填代理地址（例如 http://127.0.0.1:xxxx/v1），模型名填代理实际接受的 GPT 模型名。</div>}
               <input
                 value={url}
                 onChange={(e) => setURL(e.target.value)}
                 placeholder="自定义 Base URL（可选）"
                 className="w-full rounded-lg border p-2"
               />
+              {protocol === "cc" && <input value={customModel} onChange={(e) => { setCustomModel(e.target.value); setKeys([]); }} placeholder="CC 代理模型名，例如 gpt-4o / gpt-5" className="w-full rounded-lg border p-2" />}
               <input
                 type="password"
                 value={token}
@@ -204,7 +209,7 @@ export default function ModelPage() {
             <div className="flex justify-end gap-2 border-t p-4">
               <button onClick={() => setOpen(false)}>取消</button>
               <button
-                disabled={busy || !token || !keys.length}
+                disabled={busy || !token || !effectiveKeys.length || (protocol === "cc" && !url.trim())}
                 onClick={() => void save()}
                 className="rounded-lg bg-emerald-600 px-4 py-2 text-white disabled:opacity-50"
               >

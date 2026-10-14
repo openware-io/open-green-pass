@@ -89,9 +89,13 @@ func RegisterModels(mux *http.ServeMux, store *infra.ModelStore, gen *id.Generat
 			httpx.WriteJSON(w, 500, map[string]string{"error": "secret_store_failed"})
 			return
 		}
-		for _, preset := range modelPresets {
-			if preset.Provider != in.Provider || preset.Protocol != in.Protocol || !contains(in.ModelKeys, preset.ModelKey) {
-				continue
+		for _, modelKey := range in.ModelKeys {
+			preset, ok := findPreset(in.Provider, in.Protocol, modelKey)
+			if !ok {
+				if in.Protocol != "cc" {
+					continue
+				}
+				preset = modelPreset{Provider: in.Provider, Name: modelKey, ModelKey: modelKey, Protocol: "cc", BaseURL: baseURL, Capabilities: []string{"code"}}
 			}
 			ref := "k8s://" + namespace + "/" + secretName + "#token"
 			if err := store.UpsertConnection(r.Context(), gen.Next(), team, parseSubject(principal.Subject), preset.Name, preset.Provider, preset.ModelKey, preset.Protocol, baseURL, ref, preset.Capabilities); err != nil {
@@ -102,7 +106,18 @@ func RegisterModels(mux *http.ServeMux, store *infra.ModelStore, gen *id.Generat
 		httpx.WriteJSON(w, 200, map[string]string{"status": "configured"})
 	})
 }
+func findPreset(provider, protocol, key string) (modelPreset, bool) {
+	for _, preset := range modelPresets {
+		if preset.Provider == provider && preset.Protocol == protocol && preset.ModelKey == key {
+			return preset, true
+		}
+	}
+	return modelPreset{}, false
+}
 func selectedBaseURL(in modelConnectRequest) (string, bool) {
+	if in.Protocol == "cc" && strings.TrimSpace(in.BaseURL) != "" && len(in.ModelKeys) > 0 {
+		return strings.TrimRight(in.BaseURL, "/"), true
+	}
 	for _, preset := range modelPresets {
 		if preset.Provider == in.Provider && preset.Protocol == in.Protocol && contains(in.ModelKeys, preset.ModelKey) {
 			if strings.TrimSpace(in.BaseURL) != "" {
@@ -114,6 +129,25 @@ func selectedBaseURL(in modelConnectRequest) (string, bool) {
 	return "", false
 }
 func probeModelConnection(ctx context.Context, protocol, baseURL, token string) error {
+	if protocol == "cc" {
+		payload := strings.NewReader(`{"model":"claude-compat","max_tokens":1,"messages":[{"role":"user","content":"ping"}]}`)
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(baseURL, "/")+"/messages", payload)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("x-api-key", token)
+		req.Header.Set("anthropic-version", "2023-06-01")
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return fmt.Errorf("provider status %d", resp.StatusCode)
+		}
+		return nil
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/models", nil)
 	if err != nil {
 		return err

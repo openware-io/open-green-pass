@@ -112,6 +112,9 @@ func resolveModelToken(ctx context.Context, ref string) (string, error) {
 }
 
 func callModel(ctx context.Context, input modelInput, token, prompt string) (string, error) {
+	if input.Protocol == "cc" {
+		return callClaudeCompatible(ctx, input, token, prompt)
+	}
 	if input.Protocol != "api" {
 		return "", fmt.Errorf("model protocol %s is not supported by generation worker", input.Protocol)
 	}
@@ -143,6 +146,35 @@ func callModel(ctx context.Context, input modelInput, token, prompt string) (str
 		return "", fmt.Errorf("model returned no content")
 	}
 	return out.Choices[0].Message.Content, nil
+}
+
+func callClaudeCompatible(ctx context.Context, input modelInput, token, prompt string) (string, error) {
+	payload, _ := json.Marshal(map[string]any{"model": input.Model, "max_tokens": 4096, "temperature": 0.2, "messages": []map[string]string{{"role": "user", "content": prompt}}})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(input.BaseURL, "/")+"/messages", strings.NewReader(string(payload)))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("x-api-key", token)
+	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: 90 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("model request failed: %s", strings.TrimSpace(string(body)))
+	}
+	var out struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil || len(out.Content) == 0 || strings.TrimSpace(out.Content[0].Text) == "" {
+		return "", fmt.Errorf("model returned no content")
+	}
+	return out.Content[0].Text, nil
 }
 
 func getenv(key string) string { return strings.TrimSpace(os.Getenv(key)) }
