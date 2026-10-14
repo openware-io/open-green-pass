@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Cpu, ShieldCheck, X } from "lucide-react";
+import { Cpu, Eye, KeyRound, Pencil, ShieldCheck, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared";
 import { configuredGreenPassClient } from "@/api/runtime";
@@ -19,6 +19,7 @@ export default function ModelPage() {
     [ms, setMs] = useState<M[]>([]),
     [connections, setConnections] = useState<Connection[]>([]),
     [open, setOpen] = useState(false),
+    [selectedConnection, setSelectedConnection] = useState<Connection | null>(null),
     [provider, setProvider] = useState("openai"),
     [protocol, setProtocol] = useState("api"),
     [token, setToken] = useState(""),
@@ -58,6 +59,26 @@ export default function ModelPage() {
     } catch {
       return false;
     }
+  };
+  const openConnectionForm = (connection?: Connection) => {
+    if (!connection) {
+      setProvider(apiProviders[0] ?? "openai");
+      setProtocol("api");
+      setURL("");
+      setKeys([]);
+      setCustomModel("");
+      setToken("");
+      setOpen(true);
+      return;
+    }
+    setProtocol(connection.protocol);
+    setProvider(connection.protocol === "cc" ? "cc-proxy" : connection.provider);
+    setURL(connection.base_url);
+    setKeys(connection.protocol === "api" ? [connection.model_key] : []);
+    setCustomModel(connection.protocol === "cc" ? connection.model_key : "");
+    setToken("");
+    setSelectedConnection(null);
+    setOpen(true);
   };
   const save = async () => {
     if (!c) return;
@@ -107,7 +128,7 @@ export default function ModelPage() {
         desc="主流模型目录 · API / Claude Code 兼容规范 · Token 安全托管"
       >
         <button
-          onClick={() => setOpen(true)}
+          onClick={() => openConnectionForm()}
           className="rounded-lg bg-emerald-600 px-4 py-2 text-xs text-white"
         >
           配置模型连接
@@ -127,6 +148,29 @@ export default function ModelPage() {
           </div>
         ))}
       </div>
+      <section className="mb-5 overflow-hidden rounded-xl border bg-white">
+        <div className="flex items-center justify-between border-b px-5 py-4">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">已配置连接</h2>
+            <p className="mt-1 text-xs text-slate-500">用于生成用例的已验证模型。Token 仅显示保存状态，不可读取或回显。</p>
+          </div>
+          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">{connections.length} 个连接</span>
+        </div>
+        {connections.length ? <div className="divide-y">
+          {connections.map((connection) => <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-5 py-4" key={connection.id}>
+            <div className="min-w-48 flex-1">
+              <div className="font-medium text-slate-900">{providerLabel(connection.provider)} <span className="font-mono text-xs font-normal text-slate-500">/ {connection.model_key}</span></div>
+              <div className="mt-1 text-xs text-slate-500">{connection.protocol === "cc" ? "CC / Anthropic Messages" : "API / OpenAI-compatible"}</div>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-emerald-700"><ShieldCheck className="h-4 w-4" />已验证</div>
+            <div className="flex items-center gap-1.5 text-xs text-slate-500"><KeyRound className="h-3.5 w-3.5" />Token 已保存</div>
+            <div className="ml-auto flex gap-2">
+              <button onClick={() => setSelectedConnection(connection)} className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50"><Eye className="h-3.5 w-3.5" />查看配置</button>
+              <button onClick={() => openConnectionForm(connection)} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50"><Pencil className="h-3.5 w-3.5" />更新</button>
+            </div>
+          </div>)}
+        </div> : <div className="px-5 py-8 text-center text-sm text-slate-500">暂无已验证连接。配置成功后会在这里显示。</div>}
+      </section>
       <div className="overflow-hidden rounded-xl border bg-white">
         <table className="w-full text-xs">
           <thead className="bg-slate-50 text-left">
@@ -152,7 +196,7 @@ export default function ModelPage() {
                 <td>{p.Capabilities.join(" · ")}</td>
                 <td>{(() => {
                   const connection = connectionFor(p.Provider, p.ModelKey);
-                  return connection ? <div className="space-y-1"><span className="flex gap-1 text-emerald-600"><ShieldCheck className="h-4 w-4" />已配置</span><div className="max-w-80 truncate text-[10px] text-slate-500" title={connection.base_url}>{connection.base_url}</div><div className="text-[10px] text-slate-400">Token 已安全保存 · {formatConfiguredAt(connection.configured_at)}</div></div> : "未配置";
+                  return connection ? <button onClick={() => setSelectedConnection(connection)} className="inline-flex items-center gap-1 text-emerald-600 hover:underline"><ShieldCheck className="h-4 w-4" />已配置</button> : <span className="text-slate-400">未配置</span>;
                 })()}</td>
               </tr>
             ))}
@@ -165,12 +209,19 @@ export default function ModelPage() {
                 </td>
                 <td>CC / Anthropic Messages</td>
                 <td>code</td>
-                <td>{(() => { const connection = connectionFor(m.provider, m.model_key); return <div className="space-y-1"><span className="flex gap-1 text-emerald-600"><ShieldCheck className="h-4 w-4" />已配置</span><div className="max-w-80 truncate text-[10px] text-slate-500" title={connection?.base_url}>{connection?.base_url ?? "—"}</div><div className="text-[10px] text-slate-400">Token 已安全保存 · {formatConfiguredAt(connection?.configured_at)}</div></div>; })()}</td>
+                <td>{(() => { const connection = connectionFor(m.provider, m.model_key); return connection ? <button onClick={() => setSelectedConnection(connection)} className="inline-flex items-center gap-1 text-emerald-600 hover:underline"><ShieldCheck className="h-4 w-4" />已配置</button> : "—"; })()}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {selectedConnection && <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/45" onMouseDown={() => setSelectedConnection(null)}>
+        <aside className="h-full w-full max-w-md bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="flex items-center justify-between border-b px-6 py-5"><div><div className="text-sm font-semibold">连接配置</div><div className="mt-1 text-xs text-slate-500">仅展示非敏感连接信息</div></div><button onClick={() => setSelectedConnection(null)} aria-label="关闭"><X className="h-4 w-4" /></button></div>
+          <dl className="divide-y px-6"><div className="py-4"><dt className="text-xs text-slate-500">厂商</dt><dd className="mt-1 text-sm font-medium">{providerLabel(selectedConnection.provider)}</dd></div><div className="py-4"><dt className="text-xs text-slate-500">协议</dt><dd className="mt-1 text-sm">{selectedConnection.protocol === "cc" ? "CC / Anthropic Messages" : "API / OpenAI-compatible"}</dd></div><div className="py-4"><dt className="text-xs text-slate-500">模型名</dt><dd className="mt-1 font-mono text-sm">{selectedConnection.model_key}</dd></div><div className="py-4"><dt className="text-xs text-slate-500">Base URL</dt><dd className="mt-1 break-all font-mono text-sm">{selectedConnection.base_url}</dd></div><div className="py-4"><dt className="text-xs text-slate-500">Token / API Key</dt><dd className="mt-1 text-sm text-emerald-700">已安全保存，不可回显</dd></div><div className="py-4"><dt className="text-xs text-slate-500">最后配置时间</dt><dd className="mt-1 text-sm">{formatConfiguredAt(selectedConnection.configured_at)}</dd></div></dl>
+          <div className="border-t px-6 py-4"><button onClick={() => openConnectionForm(selectedConnection)} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white"><Pencil className="h-4 w-4" />更新连接</button></div>
+        </aside>
+      </div>}
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45">
           <div className="w-full max-w-2xl rounded-2xl bg-white">
