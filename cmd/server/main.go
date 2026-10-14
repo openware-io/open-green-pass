@@ -223,7 +223,7 @@ func main() {
 			})
 		},
 		func(mux *http.ServeMux) { gapi.RegisterAuthorized(mux, treeSvc, iamAuthorizer) },
-		func(mux *http.ServeMux) { gapi.RegisterProjectCatalog(mux, projectCatalog) },
+		func(mux *http.ServeMux) { gapi.RegisterProjectCatalog(mux, projectCatalog, generationStore) },
 		func(mux *http.ServeMux) { aiapi.RegisterGeneration(mux, generationSvc, gen, generationStore) },
 		func(mux *http.ServeMux) {
 			gapi.RegisterModels(mux, modelStore, gen, os.Getenv("GP_MODEL_SECRET_NAMESPACE"))

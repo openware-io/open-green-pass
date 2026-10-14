@@ -1,13 +1,16 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
 
+	aiinfra "github.com/openware-io/open-green-pass/internal/ai/infra"
 	"github.com/openware-io/open-green-pass/internal/gateway/httpx"
 	"github.com/openware-io/open-green-pass/internal/governance/infra"
 	"github.com/openware-io/open-green-pass/internal/iam"
+	"github.com/openware-io/open-green-pass/internal/platform/rls"
 )
 
 type batchRepoInput struct {
@@ -47,7 +50,7 @@ type batchResult struct {
 	Error string `json:"error,omitempty"`
 }
 
-func RegisterProjectCatalog(mux *http.ServeMux, store *infra.ProjectCatalog) {
+func RegisterProjectCatalog(mux *http.ServeMux, store *infra.ProjectCatalog, generationStore *aiinfra.GenerationBatchStore) {
 	mux.HandleFunc("GET /projects/{id}/repositories", func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 		if err != nil {
@@ -123,6 +126,14 @@ func RegisterProjectCatalog(mux *http.ServeMux, store *infra.ProjectCatalog) {
 			if e != nil {
 				results = append(results, batchResult{Index: i, Error: e.Error()})
 			} else {
+				// Registration immediately starts the AI technical-profile analysis.
+				// A failed analysis does not roll back the catalog row; the service is
+				// visible with profile_status=failed and can be retried explicitly.
+				teamID := principalTenantID(r)
+				go func(serviceID int64, tenantID int64) {
+					analysisCtx := rls.WithTenant(context.Background(), tenantID)
+					_ = generationStore.AnalyzeServiceProfile(analysisCtx, tenantID, id, serviceID)
+				}(v.ID, teamID)
 				results = append(results, batchResult{Index: i, ID: &v.ID})
 			}
 		}
@@ -145,6 +156,36 @@ func RegisterProjectCatalog(mux *http.ServeMux, store *infra.ProjectCatalog) {
 		}
 		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 	})
+	mux.HandleFunc("POST /projects/{id}/services/{serviceID}/analyze-profile", func(w http.ResponseWriter, r *http.Request) {
+		if !catalogEditor(w, r) {
+			return
+		}
+		projectID, projectErr := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		serviceID, serviceErr := strconv.ParseInt(r.PathValue("serviceID"), 10, 64)
+		principal, ok := iam.PrincipalFromContext(r.Context())
+		if projectErr != nil || serviceErr != nil || !ok {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_service"})
+			return
+		}
+		teamID, err := strconv.ParseInt(principal.TenantID, 10, 64)
+		if err != nil || teamID <= 0 {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "tenant_required"})
+			return
+		}
+		go func() {
+			_ = generationStore.AnalyzeServiceProfile(rls.WithTenant(context.Background(), teamID), teamID, projectID, serviceID)
+		}()
+		httpx.WriteJSON(w, http.StatusAccepted, map[string]string{"status": "analyzing"})
+	})
+}
+
+func principalTenantID(r *http.Request) int64 {
+	p, ok := iam.PrincipalFromContext(r.Context())
+	if !ok {
+		return 0
+	}
+	id, _ := strconv.ParseInt(p.TenantID, 10, 64)
+	return id
 }
 
 func validGenerationStatus(status string) bool {

@@ -49,7 +49,7 @@ export default function GenerationPage() {
   const { selectedAsset, setSelectedAsset } = useOutletContext<{ selectedAsset: IAssetNode; setSelectedAsset?: (asset: IAssetNode) => void }>();
   const realClient = useMemo(() => configuredGreenPassClient(), []);
   const [realProjectRepos, setRealProjectRepos] = useState<Array<{ id:number; project_id:number; url:string; default_branch:string }>>([]);
-  const [realProjectServices, setRealProjectServices] = useState<Array<{ id:number; project_id:number; repo_id:number; name:string; source_path:string; kind:string; build_context:string; language:string; framework:string; test_tool:string; test_command:string; status:string; generation_status:'pending'|'confirmed' }>>([]);
+  const [realProjectServices, setRealProjectServices] = useState<Array<{ id:number; project_id:number; repo_id:number; name:string; source_path:string; kind:string; build_context:string; language:string; framework:string; test_tool:string; test_command:string; status:string; generation_status:'pending'|'confirmed'; profile_status:'pending'|'analyzing'|'suggested'|'confirmed'|'failed'; profile_source:string; profile_confidence?:number; profile_evidence?:string[]; test_strategy:string; profile_analyzed_at?:string }>>([]);
   const [activeServiceId, setActiveServiceId] = useState<number | null>(() => {
     try { return Number(localStorage.getItem('greenpass_active_service_id') ?? 0) || null; } catch { return null; }
   });
@@ -111,7 +111,7 @@ export default function GenerationPage() {
         setRealProjectServices(services);
         setActiveServiceId((current) => {
           const remembered = Number(localStorage.getItem('greenpass_active_service_id') ?? 0) || 0;
-          return services.some((service) => service.id === current) ? current : services.find((service) => service.id === remembered)?.id ?? services.find((service) => service.generation_status === 'confirmed')?.id ?? services[0]?.id ?? null;
+          return services.some((service) => service.id === current && service.profile_status === 'confirmed') ? current : services.find((service) => service.id === remembered && service.profile_status === 'confirmed')?.id ?? services.find((service) => service.generation_status === 'confirmed' && service.profile_status === 'confirmed')?.id ?? services[0]?.id ?? null;
         });
         if (!services.length) setRealError('当前项目暂无目录服务，请先在被测对象页登记子服务');
       }
@@ -146,7 +146,7 @@ export default function GenerationPage() {
   const [seedsLoading, setSeedsLoading] = useState(false);
   const [reviewBusy, setReviewBusy] = useState(false);
   const cur = FLOW_STEPS[step - 1];
-  const confirmedServices = useMemo(() => realProjectServices.filter((service) => service.generation_status === 'confirmed'), [realProjectServices]);
+  const confirmedServices = useMemo(() => realProjectServices.filter((service) => service.generation_status === 'confirmed' && service.profile_status === 'confirmed'), [realProjectServices]);
   const visibleServices = useMemo(() => {
     const term = serviceSearch.trim().toLowerCase();
     return confirmedServices.filter((service) => !term || `${service.name} ${service.source_path}`.toLowerCase().includes(term));
@@ -171,7 +171,6 @@ export default function GenerationPage() {
     api_service: 'API 契约 + 单元/集成', gateway: '路由 + 鉴权 + 契约', websocket_service: '连接 + 消息协议', web_app: '组件 + 浏览器 E2E', mobile_app: '端到端 + 弱网', desktop_app: '桌面 UI + 集成', other: '通用黑盒候选',
   } as Record<string, string>)[kind] ?? '通用黑盒候选';
   const selectedServices = useMemo(() => confirmedServices.filter((service) => selectedServiceIds.includes(service.id)), [confirmedServices, selectedServiceIds]);
-  const incompleteSelected = selectedServices.filter((service) => !profileFor(service).complete);
   const toggleService = (id: number) => setSelectedServiceIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const openBatchConfirmation = () => {
     if (!realClient) { setStep(1); return; }
@@ -280,8 +279,7 @@ export default function GenerationPage() {
       {batchConfirmOpen && <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm">
         <div className="flex items-start justify-between gap-3"><div><div className="text-sm font-semibold text-slate-800">确认批量创建</div><div className="mt-1 text-xs text-slate-500">将为以下 {selectedServiceIds.length} 个服务分别创建生成批次，创建后可逐个审核。</div></div><button type="button" onClick={() => setBatchConfirmOpen(false)} className="text-xs text-slate-500 hover:text-slate-700">取消</button></div>
         <div className="mt-4 grid gap-2 md:grid-cols-2">{selectedServices.map((service) => { const serviceRepo = realProjectRepos.find((item) => item.id === service.repo_id); const profile = profileFor(service); return <div key={service.id} className="rounded-lg border border-emerald-100 bg-white px-3 py-2.5 text-xs"><div className="flex items-center justify-between gap-2"><div className="font-semibold text-slate-700">{service.name}</div><span className={'rounded-full px-2 py-0.5 text-[10px] ' + (profile.complete ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>{profile.complete ? '条件完整' : '条件不完整'}</span></div><div className="mt-1 truncate text-[11px] text-slate-500">{service.source_path}</div><div className="mt-1 text-[10px] text-slate-500">类型 {service.kind} · 生成策略 {strategyFor(service.kind)}</div><div className="mt-1 text-[10px] text-slate-500">语言 {profile.language} · 框架 {profile.framework}</div><div className="mt-1 text-[10px] text-slate-400">工具 {profile.tool} · 命令 {profile.command} · {serviceRepo?.default_branch ?? '未配置分支'} · 目标版本：未配置</div></div>; })}</div>
-        {incompleteSelected.length > 0 && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">有 {incompleteSelected.length} 个服务未登记完整技术栈或测试命令。本次可以创建“候选用例生成批次”，但生成后不能直接作为可执行测试，需先补齐服务语言、框架、测试工具和命令。</div>}
-        <div className="mt-4 flex items-center justify-between gap-3"><span className="text-[11px] text-slate-500">创建批次只冻结输入；执行工具策略将在条件完整后确定。</span><button type="button" disabled={realBusy || !selectedServiceIds.length} onClick={() => void startRealBatch()} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{realBusy ? '正在创建…' : `确认创建 ${selectedServiceIds.length} 个批次`}</button></div>
+        <div className="mt-4 flex items-center justify-between gap-3"><span className="text-[11px] text-slate-500">批次输入已包含 AI 技术画像，并已由人工确认。</span><button type="button" disabled={realBusy || !selectedServiceIds.length} onClick={() => void startRealBatch()} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{realBusy ? '正在创建…' : `确认创建 ${selectedServiceIds.length} 个批次`}</button></div>
       </div>}
 
       {/* 被测对象 = 全局轴心：本流程围绕当前被测对象展开（切换用页首被测对象导航） */}
@@ -299,7 +297,7 @@ export default function GenerationPage() {
               </div>
               <div className="text-xl font-bold text-slate-800">{displayName}</div>
               <div className="text-[11px] text-slate-500 mt-0.5">{realClient ? '真实项目目录中的被测服务，生成范围限定为该服务源码目录。' : '本用例生成流程的轴心对象 · 切换对象请用页首「被测对象」导航（面包屑 / 层次筛选）'}</div>
-              {realClient && <div className="mt-3"><label className="mb-1 block text-[10px] text-slate-400">选择目录服务（仅显示“生成测试用例 = 是”）</label><select value={selectedService?.id ?? ''} onChange={(event) => { const id = Number(event.target.value); setActiveServiceId(id); syncGlobalService(realProjectServices.find((service) => service.id === id) ?? null); }} className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"><option value="">请选择目录服务</option>{realProjectServices.filter((service) => service.generation_status === 'confirmed').map((service) => <option key={service.id} value={service.id}>{service.name} · {service.source_path}</option>)}</select></div>}
+              {realClient && <div className="mt-3"><label className="mb-1 block text-[10px] text-slate-400">选择目录服务（仅显示“生成测试用例 = 是”且画像已确认）</label><select value={selectedService?.id ?? ''} onChange={(event) => { const id = Number(event.target.value); setActiveServiceId(id); syncGlobalService(realProjectServices.find((service) => service.id === id) ?? null); }} className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"><option value="">请选择目录服务</option>{realProjectServices.filter((service) => service.generation_status === 'confirmed' && service.profile_status === 'confirmed').map((service) => <option key={service.id} value={service.id}>{service.name} · {service.source_path}</option>)}</select></div>}
             </div>
           </div>
 

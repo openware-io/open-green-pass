@@ -2,6 +2,7 @@ package infra
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -16,21 +17,27 @@ type ProjectRepository struct {
 	DefaultBranch string `json:"default_branch"`
 }
 type ProjectService struct {
-	ID               int64   `json:"id"`
-	ProjectID        int64   `json:"project_id"`
-	RepoID           int64   `json:"repo_id"`
-	Name             string  `json:"name"`
-	SourcePath       string  `json:"source_path"`
-	Kind             string  `json:"kind"`
-	BuildContext     string  `json:"build_context"`
-	Language         string  `json:"language"`
-	Framework        string  `json:"framework"`
-	TestTool         string  `json:"test_tool"`
-	TestCommand      string  `json:"test_command"`
-	DockerfilePath   *string `json:"dockerfile_path,omitempty"`
-	ManifestPath     *string `json:"manifest_path,omitempty"`
-	Status           string  `json:"status"`
-	GenerationStatus string  `json:"generation_status"`
+	ID                int64    `json:"id"`
+	ProjectID         int64    `json:"project_id"`
+	RepoID            int64    `json:"repo_id"`
+	Name              string   `json:"name"`
+	SourcePath        string   `json:"source_path"`
+	Kind              string   `json:"kind"`
+	BuildContext      string   `json:"build_context"`
+	Language          string   `json:"language"`
+	Framework         string   `json:"framework"`
+	TestTool          string   `json:"test_tool"`
+	TestCommand       string   `json:"test_command"`
+	DockerfilePath    *string  `json:"dockerfile_path,omitempty"`
+	ManifestPath      *string  `json:"manifest_path,omitempty"`
+	Status            string   `json:"status"`
+	GenerationStatus  string   `json:"generation_status"`
+	ProfileStatus     string   `json:"profile_status"`
+	ProfileSource     string   `json:"profile_source"`
+	ProfileConfidence *float64 `json:"profile_confidence,omitempty"`
+	ProfileEvidence   []any    `json:"profile_evidence,omitempty"`
+	TestStrategy      string   `json:"test_strategy"`
+	ProfileAnalyzedAt *string  `json:"profile_analyzed_at,omitempty"`
 }
 type ProjectCatalog struct {
 	db  *DB
@@ -104,15 +111,19 @@ func (s *ProjectCatalog) ListServices(ctx context.Context, projectID int64) ([]P
 	// A nil slice is encoded as JSON null, while clients consume this as a list.
 	out := make([]ProjectService, 0)
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id,project_id,repo_id,name,source_path,kind,build_context,language,framework,test_tool,test_command,dockerfile_path,manifest_path,status,generation_status FROM tgt_service WHERE project_id=$1 ORDER BY repo_id,source_path`, projectID)
+		rows, err := tx.Query(ctx, `SELECT id,project_id,repo_id,name,source_path,kind,build_context,language,framework,test_tool,test_command,dockerfile_path,manifest_path,status,generation_status,profile_status,profile_source,profile_confidence,profile_evidence,test_strategy,profile_analyzed_at::text FROM tgt_service WHERE project_id=$1 ORDER BY repo_id,source_path`, projectID)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 		for rows.Next() {
 			var v ProjectService
-			if err := rows.Scan(&v.ID, &v.ProjectID, &v.RepoID, &v.Name, &v.SourcePath, &v.Kind, &v.BuildContext, &v.Language, &v.Framework, &v.TestTool, &v.TestCommand, &v.DockerfilePath, &v.ManifestPath, &v.Status, &v.GenerationStatus); err != nil {
+			var evidence []byte
+			if err := rows.Scan(&v.ID, &v.ProjectID, &v.RepoID, &v.Name, &v.SourcePath, &v.Kind, &v.BuildContext, &v.Language, &v.Framework, &v.TestTool, &v.TestCommand, &v.DockerfilePath, &v.ManifestPath, &v.Status, &v.GenerationStatus, &v.ProfileStatus, &v.ProfileSource, &v.ProfileConfidence, &evidence, &v.TestStrategy, &v.ProfileAnalyzedAt); err != nil {
 				return err
+			}
+			if len(evidence) > 0 {
+				_ = json.Unmarshal(evidence, &v.ProfileEvidence)
 			}
 			out = append(out, v)
 		}
@@ -123,7 +134,7 @@ func (s *ProjectCatalog) ListServices(ctx context.Context, projectID int64) ([]P
 
 func (s *ProjectCatalog) UpdateService(ctx context.Context, projectID, serviceID int64, kind, generationStatus, language, framework, testTool, testCommand string) error {
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		command, err := tx.Exec(ctx, `UPDATE tgt_service SET kind=CASE WHEN $3 <> '' THEN $3 ELSE kind END, generation_status=CASE WHEN $4 <> '' THEN $4 ELSE generation_status END, language=CASE WHEN $5 <> '' THEN $5 ELSE language END, framework=CASE WHEN $6 <> '' THEN $6 ELSE framework END, test_tool=CASE WHEN $7 <> '' THEN $7 ELSE test_tool END, test_command=CASE WHEN $8 <> '' THEN $8 ELSE test_command END WHERE id=$1 AND project_id=$2`, serviceID, projectID, kind, generationStatus, language, framework, testTool, testCommand)
+		command, err := tx.Exec(ctx, `UPDATE tgt_service SET kind=CASE WHEN $3 <> '' THEN $3 ELSE kind END, generation_status=CASE WHEN $4 <> '' THEN $4 ELSE generation_status END, language=CASE WHEN $5 <> '' THEN $5 ELSE language END, framework=CASE WHEN $6 <> '' THEN $6 ELSE framework END, test_tool=CASE WHEN $7 <> '' THEN $7 ELSE test_tool END, test_command=CASE WHEN $8 <> '' THEN $8 ELSE test_command END, profile_status=CASE WHEN $4='confirmed' THEN 'confirmed' WHEN $4='pending' THEN 'pending' ELSE profile_status END WHERE id=$1 AND project_id=$2 AND ($4 <> 'confirmed' OR (btrim(CASE WHEN $5 <> '' THEN $5 ELSE language END) <> '' AND btrim(CASE WHEN $6 <> '' THEN $6 ELSE framework END) <> '' AND btrim(CASE WHEN $7 <> '' THEN $7 ELSE test_tool END) <> '' AND btrim(CASE WHEN $8 <> '' THEN $8 ELSE test_command END) <> '' AND profile_status IN ('suggested','confirmed'))`, serviceID, projectID, kind, generationStatus, language, framework, testTool, testCommand)
 		if err != nil {
 			return err
 		}

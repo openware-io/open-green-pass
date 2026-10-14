@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -39,6 +41,127 @@ type GenerationSeed struct {
 }
 
 type modelInput struct{ Provider, Model, Protocol, BaseURL, SecretRef string }
+
+// AnalyzeServiceProfile uses the project's bound model to produce a reviewable
+// technical profile before a service can be selected for case generation.
+// The result is deliberately only a suggestion; generation_status is not
+// promoted until a human confirms it in the catalog UI.
+func (s *GenerationBatchStore) AnalyzeServiceProfile(ctx context.Context, teamID, projectID, serviceID int64) error {
+	var targetID, repoID int64
+	var name, sourcePath, kind, repoURL, branch string
+	var input modelInput
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT s.project_id,s.repo_id,s.name,s.source_path,s.kind,r.url,r.default_branch FROM tgt_service s JOIN repo_repo r ON r.id=s.repo_id WHERE s.project_id=$1 AND s.id=$2`, projectID, serviceID).Scan(&targetID, &repoID, &name, &sourcePath, &kind, &repoURL, &branch); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE tgt_service SET profile_status='analyzing',profile_source='model' WHERE project_id=$1 AND id=$2`, projectID, serviceID); err != nil {
+			return err
+		}
+		var binding []byte
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(model_binding,'{}'::jsonb) FROM tgt_target WHERE team_id=$1 AND id=$2`, teamID, projectID).Scan(&binding); err != nil {
+			return err
+		}
+		var selected struct{ Provider, Model string }
+		if err := json.Unmarshal(binding, &selected); err != nil || strings.TrimSpace(selected.Provider) == "" || strings.TrimSpace(selected.Model) == "" {
+			return fmt.Errorf("generation model is not bound to target")
+		}
+		return tx.QueryRow(ctx, `SELECT provider,model_key,protocol,base_url,COALESCE(secret_ref,'') FROM mdl_model WHERE team_id=$1 AND provider=$2 AND model_key=$3 AND status='approved' AND credential_status IN ('configured','verified')`, teamID, selected.Provider, selected.Model).Scan(&input.Provider, &input.Model, &input.Protocol, &input.BaseURL, &input.SecretRef)
+	})
+	if err != nil {
+		_ = s.markProfileFailed(ctx, projectID, serviceID)
+		return err
+	}
+	token, err := resolveModelToken(ctx, input.SecretRef)
+	if err != nil {
+		_ = s.markProfileFailed(ctx, projectID, serviceID)
+		return err
+	}
+	sourceEvidence, err := fetchProfileSourceEvidence(ctx, repoURL, branch, sourcePath)
+	if err != nil {
+		_ = s.markProfileFailed(ctx, projectID, serviceID)
+		return err
+	}
+	prompt := fmt.Sprintf(`Analyze the software service technical profile for test generation using only the supplied source evidence. Infer language, framework, test tool, executable test command, and strategy. Return strict JSON only with keys language, framework, test_tool, test_command, test_strategy, confidence (0..1), evidence (array of concise reasons). Do not invent a command when the evidence is insufficient; use an empty string and explain why in evidence. Repository: %s; branch: %s; service: %s; kind: %s; source path: %s. Source evidence follows:
+%s`, repoURL, branch, name, kind, sourcePath, sourceEvidence)
+	text, err := callModel(ctx, input, token, prompt)
+	if err != nil {
+		_ = s.markProfileFailed(ctx, projectID, serviceID)
+		return err
+	}
+	var profile struct {
+		Language     string   `json:"language"`
+		Framework    string   `json:"framework"`
+		TestTool     string   `json:"test_tool"`
+		TestCommand  string   `json:"test_command"`
+		TestStrategy string   `json:"test_strategy"`
+		Confidence   float64  `json:"confidence"`
+		Evidence     []string `json:"evidence"`
+	}
+	if err := json.Unmarshal([]byte(text), &profile); err != nil {
+		_ = s.markProfileFailed(ctx, projectID, serviceID)
+		return fmt.Errorf("model returned invalid profile: %w", err)
+	}
+	evidence, _ := json.Marshal(profile.Evidence)
+	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE tgt_service SET language=$3,framework=$4,test_tool=$5,test_command=$6,test_strategy=$7,profile_confidence=$8,profile_evidence=$9::jsonb,profile_source=$10,profile_status='suggested',profile_analyzed_at=now(),generation_status='pending' WHERE project_id=$1 AND id=$2`, projectID, serviceID, profile.Language, profile.Framework, profile.TestTool, profile.TestCommand, profile.TestStrategy, profile.Confidence, evidence, "model://"+input.Provider+"/"+input.Model)
+		return err
+	})
+}
+
+// fetchProfileSourceEvidence obtains only small, declarative files that are
+// relevant to identifying a project's toolchain. It deliberately does not
+// clone arbitrary repositories or send credentials to third parties. Public
+// GitHub repositories are supported today; other sources return an actionable
+// error rather than producing an ungrounded AI suggestion.
+func fetchProfileSourceEvidence(ctx context.Context, repoURL, branch, sourcePath string) (string, error) {
+	u, err := url.Parse(strings.TrimSpace(repoURL))
+	if err != nil || !strings.EqualFold(u.Host, "github.com") {
+		return "", fmt.Errorf("技术画像暂仅支持可访问的 GitHub 仓库；请接入源码读取器后重试")
+	}
+	parts := strings.Split(strings.Trim(strings.TrimSuffix(u.Path, ".git"), "/"), "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || strings.TrimSpace(branch) == "" {
+		return "", fmt.Errorf("repository URL or branch is invalid for source analysis")
+	}
+	root := strings.Trim(strings.TrimSpace(sourcePath), "/")
+	if root == "." {
+		root = ""
+	}
+	candidates := []string{"package.json", "pnpm-lock.yaml", "yarn.lock", "go.mod", "pom.xml", "build.gradle", "build.gradle.kts", "requirements.txt", "pyproject.toml", "Cargo.toml", "composer.json", "Gemfile", "README.md"}
+	client := &http.Client{Timeout: 12 * time.Second}
+	evidence := make([]string, 0, 4)
+	for _, name := range candidates {
+		filePath := path.Join(root, name)
+		rawURL := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/%s", parts[0], parts[1], branch, filePath)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+		if err != nil {
+			return "", err
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			continue
+		}
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 16*1024))
+		resp.Body.Close()
+		if readErr != nil || resp.StatusCode != http.StatusOK || len(body) == 0 {
+			continue
+		}
+		evidence = append(evidence, "FILE: "+filePath+"\n"+string(body))
+		if len(evidence) == 4 {
+			break
+		}
+	}
+	if len(evidence) == 0 {
+		return "", fmt.Errorf("无法读取 %s@%s 的依赖或测试配置，请确认仓库、分支和目录可访问", repoURL, branch)
+	}
+	return strings.Join(evidence, "\n\n---\n\n"), nil
+}
+
+func (s *GenerationBatchStore) markProfileFailed(ctx context.Context, projectID, serviceID int64) error {
+	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE tgt_service SET profile_status='failed' WHERE project_id=$1 AND id=$2`, projectID, serviceID)
+		return err
+	})
+}
 
 // GenerateModelSeed calls the model selected on the target. A batch is never
 // marked complete from a local/demo adapter: without a bound and configured
