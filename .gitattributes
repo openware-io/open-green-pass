@@ -1,0 +1,7 @@
+# Shell scripts run inside Linux containers/CI must keep LF endings.
+# Without this, core.autocrlf=true converts them to CRLF on Windows checkout and the container
+# fails on the shebang: "/usr/bin/env: 'bash\r': No such file or directory".
+* text=auto eol=lf
+*.sh text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
