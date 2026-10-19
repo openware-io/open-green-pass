@@ -4,6 +4,7 @@ import { CONCURRENCY_ROWS, CONFLICT_EVENTS, RESOURCE_POOLS, TEST_SCENARIOS } fro
 import { scenarioNav } from '@/context/scenarioNav';
 import { PageHeader, Card } from '@/components/shared';
 import { ChevronDown, ChevronRight, CornerDownRight, Cpu, Globe, Smartphone, Sparkles, Zap, ShieldCheck, Camera, History, Waypoints } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 type LocalDevice = { serial: string; state: string; product?: string; model?: string; device?: string; connected: boolean };
 type DeviceAgentResponse = { source: string; refreshed_at: string; devices: LocalDevice[]; error?: string };
@@ -11,6 +12,28 @@ type DeviceAgentResponse = { source: string; refreshed_at: string; devices: Loca
 function deviceName(device: LocalDevice) {
   return device.model || device.product || device.device || device.serial;
 }
+
+const DEMO_POOL_ITEMS: Record<string, { title: string; detail: string; status: string; statusClass: string }[]> = {
+  'Android 真机池': [
+    { title: 'Pixel 8 · Android 14', detail: '模拟设备 · arm64 · API 34', status: '空闲', statusClass: 'bg-emerald-50 text-emerald-700' },
+    { title: 'Galaxy S23 · Android 14', detail: '模拟设备 · arm64 · API 34', status: '执行中', statusClass: 'bg-amber-50 text-amber-700' },
+    { title: 'Redmi Note 12 · Android 13', detail: '模拟设备 · arm64 · API 33', status: '排队中', statusClass: 'bg-slate-100 text-slate-600' },
+  ],
+  'iOS 真机池': [
+    { title: 'iPhone 15 · iOS 17', detail: '模拟设备 · Xcode 15', status: '空闲', statusClass: 'bg-emerald-50 text-emerald-700' },
+    { title: 'iPhone 12 · iOS 16', detail: '模拟设备 · Xcode 14', status: '执行中', statusClass: 'bg-amber-50 text-amber-700' },
+  ],
+  '浏览器实例': [
+    { title: 'Chrome · Linux', detail: '模拟实例 · Playwright · Chromium 124', status: '运行 18', statusClass: 'bg-sky-50 text-sky-700' },
+    { title: 'Firefox · Linux', detail: '模拟实例 · Playwright · Firefox 125', status: '运行 14', statusClass: 'bg-sky-50 text-sky-700' },
+    { title: 'WebKit · Linux', detail: '模拟实例 · Playwright · WebKit 17', status: '运行 10', statusClass: 'bg-sky-50 text-sky-700' },
+  ],
+  'K8s 执行沙箱': [
+    { title: 'runner-api-7f8d', detail: '模拟实例 · API / 契约测试', status: '运行中', statusClass: 'bg-amber-50 text-amber-700' },
+    { title: 'runner-web-1c2a', detail: '模拟实例 · Web E2E', status: '运行中', statusClass: 'bg-amber-50 text-amber-700' },
+    { title: 'runner-load-4b6e', detail: '模拟实例 · 性能压测', status: '排队 52', statusClass: 'bg-red-50 text-red-700' },
+  ],
+};
 
 const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
 const FORM_BADGE: Record<string, string> = { '服务/后端': 'bg-emerald-50 text-emerald-600', 'Web 前端': 'bg-sky-50 text-sky-600', '移动端': 'bg-purple-50 text-purple-600', 'AI 专项': 'bg-indigo-50 text-indigo-600' };
@@ -31,6 +54,7 @@ const CONFLICT_DOT: Record<string, string> = { danger: 'text-red-500', warning: 
 export default function ConcurrencyPage() {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [selectedPool, setSelectedPool] = useState<string | null>(null);
   const [deviceAgent, setDeviceAgent] = useState<DeviceAgentResponse | null>(null);
   const [deviceAgentError, setDeviceAgentError] = useState('正在连接本机设备代理…');
   const toggle = (id: string) => setExpanded((cur) => (cur === id ? null : id));
@@ -55,6 +79,7 @@ export default function ConcurrencyPage() {
     return () => { active = false; window.clearInterval(timer); };
   }, []);
   const onlineDevices = deviceAgent?.devices.filter((device) => device.connected) ?? [];
+  const pool = RESOURCE_POOLS.find((item) => item.name === selectedPool) ?? null;
   return (
     <div>
       <PageHeader title="测试资源" desc="测试执行资源底座 · 真机 / 浏览器 / 沙箱并发池 · 场景测试方法与实现方案 · 调度隔离与冲突事件">
@@ -65,16 +90,12 @@ export default function ConcurrencyPage() {
         </div>
       </PageHeader>
 
-      <Card title="本机真机" extra={<span className={'text-[11px] ' + (deviceAgentError ? 'text-amber-600' : 'text-emerald-600')}>{deviceAgentError || '本机 ADB 实时发现 · 每 5 秒刷新'}</span>} className="p-5 mb-5">
-        {onlineDevices.length > 0 ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{onlineDevices.map((device) => <div key={device.serial} className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4"><div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-2"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">📱</span><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-800">{deviceName(device)}</p><p className="mt-0.5 text-[11px] text-slate-500">Android 真机 · {device.product || device.device || '设备信息读取中'}</p></div></div><span className="shrink-0 rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-medium text-emerald-700">在线</span></div><div className="mt-3 grid grid-cols-2 gap-2 text-[11px]"><div><span className="block text-slate-400">设备序列号</span><code className="mt-0.5 block truncate text-slate-700" title={device.serial}>{device.serial}</code></div><div><span className="block text-slate-400">ADB 状态</span><span className="mt-0.5 block text-slate-700">{device.state}</span></div></div></div>)}</div> : <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-7 text-center"><span className="text-xl">📱</span><p className="mt-2 text-xs font-medium text-slate-600">未发现已授权的 Android 真机</p><p className="mt-1 text-[11px] text-slate-400">请连接设备并确认 USB 调试授权；平台不会把演示设备当作真实资源展示。</p></div>}
-      </Card>
-
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
         {RESOURCE_POOLS.map((p) => (
-          <div key={p.name} className="card bg-white rounded-xl border border-slate-200 p-4">
+          <button type="button" key={p.name} onClick={() => setSelectedPool(p.name)} className="card rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-400">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-medium text-slate-600">{p.name}</span>
-              <span className={'w-2 h-2 rounded-full ' + LEVEL_DOT[p.level]} />
+              <span className="flex items-center gap-2"><span className={'w-2 h-2 rounded-full ' + LEVEL_DOT[p.level]} /><ChevronRight className="h-3.5 w-3.5 text-slate-400" /></span>
             </div>
             <div className="text-2xl font-bold text-slate-800">
               {p.used}<span className="text-sm font-normal text-slate-400"> / {p.total}</span>
@@ -83,9 +104,23 @@ export default function ConcurrencyPage() {
               <div className={LEVEL_BAR[p.level] + ' h-full rounded-full'} style={{ width: `${(p.used / p.total) * 100}%` }} />
             </div>
             <div className="text-[11px] text-slate-400 mt-2">演示数据 · {p.note}</div>
-          </div>
+            {p.name === 'Android 真机池' && <div className={'mt-2 text-[11px] ' + (deviceAgentError ? 'text-amber-600' : 'text-emerald-700')}>{deviceAgentError || `真实设备 · 在线 ${onlineDevices.length} 台`}</div>}
+          </button>
         ))}
       </div>
+
+      <Dialog open={Boolean(selectedPool)} onOpenChange={(open) => { if (!open) setSelectedPool(null); }}>
+        <DialogContent className="max-w-3xl border-slate-200 bg-white p-0">
+          {pool && <><DialogHeader className="border-b border-slate-100 px-6 py-5 pr-12"><DialogTitle className="text-base text-slate-800">{pool.name} · 资源清单</DialogTitle><DialogDescription className="mt-1 text-xs">资源状态、容量与调度信息；点击卡片进入当前清单。</DialogDescription></DialogHeader>
+            <div className="max-h-[70vh] space-y-5 overflow-y-auto px-6 py-5">
+              <section className="rounded-xl border border-slate-200 bg-slate-50/70 p-4"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-medium text-slate-700">模拟资源池汇总</p><p className="mt-1 text-[11px] text-slate-500">此组容量、排队和等待时间为演示数据，不作为真实设备调度依据。</p></div><div className="shrink-0 text-right"><p className="text-xl font-semibold text-slate-800">{pool.used}<span className="text-sm font-normal text-slate-400"> / {pool.total}</span></p><p className="text-[11px] text-slate-400">{pool.note}</p></div></div></section>
+              {pool.name === 'Android 真机池' && <section><div className="mb-3 flex items-center justify-between"><div><h3 className="text-sm font-semibold text-slate-800">真实设备</h3><p className="mt-0.5 text-[11px] text-slate-500">GreenPass 本机 ADB 自动发现，不纳入模拟容量。</p></div><span className={'text-[11px] ' + (deviceAgentError ? 'text-amber-600' : 'text-emerald-700')}>{deviceAgentError || '每 5 秒刷新'}</span></div>
+                {onlineDevices.length > 0 ? <div className="space-y-2">{onlineDevices.map((device) => <div key={device.serial} className="flex items-center justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4"><div className="flex min-w-0 items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white"><Smartphone className="h-4 w-4" /></span><div className="min-w-0"><p className="text-sm font-semibold text-slate-800">{deviceName(device)}</p><p className="mt-0.5 text-[11px] text-slate-500">{device.product || device.device || 'Android'} · 序列号 <code>{device.serial}</code> · ADB {device.state}</p></div></div><span className="shrink-0 rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-medium text-emerald-700">真实 · 在线</span></div>)}</div> : <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-500">未发现已授权的 Android 真机</div>}
+              </section>}
+              <section><h3 className="mb-3 text-sm font-semibold text-slate-800">模拟资源条目</h3><div className="divide-y divide-slate-100 rounded-xl border border-slate-200">{(DEMO_POOL_ITEMS[pool.name] ?? []).map((item) => <div key={item.title} className="flex items-center justify-between gap-4 px-4 py-3"><div className="min-w-0"><p className="text-xs font-medium text-slate-700">{item.title}</p><p className="mt-0.5 text-[11px] text-slate-400">{item.detail}</p></div><span className={'shrink-0 rounded-full px-2 py-1 text-[10px] font-medium ' + item.statusClass}>{item.status}</span></div>)}</div></section>
+            </div></>}
+        </DialogContent>
+      </Dialog>
 
       <Card title="测试场景 · 测试方法与实现方案" extra={<span className="text-[11px] text-slate-400">覆盖 12 场景：点击场景行展开完整测试方法（怎么测 / 怎么实现 / 依赖资源 / 门禁）</span>} className="p-5 mb-5">
         <div className="space-y-2">
