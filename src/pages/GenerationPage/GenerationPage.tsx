@@ -181,6 +181,7 @@ function GenerationPageContent() {
   );
   const displayName = realClient ? (selectedService?.name ?? '请选择目录服务') : selectedAsset.name;
   const realRepo = realProjectRepos.find((item) => item.id === selectedService?.repo_id) ?? null;
+  const realRepoID = realRepo?.id;
   const repo = realClient
     ? (realRepo ? { name: selectedService?.name ?? selectedAsset.name, source: '代码仓库', url: realRepo.url, branches: [realRepo.default_branch], versions: [] as string[], src: [] as string[], owner: '' } : null)
     : mockRepo;
@@ -296,9 +297,9 @@ function GenerationPageContent() {
     finally { setRefsLoading(false); }
   };
   useEffect(() => {
-    if (!realClient || !realRepo || !projectId) return;
-    queueMicrotask(() => { void loadRepositoryRefs(realRepo.id).catch(() => undefined); });
-  }, [loadRepositoryRefs, realRepo?.id]);
+    if (!realRepoID) return;
+    queueMicrotask(() => { void loadRepositoryRefs(realRepoID).catch(() => undefined); });
+  }, [loadRepositoryRefs, realRepoID]);
   useEffect(() => {
     if (!realClient || !realBatch?.base_batch_id) {
       queueMicrotask(() => { setBaselineSeeds(null); setBaselineSeedsError(''); });
