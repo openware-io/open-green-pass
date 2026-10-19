@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { UPSTREAM_ADAPTERS, TESTED_REPOS, type IAssetNode } from '@/data/mock';
 import { PageHeader, GhostButton, PrimaryButton, Card, ListFilter } from '@/components/shared';
@@ -267,7 +267,7 @@ function GenerationPageContent() {
     base.forEach((fingerprint) => { if (!current.has(fingerprint)) removed += 1; });
     return { added, unchanged, removed };
   }, [baselineSeeds, realSeeds]);
-  const loadRepositoryRefs = async (repoId: number) => {
+  const loadRepositoryRefs = useCallback(async (repoId: number) => {
     if (!realClient || !projectId) return [] as RepositoryRef[];
     const refs = await realClient.listRepositoryRefs(Number(projectId), repoId);
     setRepositoryRefs((current) => ({ ...current, [repoId]: refs }));
@@ -278,7 +278,7 @@ function GenerationPageContent() {
       return preferred ? { ...current, [repoId]: { type: preferred.ref_type, name: preferred.name } } : current;
     });
     return refs;
-  };
+  }, [projectId, realClient, realProjectRepos]);
   const refreshRepositoryRefs = async () => {
     if (!realClient || !projectId || !realRepo) return;
     setRefsLoading(true); setRealError('');
@@ -298,7 +298,7 @@ function GenerationPageContent() {
   useEffect(() => {
     if (!realClient || !realRepo || !projectId) return;
     queueMicrotask(() => { void loadRepositoryRefs(realRepo.id).catch(() => undefined); });
-  }, [realClient, realRepo?.id, projectId]);
+  }, [loadRepositoryRefs, realRepo?.id]);
   useEffect(() => {
     if (!realClient || !realBatch?.base_batch_id) {
       queueMicrotask(() => { setBaselineSeeds(null); setBaselineSeedsError(''); });
