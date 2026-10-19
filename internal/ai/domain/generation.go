@@ -55,6 +55,17 @@ type GenerationBatch struct {
 	UpdatedAt        time.Time
 }
 
+// GenerationScope is the current catalog authorization for a service's source.
+// It is read from tenant-owned catalog records, never accepted from the caller.
+type GenerationScope struct {
+	ServiceID, TeamID, TargetID, RepoID int64
+	SourcePath                          string
+	Status, GenerationStatus            string
+	ProfileStatus                       string
+	Language, Framework                 string
+	TestTool, TestCommand               string
+}
+
 // NewGenerationBatch constructs an enqueued batch. IDs are supplied by the
 // application boundary so the domain has no dependency on an ID generator.
 func NewGenerationBatch(id, teamID, targetID, repoID, createdBy int64, branch, requestedVersion, idempotencyKey string, now time.Time) (*GenerationBatch, error) {
@@ -127,6 +138,8 @@ func canTransition(from, to GenerationBatchState) bool {
 type GenerationBatchRepository interface {
 	Create(ctx context.Context, batch *GenerationBatch) error
 	Find(ctx context.Context, teamID, batchID int64) (*GenerationBatch, error)
+	// ListByTarget returns newest batches first, with descending ID breaking timestamp ties.
+	ListByTarget(ctx context.Context, teamID, targetID int64, limit int) ([]*GenerationBatch, error)
 	FindByIdempotencyKey(ctx context.Context, teamID int64, key string) (*GenerationBatch, error)
 	CompareAndSwap(ctx context.Context, batch *GenerationBatch, expectedVersion int64) error
 }

@@ -3,6 +3,7 @@ package infra
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/openware-io/open-green-pass/internal/execution/domain"
@@ -21,6 +22,9 @@ func NewMockRunner(gen *id.Generator) *MockRunner { return &MockRunner{gen: gen}
 func (r *MockRunner) Execute(ctx context.Context, spec []*domain.CaseSpec) ([]*domain.CaseResult, error) {
 	results := make([]*domain.CaseResult, 0, len(spec))
 	for _, s := range spec {
+		if s.RequiresSandbox {
+			return results, fmt.Errorf("case %d requires the configured sandbox runner; mock execution cannot claim success", s.CaseID)
+		}
 		now := time.Now().UTC()
 		ended := now
 		ev := &domain.EvidenceRef{Hash: "mock-evidence"}

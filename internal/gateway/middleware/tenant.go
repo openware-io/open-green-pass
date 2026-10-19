@@ -26,7 +26,13 @@ func Tenant(next http.Handler) http.Handler {
 					return
 				}
 			}
-			next.ServeHTTP(w, r.WithContext(rls.WithTenant(r.Context(), teamID)))
+			ctx := rls.WithTenant(r.Context(), teamID)
+			// The verified principal is the source of the audit actor. Do not
+			// trust the browser's x-gp-user-id once a session is established.
+			if userID, userErr := strconv.ParseInt(principal.Subject, 10, 64); userErr == nil && userID > 0 {
+				ctx = rls.WithUser(ctx, userID)
+			}
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 		if v := r.Header.Get(protocol.HeaderTenantID); v != "" {

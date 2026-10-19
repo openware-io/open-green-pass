@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -132,15 +133,42 @@ func (s *ProjectCatalog) ListServices(ctx context.Context, projectID int64) ([]P
 	return out, err
 }
 
-func (s *ProjectCatalog) UpdateService(ctx context.Context, projectID, serviceID int64, kind, generationStatus, language, framework, testTool, testCommand string) error {
+var ErrServiceProfileIncomplete = errors.New("service technical profile must be complete and reviewed before generation is enabled")
+
+func (s *ProjectCatalog) UpdateService(ctx context.Context, projectID, serviceID int64, kind, generationStatus, language, framework string) error {
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		command, err := tx.Exec(ctx, `UPDATE tgt_service SET kind=CASE WHEN $3 <> '' THEN $3 ELSE kind END, generation_status=CASE WHEN $4 <> '' THEN $4 ELSE generation_status END, language=CASE WHEN $5 <> '' THEN $5 ELSE language END, framework=CASE WHEN $6 <> '' THEN $6 ELSE framework END, test_tool=CASE WHEN $7 <> '' THEN $7 ELSE test_tool END, test_command=CASE WHEN $8 <> '' THEN $8 ELSE test_command END, profile_status=CASE WHEN $4='confirmed' THEN 'confirmed' WHEN $4='pending' THEN 'pending' WHEN ($5<>'' OR $6<>'' OR $7<>'' OR $8<>'') THEN 'suggested' ELSE profile_status END WHERE id=$1 AND project_id=$2 AND ($4 <> 'confirmed' OR (btrim(CASE WHEN $5 <> '' THEN $5 ELSE language END) <> '' AND btrim(CASE WHEN $6 <> '' THEN $6 ELSE framework END) <> '' AND btrim(CASE WHEN $7 <> '' THEN $7 ELSE test_tool END) <> '' AND btrim(CASE WHEN $8 <> '' THEN $8 ELSE test_command END) <> '' AND profile_status IN ('suggested','confirmed'))`, serviceID, projectID, kind, generationStatus, language, framework, testTool, testCommand)
-		if err != nil {
-			return err
-		}
-		if command.RowsAffected() == 0 {
-			return pgx.ErrNoRows
-		}
-		return nil
+		return updateProjectService(ctx, tx, projectID, serviceID, kind, generationStatus, language, framework)
 	})
+}
+
+func updateProjectService(ctx context.Context, tx pgx.Tx, projectID, serviceID int64, kind, generationStatus, language, framework string) error {
+	command, err := tx.Exec(ctx, `UPDATE tgt_service SET
+		kind=CASE WHEN $3 <> '' THEN $3 ELSE kind END,
+		generation_status=CASE WHEN $4 <> '' THEN $4 ELSE generation_status END,
+		language=CASE WHEN $5 <> '' THEN $5 ELSE language END,
+		framework=CASE WHEN $6 <> '' THEN $6 ELSE framework END,
+		profile_status=CASE WHEN $4='confirmed' THEN 'confirmed'
+			WHEN ($5<>'' OR $6<>'') THEN 'suggested'
+			ELSE profile_status END
+		WHERE id=$1 AND project_id=$2 AND (
+			$4 <> 'confirmed' OR (
+				btrim(CASE WHEN $5 <> '' THEN $5 ELSE language END) <> ''
+				AND btrim(CASE WHEN $6 <> '' THEN $6 ELSE framework END) <> ''
+				AND profile_status IN ('suggested','confirmed')
+			)
+		)`, serviceID, projectID, kind, generationStatus, language, framework)
+	if err != nil {
+		return err
+	}
+	if command.RowsAffected() != 0 {
+		return nil
+	}
+	var exists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM tgt_service WHERE id=$1 AND project_id=$2)`, serviceID, projectID).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		return ErrServiceProfileIncomplete
+	}
+	return pgx.ErrNoRows
 }

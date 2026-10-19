@@ -6,7 +6,97 @@ import { toast } from 'sonner';
 import { Sparkles, Plug, ShieldCheck, UserCheck, Database, GitBranch, BookOpen, CloudDownload, ChevronLeft, ChevronRight, Check, Crosshair, Layers } from 'lucide-react';
 import { configuredGreenPassClient } from '@/api/runtime';
 import type { GenerationBatch } from '@/api/client';
-type GenerationSeed = { id: number; batch_id: number; source_locator: string; normalized_spec: Record<string, unknown>; quality_state: string; approval_state: string };
+import { useObjectCatalog } from '@/context/objectCatalog';
+type GenerationSeed = { id: number; batch_id: number; case_id?: number | null; source_locator: string; normalized_spec: Record<string, unknown>; quality_state: string; approval_state: string };
+
+// A repository root is stored as "." for the source reader, but that is an
+// implementation detail and should never be the primary UI label. Native
+// select options are single-line, so use explicit Chinese wording instead of
+// a punctuation-heavy concatenation of fields.
+function sourceDirectoryLabel(sourcePath: string) {
+  return !sourcePath || sourcePath === '.' ? '仓库根目录' : sourcePath;
+}
+
+const SEED_QUALITY_LABEL: Record<string, string> = {
+  pending: '待校验',
+  passed: '通过',
+  failed: '未通过',
+};
+
+const SEED_APPROVAL_LABEL: Record<string, string> = {
+  pending: '待审核',
+  approved: '已入库',
+  rejected: '已拒绝',
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function GeneratedSeedReviewList({ seeds }: { seeds: GenerationSeed[] }) {
+  return (
+    <div className="space-y-2">
+      {seeds.map((seed) => {
+        const spec = seed.normalized_spec ?? {};
+        const request = isRecord(spec.request) ? spec.request : {};
+        const method = stringValue(request.method) || '—';
+        const path = stringValue(request.path) || '—';
+        const headers = isRecord(request.headers) ? request.headers : {};
+        const assertions = Array.isArray(spec.assertions) ? spec.assertions.filter(isRecord) : [];
+        const steps = stringList(spec.steps);
+        const preconditions = stringList(spec.preconditions);
+        const body = request.body;
+        return (
+          <details key={seed.id} className="group rounded-lg border border-slate-200 bg-white open:border-emerald-200">
+            <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2.5 text-xs">
+              <span className="font-mono text-emerald-700">#{seed.id}</span>
+              <span className="min-w-0 flex-1 truncate font-medium text-slate-700">{stringValue(spec.title) || '未命名候选'}</span>
+              <span className="rounded bg-slate-100 px-2 py-1 font-mono text-[10px] text-slate-600">{method} {path}</span>
+              <span className={'rounded px-2 py-1 text-[10px] ' + (seed.quality_state === 'passed' ? 'bg-emerald-50 text-emerald-700' : seed.quality_state === 'failed' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700')}>质量{SEED_QUALITY_LABEL[seed.quality_state] ?? seed.quality_state}</span>
+              <span className="rounded bg-slate-100 px-2 py-1 text-[10px] text-slate-600">{SEED_APPROVAL_LABEL[seed.approval_state] ?? seed.approval_state}</span>
+              <span className="text-[10px] text-slate-400 group-open:hidden">展开详情</span>
+              <span className="hidden text-[10px] text-slate-400 group-open:inline">收起</span>
+            </summary>
+            <div className="grid gap-3 border-t border-slate-100 p-3 text-xs md:grid-cols-2">
+              <div className="space-y-3">
+                <section>
+                  <div className="mb-1 font-medium text-slate-600">前置条件</div>
+                  {preconditions.length ? <ul className="list-inside list-disc space-y-1 text-slate-500">{preconditions.map((item, index) => <li key={index}>{item}</li>)}</ul> : <span className="text-slate-400">无</span>}
+                </section>
+                <section>
+                  <div className="mb-1 font-medium text-slate-600">执行步骤</div>
+                  {steps.length ? <ol className="list-inside list-decimal space-y-1 text-slate-500">{steps.map((item, index) => <li key={index}>{item}</li>)}</ol> : <span className="text-slate-400">无</span>}
+                </section>
+                <section>
+                  <div className="mb-1 font-medium text-slate-600">预期结果</div>
+                  <p className="whitespace-pre-wrap text-slate-500">{stringValue(spec.expected) || '未提供'}</p>
+                </section>
+              </div>
+              <div className="space-y-3">
+                <section>
+                  <div className="mb-1 font-medium text-slate-600">请求与断言</div>
+                  <div className="rounded-md bg-slate-50 p-2 font-mono text-[11px] text-slate-600">{method} {path}</div>
+                  {Object.keys(headers).length > 0 && <pre className="mt-1 overflow-auto rounded-md bg-slate-50 p-2 text-[10px] text-slate-500">{JSON.stringify(headers, null, 2)}</pre>}
+                  {body !== undefined && body !== null && <pre className="mt-1 max-h-40 overflow-auto rounded-md bg-slate-50 p-2 text-[10px] text-slate-500">{JSON.stringify(body, null, 2)}</pre>}
+                  <div className="mt-2 flex flex-wrap gap-1.5">{assertions.map((assertion, index) => <span key={index} className="rounded bg-blue-50 px-2 py-1 text-[10px] text-blue-700">{stringValue(assertion.type) === 'status' ? `状态码 = ${String(assertion.expected_status ?? '—')}` : stringValue(assertion.type) === 'body_contains' ? `响应包含“${stringValue(assertion.value)}”` : stringValue(assertion.type)}</span>)}</div>
+                </section>
+                <div className="break-all text-[10px] text-slate-400">源码证据：{stringValue(spec.source_locator) || '未标注'}<br />生成记录：{seed.source_locator}</div>
+              </div>
+            </div>
+          </details>
+        );
+      })}
+    </div>
+  );
+}
 
 const QUALITY = [
   { label: '变异测试验证', val: '38 / 48', width: 79, color: 'bg-emerald-500', note: '10 条未通过，无法杀死代码变体' },
@@ -45,15 +135,18 @@ const TYPE_LABEL: Record<string, string> = { service: '服务', 'service-group':
 const STAGE_LABEL: Record<string, string> = { enqueued: '待启动', fetching: '冻结源码', parsing: '解析归一化', generating: '生成候选', quality_check: '质量检查', review: '人工审核', committing: '写入用例库', approved: '已完成', rejected: '已拒绝', failed: '失败', rolled_back: '已回退' };
 
 export default function GenerationPage() {
+  const { projectId } = useObjectCatalog();
+  return <GenerationPageContent key={projectId} />;
+}
+
+function GenerationPageContent() {
   const navigate = useNavigate();
-  const { selectedAsset, setSelectedAsset } = useOutletContext<{ selectedAsset: IAssetNode; setSelectedAsset?: (asset: IAssetNode) => void }>();
+  const { selectedAsset } = useOutletContext<{ selectedAsset: IAssetNode }>();
   const realClient = useMemo(() => configuredGreenPassClient(), []);
-  const [realProjectRepos, setRealProjectRepos] = useState<Array<{ id:number; project_id:number; url:string; default_branch:string }>>([]);
-  const [realProjectServices, setRealProjectServices] = useState<Array<{ id:number; project_id:number; repo_id:number; name:string; source_path:string; kind:string; build_context:string; language:string; framework:string; test_tool:string; test_command:string; status:string; generation_status:'pending'|'confirmed'; profile_status:'pending'|'analyzing'|'suggested'|'confirmed'|'failed'; profile_source:string; profile_confidence?:number; profile_evidence?:string[]; test_strategy:string; profile_analyzed_at?:string }>>([]);
-  const [activeServiceId, setActiveServiceId] = useState<number | null>(() => {
-    try { return Number(localStorage.getItem('greenpass_active_service_id') ?? 0) || null; } catch { return null; }
-  });
-  const [realCatalogLoading, setRealCatalogLoading] = useState(false);
+  const catalog = useObjectCatalog();
+  const { repos: realProjectRepos, services: realProjectServices, serviceId: activeServiceId, projectId, selectService } = catalog;
+  const realCatalogLoading = Boolean(realClient && catalog.loading);
+  const [realError, setRealError] = useState('');
   const [configuredModels, setConfiguredModels] = useState<Array<{ id:number; provider:string; model_key:string; status:string }>>([]);
   const [modelBinding, setModelBinding] = useState<{ provider:string; model:string } | null>(null);
   const [q, setQ] = useState('');
@@ -63,88 +156,66 @@ export default function GenerationPage() {
   // 被测对象 = 全局轴心（页首被测对象导航切换），生成流程围绕它展开
   const mockRepo = TESTED_REPOS.find((r) => r.name === selectedAsset.name) ?? null;
   const selectedService = realProjectServices.find((service) => service.id === activeServiceId)
-    ?? realProjectServices.find((service) => service.name === selectedAsset.name)
-    ?? realProjectServices[0]
     ?? null;
+  const selectedServiceReady = Boolean(
+    selectedService
+      && selectedService.generation_status === 'confirmed'
+      && selectedService.profile_status === 'confirmed'
+      && [selectedService.language, selectedService.framework]
+        .every((value) => Boolean(value?.trim())),
+  );
   const displayName = realClient ? (selectedService?.name ?? '请选择目录服务') : selectedAsset.name;
-  const syncGlobalService = (service: typeof selectedService) => {
-    if (!service) return;
-    try { localStorage.setItem('greenpass_active_service_name', service.name); localStorage.setItem('greenpass_active_service_id', String(service.id)); } catch { /* ignore */ }
-    window.dispatchEvent(new CustomEvent('greenpass-service-context', { detail: service.name }));
-    if (setSelectedAsset && !realClient) setSelectedAsset({ id: String(service.id), name: service.name, type: 'service', coverage: 0, gateRate: 0, repo: service.name });
-  };
-  useEffect(() => { if (realClient && selectedService) syncGlobalService(selectedService); }, [realClient, selectedService?.id]);
-  const realRepo = realProjectRepos.find((item) => item.id === selectedService?.repo_id) ?? realProjectRepos[0] ?? null;
+  const realRepo = realProjectRepos.find((item) => item.id === selectedService?.repo_id) ?? null;
   const repo = realClient
     ? (realRepo ? { name: selectedService?.name ?? selectedAsset.name, source: '代码仓库', url: realRepo.url, branches: [realRepo.default_branch], versions: [] as string[], src: [] as string[], owner: '' } : null)
     : mockRepo;
-  useEffect(() => {
-    if (realRepo?.default_branch) setGenBranch(realRepo.default_branch);
-  }, [realRepo?.id, realRepo?.default_branch]);
-  // 生成输入的分支 / 版本（对象切换时 render 期重置为该对象默认分支/版本）
+  // Prototype-only inputs. In real mode the backend pins the repository's
+  // registered default branch and exposes no editable release-version source.
+  // Keeping them isolated prevents a real UI control from implying it changes
+  // the request when it does not.
   const [genBranch, setGenBranch] = useState(() => repo?.branches?.[0] ?? '');
   const [genVer, setGenVer] = useState(() => repo?.versions?.[0] ?? '');
-  const [prevAssetId, setPrevAssetId] = useState(selectedAsset.id);
-  if (prevAssetId !== selectedAsset.id) {
-    setPrevAssetId(selectedAsset.id);
+  const generationContextKey = [selectedAsset.id, selectedService?.id ?? '', realRepo?.id ?? '', repo?.branches?.[0] ?? '', repo?.versions?.[0] ?? ''].join(':');
+  const [previousGenerationContextKey, setPreviousGenerationContextKey] = useState(generationContextKey);
+  if (previousGenerationContextKey !== generationContextKey) {
+    setPreviousGenerationContextKey(generationContextKey);
     setGenBranch(repo?.branches?.[0] ?? '');
     setGenVer(repo?.versions?.[0] ?? '');
   }
   useEffect(() => {
     if (!realClient) return;
     let cancelled = false;
-    setRealCatalogLoading(true);
-    const load = async () => {
-      let projectID = Number(localStorage.getItem('greenpass_project_id') ?? 0);
-      if (!projectID) {
-        const targets = await realClient.listTargets();
-        const project = targets.find((target) => target.type === 'project' && target.name === 'im-saas') ?? targets.find((target) => target.type === 'project');
-        projectID = project?.id ?? 0;
-        if (projectID) localStorage.setItem('greenpass_project_id', String(projectID));
-      }
-      if (!projectID) throw new Error('暂无可用的真实项目');
-      const results = await Promise.allSettled([realClient.listProjectRepositories(projectID), realClient.listProjectServices(projectID)]);
-      const repos = results[0].status === 'fulfilled' ? results[0].value : [];
-      const services = results[1].status === 'fulfilled' ? results[1].value : [];
-      if (!cancelled) {
-        setRealProjectRepos(repos);
-        setRealProjectServices(services);
-        setActiveServiceId((current) => {
-          const remembered = Number(localStorage.getItem('greenpass_active_service_id') ?? 0) || 0;
-          return services.some((service) => service.id === current && service.profile_status === 'confirmed') ? current : services.find((service) => service.id === remembered && service.profile_status === 'confirmed')?.id ?? services.find((service) => service.generation_status === 'confirmed' && service.profile_status === 'confirmed')?.id ?? services[0]?.id ?? null;
-        });
-        if (!services.length) setRealError('当前项目暂无目录服务，请先在被测对象页登记子服务');
-      }
-    };
-    void load()
-      .catch(() => { if (!cancelled) { setRealProjectRepos([]); setRealProjectServices([]); } })
-      .finally(() => { if (!cancelled) setRealCatalogLoading(false); });
-    return () => { cancelled = true; };
-  }, [realClient]);
-  useEffect(() => {
-    if (!realClient) return;
-    const projectID = Number(localStorage.getItem('greenpass_project_id') ?? 0);
+    const projectID = Number(projectId);
     void Promise.all([realClient.modelCatalog(), projectID ? realClient.getModelBinding(projectID) : Promise.resolve(null)]).then(([catalog, binding]) => {
+      if (cancelled) return;
       setConfiguredModels(catalog.models.filter((model) => model.status === 'approved'));
       setModelBinding(binding ? { provider: binding.provider, model: binding.model } : null);
-    }).catch(() => { setConfiguredModels([]); setModelBinding(null); });
-  }, [realClient, realProjectServices.length]);
+    }).catch(() => { if (!cancelled) { setConfiguredModels([]); setModelBinding(null); } });
+    return () => { cancelled = true; };
+  }, [realClient, projectId]);
 
   // 生成流程向导状态
   const [step, setStep] = useState(1);
   const [stored, setStored] = useState(false);
   const [audit, setAudit] = useState<Record<string, string>>({});
-  const [realBatch, setRealBatch] = useState<GenerationBatch | null>(null);
+  const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
   const [realBatches, setRealBatches] = useState<GenerationBatch[]>([]);
+  const visibleBatches = useMemo(() => activeServiceId ? realBatches.filter((batch) => batch.service_id === activeServiceId) : realBatches, [realBatches, activeServiceId]);
+  const realBatch = visibleBatches.find((batch) => batch.id === selectedBatchId) ?? visibleBatches[0] ?? null;
+  const activeBatchId = realBatch?.id;
+  const activeBatchStateVersion = realBatch?.state_version;
   const [selectedServiceIds, setSelectedServiceIds] = useState<number[]>([]);
   const [serviceSearch, setServiceSearch] = useState('');
   const [batchConfirmOpen, setBatchConfirmOpen] = useState(false);
   const [batchResults, setBatchResults] = useState<Array<{ serviceId: number; name: string; ok: boolean; error?: string }>>([]);
   const [realBusy, setRealBusy] = useState(false);
-  const [realError, setRealError] = useState('');
-  const [realSeeds, setRealSeeds] = useState<GenerationSeed[]>([]);
-  const [seedsLoading, setSeedsLoading] = useState(false);
+  const [seedResponse, setSeedResponse] = useState<{ batchId: number; stateVersion: number; items: GenerationSeed[]; error?: string } | null>(null);
+  const seedsMatch = Boolean(realBatch && seedResponse?.batchId === realBatch.id && seedResponse.stateVersion === realBatch.state_version);
+  const seedsLoading = Boolean(realBatch && !seedsMatch);
+  const seedsError = seedsMatch ? seedResponse?.error ?? '' : '';
+  const realSeeds = seedsMatch && !seedsError ? seedResponse?.items.filter((seed) => seed.batch_id === realBatch?.id) ?? [] : [];
   const [reviewBusy, setReviewBusy] = useState(false);
+  const canReview = Boolean(realBatch?.state === 'review' && seedsMatch && !seedsError && realSeeds.length > 0 && !reviewBusy);
   const cur = FLOW_STEPS[step - 1];
   const confirmedServices = useMemo(() => realProjectServices.filter((service) => service.generation_status === 'confirmed' && service.profile_status === 'confirmed'), [realProjectServices]);
   const visibleServices = useMemo(() => {
@@ -165,16 +236,21 @@ export default function GenerationPage() {
     const framework = service.framework || fallback.framework;
     const tool = service.test_tool || fallback.tool;
     const command = service.test_command || '未登记';
-    return { language, framework, tool, command, complete: [service.language, service.framework, service.test_tool, service.test_command].every(Boolean) };
+    return { language, framework, tool, command, complete: [service.language, service.framework].every(Boolean) };
   };
-  const strategyFor = (kind: string) => ({
-    api_service: 'API 契约 + 单元/集成', gateway: '路由 + 鉴权 + 契约', websocket_service: '连接 + 消息协议', web_app: '组件 + 浏览器 E2E', mobile_app: '端到端 + 弱网', desktop_app: '桌面 UI + 集成', other: '通用黑盒候选',
-  } as Record<string, string>)[kind] ?? '通用黑盒候选';
   const selectedServices = useMemo(() => confirmedServices.filter((service) => selectedServiceIds.includes(service.id)), [confirmedServices, selectedServiceIds]);
+  // Batch selection is intentionally independent from the global header
+  // context. Selecting several services must not make the header jump to the
+  // last checkbox the user touched.
   const toggleService = (id: number) => setSelectedServiceIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const openBatchConfirmation = () => {
     if (!realClient) { setStep(1); return; }
-    if (!selectedServiceIds.length && selectedService) setSelectedServiceIds([selectedService.id]);
+    if (!confirmedServices.length) { setRealError('请先在被测对象页完成服务技术画像确认，并启用生成测试用例。'); return; }
+    if (!selectedServices.length) {
+      const fallback = confirmedServices.find((service) => service.id === activeServiceId);
+      if (!fallback) { setRealError('请先选择至少一个技术画像已确认且允许生成的服务。'); return; }
+      setSelectedServiceIds([fallback.id]);
+    } else setSelectedServiceIds(selectedServices.map((service) => service.id));
     if (!modelBinding) { setRealError('请先在 AI 模型配置中配置并绑定一个已验证模型，再生成用例'); return; }
     setBatchConfirmOpen(true);
     setRealError('');
@@ -183,7 +259,7 @@ export default function GenerationPage() {
     if (!realClient) { setStep(1); return; }
     setRealBusy(true); setRealError('');
     try {
-      const projectID = Number(localStorage.getItem('greenpass_project_id') ?? 0);
+      const projectID = Number(projectId);
       if (!projectID) throw new Error('请先在被测对象页选择真实项目');
       if (!modelBinding) throw new Error('当前项目未绑定已验证模型，无法生成真实用例');
       const repos = realProjectRepos.length ? realProjectRepos : await realClient.listProjectRepositories(projectID);
@@ -195,35 +271,58 @@ export default function GenerationPage() {
         try {
           const repo = repos.find((item) => item.id === service.repo_id);
           if (!repo) throw new Error('未关联代码仓库');
-          const batch = await realClient.createGenerationBatch({ target_id: projectID, repo_id: repo.id, service_id: service.id, source_path: service.source_path, branch: repo.default_branch, idempotency_key: `ui-batch-${projectID}-${service.id}-${Date.now()}` });
+          const batch = await realClient.createGenerationBatch({ target_id: projectID, repo_id: repo.id, service_id: service.id, source_path: service.source_path, branch: repo.default_branch, idempotency_key: `ui-batch-${projectID}-${service.id}-${crypto.randomUUID()}` });
           created.push(batch); results.push({ serviceId: service.id, name: service.name, ok: true });
         } catch (error) { results.push({ serviceId: service.id, name: service.name, ok: false, error: error instanceof Error ? error.message : '创建失败' }); }
       }
-      setBatchResults(results); setRealBatches((current) => [...created, ...current]); setRealBatch(created[0] ?? null); setSelectedServiceIds([]); setBatchConfirmOpen(false); setStep(1);
+      setBatchResults(results);
+      setRealBatches((current) => [...created, ...current.filter((batch) => !created.some((item) => item.id === batch.id))]);
+      if (created.length) setSelectedBatchId((created.find((batch) => batch.service_id === activeServiceId) ?? created[0]).id);
+      setSelectedServiceIds([]); setBatchConfirmOpen(false); setStep(1);
       if (created.length) toast.success(`已创建 ${created.length} 个生成批次`, { description: results.filter((item) => !item.ok).length ? `${results.filter((item) => !item.ok).length} 个服务创建失败，请查看结果` : '服务端将依次生成候选用例' });
     } catch (error) { setRealError(error instanceof Error ? error.message : '创建生成批次失败'); }
     finally { setRealBusy(false); }
   };
   useEffect(() => {
-    if (!realBatches.length || !realClient) return;
+    if (!projectId || !realClient || realBusy || reviewBusy) return;
     let cancelled = false;
+    let timer: number | undefined;
     const refresh = async () => {
       try {
-        const next = await Promise.all(realBatches.map(async (item) => realClient.getGenerationBatch(item.id)));
-        if (!cancelled) { setRealBatches(next); setRealBatch((current) => current ? next.find((item) => item.id === current.id) ?? next[0] : next[0] ?? null); }
-        const active = next.find((item) => item.id === realBatch?.id) ?? next[0];
-        if (active) { const items = await realClient.listGenerationSeeds(active.id); if (!cancelled) setRealSeeds(items); }
+        const next = await realClient.listGenerationBatches(Number(projectId));
+        if (!cancelled) setRealBatches((current) => next.map((batch) => {
+          const known = current.find((item) => item.id === batch.id);
+          return known && known.state_version > batch.state_version ? known : batch;
+        }));
       } catch (error) {
         if (!cancelled) setRealError(error instanceof Error ? error.message : '读取真实批次失败');
-      } finally { if (!cancelled) setSeedsLoading(false); }
+      } finally { if (!cancelled) timer = window.setTimeout(() => void refresh(), 2000); }
     };
-    setSeedsLoading(true);
     void refresh();
-    const timer = window.setInterval(() => { void refresh(); }, 2000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [realBatches, realClient, realBatch?.id]);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [projectId, realClient, realBusy, reviewBusy]);
+  useEffect(() => {
+    if (!realClient || !activeBatchId || activeBatchStateVersion === undefined) return;
+    const batchId = activeBatchId;
+    const stateVersion = activeBatchStateVersion;
+    let cancelled = false;
+    let timer: number | undefined;
+    const load = async () => {
+      try {
+        const items = await realClient.listGenerationSeeds(batchId);
+        if (!cancelled) setSeedResponse({ batchId, stateVersion, items });
+      } catch (error) {
+        if (!cancelled) {
+          setSeedResponse({ batchId, stateVersion, items: [], error: error instanceof Error ? error.message : '读取候选用例失败' });
+          timer = window.setTimeout(() => void load(), 3000);
+        }
+      }
+    };
+    void load();
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [realClient, activeBatchId, activeBatchStateVersion]);
   const submitRealReview = async (decision: 'approve' | 'reject') => {
-    if (!realBatch || !realClient) return;
+    if (!realBatch || !realClient || !canReview) return;
     setReviewBusy(true); setRealError('');
     try {
       const next = await realClient.reviewGenerationBatch(realBatch.id, {
@@ -231,7 +330,7 @@ export default function GenerationPage() {
         expected_state_version: realBatch.state_version,
         request_id: `ui-review-${realBatch.id}-${decision}`,
       });
-      setRealBatch(next);
+      setRealBatches((current) => current.map((batch) => batch.id === next.id && batch.state_version <= next.state_version ? next : batch));
     } catch (error) { setRealError(error instanceof Error ? error.message : '提交审核结果失败'); }
     finally { setReviewBusy(false); }
   };
@@ -250,26 +349,26 @@ export default function GenerationPage() {
       </div>
       <PageHeader title="生成用例" desc={realClient ? `选择已确认的目录服务，批量创建生成批次 · 当前可生成 ${confirmedServices.length} 个服务` : '针对当前被测对象的用例生成流程 · 适配解析 → AI 生成 → 质量验证 → 审核入库'}>
         <GhostButton onClick={() => navigate('/target')}>管理被测对象</GhostButton>
-        <PrimaryButton disabled={realBusy || !realClient} onClick={openBatchConfirmation}>{realBusy ? '创建批次…' : `批量生成用例${selectedServiceIds.length ? `（${selectedServiceIds.length}）` : ''}`}</PrimaryButton>
+        <PrimaryButton disabled={realBusy || !realClient} onClick={openBatchConfirmation}>{realBusy ? '创建批次…' : `批量生成用例${selectedServices.length ? `（${selectedServices.length}）` : ''}`}</PrimaryButton>
       </PageHeader>
       {realClient && <div className={'mb-5 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 text-xs ' + (modelBinding ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800')}><span className="font-semibold">模型生成</span>{modelBinding ? <span>当前绑定：{modelBinding.provider} / {modelBinding.model} · 已配置模型 {configuredModels.length} 个</span> : <><span>当前项目未绑定已验证模型，暂不能生成真实用例。</span><button type="button" onClick={() => navigate('/models')} className="font-medium underline">去配置模型</button></>}</div>}
 
       {realClient && <Card title="选择生成范围" className="p-0 mb-5 overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex flex-wrap items-center gap-3">
           <div className="flex-1 min-w-[220px]"><div className="text-sm font-semibold text-slate-700">已确认服务</div><div className="text-[11px] text-slate-400 mt-1">只有“生成测试用例 = 是”的服务可以选择，批量操作会为每个服务创建独立批次。</div></div>
-          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">已选 {selectedServiceIds.length} / {confirmedServices.length}</span>
+          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">已选 {selectedServices.length} / {confirmedServices.length}</span>
           <button type="button" onClick={() => setSelectedServiceIds(confirmedServices.map((service) => service.id))} className="text-xs text-emerald-700 hover:underline">全选</button>
           <button type="button" onClick={() => setSelectedServiceIds([])} className="text-xs text-slate-500 hover:underline">清空</button>
           <input value={serviceSearch} onChange={(event) => setServiceSearch(event.target.value)} placeholder="搜索服务或源码目录" className="w-full sm:w-56 rounded-lg border border-slate-200 px-3 py-2 text-xs outline-none focus:border-emerald-400" />
         </div>
         <div className="divide-y divide-slate-100 max-h-[330px] overflow-y-auto">
-          {realCatalogLoading ? <div className="p-8 text-center text-xs text-slate-500">正在读取 im-saas 项目目录…</div> : visibleServices.length === 0 ? <div className="p-8 text-center text-xs text-slate-500">暂无符合条件的已确认服务</div> : visibleServices.map((service) => {
+          {realCatalogLoading ? <div className="p-8 text-center text-xs text-slate-500">正在读取项目目录…</div> : visibleServices.length === 0 ? <div className="p-8 text-center text-xs text-slate-500">暂无符合条件的已确认服务</div> : visibleServices.map((service) => {
             const checked = selectedServiceIds.includes(service.id);
             const serviceRepo = realProjectRepos.find((item) => item.id === service.repo_id);
             const profile = profileFor(service);
             return <label key={service.id} className={'flex cursor-pointer items-start gap-3 px-5 py-3 transition ' + (checked ? 'bg-emerald-50/60' : 'hover:bg-slate-50')}>
               <input type="checkbox" checked={checked} onChange={() => toggleService(service.id)} className="mt-1 h-4 w-4 accent-emerald-600" />
-              <span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-700"><span>{service.name}</span><span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">生成测试用例：是</span><span className="text-[10px] font-normal text-slate-400">{service.kind}</span></span><span className="mt-1 block truncate text-[11px] text-slate-500">{service.source_path}</span><span className="mt-1 block text-[10px] text-slate-400">语言 {profile.language} · 框架 {profile.framework} · 工具 {profile.tool}</span></span>
+              <span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-700"><span>{service.name}</span><span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">生成测试用例：是</span><span className="text-[10px] font-normal text-slate-400">{service.kind}</span></span><span className="mt-1 block truncate text-[11px] text-slate-500">{sourceDirectoryLabel(service.source_path)}</span><span className="mt-1 block text-[10px] text-slate-400">语言：{profile.language} · 框架：{profile.framework} · 工具：{profile.tool}</span></span>
               <span className="hidden min-w-[180px] text-right text-[10px] text-slate-400 sm:block">{serviceRepo?.url ?? '未关联仓库'}<br /><b className="font-normal text-slate-500">{serviceRepo?.default_branch ?? '未配置分支'}</b></span>
             </label>;
           })}
@@ -277,9 +376,9 @@ export default function GenerationPage() {
       </Card>}
 
       {batchConfirmOpen && <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-3"><div><div className="text-sm font-semibold text-slate-800">确认批量创建</div><div className="mt-1 text-xs text-slate-500">将为以下 {selectedServiceIds.length} 个服务分别创建生成批次，创建后可逐个审核。</div></div><button type="button" onClick={() => setBatchConfirmOpen(false)} className="text-xs text-slate-500 hover:text-slate-700">取消</button></div>
-        <div className="mt-4 grid gap-2 md:grid-cols-2">{selectedServices.map((service) => { const serviceRepo = realProjectRepos.find((item) => item.id === service.repo_id); const profile = profileFor(service); return <div key={service.id} className="rounded-lg border border-emerald-100 bg-white px-3 py-2.5 text-xs"><div className="flex items-center justify-between gap-2"><div className="font-semibold text-slate-700">{service.name}</div><span className={'rounded-full px-2 py-0.5 text-[10px] ' + (profile.complete ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>{profile.complete ? '条件完整' : '条件不完整'}</span></div><div className="mt-1 truncate text-[11px] text-slate-500">{service.source_path}</div><div className="mt-1 text-[10px] text-slate-500">类型 {service.kind} · 生成策略 {strategyFor(service.kind)}</div><div className="mt-1 text-[10px] text-slate-500">语言 {profile.language} · 框架 {profile.framework}</div><div className="mt-1 text-[10px] text-slate-400">工具 {profile.tool} · 命令 {profile.command} · {serviceRepo?.default_branch ?? '未配置分支'} · 目标版本：未配置</div></div>; })}</div>
-        <div className="mt-4 flex items-center justify-between gap-3"><span className="text-[11px] text-slate-500">批次输入已包含 AI 技术画像，并已由人工确认。</span><button type="button" disabled={realBusy || !selectedServiceIds.length} onClick={() => void startRealBatch()} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{realBusy ? '正在创建…' : `确认创建 ${selectedServiceIds.length} 个批次`}</button></div>
+        <div className="flex items-start justify-between gap-3"><div><div className="text-sm font-semibold text-slate-800">确认批量创建</div><div className="mt-1 text-xs text-slate-500">将为以下 {selectedServices.length} 个服务分别创建生成批次，创建后可逐个审核。</div></div><button type="button" onClick={() => setBatchConfirmOpen(false)} className="text-xs text-slate-500 hover:text-slate-700">取消</button></div>
+        <div className="mt-4 grid gap-2 md:grid-cols-2">{selectedServices.map((service) => { const serviceRepo = realProjectRepos.find((item) => item.id === service.repo_id); const profile = profileFor(service); return <div key={service.id} className="rounded-lg border border-emerald-100 bg-white px-3 py-2.5 text-xs"><div className="flex items-center justify-between gap-2"><div className="font-semibold text-slate-700">{service.name}</div><span className={'rounded-full px-2 py-0.5 text-[10px] ' + (profile.complete ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>{profile.complete ? '条件完整' : '条件不完整'}</span></div><div className="mt-1 truncate text-[11px] text-slate-500">目录：{sourceDirectoryLabel(service.source_path)}</div><div className="mt-1 text-[10px] text-slate-500">类型：{service.kind}</div><div className="mt-1 text-[10px] text-slate-500">语言：{profile.language} · 框架：{profile.framework}</div><div className="mt-1 text-[10px] text-slate-400">工具：{profile.tool} · 命令：{profile.command} · 登记分支：{serviceRepo?.default_branch ?? '未配置'}</div></div>; })}</div>
+        <div className="mt-4 flex items-center justify-between gap-3"><span className="text-[11px] text-slate-500">创建后服务端会冻结已登记仓库的默认分支与服务目录；本期仅支持 HTTP/API 结构化候选。</span><button type="button" disabled={realBusy || !selectedServices.length} onClick={() => void startRealBatch()} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{realBusy ? '正在创建…' : `确认创建 ${selectedServices.length} 个批次`}</button></div>
       </div>}
 
       {/* 被测对象 = 全局轴心：本流程围绕当前被测对象展开（切换用页首被测对象导航） */}
@@ -297,11 +396,18 @@ export default function GenerationPage() {
               </div>
               <div className="text-xl font-bold text-slate-800">{displayName}</div>
               <div className="text-[11px] text-slate-500 mt-0.5">{realClient ? '真实项目目录中的被测服务，生成范围限定为该服务源码目录。' : '本用例生成流程的轴心对象 · 切换对象请用页首「被测对象」导航（面包屑 / 层次筛选）'}</div>
-              {realClient && <div className="mt-3"><label className="mb-1 block text-[10px] text-slate-400">选择目录服务（仅显示“生成测试用例 = 是”且画像已确认）</label><select value={selectedService?.id ?? ''} onChange={(event) => { const id = Number(event.target.value); setActiveServiceId(id); syncGlobalService(realProjectServices.find((service) => service.id === id) ?? null); }} className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"><option value="">请选择目录服务</option>{realProjectServices.filter((service) => service.generation_status === 'confirmed' && service.profile_status === 'confirmed').map((service) => <option key={service.id} value={service.id}>{service.name} · {service.source_path}</option>)}</select></div>}
+              {realClient && <div className="mt-3"><label htmlFor="generation-service" className="mb-1 block text-[10px] text-slate-400">查看服务上下文</label><select id="generation-service" value={selectedService?.id ?? ''} onChange={(event) => selectService(Number(event.target.value) || null)} className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"><option value="">请选择目录服务</option>{realProjectServices.map((service) => <option key={service.id} value={service.id}>{service.name}（{sourceDirectoryLabel(service.source_path)}）{service.generation_status !== 'confirmed' || service.profile_status !== 'confirmed' ? '，待确认' : ''}</option>)}</select>{selectedService && <div className={'mt-2 text-[10px] ' + (selectedServiceReady ? 'text-emerald-700' : 'text-amber-700')}>{selectedServiceReady ? '技术画像与生成范围已确认，可在上方加入批量生成范围。' : '此服务尚未完成画像确认或未启用生成；请前往被测对象页处理。'}</div>}</div>}
             </div>
           </div>
 
-          {repo ? (
+          {repo ? realClient ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 min-w-0">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-600"><GitBranch className="w-3.5 h-3.5 text-emerald-500" />已冻结的生成来源</div>
+              <div className="mt-2 truncate text-xs text-slate-700" title={realRepo?.url}>{realRepo?.url}</div>
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500"><span>登记默认分支 <b className="font-mono text-slate-700">{realRepo?.default_branch || '未配置'}</b></span><span>服务目录 <b className="font-mono text-slate-700">{selectedService?.source_path || '未配置'}</b></span></div>
+              <p className="mt-2 text-[10px] leading-4 text-slate-400">创建批次后服务端会冻结当前提交；分支和版本不在此页编辑，避免与已登记仓库来源不一致。</p>
+            </div>
+          ) : (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 min-w-0">
               <div className="flex items-center gap-1.5 text-xs font-medium text-slate-600"><GitBranch className="w-3.5 h-3.5 text-emerald-500" />仓库配置</div>
               <div className="mt-2 truncate text-xs text-slate-700" title={'url' in repo ? repo.url : repo.name}>{'url' in repo ? repo.url : repo.name}</div>
@@ -323,7 +429,7 @@ export default function GenerationPage() {
               </div>
             </div>
           ) : realClient ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700 min-w-0">{realCatalogLoading ? '正在读取 im-saas 项目目录…' : realError || '请选择一个已确认的目录服务后继续。'}</div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700 min-w-0">{realCatalogLoading ? '正在读取项目目录…' : realError || catalog.error || '请选择一个已确认的目录服务后继续。'}</div>
           ) : (
             <div className="flex items-center gap-3 bg-amber-50 rounded-xl border border-amber-200 px-4 py-3 text-[12px] text-amber-700 flex-1 min-w-[300px]">
               <CloudDownload className="w-4 h-4 shrink-0" />
@@ -336,7 +442,13 @@ export default function GenerationPage() {
           </GhostButton>
         </div>
 
-        {repo && (
+        {repo && realClient && (
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-start gap-2 text-[11px] text-slate-500">
+            <CloudDownload className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+            <span>本页只展示已登记来源。确认创建后，服务端按 <b>{realRepo?.default_branch || '默认分支'}</b> 与 <b>{selectedService?.source_path || '服务目录'}</b> 冻结源码；执行环境的版本校验在「测试执行」中显式配置。</span>
+          </div>
+        )}
+        {repo && !realClient && (
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-start gap-2 text-[11px] text-slate-500">
             <CloudDownload className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
             <span>当前生成输入：<b>{'url' in repo ? repo.url : repo.name}</b> · 分支 <b>{genBranch || '未配置'}</b> · 服务目录 <b>{selectedService?.source_path || '项目级目录'}</b>。目标版本：<b>未配置</b>（需由 CI/CD 推送版本或在版本目录登记后才能执行环境校验）。</span>
@@ -360,19 +472,19 @@ export default function GenerationPage() {
       </Card>
 
       {batchResults.length > 0 && <div className="mb-5 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs"><div className="font-semibold text-slate-700">本次创建结果</div><div className="mt-2 flex flex-wrap gap-2">{batchResults.map((result) => <span key={result.serviceId} className={'rounded-full px-2.5 py-1 ' + (result.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700')}>{result.ok ? '已创建' : '失败'} · {result.name}{result.error ? `：${result.error}` : ''}</span>)}</div></div>}
-      {realBatches.length > 0 && <Card title="生成批次" className="p-0 mb-5 overflow-hidden" extra={<span className="text-[11px] text-slate-400">共 {realBatches.length} 个 · 自动刷新</span>}>
-        <div className="divide-y divide-slate-100">{realBatches.map((batch) => {
+      {realClient && <Card title={activeServiceId ? '当前服务生成批次' : '项目生成批次'} className="p-0 mb-5 overflow-hidden" extra={<span className="text-[11px] text-slate-400">共 {visibleBatches.length} 个 · 自动刷新</span>}>
+        <div className="divide-y divide-slate-100">{visibleBatches.map((batch) => {
           const service = realProjectServices.find((item) => item.id === batch.service_id);
           const active = realBatch?.id === batch.id;
-          return <button type="button" key={batch.id} onClick={() => { setRealBatch(batch); setStep(1); }} className={'w-full px-5 py-3 text-left transition ' + (active ? 'bg-emerald-50/60' : 'hover:bg-slate-50')}>
+          return <button type="button" key={batch.id} onClick={() => { setSelectedBatchId(batch.id); if (service) selectService(service.id); setStep(1); }} className={'w-full px-5 py-3 text-left transition ' + (active ? 'bg-emerald-50/60' : 'hover:bg-slate-50')}>
             <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-semibold text-slate-700">{service?.name ?? `服务 #${batch.service_id ?? '未绑定'}`}</span><span className={'rounded-full px-2 py-0.5 text-[10px] font-medium ' + (batch.state === 'approved' ? 'bg-emerald-100 text-emerald-700' : batch.state === 'failed' || batch.state === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700')}>{STAGE_LABEL[batch.state] ?? batch.state}</span><span className="ml-auto font-mono text-[10px] text-slate-400">#{batch.id}</span></div>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500"><span>目录：{batch.source_path || service?.source_path || '项目级目录'}</span><span>分支：{batch.branch || '未配置'}</span><span>目标版本：{batch.version || '未配置'}</span></div>
           </button>;
-        })}</div>
+        })}{visibleBatches.length === 0 && <div className="px-5 py-8 text-center text-xs text-slate-500">{activeServiceId ? '当前服务暂无生成批次。选择该服务后创建批次，即可在这里查看进度和审核候选。' : '当前项目暂无生成批次。'}</div>}</div>
       </Card>}
       {realError && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">{realError}</div>}
 
-      {realClient && realBatch && <Card title="真实生成流程" className="p-5 mb-5">
+      {realClient && realBatch && <Card title={`真实生成流程 · ${realProjectServices.find((service) => service.id === realBatch.service_id)?.name ?? '项目级批次'} · #${realBatch.id}`} className="p-5 mb-5">
         <div className="flex flex-wrap items-center gap-2 mb-5">
           {(['enqueued', 'fetching', 'parsing', 'generating', 'quality_check', 'review', 'committing', 'approved'] as const).map((state, index) => {
             const order = ['enqueued', 'fetching', 'parsing', 'generating', 'quality_check', 'review', 'committing', 'approved'];
@@ -382,11 +494,13 @@ export default function GenerationPage() {
             return <div key={state} className={'flex items-center gap-1.5 text-[10px] ' + (active ? 'text-emerald-700 font-semibold' : done ? 'text-emerald-500' : 'text-slate-300')}><span className={'w-6 h-6 rounded-full flex items-center justify-center border ' + (active ? 'bg-emerald-600 text-white border-emerald-600' : done ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200')}>{done ? '✓' : index + 1}</span><span>{STAGE_LABEL[state]}</span>{index < 7 && <span className="mx-1 text-slate-200">→</span>}</div>;
           })}
         </div>
-        <div className="mb-4 flex flex-wrap gap-3 text-xs text-slate-500"><span>分支 <b>{realBatch.branch}</b></span><span>候选种子 <b>{seedsLoading ? '读取中…' : realSeeds.length}</b></span><span>当前阶段 <b className="text-emerald-700">{STAGE_LABEL[realBatch.state] ?? realBatch.state}</b></span></div>
-        {realSeeds.length === 0 ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-5 text-xs text-slate-500">worker 正在生成候选种子，页面每 2 秒自动刷新。</div> : <div className="rounded-lg border border-slate-200 overflow-hidden"><table className="w-full text-xs"><thead className="bg-slate-50"><tr className="text-left text-slate-500"><th className="px-3 py-2">种子</th><th className="px-3 py-2">来源</th><th className="px-3 py-2">质量</th><th className="px-3 py-2">审核</th></tr></thead><tbody className="divide-y divide-slate-100">{realSeeds.map((seed) => <tr key={seed.id}><td className="px-3 py-2 font-mono text-emerald-700">#{seed.id}</td><td className="px-3 py-2 text-slate-600">{seed.source_locator}</td><td className="px-3 py-2 text-slate-500">{seed.quality_state}</td><td className="px-3 py-2 text-slate-500">{seed.approval_state}</td></tr>)}</tbody></table></div>}
-        {realBatch.state === 'review' && <div className="mt-4 flex justify-end gap-2"><button type="button" disabled={reviewBusy} onClick={() => void submitRealReview('reject')} className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50">拒绝批次</button><button type="button" disabled={reviewBusy} onClick={() => void submitRealReview('approve')} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">{reviewBusy ? '提交中…' : '审核通过并入库'}</button></div>}
-        {realBatch.state === 'approved' && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700"><span>本批次已审核通过，模型生成的候选已写入版本化用例库（cas_case / cas_version）。</span><button type="button" onClick={() => navigate('/cases')} className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 font-medium text-emerald-700 hover:bg-emerald-50">查看用例库</button></div>}
-        {realBatch.state === 'failed' && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">模型生成失败：请检查项目模型绑定、模型连接状态和模型服务日志；本批次没有写入正式用例。</div>}
+        <div className="mb-4 flex flex-wrap gap-3 text-xs text-slate-500"><span>已冻结分支 <b>{realBatch.branch}</b></span><span>候选种子 <b>{seedsLoading ? '读取中…' : realSeeds.length}</b></span><span>当前阶段 <b className="text-emerald-700">{STAGE_LABEL[realBatch.state] ?? realBatch.state}</b></span></div>
+        {seedsError ? <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-5 text-xs text-red-700">候选用例读取失败：{seedsError}。页面将自动重试，读取成功前不能审核或执行。</div> : seedsLoading ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-5 text-xs text-slate-500">正在读取当前批次候选用例…</div> : realSeeds.length === 0 ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-5 text-xs text-slate-500">{['failed', 'rejected', 'rolled_back', 'approved', 'review'].includes(realBatch.state) ? '本批次没有可展示的候选用例，不能审核或执行。' : '正在生成候选用例，页面会自动更新进度。'}</div> : <GeneratedSeedReviewList seeds={realSeeds} />}
+        {realBatch.state === 'review' && <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"><p className="text-xs font-medium text-amber-800">请先逐条展开核对请求、断言与源码证据，再决定本批次是否入库。</p><p className="mt-1 text-[11px] text-amber-700">当前版本按批次整体审核；“审核通过”会把全部通过质量门的候选写入用例库，拒绝不会写入正式用例。</p><div className="mt-3 flex justify-end gap-2"><button type="button" disabled={!canReview} onClick={() => void submitRealReview('reject')} className="text-xs px-3 py-1.5 rounded-lg border border-red-200 bg-white text-red-600 hover:bg-red-50">拒绝该批次</button><button type="button" disabled={!canReview} onClick={() => void submitRealReview('approve')} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">{reviewBusy ? '提交中…' : '确认审核通过并入库'}</button></div></div>}
+        {realBatch.state === 'approved' && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700"><span>本批次已审核通过，候选已写入当前项目的版本化用例库；进入用例库或执行页会保留本项目上下文。</span><div className="flex flex-wrap gap-2"><button type="button" onClick={() => navigate(`/cases?target_id=${realBatch.target_id}`)} className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 font-medium text-emerald-700 hover:bg-emerald-50">查看本项目用例库</button><button type="button" disabled={seedsLoading || Boolean(seedsError) || !realSeeds.some((seed) => seed.case_id)} onClick={() => { const ids = realSeeds.flatMap((seed) => seed.case_id ? [seed.case_id] : []); if (ids.length) navigate(`/exec?target_id=${realBatch.target_id}&case_ids=${ids.join(',')}`); }} className="rounded-lg bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">执行本批用例</button></div></div>}
+        {realBatch.state === 'rejected' && <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">该批次已被拒绝，未写入正式用例。请修正技术画像、源码范围或模型配置后重新创建批次。</div>}
+        {realBatch.state === 'rolled_back' && <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">该批次已回退；请在用例管理与审计记录中核对受影响的版本后再重新生成。</div>}
+        {realBatch.state === 'failed' && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700"><p>生成失败：{realBatch.failure_summary || '请检查源码访问、模型连接和候选质量校验。'}</p><div className="mt-2"><button type="button" onClick={() => navigate('/target')} className="font-medium underline">前往被测对象检查仓库、服务目录和技术画像</button><span className="mx-2 text-red-300">·</span><button type="button" onClick={() => navigate('/models')} className="font-medium underline">检查项目模型绑定</button></div><p className="mt-2 text-[10px] text-red-500">失败批次不会写入正式用例；修正后请创建新批次，旧批次保留用于审计。</p></div>}
       </Card>}
 
       {/* 用例生成流程向导（六步，围绕当前被测对象） */}
@@ -522,11 +636,8 @@ export default function GenerationPage() {
               {realBatch ? (
                 <>
                   {seedsLoading ? <div className="text-xs text-slate-500 bg-white border border-slate-200 rounded-lg p-4">正在读取服务端候选种子…</div> : realSeeds.length === 0 ? <div className="text-xs text-slate-500 bg-white border border-slate-200 rounded-lg p-4">候选种子尚未生成，当前不能进行人工审核。请等待生成 worker 推进批次。</div> : <>
-                    <table className="w-full text-xs bg-white border border-slate-200 rounded-lg overflow-hidden">
-                      <thead className="bg-slate-50"><tr className="text-left text-slate-500"><th className="px-3 py-2 font-medium">种子</th><th className="px-3 py-2 font-medium">来源</th><th className="px-3 py-2 font-medium">质量</th><th className="px-3 py-2 font-medium">审核状态</th></tr></thead>
-                      <tbody className="divide-y divide-slate-100">{realSeeds.map((seed) => <tr key={seed.id}><td className="px-3 py-2 font-mono text-emerald-700">#{seed.id}</td><td className="px-3 py-2 text-slate-600">{seed.source_locator}</td><td className="px-3 py-2 text-slate-500">{seed.quality_state}</td><td className="px-3 py-2 text-slate-500">{seed.approval_state}</td></tr>)}</tbody>
-                    </table>
-                    {realBatch.state === 'review' && <div className="flex justify-end gap-2"><button type="button" disabled={reviewBusy} onClick={() => void submitRealReview('reject')} className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50">拒绝批次</button><button type="button" disabled={reviewBusy} onClick={() => void submitRealReview('approve')} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">{reviewBusy ? '提交中…' : '全部通过并入库'}</button></div>}
+                    <GeneratedSeedReviewList seeds={realSeeds} />
+                    {realBatch.state === 'review' && <div className="flex justify-end gap-2"><button type="button" disabled={!canReview} onClick={() => void submitRealReview('reject')} className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50">拒绝批次</button><button type="button" disabled={!canReview} onClick={() => void submitRealReview('approve')} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">{reviewBusy ? '提交中…' : '全部通过并入库'}</button></div>}
                   </>}
                 </>
               ) : <table className="w-full text-xs bg-white border border-slate-200 rounded-lg overflow-hidden">

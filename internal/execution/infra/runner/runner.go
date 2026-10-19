@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/openware-io/open-green-pass/internal/execution/domain"
+	"github.com/openware-io/open-green-pass/internal/execution/infra/httpcase"
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
 
@@ -205,9 +206,20 @@ type APIAdapter struct{}
 func (APIAdapter) Name() string { return ScenarioAPI }
 func (APIAdapter) Plan(s *domain.CaseSpec) (Plan, error) {
 	m := scriptMap(s.Script)
-	cmd := scriptCommand(m)
+	var cmd []string
+	if _, hasRequest := m["request"].(map[string]any); hasRequest {
+		var err error
+		cmd, err = httpcase.BuildCommand(s.Script, s.BaseURL)
+		if err != nil {
+			return Plan{}, err
+		}
+	} else {
+		cmd = scriptCommand(m)
+	}
 	if len(cmd) == 0 {
-		cmd = []string{"sh", "-c", "echo greenpass-api-ok"}
+		// Keep the legacy adapter contract observable without manufacturing a
+		// passing result. Empty API scripts fail closed in the executor.
+		cmd = []string{"sh", "-c", "echo missing executable API case >&2; exit 1"}
 	}
 	image := scriptString(m, "image")
 	if image == "" {
@@ -239,7 +251,7 @@ func (STFAdapter) Plan(s *domain.CaseSpec) (Plan, error) {
 	m := scriptMap(s.Script)
 	cmd := scriptCommand(m)
 	if len(cmd) == 0 {
-		cmd = []string{"sh", "-c", "echo greenpass-mobile-ok"}
+		cmd = []string{"sh", "-c", "echo missing executable mobile case >&2; exit 1"}
 	}
 	image := scriptString(m, "image")
 	if image == "" {

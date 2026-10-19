@@ -3,6 +3,8 @@ package application
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/openware-io/open-green-pass/internal/execution/domain"
@@ -14,6 +16,24 @@ import (
 type EnvService struct {
 	repo domain.EnvRepository
 	gen  *id.Generator
+}
+
+// ExecutionBaseURL returns the operator-configured origin for an environment.
+// It deliberately fails closed: a generated declarative request must never
+// fall back to a fake/smoke command when no destination was registered.
+func (s *EnvService) ExecutionBaseURL(ctx context.Context, targetID int64, env string) (string, error) {
+	teamID, ok := rls.TenantFrom(ctx)
+	if !ok {
+		return "", ErrTenantRequired
+	}
+	runtime, err := s.repo.FindRuntime(ctx, teamID, targetID, env)
+	if err != nil {
+		return "", fmt.Errorf("environment runtime is not registered for target %d environment %q", targetID, env)
+	}
+	if strings.TrimSpace(runtime.BaseURL) == "" {
+		return "", fmt.Errorf("environment base_url is not configured for target %d environment %q", targetID, env)
+	}
+	return domain.ValidateRuntimeBaseURL(runtime.BaseURL)
 }
 
 // NewEnvService 创建版本校验应用服务。
@@ -33,18 +53,70 @@ func (e *TenantErr) Error() string { return "tenant required: missing x-gp-team-
 
 // RegisterRuntime 登记/更新被测对象在指定环境的运行版本（upsert）。
 func (s *EnvService) RegisterRuntime(ctx context.Context, targetID int64, env, version string) (*domain.EnvRuntime, error) {
+	return s.RegisterRuntimeWithBaseURL(ctx, targetID, env, version, "")
+}
+
+// RegisterRuntimeWithBaseURL registers both the version evidence and the
+// trusted environment origin used by declarative API test cases.
+func (s *EnvService) RegisterRuntimeWithBaseURL(ctx context.Context, targetID int64, env, version, baseURL string) (*domain.EnvRuntime, error) {
+	return s.RegisterRuntimeBaseline(ctx, targetID, env, version, baseURL, nil, domain.EnvironmentConfirmation{})
+}
+
+// RegisterRuntimeBaseline persists a user-confirmed, non-sensitive execution
+// baseline. Requirements can be suggested by analysis, but the confirmation is
+// an explicit operator action. CredentialRef is a reference only; secrets are
+// rejected here so they cannot leak into the application database or audit.
+func (s *EnvService) RegisterRuntimeBaseline(ctx context.Context, targetID int64, env, version, baseURL string, requirements []domain.EnvironmentRequirement, confirmation domain.EnvironmentConfirmation) (*domain.EnvRuntime, error) {
 	teamID, ok := rls.TenantFrom(ctx)
 	if !ok {
 		return nil, ErrTenantRequired
 	}
+	if err := validateEnvironmentConfirmation(requirements, confirmation); err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
 	r := &domain.EnvRuntime{
 		ID: s.gen.Next(), TeamID: teamID, TargetID: targetID,
-		Env: env, RunningVersion: version, CheckedAt: time.Now().UTC(),
+		Env: env, RunningVersion: version, BaseURL: baseURL, CheckedAt: now,
+		Requirements: requirements, Confirmation: confirmation,
+	}
+	if confirmation.Confirmed {
+		r.ConfirmedAt = &now
 	}
 	if err := s.repo.UpsertRuntime(ctx, r); err != nil {
 		return nil, err
 	}
 	return r, nil
+}
+
+func validateEnvironmentConfirmation(requirements []domain.EnvironmentRequirement, confirmation domain.EnvironmentConfirmation) error {
+	if !confirmation.Confirmed {
+		return fmt.Errorf("environment requirements must be explicitly confirmed")
+	}
+	if len(confirmation.CredentialRef) > 160 || strings.ContainsAny(confirmation.CredentialRef, "\r\n") {
+		return fmt.Errorf("credential reference is invalid")
+	}
+	for key, value := range confirmation.Values {
+		if strings.TrimSpace(key) == "" || len(key) > 80 || len(value) > 500 || strings.ContainsAny(value, "\r\n") {
+			return fmt.Errorf("environment confirmation value is invalid")
+		}
+		lower := strings.ToLower(key)
+		if strings.Contains(lower, "password") || strings.Contains(lower, "token") || strings.Contains(lower, "secret") || strings.Contains(lower, "cookie") {
+			return fmt.Errorf("environment confirmation accepts credential references, not secret values")
+		}
+	}
+	for _, requirement := range requirements {
+		if strings.TrimSpace(requirement.Key) == "" || len(requirement.Key) > 80 || len(requirement.Label) > 120 || len(requirement.Reason) > 500 || len(requirement.Evidence) > 500 {
+			return fmt.Errorf("environment requirement is invalid")
+		}
+		if requirement.Required && !requirement.Sensitive && strings.TrimSpace(confirmation.Values[requirement.Key]) == "" {
+			return fmt.Errorf("required environment field %q is not confirmed", requirement.Label)
+		}
+		if requirement.Required && requirement.Sensitive && strings.TrimSpace(confirmation.CredentialRef) == "" {
+			return fmt.Errorf("required credential reference is not confirmed")
+		}
+	}
+	return nil
 }
 
 // CheckVersion 比对目标版本 vs 环境运行版本，写 env_check 并返回结果。

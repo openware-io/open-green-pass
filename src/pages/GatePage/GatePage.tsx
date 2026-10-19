@@ -4,7 +4,7 @@ import { scenarioNav } from '@/context/scenarioNav';
 import { toast } from 'sonner';
 import { assetToProfile, TEST_SCENARIOS, type IAsset } from '@/data/mock';
 import { PageHeader, GhostButton, PrimaryButton, Card, ListFilter } from '@/components/shared';
-import { BrainCircuit, Cpu, Globe, Smartphone, Sparkles, Loader2 } from 'lucide-react';
+import { BrainCircuit, Cpu, Globe, Smartphone, Sparkles, Loader2, BotMessageSquare } from 'lucide-react';
 import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
 import type { GateResult } from '@/api/client';
 
@@ -83,6 +83,7 @@ export default function GatePage() {
   return (
     <div>
       <PageHeader title="质量门禁" desc={`${profile.name} · 策略即代码 · AI 判定 · 确定性验证 · 篡改检测 · 契约门禁`}>
+        <GhostButton onClick={() => navigate('/assistant?mode=guide&issue=gate-blocked')}> <span className="inline-flex items-center gap-1"><BotMessageSquare className="w-3.5 h-3.5" />AI 带我处理</span></GhostButton>
         <GhostButton onClick={handleViewPolicy}>查看策略</GhostButton>
         <PrimaryButton onClick={handleRejudge} disabled={running}>
           {running ? <span className="inline-flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />判定中…</span> : phase === 'done' ? '重新判定 ✓' : '重新判定'}

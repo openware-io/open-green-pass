@@ -59,3 +59,24 @@ func (r *CaseReader) FetchScript(ctx context.Context, teamID, caseID int64) (int
 	_ = json.Unmarshal(script, &out)
 	return version, out, nil
 }
+
+// FetchScriptForTarget enforces that selected cases belong to the run target.
+func (r *CaseReader) FetchScriptForTarget(ctx context.Context, teamID, targetID, caseID int64) (int, any, error) {
+	var version int
+	var script []byte
+	err := r.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx,
+			`SELECT c.current_version, v.script_json
+			 FROM cas_case c LEFT JOIN cas_version v ON v.case_id=c.id AND v.version=c.current_version
+			 WHERE c.team_id=$1 AND c.target_id=$2 AND c.id=$3 AND c.status='active'`,
+			teamID, targetID, caseID).Scan(&version, &script)
+	})
+	if err != nil {
+		return 0, nil, err
+	}
+	var out any
+	if err := json.Unmarshal(script, &out); err != nil {
+		return 0, nil, err
+	}
+	return version, out, nil
+}

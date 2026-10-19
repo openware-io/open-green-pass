@@ -2,6 +2,7 @@ package infra
 
 import (
 	"context"
+	"sort"
 	"sync"
 
 	"github.com/openware-io/open-green-pass/internal/ai/domain"
@@ -66,6 +67,27 @@ func (r *MemoryGenerationBatchRepository) FindByIdempotencyKey(_ context.Context
 		return nil, domain.ErrGenerationNotFound
 	}
 	return cloneGenerationBatch(r.byID[generationBatchKey{teamID, id}]), nil
+}
+
+func (r *MemoryGenerationBatchRepository) ListByTarget(_ context.Context, teamID, targetID int64, limit int) ([]*domain.GenerationBatch, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	result := make([]*domain.GenerationBatch, 0)
+	for _, batch := range r.byID {
+		if batch.TeamID == teamID && batch.TargetID == targetID {
+			result = append(result, cloneGenerationBatch(batch))
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].CreatedAt.Equal(result[j].CreatedAt) {
+			return result[i].ID > result[j].ID
+		}
+		return result[i].CreatedAt.After(result[j].CreatedAt)
+	})
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+	return result, nil
 }
 
 func (r *MemoryGenerationBatchRepository) CompareAndSwap(_ context.Context, batch *domain.GenerationBatch, expectedVersion int64) error {

@@ -10,6 +10,15 @@ servers:
   - url: http://localhost:8080
 paths:
   /generation/batches:
+    get:
+      summary: 查询当前项目最近的用例生成批次
+      description: 仅返回当前租户和指定项目的批次，按创建时间降序排列，同一时间按 ID 降序排列。
+      parameters:
+        - { name: target_id, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        '200': { description: 生成批次列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/GenerationBatch' } } } } }
+        '400': { description: 缺少租户或项目 ID、查询参数无效 }
     post:
       summary: 创建用例生成批次
       requestBody:
@@ -371,6 +380,9 @@ paths:
               properties:
                 env: { type: string }
                 version: { type: string }
+                base_url: { type: string, description: 管理员登记的测试环境 HTTP(S) origin }
+                requirements: { type: array, items: { $ref: '#/components/schemas/EnvironmentRequirement' } }
+                confirmation: { $ref: '#/components/schemas/EnvironmentConfirmation' }
       responses:
         '200': { description: 已登记, content: { application/json: { schema: { $ref: '#/components/schemas/EnvRuntime' } } } }
   /targets/{id}/version-check:
@@ -540,6 +552,13 @@ paths:
         - { name: run_id, in: query, required: true, schema: { type: integer } }
       responses:
         '200': { description: 判定列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/GateResult' } } } } }
+  /audit/events:
+    get:
+      summary: 查询当前租户可信审计哈希链事件
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+      responses:
+        '200': { description: 审计事件，按时间倒序, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/AuditEvent' } } } } }
   # ---------- 成本（trusted，GP1-06） ----------
   /cost/record:
     post:
@@ -671,8 +690,140 @@ paths:
           description: HTML 报告
           content:
             text/html: {}
+  /assistant/sessions:
+    post:
+      summary: 创建当前用户的 AI 对话会话
+      operationId: createAssistantSession
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AssistantSessionCreate' } } } }
+      responses:
+        '201': { description: 已创建会话, content: { application/json: { schema: { $ref: '#/components/schemas/AssistantSession' } } } }
+  /assistant/sessions/{id}/turns:
+    get:
+      summary: 读取对话会话
+      operationId: listAssistantTurns
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      responses:
+        '200': { description: 对话列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/AssistantTurn' } } } } }
+    post:
+      summary: 发送一条 AI 对话
+      operationId: createAssistantTurn
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AssistantTurnCreate' } } } }
+      responses:
+        '201': { description: 已生成回答, content: { application/json: { schema: { $ref: '#/components/schemas/AssistantTurnResponse' } } } }
+  /assistant/sessions/{id}/guidance:
+    post:
+      summary: 发起一次受限且可见的界面引导
+      operationId: startAssistantGuidance
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      responses:
+        '201': { description: 动作清单, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/AssistantUIAction' } } } } }
+  /assistant/sessions/{id}/actions:
+    get:
+      summary: 查询本会话的界面动作记录
+      operationId: listAssistantActions
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      responses:
+        '200': { description: 动作记录, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/AssistantActionRecord' } } } } }
+  /assistant/sessions/{id}/actions/{actionId}/complete:
+    post:
+      summary: 记录用户可见引导动作的完成或取消
+      operationId: completeAssistantAction
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+        - { name: actionId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AssistantActionComplete' } } } }
+      responses:
+        '201': { description: 完成记录已写入审计链, content: { application/json: { schema: { $ref: '#/components/schemas/AssistantActionRecord' } } } }
+  /assistant/artifacts:
+    get:
+      summary: 查询 AI 协作待处理事项
+      operationId: listAssistantArtifacts
+      responses:
+        '200': { description: 协作事项, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/AssistantArtifact' } } } } }
 components:
   schemas:
+    AssistantSessionCreate:
+      type: object
+      required: [ page ]
+      properties: { page: { type: string, enum: [ /gate, /cases, /exec, /history, /generation, /trace, /target, /scenarios, /assistant ] } }
+    AuditEvent:
+      type: object
+      required: [ id, team_id, actor, op, asset, asset_id, payload, prev_hash, hash, ts ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        actor: { type: integer, format: int64 }
+        op: { type: string }
+        asset: { type: string }
+        asset_id: { type: integer, format: int64 }
+        payload: { type: object, additionalProperties: true }
+        prev_hash: { type: string }
+        hash: { type: string }
+        ts: { type: string, format: date-time }
+    AssistantSession:
+      type: object
+      required: [ id, page, created_at, updated_at ]
+      properties:
+        id: { type: integer, format: int64 }
+        page: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AssistantTurnCreate:
+      type: object
+      required: [ text ]
+      properties: { text: { type: string, minLength: 1, maxLength: 4000 } }
+    AssistantTurn:
+      type: object
+      required: [ id, session_id, role, text, created_at ]
+      properties:
+        id: { type: integer, format: int64 }
+        session_id: { type: integer, format: int64 }
+        role: { type: string, enum: [ user, assistant ] }
+        text: { type: string }
+        created_at: { type: string, format: date-time }
+    AssistantArtifact:
+      type: object
+      required: [ id, kind, priority, title, summary, recommendation, evidence, status, created_at ]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string }
+        priority: { type: string, enum: [ high, medium, low ] }
+        title: { type: string }
+        summary: { type: string }
+        recommendation: { type: string }
+        evidence: { type: array, items: { type: string } }
+        status: { type: string, enum: [ open, archived ] }
+        created_at: { type: string, format: date-time }
+    AssistantTurnResponse:
+      type: object
+      required: [ user, assistant ]
+      properties:
+        user: { $ref: '#/components/schemas/AssistantTurn' }
+        assistant: { $ref: '#/components/schemas/AssistantTurn' }
+        artifact: { $ref: '#/components/schemas/AssistantArtifact', nullable: true }
+    AssistantUIAction:
+      type: object
+      required: [ id, kind, label ]
+      properties:
+        id: { type: integer, format: int64 }
+        kind: { type: string, enum: [ navigate, focus, prefill, open_evidence ] }
+        route: { type: string }
+        target: { type: string }
+        values: { type: object, additionalProperties: { type: string } }
+        label: { type: string }
+    AssistantActionComplete:
+      type: object
+      required: [ status ]
+      properties: { status: { type: string, enum: [ completed, cancelled ] } }
+    AssistantActionRecord:
+      type: object
+      required: [ id, action, status, created_at ]
+      properties:
+        id: { type: integer, format: int64 }
+        action: { type: string }
+        status: { type: string }
+        created_at: { type: string, format: date-time }
     WechatAuthConfig:
       type: object
       required: [ team_id, enabled, app_id, callback_uri, secret_configured ]
@@ -831,21 +982,22 @@ components:
       properties:
         id: { type: integer, format: int64 }
         team_id: { type: integer, format: int64 }
-                target_id: { type: integer, format: int64 }
+        target_id: { type: integer, format: int64 }
         repo_id: { type: integer, format: int64 }
-                service_id: { type: integer, format: int64, description: 项目目录中的被测子服务 }
-                source_path: { type: string, description: 被测子服务在仓库中的源码目录 }
+        service_id: { type: integer, format: int64, description: 项目目录中的被测子服务 }
+        source_path: { type: string, description: 被测子服务在仓库中的源码目录 }
         branch: { type: string }
         version: { type: string }
         state: { type: string, enum: [ enqueued, fetching, parsing, generating, quality_check, review, committing, approved, rejected, rolled_back, failed ] }
         state_version: { type: integer, format: int64 }
         workflow_id: { type: string }
         idempotency_key: { type: string }
+        failure_summary: { type: string, description: 生成失败原因摘要 }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     GenerationBatchCreate:
       type: object
-      required: [ target_id, repo_id, branch, idempotency_key ]
+      required: [ target_id, repo_id, service_id, branch, idempotency_key ]
       properties:
         target_id: { type: integer, format: int64 }
         repo_id: { type: integer, format: int64 }
@@ -867,6 +1019,7 @@ components:
       properties:
         id: { type: integer, format: int64 }
         batch_id: { type: integer, format: int64 }
+        case_id: { type: integer, format: int64, nullable: true, description: 审核通过后写入正式用例库的 ID }
         source_locator: { type: string }
         normalized_spec: { type: object, additionalProperties: true }
         quality_state: { type: string, enum: [ pending, passed, failed ] }
@@ -890,8 +1043,8 @@ components:
         build_context: { type: string }
         language: { type: string, description: 服务主要编程语言；未登记时不得假设 }
         framework: { type: string, description: 服务框架或前端运行时 }
-        test_tool: { type: string, description: 计划使用的测试工具或执行器 }
-        test_command: { type: string, description: 可执行的测试命令 }
+        test_tool: { type: string, readOnly: true, description: 系统从源码识别的测试工具或执行器；不可由用户填写 }
+        test_command: { type: string, readOnly: true, description: 系统从源码识别的项目测试命令；不可由用户填写或执行 }
         dockerfile_path: { type: string, nullable: true }
         manifest_path: { type: string, nullable: true }
         status: { type: string }
@@ -907,8 +1060,6 @@ components:
         build_context: { type: string }
         language: { type: string }
         framework: { type: string }
-        test_tool: { type: string }
-        test_command: { type: string }
         dockerfile_path: { type: string, nullable: true }
         manifest_path: { type: string, nullable: true }
     BatchResultResponse:
@@ -1075,7 +1226,30 @@ components:
         target_id: { type: integer, format: int64 }
         env: { type: string }
         running_version: { type: string }
+        base_url: { type: string }
         checked_at: { type: string, format: date-time }
+        requirements: { type: array, items: { $ref: '#/components/schemas/EnvironmentRequirement' } }
+        confirmation: { $ref: '#/components/schemas/EnvironmentConfirmation' }
+        confirmed_at: { type: string, format: date-time }
+    EnvironmentRequirement:
+      type: object
+      required: [ key, label, required, reason ]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        required: { type: boolean }
+        reason: { type: string }
+        evidence: { type: string }
+        sensitive: { type: boolean }
+    EnvironmentConfirmation:
+      type: object
+      required: [ confirmed ]
+      properties:
+        confirmed: { type: boolean }
+        values: { type: object, additionalProperties: { type: string } }
+        credential_ref: { type: string, description: 密钥管理器中的引用名，禁止提交密码或 Token 正文 }
+        browser_profile: { type: string }
+        test_data_profile: { type: string }
     EnvCheck:
       type: object
       required: [ id, team_id, target_id, target_version, env_version, result, checked_at ]

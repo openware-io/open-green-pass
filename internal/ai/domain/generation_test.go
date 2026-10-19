@@ -62,6 +62,9 @@ func (contextRepositoryProbe) Create(context.Context, *GenerationBatch) error { 
 func (contextRepositoryProbe) Find(context.Context, int64, int64) (*GenerationBatch, error) {
 	return nil, ErrGenerationNotFound
 }
+func (contextRepositoryProbe) ListByTarget(context.Context, int64, int64, int) ([]*GenerationBatch, error) {
+	return nil, nil
+}
 func (contextRepositoryProbe) FindByIdempotencyKey(context.Context, int64, string) (*GenerationBatch, error) {
 	return nil, ErrGenerationNotFound
 }

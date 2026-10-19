@@ -202,6 +202,27 @@ func (s *RunService) StartVersionCheck(ctx context.Context, runID int64) (*domai
 	return run, nil
 }
 
+// MarkFailed durably closes a run when a workflow activity ends without a
+// completed execution result. This prevents queued/running rows from becoming
+// permanently stale after a fail-closed preflight or runner error.
+func (s *RunService) MarkFailed(ctx context.Context, runID int64) error {
+	teamID, ok := rls.TenantFrom(ctx)
+	if !ok {
+		return ErrTenantRequired
+	}
+	run, err := s.repo.Find(ctx, teamID, runID)
+	if err != nil {
+		return err
+	}
+	if run.State == domain.RunFailed || run.State == domain.RunDone {
+		return nil
+	}
+	if err := run.Fail(); err != nil {
+		return err
+	}
+	return s.saveRun(ctx, run)
+}
+
 // ExecuteRun 执行当次用例（scheduled→running→collect→gate→report→done）；重跑 attempt_seq 递增。
 func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.Run, results []*domain.CaseResult, err error) {
 	teamID, ok := rls.TenantFrom(ctx)
@@ -270,12 +291,30 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 	}
 	spec := make([]*domain.CaseSpec, 0, len(run.SelectedCases))
 	for _, caseID := range run.SelectedCases {
-		version, script, err := s.cases.FetchScript(ctx, teamID, caseID)
+		var version int
+		var script any
+		var err error
+		if scoped, ok := s.cases.(domain.TargetScopedCasePort); ok {
+			version, script, err = scoped.FetchScriptForTarget(ctx, teamID, run.TargetID, caseID)
+		} else {
+			version, script, err = s.cases.FetchScript(ctx, teamID, caseID)
+		}
 		if err != nil {
 			return nil, nil, err
 		}
+		baseURL := ""
+		requiresSandbox := hasDeclarativeHTTPRequest(script)
+		if requiresSandbox {
+			if s.envSvc == nil {
+				return nil, nil, fmt.Errorf("environment runtime service is required to execute generated API cases")
+			}
+			baseURL, err = s.envSvc.ExecutionBaseURL(ctx, run.TargetID, run.Env)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
 		spec = append(spec, &domain.CaseSpec{
-			CaseID: caseID, CaseVersion: version, TargetID: run.TargetID, Env: run.Env,
+			CaseID: caseID, CaseVersion: version, TargetID: run.TargetID, Env: run.Env, BaseURL: baseURL, RequiresSandbox: requiresSandbox,
 			Scenario: scenarioFromScript(script), Script: script, ScreenshotEnabled: shot.ScreenshotEnabled,
 		})
 	}
@@ -364,6 +403,15 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 		return nil, nil, err
 	}
 	return run, results, nil
+}
+
+func hasDeclarativeHTTPRequest(script any) bool {
+	root, ok := script.(map[string]any)
+	if !ok {
+		return false
+	}
+	_, ok = root["request"].(map[string]any)
+	return ok
 }
 
 func (s *RunService) executeWithLeaseRenewal(ctx context.Context, specs []*domain.CaseSpec, leases []domain.ExecutionPoolLease) ([]*domain.CaseResult, error) {

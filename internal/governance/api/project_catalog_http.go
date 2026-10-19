@@ -2,9 +2,12 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 
 	aiinfra "github.com/openware-io/open-green-pass/internal/ai/infra"
 	"github.com/openware-io/open-green-pass/internal/gateway/httpx"
@@ -23,8 +26,6 @@ type batchRepoRequest struct {
 type batchServiceInput struct {
 	Language       string  `json:"language"`
 	Framework      string  `json:"framework"`
-	TestTool       string  `json:"test_tool"`
-	TestCommand    string  `json:"test_command"`
 	RepoID         int64   `json:"repo_id"`
 	Name           string  `json:"name"`
 	SourcePath     string  `json:"source_path"`
@@ -41,8 +42,6 @@ type updateServiceRequest struct {
 	GenerationStatus string `json:"generation_status"`
 	Language         string `json:"language"`
 	Framework        string `json:"framework"`
-	TestTool         string `json:"test_tool"`
-	TestCommand      string `json:"test_command"`
 }
 type batchResult struct {
 	Index int    `json:"index"`
@@ -122,7 +121,7 @@ func RegisterProjectCatalog(mux *http.ServeMux, store *infra.ProjectCatalog, gen
 		}
 		results := make([]batchResult, 0, len(in.Services))
 		for i, item := range in.Services {
-			v, e := store.AddService(r.Context(), infra.ProjectService{ProjectID: id, RepoID: item.RepoID, Name: item.Name, SourcePath: item.SourcePath, Kind: item.Kind, BuildContext: item.BuildContext, Language: item.Language, Framework: item.Framework, TestTool: item.TestTool, TestCommand: item.TestCommand, DockerfilePath: item.DockerfilePath, ManifestPath: item.ManifestPath})
+			v, e := store.AddService(r.Context(), infra.ProjectService{ProjectID: id, RepoID: item.RepoID, Name: item.Name, SourcePath: item.SourcePath, Kind: item.Kind, BuildContext: item.BuildContext, Language: item.Language, Framework: item.Framework, DockerfilePath: item.DockerfilePath, ManifestPath: item.ManifestPath})
 			if e != nil {
 				results = append(results, batchResult{Index: i, Error: e.Error()})
 			} else {
@@ -146,12 +145,19 @@ func RegisterProjectCatalog(mux *http.ServeMux, store *infra.ProjectCatalog, gen
 		projectID, projectErr := strconv.ParseInt(r.PathValue("id"), 10, 64)
 		serviceID, serviceErr := strconv.ParseInt(r.PathValue("serviceID"), 10, 64)
 		var in updateServiceRequest
-		if projectErr != nil || serviceErr != nil || httpx.DecodeJSON(r, &in) != nil || (in.Kind == "" && in.GenerationStatus == "" && in.Language == "" && in.Framework == "" && in.TestTool == "" && in.TestCommand == "") || (in.Kind != "" && !validServiceKind(in.Kind)) || (in.GenerationStatus != "" && !validGenerationStatus(in.GenerationStatus)) {
+		if projectErr != nil || serviceErr != nil || httpx.DecodeJSON(r, &in) != nil || (in.Kind == "" && in.GenerationStatus == "" && in.Language == "" && in.Framework == "") || (in.Kind != "" && !validServiceKind(in.Kind)) || (in.GenerationStatus != "" && !validGenerationStatus(in.GenerationStatus)) {
 			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_service_kind"})
 			return
 		}
-		if err := store.UpdateService(r.Context(), projectID, serviceID, in.Kind, in.GenerationStatus, in.Language, in.Framework, in.TestTool, in.TestCommand); err != nil {
-			httpx.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "service_not_found"})
+		if err := store.UpdateService(r.Context(), projectID, serviceID, in.Kind, in.GenerationStatus, in.Language, in.Framework); err != nil {
+			switch {
+			case errors.Is(err, pgx.ErrNoRows):
+				httpx.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "service_not_found"})
+			case errors.Is(err, infra.ErrServiceProfileIncomplete):
+				httpx.WriteJSON(w, http.StatusConflict, map[string]string{"error": "service_profile_incomplete", "message": "请先补齐并确认服务技术画像，再启用测试用例生成"})
+			default:
+				httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "service_update_failed"})
+			}
 			return
 		}
 		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "updated"})

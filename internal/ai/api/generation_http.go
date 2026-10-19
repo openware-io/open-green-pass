@@ -22,10 +22,42 @@ type generationHandler struct {
 func RegisterGeneration(mux *http.ServeMux, svc *application.GenerationBatchService, gen *id.Generator, store *infra.GenerationBatchStore) {
 	h := &generationHandler{svc: svc, gen: gen, store: store}
 	mux.HandleFunc("POST /generation/batches", h.create)
+	mux.HandleFunc("GET /generation/batches", h.list)
 	mux.HandleFunc("GET /generation/batches/{id}", h.get)
 	mux.HandleFunc("GET /generation/batches/{id}/seeds", h.seeds)
 	mux.HandleFunc("POST /generation/batches/{id}/review", h.review)
 	mux.HandleFunc("POST /generation/batches/{id}/rollback", h.rollback)
+}
+
+func (h *generationHandler) list(w http.ResponseWriter, r *http.Request) {
+	team, ok := rls.TenantFrom(r.Context())
+	if !ok || team <= 0 {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "tenant_required"})
+		return
+	}
+	targetID, err := strconv.ParseInt(r.URL.Query().Get("target_id"), 10, 64)
+	if err != nil || targetID <= 0 {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_target_id"})
+		return
+	}
+	limit := application.DefaultGenerationBatchLimit
+	if r.URL.Query().Has("limit") {
+		limit, err = strconv.Atoi(r.URL.Query().Get("limit"))
+		if err != nil || limit < 1 || limit > application.MaxGenerationBatchLimit {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_limit"})
+			return
+		}
+	}
+	batches, err := h.svc.ListByTarget(r.Context(), team, targetID, limit)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "generation_batches_unavailable"})
+		return
+	}
+	response := make([]map[string]any, 0, len(batches))
+	for _, batch := range batches {
+		response = append(response, batchResponse(batch))
+	}
+	httpx.WriteJSON(w, http.StatusOK, response)
 }
 
 func (h *generationHandler) seeds(w http.ResponseWriter, r *http.Request) {
@@ -73,7 +105,7 @@ func (h *generationHandler) create(w http.ResponseWriter, r *http.Request) {
 		actor = 1
 	}
 	var in createBatchRequest
-	if httpx.DecodeJSON(r, &in) != nil || in.TargetID <= 0 || in.RepoID <= 0 || in.Branch == "" || in.IdempotencyKey == "" {
+	if httpx.DecodeJSON(r, &in) != nil || in.TargetID <= 0 || in.RepoID <= 0 || in.ServiceID == nil || *in.ServiceID <= 0 || in.Branch == "" || in.IdempotencyKey == "" {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_generation_batch"})
 		return
 	}
@@ -168,5 +200,5 @@ func (h *generationHandler) rollback(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, 200, batchResponse(b))
 }
 func batchResponse(b *domain.GenerationBatch) map[string]any {
-	return map[string]any{"id": b.ID, "team_id": b.TeamID, "target_id": b.TargetID, "repo_id": b.RepoID, "service_id": b.ServiceID, "source_path": b.SourcePath, "branch": b.Branch, "version": b.RequestedVersion, "state": b.State, "state_version": b.StateVersion, "workflow_id": b.WorkflowID, "idempotency_key": b.IdempotencyKey, "created_at": b.CreatedAt, "updated_at": b.UpdatedAt}
+	return map[string]any{"id": b.ID, "team_id": b.TeamID, "target_id": b.TargetID, "repo_id": b.RepoID, "service_id": b.ServiceID, "source_path": b.SourcePath, "branch": b.Branch, "version": b.RequestedVersion, "state": b.State, "state_version": b.StateVersion, "workflow_id": b.WorkflowID, "idempotency_key": b.IdempotencyKey, "failure_summary": b.FailureSummary, "created_at": b.CreatedAt, "updated_at": b.UpdatedAt}
 }

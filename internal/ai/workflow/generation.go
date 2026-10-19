@@ -44,8 +44,9 @@ type RollbackSignalPayload struct {
 // so worker wiring may register retry-safe adapters without exposing I/O in the
 // workflow package.
 type BatchActivityInput struct {
-	BatchID int64
-	TeamID  int64
+	BatchID      int64
+	TeamID       int64
+	FailureStage string `json:"failure_stage,omitempty"`
 }
 
 // GenerationPipelineWorkflow runs the non-human stages, then waits durably for
@@ -60,7 +61,9 @@ func GenerationPipelineWorkflow(ctx workflow.Context, input GenerationPipelineIn
 	activityInput := BatchActivityInput{BatchID: input.BatchID, TeamID: input.TeamID}
 	for _, activityName := range []string{"FetchSource", "ParseAndNormalize", "GenerateSeeds", "QualityGate"} {
 		if err := workflow.ExecuteActivity(ctx, activityName, activityInput).Get(ctx, nil); err != nil {
-			_ = workflow.ExecuteActivity(ctx, "FailGeneration", activityInput).Get(ctx, nil)
+			failureInput := activityInput
+			failureInput.FailureStage = activityName
+			_ = workflow.ExecuteActivity(ctx, "FailGeneration", failureInput).Get(ctx, nil)
 			return err
 		}
 	}
@@ -87,6 +90,9 @@ func GenerationPipelineWorkflow(ctx workflow.Context, input GenerationPipelineIn
 		return workflow.ExecuteActivity(ctx, "RecordReview", review).Get(ctx, nil)
 	}
 	if err := workflow.ExecuteActivity(ctx, "CommitVersions", review).Get(ctx, nil); err != nil {
+		failureInput := activityInput
+		failureInput.FailureStage = "CommitVersions"
+		_ = workflow.ExecuteActivity(ctx, "FailGeneration", failureInput).Get(ctx, nil)
 		return err
 	}
 	return workflow.ExecuteActivity(ctx, "EmitAudit", review).Get(ctx, nil)

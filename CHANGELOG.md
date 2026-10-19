@@ -2,6 +2,10 @@
 
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
+## [Unreleased]
+- **AI 助手架构评审稿**：新增 [`docs/architecture/AI-ASSISTANT-DESIGN.md`](./docs/architecture/AI-ASSISTANT-DESIGN.md)，定义显式助手与隐式助手的统一运行时、上下文/技能/工具/审批边界、业务接入矩阵、AI 对 GP 的语义命令与受限界面代理、全量操作审计、事件与 Temporal 接入、数据模型、安全审计和分阶段落地路径。
+- **AI 协作原型与实施稿**：新增“AI 协作”原型页、全局/门禁页引导入口，以及 [`docs/plans/AI-ASSISTANT-IMPLEMENTATION-PLAN.md`](./docs/plans/AI-ASSISTANT-IMPLEMENTATION-PLAN.md)。原型明确呈现后台建议不操作界面、显式引导定位/预填但由用户提交、每一步进入审计链的交互边界。
+
 ## [v1.8.2] - 2026-09-29
 - **执行方案全阶段可执行（v0.3）**：P1 细化到实现级（GP1-01~08 含实施步骤/关键文件/验证，im saas 首个 SUT 闭环）；P2–P4 从执行纲要细化为任务级施工图（GP2-01~08 异构执行+调度+扩展 / GP3-01~07 AI 治理+W1 / GP4-01~06 平台化）；确认点调整（P2–P4 按图执行，阶段 DoD→用户验收）。## [v1.8.1] - 2026-09-29
 - **实施执行方案**：新增 [`docs/plans/IMPLEMENTATION-PLAN.md`](./docs/plans/IMPLEMENTATION-PLAN.md) v0.2（实现级）——基于工程规范细化到可执行步骤。

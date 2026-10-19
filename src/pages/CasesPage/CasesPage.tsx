@@ -1,13 +1,14 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { CASES, TEST_SCENARIOS, CURRENT_ITERATION, SERVICE_VERSIONS, CASE_EXEC, RECENT_GEN, type ICase, type CaseChange, type ExecCarrierType } from '@/data/mock';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { scenarioNav } from '@/context/scenarioNav';
 import { toast } from 'sonner';
 import { Cpu, Globe, Smartphone, Sparkles, ShieldCheck, Pencil, Trash2, Power, Check, Ban, GitBranch, History, ArrowLeft, Package, RefreshCcw, Code2, Braces, Activity, Boxes, FlaskConical } from 'lucide-react';
 import { PageHeader, GhostButton, PrimaryButton, ListFilter } from '@/components/shared';
 import { Card } from '@/components/shared';
 import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
-import type { CaseVersion, Target, TestCase } from '@/api/client';
+import type { CaseVersion, TestCase } from '@/api/client';
+import { useObjectCatalog } from '@/context/objectCatalog';
 
 const TYPE_BADGE: Record<string, string> = {
   '单元': 'bg-emerald-50 text-emerald-700',
@@ -361,9 +362,12 @@ export default function CasesPage() {
 
 function RealCasesPanel() {
   const client = useMemo(() => configuredGreenPassClient(), []);
-  const [targets, setTargets] = useState<Target[]>([]);
+  const catalog = useObjectCatalog();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTargetID = searchParams.get('target_id') ?? '';
+  const { enabled, loaded, projects, projectId, selectProject } = catalog;
+  const requestContext = useRef<{ key: string; pendingProject: string | null }>({ key: '', pendingProject: null });
   const [cases, setCases] = useState<TestCase[]>([]);
-  const [targetID, setTargetID] = useState('');
   const [code, setCode] = useState('');
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState('api');
@@ -373,27 +377,58 @@ function RealCasesPanel() {
   const [history, setHistory] = useState<{ caseID: number; items: CaseVersion[] }>();
   const [message, setMessage] = useState('');
 
-  const loadCases = useCallback(async (targetId = targetID) => {
-    if (!client) return;
+  const readCases = useCallback(async (targetId = projectId): Promise<TestCase[]> => {
+    if (!client) return [];
     const parsed = Number(targetId);
-    const loaded = await client.listCases(Number.isSafeInteger(parsed) && parsed > 0 ? { target_id: parsed } : {});
-    setCases(loaded);
-  }, [client, targetID]);
+    return client.listCases(Number.isSafeInteger(parsed) && parsed > 0 ? { target_id: parsed } : {});
+  }, [client, projectId]);
 
   useEffect(() => {
-    if (!client) return;
-    let active = true;
-    client.listTargets().then((loaded) => {
-      if (!active) return;
-      setTargets(loaded);
-      const first = loaded[0]?.id;
-      if (first) {
-        setTargetID(String(first));
-        void loadCases(String(first));
+    if (!client || !enabled || !loaded || !requestedTargetID) return;
+    if (requestContext.current.key !== requestedTargetID) {
+      requestContext.current = { key: requestedTargetID, pendingProject: null };
+      if (projects.some((target) => String(target.id) === requestedTargetID)) {
+        if (projectId !== requestedTargetID) {
+          requestContext.current.pendingProject = requestedTargetID;
+          selectProject(requestedTargetID);
+        }
+        return;
       }
-    }).catch((error: unknown) => { if (active) setMessage(error instanceof Error ? error.message : '读取真实被测对象失败'); });
+      toast.error('指定的被测项目不可用', { description: '已保留当前项目上下文，请重新选择用例。' });
+      setSearchParams((current) => { const next = new URLSearchParams(current); next.delete('target_id'); return next; }, { replace: true });
+      return;
+    }
+    if (requestContext.current.pendingProject) {
+      if (projectId !== requestContext.current.pendingProject) return;
+      requestContext.current.pendingProject = null;
+      return;
+    }
+    // Once the link context is applied, a deliberate header/project switch
+    // takes precedence over its query parameter and must not be resurrected
+    // on the next reload.
+    if (projectId !== requestedTargetID) {
+      setSearchParams((current) => { const next = new URLSearchParams(current); next.delete('target_id'); return next; }, { replace: true });
+    }
+  }, [client, enabled, loaded, requestedTargetID, projects, projectId, selectProject, setSearchParams]);
+
+  useEffect(() => {
+    if (requestedTargetID) return;
+    requestContext.current = { key: '', pendingProject: null };
+  }, [requestedTargetID]);
+
+  useEffect(() => {
+    if (!client || !enabled || !loaded || !projectId) return;
+    let active = true;
+    void readCases(projectId)
+      .then((loadedCases) => { if (active) { setCases(loadedCases); setMessage(''); } })
+      .catch((error: unknown) => { if (active) setMessage(error instanceof Error ? error.message : '读取真实用例失败'); });
     return () => { active = false; };
-  }, [client, loadCases]);
+  }, [client, enabled, loaded, projectId, readCases]);
+
+  const changeTarget = (nextProjectID: string) => {
+    setSearchParams((current) => { const next = new URLSearchParams(current); next.delete('target_id'); return next; }, { replace: true });
+    selectProject(nextProjectID);
+  };
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true); setMessage('');
@@ -415,19 +450,19 @@ function RealCasesPanel() {
       <div className="p-5 space-y-4">
         <p className="text-[11px] text-slate-500">连接：{greenPassConnectionHint()}。本区仅使用 OpenAPI 定义的数值 ID；下方原型表格不会写入后端。</p>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-          <select value={targetID} disabled={busy} onChange={(event) => { setTargetID(event.target.value); void run(() => loadCases(event.target.value)); }} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs">
-            <option value="">选择真实被测对象</option>{targets.map((target) => <option key={target.id} value={target.id}>{target.name} · #{target.id}</option>)}
+          <select value={projectId} disabled={busy || !loaded} onChange={(event) => changeTarget(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs">
+            <option value="">选择真实被测对象</option>{projects.map((target) => <option key={target.id} value={target.id}>{target.name} · #{target.id}</option>)}
           </select>
           <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="用例编号" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
           <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="标题" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
           <input value={kind} onChange={(event) => setKind(event.target.value)} placeholder="场景族，如 api" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
-          <button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(targetID); if (!Number.isSafeInteger(id) || id <= 0 || !code.trim() || !title.trim()) throw new Error('被测对象、编号、标题不能为空'); await client.createCase({ target_id: id, code: code.trim(), title: title.trim(), kind: kind.trim() || undefined, script: parseScript() }); await loadCases(); setCode(''); setTitle(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实用例</button>
+          <button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(projectId); if (!Number.isSafeInteger(id) || id <= 0 || !code.trim() || !title.trim()) throw new Error('被测对象、编号、标题不能为空'); await client.createCase({ target_id: id, code: code.trim(), title: title.trim(), kind: kind.trim() || undefined, script: parseScript() }); setCases(await readCases()); setCode(''); setTitle(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实用例</button>
         </div>
         <textarea value={script} onChange={(event) => setScript(event.target.value)} disabled={busy} rows={2} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" aria-label="用例脚本 JSON" />
         {message && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{message}</div>}
         <div className="overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-3 py-2">ID / 编号</th><th className="px-3 py-2">标题</th><th className="px-3 py-2">类型</th><th className="px-3 py-2">版本</th><th className="px-3 py-2">状态</th><th className="px-3 py-2">操作</th></tr></thead>
-            <tbody className="divide-y divide-slate-100">{cases.map((item) => <tr key={item.id}><td className="px-3 py-2 font-mono">#{item.id} · {item.code}</td><td className="px-3 py-2">{item.title}</td><td className="px-3 py-2">{item.kind}</td><td className="px-3 py-2">v{item.current_version}</td><td className="px-3 py-2">{item.status}</td><td className="px-3 py-2"><div className="flex flex-wrap gap-1.5"><button type="button" disabled={busy} onClick={() => void run(async () => { const value = versionScript.trim(); if (!value) throw new Error('先填写新版本脚本'); const parsed = JSON.parse(value) as unknown; await client.createCaseVersion(item.id, { script: parsed }); setVersionScript(''); await loadCases(); })} className="rounded border border-slate-200 px-2 py-1 text-[10px] hover:border-emerald-300">提交新版本</button><button type="button" disabled={busy} onClick={() => void run(async () => { const items = await client.caseHistory(item.id); setHistory({ caseID: item.id, items }); })} className="rounded border border-slate-200 px-2 py-1 text-[10px] hover:border-emerald-300">历史</button><button type="button" disabled={busy} onClick={() => { const raw = window.prompt(`回退 #${item.id} 到哪个版本？`, String(item.current_version)); const version = Number(raw); if (raw && Number.isSafeInteger(version) && version > 0) void run(async () => { await client.rollbackCase(item.id, version); await loadCases(); }); }} className="rounded border border-amber-200 px-2 py-1 text-[10px] text-amber-700">回退</button><button type="button" disabled={busy} onClick={() => void run(async () => { await client.deleteCase(item.id); await loadCases(); })} className="rounded border border-red-200 px-2 py-1 text-[10px] text-red-600">删除</button></div></td></tr>)}</tbody>
+            <tbody className="divide-y divide-slate-100">{cases.map((item) => <tr key={item.id}><td className="px-3 py-2 font-mono">#{item.id} · {item.code}</td><td className="px-3 py-2">{item.title}</td><td className="px-3 py-2">{item.kind}</td><td className="px-3 py-2">v{item.current_version}</td><td className="px-3 py-2">{item.status}</td><td className="px-3 py-2"><div className="flex flex-wrap gap-1.5"><button type="button" disabled={busy} onClick={() => void run(async () => { const value = versionScript.trim(); if (!value) throw new Error('先填写新版本脚本'); const parsed = JSON.parse(value) as unknown; await client.createCaseVersion(item.id, { script: parsed }); setVersionScript(''); setCases(await readCases()); })} className="rounded border border-slate-200 px-2 py-1 text-[10px] hover:border-emerald-300">提交新版本</button><button type="button" disabled={busy} onClick={() => void run(async () => { const items = await client.caseHistory(item.id); setHistory({ caseID: item.id, items }); })} className="rounded border border-slate-200 px-2 py-1 text-[10px] hover:border-emerald-300">历史</button><button type="button" disabled={busy} onClick={() => { const raw = window.prompt(`回退 #${item.id} 到哪个版本？`, String(item.current_version)); const version = Number(raw); if (raw && Number.isSafeInteger(version) && version > 0) void run(async () => { await client.rollbackCase(item.id, version); setCases(await readCases()); }); }} className="rounded border border-amber-200 px-2 py-1 text-[10px] text-amber-700">回退</button><button type="button" disabled={busy} onClick={() => void run(async () => { await client.deleteCase(item.id); setCases(await readCases()); })} className="rounded border border-red-200 px-2 py-1 text-[10px] text-red-600">删除</button></div></td></tr>)}</tbody>
           </table>
           {cases.length === 0 && <div className="px-3 py-5 text-center text-xs text-slate-400">当前被测对象暂无真实用例</div>}
         </div>

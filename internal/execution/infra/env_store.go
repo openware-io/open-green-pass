@@ -3,6 +3,7 @@ package infra
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5"
 
@@ -24,14 +25,31 @@ func NewEnvStore(db *db.DB, gen *id.Generator) *EnvStore {
 
 // UpsertRuntime 登记/更新环境运行版本。
 func (s *EnvStore) UpsertRuntime(ctx context.Context, r *domain.EnvRuntime) error {
+	baseURL := r.BaseURL
+	if r.BaseURL != "" {
+		validated, err := domain.ValidateRuntimeBaseURL(r.BaseURL)
+		if err != nil {
+			return err
+		}
+		baseURL = validated
+		r.BaseURL = validated
+	}
+	requirements, err := json.Marshal(r.Requirements)
+	if err != nil {
+		return err
+	}
+	confirmation, err := json.Marshal(r.Confirmation)
+	if err != nil {
+		return err
+	}
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO env_runtime(id, team_id, target_id, env, running_version, checked_at, created_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			INSERT INTO env_runtime(id, team_id, target_id, env, running_version, base_url, checked_at, created_by, requirements, confirmation, confirmed_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11)
 			ON CONFLICT (team_id, target_id, env) DO UPDATE SET
-				running_version = EXCLUDED.running_version, checked_at = EXCLUDED.checked_at,
+				running_version = EXCLUDED.running_version, base_url = CASE WHEN EXCLUDED.base_url = '' THEN env_runtime.base_url ELSE EXCLUDED.base_url END, requirements = EXCLUDED.requirements, confirmation = EXCLUDED.confirmation, confirmed_at = EXCLUDED.confirmed_at, checked_at = EXCLUDED.checked_at,
 				updated_at = now()`,
-			r.ID, r.TeamID, r.TargetID, r.Env, r.RunningVersion, r.CheckedAt, r.CreatedBy)
+			r.ID, r.TeamID, r.TargetID, r.Env, r.RunningVersion, baseURL, r.CheckedAt, r.CreatedBy, requirements, confirmation, r.ConfirmedAt)
 		return err
 	})
 }
@@ -40,11 +58,18 @@ func (s *EnvStore) UpsertRuntime(ctx context.Context, r *domain.EnvRuntime) erro
 func (s *EnvStore) FindRuntime(ctx context.Context, teamID, targetID int64, env string) (*domain.EnvRuntime, error) {
 	var r domain.EnvRuntime
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		var requirements, confirmation []byte
 		row := tx.QueryRow(ctx, `
-			SELECT id, team_id, target_id, env, running_version, checked_at
+			SELECT id, team_id, target_id, env, running_version, base_url, checked_at, requirements, confirmation, confirmed_at
 			FROM env_runtime WHERE team_id = $1 AND target_id = $2 AND env = $3`,
 			teamID, targetID, env)
-		return row.Scan(&r.ID, &r.TeamID, &r.TargetID, &r.Env, &r.RunningVersion, &r.CheckedAt)
+		if err := row.Scan(&r.ID, &r.TeamID, &r.TargetID, &r.Env, &r.RunningVersion, &r.BaseURL, &r.CheckedAt, &requirements, &confirmation, &r.ConfirmedAt); err != nil {
+			return err
+		}
+		if err := json.Unmarshal(requirements, &r.Requirements); err != nil {
+			return err
+		}
+		return json.Unmarshal(confirmation, &r.Confirmation)
 	})
 	if err != nil {
 		return nil, err

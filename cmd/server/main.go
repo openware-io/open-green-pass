@@ -13,7 +13,11 @@ import (
 	aiapi "github.com/openware-io/open-green-pass/internal/ai/api"
 	aiapp "github.com/openware-io/open-green-pass/internal/ai/application"
 	aiinfra "github.com/openware-io/open-green-pass/internal/ai/infra"
+	aiaudit "github.com/openware-io/open-green-pass/internal/ai/trusted_audit"
 	aiworkflow "github.com/openware-io/open-green-pass/internal/ai/workflow"
+	assistantapi "github.com/openware-io/open-green-pass/internal/assistant/api"
+	assistantapp "github.com/openware-io/open-green-pass/internal/assistant/application"
+	assistantinfra "github.com/openware-io/open-green-pass/internal/assistant/infra"
 	eapi "github.com/openware-io/open-green-pass/internal/execution/api"
 	eapp "github.com/openware-io/open-green-pass/internal/execution/application"
 	edomain "github.com/openware-io/open-green-pass/internal/execution/domain"
@@ -77,8 +81,9 @@ func main() {
 	store := infra.NewTargetStore(db, gen)
 	treeSvc := application.NewTargetTreeService(store, gen)
 	projectCatalog := infra.NewProjectCatalog(db, gen)
-	generationStore := aiinfra.NewGenerationBatchStore(db)
+	generationStore := aiinfra.NewGenerationBatchStore(db, gen)
 	generationSvc := aiapp.NewGenerationBatchService(generationStore)
+	generationSvc.SetScopePort(generationStore)
 	modelStore := infra.NewModelStore(db)
 	// GP3-05 reference policy is intentionally empty until the persistent
 	// approval/whitelist store is configured; it can be injected here later.
@@ -158,7 +163,6 @@ func main() {
 	defer temporalClient.Close()
 	generationController := aiworkflow.NewTemporalController(temporalClient)
 	generationSvc.SetWorkflowPort(generationController)
-	generationSvc.SetReviewPorts(generationController, nil)
 	runEventBus, err := gpRedisRunBus.New(ctx, cfg.RedisAddr, os.Getenv("GP_REDIS_PASSWORD"))
 	if err != nil {
 		log.Error("init redis run event bus", "error", err)
@@ -177,6 +181,13 @@ func main() {
 	gateStore := tinfra.NewGateStore(trustedDB, gen)
 	auditStore := tinfra.NewAuditStore(trustedDB, gen)
 	auditSvc := tapp.NewAuditService(auditStore, gen)
+	generationSvc.SetReviewPorts(generationController, aiaudit.New(auditSvc))
+	assistantStore := assistantinfra.NewStore(db)
+	assistantSvc := assistantapp.NewService(assistantStore, assistantapp.AuditFunc(func(ctx context.Context, actor int64, op, asset string, assetID int64, payload map[string]any) error {
+		_, err := auditSvc.Append(ctx, actor, op, asset, assetID, payload)
+		return err
+	}), gen)
+	assistantSvc.SetModelResponder(aiinfra.NewAssistantResponder(db))
 	runSvc.SetAuditPort(einfra.NewTrustedAuditPort(auditSvc))
 	// Execution/run and report tables remain owned by their respective domains;
 	// the trusted connection is restricted to trusted writes only.
@@ -231,6 +242,7 @@ func main() {
 		func(mux *http.ServeMux) { gapi.RegisterCasesAuthorized(mux, caseSvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { eapi.RegisterAuthorized(mux, envSvc, runSvc, policySvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc, costSvc, reportSvc) },
+		func(mux *http.ServeMux) { assistantapi.Register(mux, assistantSvc) },
 	)
 	srv := &http.Server{
 		Addr:              addr,

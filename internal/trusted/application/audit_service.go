@@ -32,6 +32,31 @@ type AuditService struct {
 	gen  *id.Generator
 }
 
+// AuditListItem is the read-safe representation of an append-only audit event.
+// Payload stays structured so the UI can show AI provenance without guessing
+// from the operation name.
+type AuditListItem = domain.AuditEvent
+
+type auditListRepository interface {
+	List(context.Context, int64, int) ([]domain.AuditEvent, error)
+}
+
+// List returns the newest events in the current tenant's trusted chain.
+func (s *AuditService) List(ctx context.Context, limit int) ([]AuditListItem, error) {
+	teamID, ok := rls.TenantFrom(ctx)
+	if !ok {
+		return nil, ErrTenantRequired
+	}
+	if limit < 1 || limit > 200 {
+		return nil, errors.New("audit limit must be between 1 and 200")
+	}
+	repo, ok := s.repo.(auditListRepository)
+	if !ok {
+		return nil, errors.New("audit repository does not support list")
+	}
+	return repo.List(ctx, teamID, limit)
+}
+
 // NewAuditService 创建审计服务。
 func NewAuditService(repo domain.AuditRepository, gen *id.Generator) *AuditService {
 	return &AuditService{repo: repo, gen: gen}

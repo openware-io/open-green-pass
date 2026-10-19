@@ -38,16 +38,17 @@ export default function TracePage() {
   const { selectedAsset } = useOutletContext<{ selectedAsset: IAssetNode }>();
   const realClient = useMemo(() => configuredGreenPassClient(), []);
   const [liveCases, setLiveCases] = useState<TestCase[]>([]);
-  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveLoading, setLiveLoading] = useState(Boolean(realClient));
   const [liveError, setLiveError] = useState('');
   useEffect(() => {
     if (!realClient) return;
     const targetID = Number(localStorage.getItem('greenpass_project_id') ?? 0);
-    if (!targetID) { setLiveError('请先在被测对象页选择真实项目'); return; }
     let cancelled = false;
-    setLiveLoading(true); setLiveError('');
-    void realClient.listCases({ target_id: targetID }).then((items) => {
-      if (!cancelled) setLiveCases(items);
+    const request = targetID > 0
+      ? realClient.listCases({ target_id: targetID })
+      : Promise.reject(new Error('请先在被测对象页选择真实项目'));
+    void request.then((items) => {
+      if (!cancelled) { setLiveCases(items); setLiveError(''); }
     }).catch((error) => {
       if (!cancelled) setLiveError(error instanceof Error ? error.message : '读取真实用例失败');
     }).finally(() => { if (!cancelled) setLiveLoading(false); });

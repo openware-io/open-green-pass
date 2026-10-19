@@ -25,6 +25,7 @@ func Register(mux *http.ServeMux, gate *application.GateService, audit *applicat
 	mux.HandleFunc("PUT /gates/rules", h.upsertRule)
 	mux.HandleFunc("POST /gates/evaluate", h.evaluate)
 	mux.HandleFunc("GET /gates/results", h.resultsByRun)
+	mux.HandleFunc("GET /audit/events", h.auditEvents)
 	// 成本
 	mux.HandleFunc("POST /cost/record", h.recordCost)
 	mux.HandleFunc("GET /cost/overview", h.costOverview)
@@ -35,6 +36,24 @@ func Register(mux *http.ServeMux, gate *application.GateService, audit *applicat
 	mux.HandleFunc("POST /reports/bundle", h.bundleReports)
 	mux.HandleFunc("POST /reports/bundle/export", h.exportBundle)
 	mux.HandleFunc("GET /reports/{id}/export", h.exportReport)
+}
+
+func (h *gateHandler) auditEvents(w http.ResponseWriter, r *http.Request) {
+	limit := 100
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil {
+			httpx.WriteErr(w, gperr.Validation("limit must be an integer"))
+			return
+		}
+		limit = value
+	}
+	events, err := h.audit.List(r.Context(), limit)
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, events)
 }
 
 func (h *gateHandler) bundleReports(w http.ResponseWriter, r *http.Request) {

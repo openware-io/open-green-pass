@@ -104,3 +104,7 @@ func ActivityExecuteRun(ctx context.Context, teamID, runID int64) (*ExecuteResul
 	}
 	return &ExecuteResult{State: run.State, PassCount: pass, TotalCount: len(results)}, nil
 }
+
+func ActivityMarkRunFailed(ctx context.Context, teamID, runID int64) error {
+	return deps.runSvc.MarkFailed(rls.WithTenant(context.Background(), teamID), runID)
+}

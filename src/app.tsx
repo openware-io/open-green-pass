@@ -23,6 +23,7 @@ import CicdPage from '@/pages/CicdPage/CicdPage';
 import CicdTriggerPage from '@/pages/CicdTriggerPage/CicdTriggerPage';
 import CicdConnectorPage from '@/pages/CicdConnectorPage/CicdConnectorPage';
 import SettingsPage from '@/pages/SettingsPage/SettingsPage';
+import AssistantPage from '@/pages/AssistantPage/AssistantPage';
 import { useCurrentUser, useLoginReady } from '@/context/login';
 
 function ProtectedLayout() {
@@ -59,6 +60,7 @@ export default function App() {
         <Route path="cicd-trigger" element={<CicdTriggerPage />} />
         <Route path="cicd-connector" element={<CicdConnectorPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="assistant" element={<AssistantPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
       </Routes>

@@ -74,6 +74,7 @@ func TestWorkflowExecuteRun(t *testing.T) {
 	w.RegisterWorkflow(workflow.ExecuteRunWorkflow)
 	w.RegisterActivity(workflow.ActivityRunVersionCheck)
 	w.RegisterActivity(workflow.ActivityExecuteRun)
+	w.RegisterActivity(workflow.ActivityMarkRunFailed)
 	if err := w.Start(); err != nil {
 		t.Fatalf("worker start: %v", err)
 	}

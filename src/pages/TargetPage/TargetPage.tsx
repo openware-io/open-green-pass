@@ -1,12 +1,12 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ASSET_TREE, METRICS, GEN_TRACE, ASSET_RISKS, AI_MODELS, PROJECT_MODELS, TEST_SCENARIOS, TESTED_REPOS, CASES, COST_GEN_DETAIL, COST_EXEC_DETAIL, assetToProfile, nodeRepos, type IAsset, type IAssetNode, type ITestedRepo } from '@/data/mock';
 import { scenarioNav } from '@/context/scenarioNav';
 import { KpiCard, PageHeader, PrimaryButton, GhostButton, ListFilter, Card } from '@/components/shared';
-import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
-import type { Target } from '@/api/client';
-import { Brain, ShieldAlert, ChevronRight, ChevronDown, Sparkles, GitBranch, CircleDot, FileSearch, History, CheckCircle2, AlertTriangle, XCircle, Layers, Cpu, Globe, Smartphone, X, Plus, ExternalLink, Check, Plug, Files, FileText, Wallet } from 'lucide-react';
+import { configuredGreenPassClient } from '@/api/runtime';
+import { useObjectCatalog, type CatalogService } from '@/context/objectCatalog';
+import { Brain, ShieldAlert, ChevronRight, ChevronDown, Sparkles, GitBranch, CircleDot, FileSearch, History, CheckCircle2, AlertTriangle, XCircle, Layers, Cpu, Globe, Smartphone, X, Plus, ExternalLink, Check, Plug, Files, FileText, Wallet, LoaderCircle, LockKeyhole, CircleCheck, Circle, RefreshCw, ArrowRight, ShieldCheck, ListChecks, Database, FolderTree, Box } from 'lucide-react';
 
 const ADD_STEPS = ['基本信息', '代码源接入', '上游源', '确认'];
 
@@ -101,6 +101,157 @@ function TreeNode({ node, activeId, onSelect, depth, openMap, onToggle }: {
   );
 }
 
+type ProfileFieldKey = 'language' | 'framework';
+
+const PROFILE_FIELDS: ReadonlyArray<readonly [ProfileFieldKey, string, string]> = [
+  ['language', '语言', '例如 Java、Go、TypeScript'],
+  ['framework', '框架', '例如 Spring Boot、Gin、React'],
+];
+
+function profileCompletion(service: CatalogService) {
+  const missing = PROFILE_FIELDS.filter(([key]) => !service[key]?.trim()).map(([, label]) => label);
+  return { complete: missing.length === 0, missing };
+}
+
+function profileConfidencePercent(service: CatalogService): number | null {
+  const value = service.profile_confidence;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return Math.round(value <= 1 ? value * 100 : value);
+}
+
+function profileSourceLabel(source: string): string {
+  if (!source) return '未记录分析来源';
+  return source.startsWith('model://') ? `模型分析 · ${source.slice('model://'.length)}` : source;
+}
+
+/** The repository root is a user-facing scope, never an implementation dot. */
+function sourceDirectoryLabel(sourcePath: string): string {
+  return sourcePath.trim() === '.' ? '仓库根目录' : sourcePath;
+}
+
+function profileEvidenceParts(evidence: string): { file: string; reason: string } {
+  const separator = evidence.indexOf('：');
+  return separator > 0
+    ? { file: evidence.slice(0, separator), reason: evidence.slice(separator + 1) }
+    : { file: '未标注文件', reason: evidence };
+}
+
+function analysisTimeLabel(value?: string): string {
+  if (!value) return '尚未分析';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN', { hour12: false });
+}
+
+type ServicePreparation = 'needs_analysis' | 'analyzing' | 'analysis_failed' | 'needs_completion' | 'needs_review' | 'needs_authorization' | 'ready';
+
+function servicePreparation(service: CatalogService): ServicePreparation {
+  const { complete } = profileCompletion(service);
+  if (service.generation_status === 'confirmed' && service.profile_status === 'confirmed' && complete) return 'ready';
+  if (service.profile_status === 'analyzing') return 'analyzing';
+  if (service.profile_status === 'failed') return 'analysis_failed';
+  if (service.profile_status === 'suggested' && !complete) return 'needs_completion';
+  if (service.profile_status === 'suggested') return 'needs_review';
+  if (service.profile_status === 'confirmed') return 'needs_authorization';
+  return 'needs_analysis';
+}
+
+const PREPARATION_COPY: Record<ServicePreparation, { label: string; detail: string; tone: string }> = {
+  needs_analysis: { label: '待进行 AI 分析', detail: '尚未识别技术栈与测试方式', tone: 'bg-slate-100 text-slate-600' },
+  analyzing: { label: 'AI 正在分析', detail: '正在读取源码和构建配置', tone: 'bg-blue-50 text-blue-700' },
+  analysis_failed: { label: '分析未完成', detail: '请重试，或转为人工补充配置', tone: 'bg-red-50 text-red-700' },
+  needs_completion: { label: '画像待补齐', detail: '测试配置不完整，尚不能授权生成', tone: 'bg-amber-50 text-amber-700' },
+  needs_review: { label: '待人工核验', detail: 'AI 已给出建议，需核对证据和配置', tone: 'bg-amber-50 text-amber-700' },
+  needs_authorization: { label: '待授权生成', detail: '技术画像已确认，尚未允许用例生成', tone: 'bg-indigo-50 text-indigo-700' },
+  ready: { label: '可生成用例', detail: '技术画像已确认且生成已获授权', tone: 'bg-emerald-50 text-emerald-700' },
+};
+
+function PreparationStep({ label, state }: { label: string; state: 'done' | 'current' | 'pending' }) {
+  const palette = state === 'done'
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+    : state === 'current'
+      ? 'border-amber-200 bg-amber-50 text-amber-700'
+      : 'border-slate-200 bg-white text-slate-400';
+  return <div className={`flex min-w-0 items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-medium ${palette}`}>
+    {state === 'done' ? <CircleCheck className="h-3.5 w-3.5 shrink-0" /> : <Circle className="h-3.5 w-3.5 shrink-0" />}
+    <span className="truncate">{label}</span>
+  </div>;
+}
+
+function ServicePreparationCard({
+  service,
+  repoName,
+  busy,
+  serviceKinds,
+  onKindChange,
+  onAnalyze,
+  onOpenProfile,
+  onOpenGeneration,
+  onRevokeGeneration,
+}: {
+  service: CatalogService;
+  repoName: (repoID: number) => string;
+  busy: boolean;
+  serviceKinds: ReadonlyArray<readonly [string, string]>;
+  onKindChange: (kind: string) => void;
+  onAnalyze: () => void;
+  onOpenProfile: () => void;
+  onOpenGeneration: () => void;
+  onRevokeGeneration: () => void;
+}) {
+  const preparation = servicePreparation(service);
+  const copy = PREPARATION_COPY[preparation];
+  const completion = profileCompletion(service);
+  const confidence = profileConfidencePercent(service);
+  const evidenceCount = service.profile_evidence?.length ?? 0;
+  const reviewRisk = (confidence !== null && confidence < 70) || evidenceCount === 0;
+  const analysisState: 'done' | 'current' | 'pending' = ['needs_completion', 'needs_review', 'needs_authorization', 'ready'].includes(preparation) ? 'done' : preparation === 'analyzing' ? 'current' : 'pending';
+  const reviewState: 'done' | 'current' | 'pending' = service.profile_status === 'confirmed' ? 'done' : ['needs_completion', 'needs_review', 'analysis_failed'].includes(preparation) ? 'current' : 'pending';
+  const authorizationState: 'done' | 'current' | 'pending' = preparation === 'ready' ? 'done' : preparation === 'needs_authorization' ? 'current' : 'pending';
+  let action: React.ReactNode;
+  if (preparation === 'ready') {
+    action = <div className="flex flex-wrap items-center gap-2"><button type="button" onClick={onOpenGeneration} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"><Sparkles className="h-3.5 w-3.5" />进入用例生成<ArrowRight className="h-3.5 w-3.5" /></button><button type="button" disabled={busy} onClick={onOpenProfile} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:border-emerald-300 hover:text-emerald-700">查看画像</button><button type="button" disabled={busy} onClick={onRevokeGeneration} className="px-2 py-2 text-[11px] text-slate-400 hover:text-red-600">暂停生成授权</button></div>;
+  } else if (preparation === 'analyzing') {
+    action = <button type="button" disabled className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700"><LoaderCircle className="h-3.5 w-3.5 animate-spin" />分析中，会自动更新</button>;
+  } else if (preparation === 'needs_analysis' || preparation === 'analysis_failed') {
+    action = <div className="flex flex-wrap items-center gap-2"><button type="button" disabled={busy} onClick={onAnalyze} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"><Sparkles className="h-3.5 w-3.5" />{preparation === 'analysis_failed' ? '重新进行 AI 分析' : '开始 AI 分析'}</button>{preparation === 'analysis_failed' && <button type="button" disabled={busy} onClick={onOpenProfile} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:border-emerald-300 hover:text-emerald-700">人工补充画像</button>}</div>;
+  } else {
+    action = <button type="button" disabled={busy} onClick={onOpenProfile} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700">{preparation === 'needs_authorization' ? <LockKeyhole className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}{preparation === 'needs_authorization' ? '查看画像并授权生成' : completion.complete ? '核验 AI 技术画像' : '补齐并核验画像'}<ArrowRight className="h-3.5 w-3.5" /></button>;
+  }
+
+  return <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-200 hover:shadow-md">
+    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          {preparation === 'ready'
+            ? <button type="button" onClick={onOpenGeneration} className="text-left text-sm font-semibold text-slate-800 hover:text-emerald-700 hover:underline">{service.name}</button>
+            : <button type="button" onClick={onOpenProfile} title="需先完成技术画像核验与生成授权" className="text-left text-sm font-semibold text-slate-800 hover:text-emerald-700 hover:underline">{service.name}</button>}
+          <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${copy.tone}`}>{copy.label}</span>
+          {reviewRisk && ['needs_completion', 'needs_review', 'needs_authorization'].includes(preparation) && <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-700"><AlertTriangle className="h-3 w-3" />需注意证据风险</span>}
+        </div>
+        <p className="mt-1 text-xs text-slate-500">{copy.detail}</p>
+        <div className="mt-3 grid gap-2 text-[11px] text-slate-600 sm:grid-cols-2 xl:grid-cols-4">
+          <span className="flex min-w-0 items-center gap-1.5"><GitBranch className="h-3.5 w-3.5 shrink-0 text-slate-400" /><span className="truncate" title={repoName(service.repo_id)}>{repoName(service.repo_id)}</span></span>
+          <span className="flex min-w-0 items-center gap-1.5"><Files className="h-3.5 w-3.5 shrink-0 text-slate-400" /><code className="truncate" title={sourceDirectoryLabel(service.source_path)}>{sourceDirectoryLabel(service.source_path)}</code></span>
+          <span className="flex min-w-0 items-center gap-1.5"><Database className="h-3.5 w-3.5 shrink-0 text-slate-400" /><span className="truncate">{profileSourceLabel(service.profile_source)}</span></span>
+          <span className="flex items-center gap-1.5"><ListChecks className="h-3.5 w-3.5 shrink-0 text-slate-400" />{confidence === null ? '置信度待产出' : `置信度 ${confidence}%`} · {evidenceCount} 条证据</span>
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-col items-start gap-2 xl:items-end">
+        <label className="flex items-center gap-2 text-[10px] text-slate-400">对象类型<select value={service.kind} disabled={busy} onChange={(event) => onKindChange(event.target.value)} className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-700 outline-none focus:border-emerald-400">{serviceKinds.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        {action}
+      </div>
+    </div>
+    <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 sm:grid-cols-4">
+      <PreparationStep label="已登记来源" state="done" />
+      <PreparationStep label="AI 分析" state={analysisState} />
+      <PreparationStep label="人工核验" state={reviewState} />
+      <PreparationStep label="授权生成" state={authorizationState} />
+    </div>
+    {preparation === 'needs_completion' && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">缺少：{completion.missing.join('、')}。补齐后请核对源码证据，再明确授权 AI 生成用例。</p>}
+    {preparation === 'analysis_failed' && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[11px] text-red-700">本次分析未完成，不会自动开启用例生成。可重试分析，或由测试负责人补充技术画像。</p>}
+  </article>;
+}
+
 export default function TargetPage() {
   const navigate = useNavigate();
   const { selectedAsset, setSelectedAsset } = useOutletContext<{ selectedAsset: IAssetNode; setSelectedAsset: (n: IAssetNode) => void }>();
@@ -158,10 +309,7 @@ export default function TargetPage() {
 
   if (realClient) {
     return (
-      <div>
-        <PageHeader title="项目与被测服务" desc="用户创建项目 · 项目内批量添加仓库 · 按仓库目录批量登记子服务" />
-        <RealTargetsPanel client={realClient} />
-      </div>
+      <RealTargetsPanel client={realClient} />
     );
   }
 
@@ -666,57 +814,158 @@ export default function TargetPage() {
 }
 
 function RealTargetsPanel({ client }: { client: ReturnType<typeof configuredGreenPassClient> }) {
-  const [targets, setTargets] = useState<Target[]>([]);
+  const navigate = useNavigate();
+  const catalog = useObjectCatalog();
+  const { projects: targets, projectId: projectID, repos, services, repoId: selectedRepoID, refresh: refreshProject } = catalog;
   const [name, setName] = useState('');
   const [remark, setRemark] = useState('');
-  const [projectID, setProjectID] = useState('');
-  const [repos, setRepos] = useState<Array<{id:number;url:string;default_branch:string}>>([]);
-  const [services, setServices] = useState<Array<{id:number;repo_id:number;name:string;source_path:string;kind:string;status:string;generation_status:'pending'|'confirmed';profile_status:'pending'|'analyzing'|'suggested'|'confirmed'|'failed';language:string;framework:string;test_tool:string;test_command:string;test_strategy:string;profile_confidence?:number}>>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success'|'error'>('success');
   const [dialog,setDialog]=useState<'project'|'repos'|'services'|null>(null);
   const [repoDrafts,setRepoDrafts]=useState([{url:'',branch:'main'}]);
   const [serviceDrafts,setServiceDrafts]=useState([{repoID:'',name:'',path:'',kind:'api_service'}]);
-
-  const refresh = async () => { if (client) setTargets(await client.listTargets()); };
-  const refreshProject = useCallback(async (raw=projectID) => { if(!client)return;const id=Number(raw);if(!Number.isSafeInteger(id)||id<=0){setRepos([]);setServices([]);return;} try { localStorage.setItem('greenpass_project_id', String(id)); } catch { /* ignore */ } const [loadedRepos,loadedServices]=await Promise.all([client.listProjectRepositories(id),client.listProjectServices(id)]);setRepos(loadedRepos??[]);setServices(loadedServices??[]); },[client,projectID]);
+  const [profileService, setProfileService] = useState<CatalogService | null>(null);
+  const [profileDraft, setProfileDraft] = useState({ language: '', framework: '' });
+  // The catalog API currently exposes a durable authorization transition, but
+  // not a separate durable "profile reviewed" transition. Keep the two user
+  // decisions separate in this dialog: saving a reviewed draft never enables
+  // generation; authorization is a subsequent explicit action.
+  const [profileReviewSaved, setProfileReviewSaved] = useState(false);
+  const [requestedAnalysis, setRequestedAnalysis] = useState<number[]>([]);
+  const analyzing = requestedAnalysis.length > 0 || services.some((service) => service.profile_status === 'analyzing');
   useEffect(() => {
-    if (!client) return;
-    let active = true;
-    client.listTargets().then((loaded) => {
-      if (!active) return;
-      setTargets(loaded);
-      const preferred=loaded.find((target)=>target.type==='project'&&target.name==='im-saas') ?? loaded.find((target)=>target.type==='project');
-      if(preferred){setProjectID(String(preferred.id));void refreshProject(String(preferred.id));}
-    }).catch((error: unknown) => { if (active) { setMessageType('error'); setMessage(error instanceof Error ? error.message : '读取真实被测对象失败'); } });
-    return () => { active = false; };
-  }, [client, refreshProject]);
+    if (!analyzing || busy) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      const refreshed = await refreshProject();
+      if (!cancelled) {
+        if (!refreshed.error) setRequestedAnalysis((ids) => ids.filter((id) => refreshed.services.some((service) => service.id === id && (service.profile_status === 'pending' || service.profile_status === 'analyzing'))));
+        timer = setTimeout(() => void poll(), 3000);
+      }
+    };
+    timer = setTimeout(() => void poll(), 3000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [analyzing, busy, projectID, refreshProject]);
+  const openProfile = (service: CatalogService) => {
+    setProfileService(service);
+    setProfileDraft({ language: service.language, framework: service.framework });
+    setProfileReviewSaved(service.profile_status === 'confirmed');
+  };
   const run = async (action: () => Promise<void>) => { setBusy(true); setMessage(''); try { await action(); } catch (error) { setMessageType('error'); setMessage(error instanceof Error ? error.message : '真实 API 操作失败'); } finally { setBusy(false); } };
+  const profileDraftComplete = Object.values(profileDraft).every((value) => value.trim());
+  // A confirmed status is currently coupled to the server-side authorization
+  // transition. Do not present it as an independently persisted review state.
+  const profileAlreadyConfirmed = profileService?.profile_status === 'confirmed';
+  const profileIsAuthorized = profileService?.generation_status === 'confirmed';
+  const profileCanAuthorize = Boolean(profileService && profileDraftComplete && (profileAlreadyConfirmed || profileReviewSaved));
+  const saveProfileReview = () => {
+    const service = profileService;
+    if (!service) return;
+    void run(async () => {
+      await client.updateProjectServiceProfile(service.project_id, service.id, {
+        language: profileDraft.language.trim(), framework: profileDraft.framework.trim(),
+      });
+      await refreshProject();
+      setProfileReviewSaved(true);
+      setMessageType('success');
+      setMessage(`${service.name} 的技术画像核验配置已保存，尚未授权生成。`);
+    });
+  };
+  const authorizeProfileGeneration = () => {
+    const service = profileService;
+    if (!service) return;
+    void run(async () => {
+      if (!profileDraftComplete || (!profileAlreadyConfirmed && !profileReviewSaved)) throw new Error('请先保存并确认技术画像，再单独授权生成');
+      await client.updateProjectServiceGenerationStatus(service.project_id, service.id, 'confirmed');
+      await refreshProject();
+      setRequestedAnalysis((ids) => ids.filter((id) => id !== service.id));
+      catalog.selectService(service.id);
+      setProfileService(null);
+      setProfileReviewSaved(false);
+      setMessageType('success');
+      setMessage(`${service.name} 已完成技术画像确认，并已单独授权进入用例生成`);
+    });
+  };
   const selectedProject=targets.find((target)=>String(target.id)===projectID);
   const repoName=(repoID:number)=>{const repo=repos.find((item)=>item.id===repoID);return repo ? repo.url.split('/').pop()?.replace(/\.git$/,'') ?? String(repoID) : String(repoID);};
   const serviceKinds=[['api_service','后端服务'],['gateway','API 网关'],['websocket_service','WebSocket 服务'],['web_app','Web 应用'],['mobile_app','移动应用'],['desktop_app','桌面应用'],['other','其他']] as const;
 
   if (!client) return <Card title="真实被测对象控制" className="mb-5" extra={<span className="text-[11px] text-slate-400">原型模式</span>}><p className="p-5 text-sm text-slate-500">配置 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_API_BASE</code> 与数值型 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_TEAM_ID</code> 后启用真实对象树、创建节点和仓库绑定。</p></Card>;
   return <div className="space-y-5">
-    <section className="rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 p-6 text-white">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0"><div className="mb-2 flex items-center gap-2 text-xs text-emerald-100"><Layers className="h-4 w-4"/>当前被测项目<span className="rounded-full bg-white/15 px-2 py-0.5">真实 API</span></div><h2 className="truncate text-2xl font-bold">{selectedProject?.name ?? '请选择项目'}</h2><p className="mt-1 font-mono text-[11px] text-emerald-100/80">{selectedProject ? `PROJECT #${selectedProject.id}` : greenPassConnectionHint()}</p>{selectedProject?.remark&&<p className="mt-2 max-w-2xl text-xs leading-5 text-emerald-50">{selectedProject.remark}</p>}</div>
-        <div className="grid grid-cols-3 gap-3"><div className="rounded-xl bg-white/10 px-5 py-3 text-center"><div className="text-2xl font-bold">{repos.length}</div><div className="text-[11px] text-emerald-100">代码仓库</div></div><div className="rounded-xl bg-white/10 px-5 py-3 text-center"><div className="text-2xl font-bold">{services.length}</div><div className="text-[11px] text-emerald-100">目录服务</div></div><div className="rounded-xl bg-white/10 px-5 py-3 text-center"><div className="text-2xl font-bold">{new Set(repos.map(r=>r.default_branch)).size}</div><div className="text-[11px] text-emerald-100">分支策略</div></div></div>
+    <PageHeader title="被测对象" desc="按项目管理代码仓库与目录服务；选择服务后核验技术画像，再授权生成用例。">
+      <button type="button" onClick={() => setDialog('project')} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:border-emerald-300 hover:text-emerald-700"><Plus className="h-3.5 w-3.5" />新建项目</button>
+    </PageHeader>
+    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0"><div className="flex items-center gap-2 text-[11px] font-medium text-emerald-700"><FolderTree className="h-4 w-4" />项目范围</div><h2 className="mt-1 truncate text-xl font-semibold text-slate-800">{selectedProject?.name ?? '请选择项目'}</h2><p className="mt-1 text-xs text-slate-500">{selectedProject?.remark ?? '选择一个项目后查看其仓库与目录服务。'}</p></div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3"><div className="rounded-lg bg-slate-50 px-4 py-2.5 text-center"><b className="block text-lg text-slate-800">{repos.length}</b><span className="text-[10px] text-slate-500">代码仓库</span></div><div className="rounded-lg bg-slate-50 px-4 py-2.5 text-center"><b className="block text-lg text-slate-800">{services.length}</b><span className="text-[10px] text-slate-500">目录服务</span></div><div className="hidden rounded-lg bg-slate-50 px-4 py-2.5 text-center sm:block"><b className="block text-lg text-slate-800">{services.filter((service) => servicePreparation(service) === 'ready').length}</b><span className="text-[10px] text-slate-500">可生成用例</span></div></div>
       </div>
-      <div className="mt-5 flex flex-col gap-2 lg:flex-row"><select value={projectID} onChange={(e)=>{setProjectID(e.target.value);void refreshProject(e.target.value);}} className="min-w-0 flex-1 rounded-lg border border-white/20 bg-white px-3 py-2.5 text-xs text-slate-700 outline-none"><option value="">选择项目</option>{targets.filter(t=>t.type==='project').map(t=><option key={t.id} value={t.id}>{t.name} · #{t.id}</option>)}</select><button type="button" onClick={()=>setDialog('project')} className="flex items-center justify-center gap-1.5 rounded-lg border border-white/30 bg-white/10 px-4 py-2.5 text-xs font-medium text-white hover:bg-white/20"><Plus className="h-3.5 w-3.5"/>新建项目</button><button type="button" disabled={!projectID} onClick={()=>setDialog('repos')} className="flex items-center justify-center gap-1.5 rounded-lg bg-white px-4 py-2.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"><GitBranch className="h-3.5 w-3.5"/>添加仓库</button><button type="button" disabled={!projectID||repos.length===0} onClick={()=>setDialog('services')} className="flex items-center justify-center gap-1.5 rounded-lg bg-white px-4 py-2.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"><Files className="h-3.5 w-3.5"/>登记子服务</button></div>
+      <div className="flex flex-col gap-3 bg-slate-50/70 px-5 py-3 lg:flex-row lg:items-center"><label className="min-w-0 flex-1"><span className="sr-only">当前项目</span><select value={projectID} onChange={(e) => catalog.selectProject(e.target.value)} aria-label="当前项目" disabled={catalog.loading} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 outline-none focus:border-emerald-400"><option value="">选择项目</option>{targets.filter((target) => target.type === 'project').map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}</select></label><div className="flex flex-wrap gap-2"><button type="button" disabled={!projectID} onClick={() => setDialog('repos')} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 hover:border-emerald-300 hover:text-emerald-700 disabled:opacity-50"><GitBranch className="h-3.5 w-3.5" />添加仓库</button><button type="button" disabled={!projectID || repos.length === 0} onClick={() => setDialog('services')} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"><Files className="h-3.5 w-3.5" />登记服务</button></div></div>
     </section>
 
     {message&&<div className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-xs ${messageType==='success'?'border-emerald-200 bg-emerald-50 text-emerald-700':'border-red-200 bg-red-50 text-red-700'}`}><CheckCircle2 className="h-4 w-4"/>{message}</div>}
+    {catalog.error && <div role="alert" className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700"><span>目录加载失败：{catalog.error}</span><button type="button" onClick={() => void refreshProject()} className="font-medium hover:underline">重试</button></div>}
+    {profileService && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setProfileService(null); }}>
+      <section role="dialog" aria-modal="true" aria-labelledby="profile-review-title" className="flex max-h-[88dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4"><div><h3 id="profile-review-title" className="text-base font-semibold text-slate-800">核验 AI 技术画像 · {profileService.name}</h3><p className="mt-1 text-xs text-slate-500">先保存已核验的技术画像；生成授权是下一步独立决定，不会因保存画像自动开启。</p></div><button type="button" disabled={busy} aria-label="关闭技术画像" onClick={() => setProfileService(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button></div>
+        <div className="min-h-0 space-y-5 overflow-auto p-6">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600"><span className="block text-[10px] text-slate-400">分析范围</span><code className="mt-1 block break-all text-slate-700">{sourceDirectoryLabel(profileService.source_path)}</code></div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600"><span className="block text-[10px] text-slate-400">模型与来源</span><span className="mt-1 block break-all text-slate-700">{profileSourceLabel(profileService.profile_source)}</span></div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600"><span className="block text-[10px] text-slate-400">分析结果</span><span className="mt-1 block text-slate-700">{profileConfidencePercent(profileService) === null ? '置信度未提供' : `置信度 ${profileConfidencePercent(profileService)}%`} · {analysisTimeLabel(profileService.profile_analyzed_at)}</span></div>
+          </div>
+          <div className="rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-800"><strong>执行边界：</strong>测试工具和测试命令由系统从源码自动识别，仅供审查，不允许在这里填写或执行。GreenPass 当前执行已入库用例中的受限 HTTP 请求和断言；实际执行仍须在“测试执行”选择已登记环境。</div>
+          <div><div className="mb-2 flex items-center justify-between gap-3"><div><h4 className="text-xs font-semibold text-slate-700">模型返回的源码证据</h4><p className="mt-1 text-[11px] text-slate-400">每项均绑定本次分析实际读取的配置文件。请核对文件内容和建议是否一致，再保存核验或授权生成。</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-medium ${(profileService.profile_evidence?.length ?? 0) > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{profileService.profile_evidence?.length ?? 0} 条证据</span></div>{profileService.profile_evidence?.length ? <ul className="space-y-2 text-xs leading-5 text-slate-600">{profileService.profile_evidence.map((evidence, index) => { const item = profileEvidenceParts(evidence); return <li key={index} className="break-words rounded-lg border border-slate-200 bg-white p-3"><span className="mr-2 inline-flex rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">{item.file}</span>{item.reason}</li>; })}</ul> : <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">没有可核验的源码证据。请先重新分析，或由负责人依据代码仓库补充画像；不要仅凭模型建议授权生成。</p>}</div>
+          {profileService.test_strategy && <div><h4 className="mb-2 text-xs font-semibold text-slate-700">AI 建议的测试策略</h4><p className="whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-xs leading-6 text-slate-600">{profileService.test_strategy}</p></div>}
+          <div><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h4 className="text-xs font-semibold text-slate-700">负责人核验的技术配置</h4><p className="mt-1 text-[11px] text-slate-400">仅可修正语言和框架；测试工具与命令由系统识别，不能由用户伪造或补全。</p></div>{profileService.profile_status === 'failed' && <button type="button" disabled={busy} onClick={() => void run(async () => { await client.analyzeProjectServiceProfile(profileService.project_id, profileService.id); setRequestedAnalysis((ids) => [...ids.filter((id) => id !== profileService.id), profileService.id]); await refreshProject(); setProfileService(null); setMessageType('success'); setMessage(`${profileService.name} 已重新提交 AI 技术画像分析`); })} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-100"><RefreshCw className="h-3.5 w-3.5" />重新分析</button>}</div><div className="grid gap-4 sm:grid-cols-2">{PROFILE_FIELDS.map(([key, label, placeholder]) => <label key={key}><span className="mb-1.5 block text-xs font-medium text-slate-600">{label}</span><input value={profileDraft[key]} placeholder={placeholder} onChange={(event) => setProfileDraft((draft) => ({ ...draft, [key]: event.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" /></label>)}</div><div className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><span className="block text-[10px] text-slate-400">系统识别的测试工具</span><code className="mt-1 block break-all text-xs text-slate-700">{profileService.test_tool || '未从当前源码证据识别到自动化测试工具'}</code></div><div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><span className="block text-[10px] text-slate-400">系统识别的测试命令</span><code className="mt-1 block break-all text-xs text-slate-700">{profileService.test_command || '未发现可安全采用的项目测试命令'}</code></div></div></div>
+          {messageType === 'error' && message && <p role="alert" className="rounded-lg bg-red-50 p-3 text-xs text-red-700">{message}</p>}
+        </div>
+        <div className="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4"><div className="flex flex-wrap items-start gap-2 text-[11px]"><span className={'rounded-full px-2 py-1 font-medium ' + (profileAlreadyConfirmed || profileReviewSaved ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>{profileAlreadyConfirmed || profileReviewSaved ? '步骤 1：技术画像已核验' : '步骤 1：请先保存画像核验'}</span><span className={'rounded-full px-2 py-1 font-medium ' + (profileIsAuthorized ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500')}>{profileIsAuthorized ? '步骤 2：已授权生成' : '步骤 2：尚未授权生成'}</span></div><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="max-w-xl text-[11px] leading-5 text-slate-500"><p>保存画像核验只保存技术配置，不会开启生成。授权后才可在“生成用例”页选择此服务；之后仍可暂停授权，画像不会删除。</p><p className="mt-1 text-amber-700">当前服务端正式的“已确认”状态会在授权时落库；前端已把两个动作拆开，后端仍应独立持久化核验状态并强制状态序列。</p></div><div className="flex shrink-0 flex-wrap justify-end gap-2"><button type="button" disabled={busy} onClick={() => setProfileService(null)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs text-slate-600">关闭</button><button type="button" disabled={busy || !profileDraftComplete} onClick={saveProfileReview} className="rounded-lg border border-emerald-200 bg-white px-4 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">{busy ? '保存中…' : profileAlreadyConfirmed || profileReviewSaved ? '更新画像核验' : '保存画像核验（不授权）'}</button>{!profileIsAuthorized && <button type="button" disabled={busy || !profileCanAuthorize} onClick={authorizeProfileGeneration} title={!profileCanAuthorize ? '请先保存画像核验' : undefined} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"><ShieldCheck className="h-3.5 w-3.5" />授权生成用例</button>}</div></div></div>
+      </section>
+    </div>}
 
-    <Card title="项目仓库" extra={<span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">{repos.length} 个仓库</span>}><div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-5 py-3 font-medium">仓库</th><th className="px-5 py-3 font-medium">默认分支</th><th className="px-5 py-3 font-medium">仓库 ID</th><th className="px-5 py-3 font-medium">服务数</th><th className="px-5 py-3 font-medium">状态</th></tr></thead><tbody className="divide-y divide-slate-100">{repos.map(repo=><tr key={repo.id} className="hover:bg-slate-50"><td className="max-w-md px-5 py-3"><div className="font-medium text-slate-700">{repoName(repo.id)}</div><div className="truncate font-mono text-[10px] text-slate-400" title={repo.url}>{repo.url}</div></td><td className="px-5 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 font-mono text-[10px] text-slate-600">{repo.default_branch}</span></td><td className="px-5 py-3 font-mono text-[11px] text-slate-500">#{repo.id}</td><td className="px-5 py-3 font-semibold text-slate-700">{services.filter(s=>s.repo_id===repo.id).length}</td><td className="px-5 py-3"><span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] text-emerald-600">已接入</span></td></tr>)}</tbody></table>{repos.length===0&&<div className="py-10 text-center text-xs text-slate-400">选择项目后查看仓库，或在上方批量添加。</div>}</div></Card>
-
-    <Card title="目录子服务" extra={<span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">{services.length} 个服务</span>}><div className="max-h-[520px] overflow-auto"><table className="w-full text-xs"><thead className="sticky top-0 bg-slate-50 text-left text-slate-500"><tr><th className="px-5 py-3 font-medium">服务名称</th><th className="px-5 py-3 font-medium">所属仓库</th><th className="px-5 py-3 font-medium">源码目录</th><th className="px-5 py-3 font-medium">类型</th><th className="px-5 py-3 font-medium">AI 技术画像</th><th className="px-5 py-3 font-medium">生成测试用例</th></tr></thead><tbody className="divide-y divide-slate-100">{services.map(service=>{const profileReady=service.profile_status==='suggested'||service.profile_status==='confirmed'; const profileComplete=[service.language,service.framework,service.test_tool,service.test_command].every(Boolean); return <tr key={service.id} className="hover:bg-slate-50"><td className="px-5 py-3 font-medium text-slate-700">{service.name}</td><td className="px-5 py-3 text-slate-500">{repoName(service.repo_id)}</td><td className="px-5 py-3 font-mono text-[11px] text-slate-600">{service.source_path}</td><td className="px-5 py-3"><select value={service.kind} disabled={busy} onChange={(e)=>void run(async()=>{await client.updateProjectServiceKind(Number(projectID),service.id,e.target.value);await refreshProject();setMessageType('success');setMessage(`${service.name} 类型已更新`);})} className="w-32 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[11px] font-medium text-slate-700 shadow-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100">{serviceKinds.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></td><td className="px-5 py-3"><div className="flex min-w-[240px] items-center gap-2"><span className={`rounded-full px-2 py-1 text-[10px] ${service.profile_status==='failed'?'bg-red-50 text-red-700':service.profile_status==='analyzing'?'bg-blue-50 text-blue-700':profileReady?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-500'}`}>{service.profile_status==='analyzing'?'分析中':service.profile_status==='suggested'?(profileComplete?'待确认':'待补齐'):service.profile_status==='confirmed'?'已确认':service.profile_status==='failed'?'分析失败':'待分析'}</span>{profileReady&&<span className="truncate text-[10px] text-slate-400">{service.language||'语言?'} · {service.framework||'框架?'} · {service.test_tool||'工具?'}</span>}<button type="button" disabled={busy||service.profile_status==='analyzing'} onClick={()=>void run(async()=>{await client.analyzeProjectServiceProfile(Number(projectID),service.id);await refreshProject();setMessageType('success');setMessage(`${service.name} 已提交 AI 技术画像分析`);})} className="ml-auto whitespace-nowrap text-[10px] font-medium text-emerald-700 hover:underline">{service.profile_status==='failed'?'重试分析':'重新分析'}</button></div></td><td className="px-5 py-3"><div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 shadow-sm"><button type="button" disabled={busy||!profileComplete||!profileReady} title={!profileReady?'请先完成 AI 技术画像分析':!profileComplete?'请补齐语言、框架、测试工具和测试命令':''} onClick={()=>void run(async()=>{if(service.generation_status!=='confirmed'){await client.updateProjectServiceGenerationStatus(Number(projectID),service.id,'confirmed');await refreshProject();setMessageType('success');setMessage(`${service.name} 生成测试用例：是`);}})} className={`rounded-md px-3 py-1.5 text-[11px] font-semibold transition ${service.generation_status==='confirmed'?'bg-emerald-600 text-white shadow-sm':'text-slate-400 hover:bg-white hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50'}`}>是</button><button type="button" disabled={busy} onClick={()=>void run(async()=>{if(service.generation_status==='confirmed'){await client.updateProjectServiceGenerationStatus(Number(projectID),service.id,'pending');await refreshProject();setMessageType('success');setMessage(`${service.name} 生成测试用例：否`);}})} className={`rounded-md px-3 py-1.5 text-[11px] font-semibold transition ${service.generation_status!=='confirmed'?'bg-white text-slate-700 shadow-sm':'text-slate-400 hover:bg-white hover:text-slate-600'}`}>否</button></div></td></tr>})}</tbody></table>{services.length===0&&<div className="py-10 text-center text-xs text-slate-400">暂无目录子服务，请先添加仓库再批量登记。</div>}</div></Card>
+    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-2 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-sm font-semibold text-slate-800">仓库与目录服务</h2><p className="mt-1 text-[11px] text-slate-500">先选择仓库，再处理其目录服务的技术画像与生成授权。</p></div><span className="text-[11px] text-slate-400">项目 → 仓库 → 服务</span></div>
+      {repos.length === 0 && <div className="py-12 text-center text-xs text-slate-400">当前项目尚未接入仓库。请先添加仓库，再登记目录服务。</div>}
+      <div className="divide-y divide-slate-100">{repos.map((repo) => { const repoServices = services.filter((service) => service.repo_id === repo.id); const selected = selectedRepoID === repo.id; return <section key={repo.id} className={selected ? 'bg-emerald-50/30' : ''}>
+        <button type="button" aria-expanded={selected} aria-label={`${selected ? '收起' : '展开'}仓库 ${repoName(repo.id)} 的目录服务`} onClick={() => catalog.selectRepository(selected ? null : repo.id)} className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-slate-50"><span className={'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ' + (selected ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500')}><GitBranch className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-800">{repoName(repo.id)}</span><span className="mt-0.5 block truncate font-mono text-[10px] text-slate-400">{repo.url}</span></span><span className="hidden text-right text-[11px] text-slate-500 sm:block">默认分支<br /><code className="text-slate-700">{repo.default_branch}</code></span><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">{repoServices.length} 个服务</span><ChevronRight className={'h-4 w-4 text-slate-300 transition ' + (selected ? 'rotate-90 text-emerald-600' : '')} /></button>
+        {selected && <div className="border-t border-emerald-100 bg-white px-5 py-4"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2 text-xs font-medium text-slate-700"><Box className="h-4 w-4 text-emerald-600" />目录服务 <span className="font-normal text-slate-400">按「登记 → 分析 → 核验 → 授权」推进</span></div><button type="button" onClick={() => setDialog('services')} className="text-xs font-medium text-emerald-700 hover:underline">为此仓库登记服务</button></div><div className="space-y-3">{repoServices.map((service) => <ServicePreparationCard
+          key={service.id}
+          service={service}
+          repoName={repoName}
+          busy={busy}
+          serviceKinds={serviceKinds}
+          onKindChange={(kind) => void run(async () => {
+            await client.updateProjectServiceKind(Number(projectID), service.id, kind);
+            await refreshProject();
+            setMessageType('success');
+            setMessage(`${service.name} 的对象类型已更新`);
+          })}
+          onAnalyze={() => void run(async () => {
+            await client.analyzeProjectServiceProfile(Number(projectID), service.id);
+            setRequestedAnalysis((ids) => [...ids.filter((id) => id !== service.id), service.id]);
+            await refreshProject();
+            setMessageType('success');
+            setMessage(`${service.name} 已提交 AI 技术画像分析，结果会自动更新`);
+          })}
+          onOpenProfile={() => openProfile(service)}
+          onOpenGeneration={() => { catalog.selectService(service.id); navigate('/generation'); }}
+          onRevokeGeneration={() => void run(async () => {
+            await client.updateProjectServiceGenerationStatus(Number(projectID), service.id, 'pending');
+            await refreshProject();
+            setMessageType('success');
+            setMessage(`${service.name} 的用例生成授权已暂停；技术画像仍保留。`);
+          })}
+        />)}{repoServices.length === 0 && <div className="rounded-lg border border-dashed border-slate-200 py-8 text-center text-xs text-slate-400">该仓库尚未登记目录服务。</div>}</div></div>}
+      </section>; })}</div>
+    </section>
 
     {dialog&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4" onMouseDown={(e)=>{if(e.target===e.currentTarget&&!busy)setDialog(null);}}><div className="max-h-[88vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-slate-200 px-6 py-4"><div><h3 className="text-base font-semibold text-slate-800">{dialog==='project'?'新建被测项目':dialog==='repos'?'批量添加代码仓库':'批量登记目录子服务'}</h3><p className="mt-0.5 text-[11px] text-slate-400">{dialog==='project'?'创建后即可继续添加仓库':dialog==='repos'?`添加到 ${selectedProject?.name ?? '当前项目'}`:'选择仓库并填写实际源码目录，不需要记忆仓库 ID'}</p></div><button type="button" disabled={busy} onClick={()=>setDialog(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"><X className="h-4 w-4"/></button></div><div className="max-h-[65vh] overflow-auto p-6">
       {dialog==='project'&&<div className="space-y-4"><div><label className="mb-1.5 block text-xs font-medium text-slate-600">项目名称</label><input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="例如 im-saas" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-400"/></div><div><label className="mb-1.5 block text-xs font-medium text-slate-600">项目备注</label><textarea value={remark} maxLength={500} onChange={e=>setRemark(e.target.value)} placeholder="说明项目用途、系统范围或测试重点" rows={4} className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-400"/><div className="mt-1 text-right text-[10px] text-slate-400">{remark.length}/500</div></div></div>}
       {dialog==='repos'&&<div className="space-y-3"><div className="grid grid-cols-[1fr_180px_36px] gap-2 px-1 text-[11px] text-slate-400"><span>仓库 URL</span><span>默认分支</span><span/></div>{repoDrafts.map((draft,index)=><div key={index} className="grid grid-cols-[1fr_180px_36px] gap-2"><input value={draft.url} onChange={e=>setRepoDrafts(rows=>rows.map((row,i)=>i===index?{...row,url:e.target.value}:row))} placeholder="https://github.com/org/repo.git" className="rounded-lg border border-slate-200 px-3 py-2 text-xs outline-none focus:border-emerald-400"/><input value={draft.branch} onChange={e=>setRepoDrafts(rows=>rows.map((row,i)=>i===index?{...row,branch:e.target.value}:row))} placeholder="main" className="rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs outline-none focus:border-emerald-400"/><button type="button" disabled={repoDrafts.length===1} onClick={()=>setRepoDrafts(rows=>rows.filter((_,i)=>i!==index))} className="rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-30"><X className="mx-auto h-4 w-4"/></button></div>)}<button type="button" onClick={()=>setRepoDrafts(rows=>[...rows,{url:'',branch:'main'}])} className="flex items-center gap-1 text-xs text-emerald-600 hover:underline"><Plus className="h-3.5 w-3.5"/>增加一行</button></div>}
       {dialog==='services'&&<div className="space-y-3"><div className="grid grid-cols-[190px_1fr_1fr_150px_36px] gap-2 px-1 text-[11px] text-slate-400"><span>所属仓库</span><span>服务名称</span><span>源码目录</span><span>类型</span><span/></div>{serviceDrafts.map((draft,index)=><div key={index} className="grid grid-cols-[190px_1fr_1fr_150px_36px] gap-2"><select value={draft.repoID} onChange={e=>setServiceDrafts(rows=>rows.map((row,i)=>i===index?{...row,repoID:e.target.value}:row))} className="rounded-lg border border-slate-200 px-2 py-2 text-xs outline-none focus:border-emerald-400"><option value="">选择仓库</option>{repos.map(repo=><option key={repo.id} value={repo.id}>{repoName(repo.id)}</option>)}</select><input value={draft.name} onChange={e=>setServiceDrafts(rows=>rows.map((row,i)=>i===index?{...row,name:e.target.value}:row))} placeholder="user-service" className="rounded-lg border border-slate-200 px-3 py-2 text-xs outline-none focus:border-emerald-400"/><input value={draft.path} onChange={e=>setServiceDrafts(rows=>rows.map((row,i)=>i===index?{...row,path:e.target.value}:row))} placeholder="services/user" className="rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs outline-none focus:border-emerald-400"/><select value={draft.kind} onChange={e=>setServiceDrafts(rows=>rows.map((row,i)=>i===index?{...row,kind:e.target.value}:row))} className="rounded-lg border border-slate-200 px-2 py-2 text-xs outline-none focus:border-emerald-400">{serviceKinds.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select><button type="button" disabled={serviceDrafts.length===1} onClick={()=>setServiceDrafts(rows=>rows.filter((_,i)=>i!==index))} className="rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-30"><X className="mx-auto h-4 w-4"/></button></div>)}<button type="button" onClick={()=>setServiceDrafts(rows=>[...rows,{repoID:'',name:'',path:'',kind:'api_service'}])} className="flex items-center gap-1 text-xs text-emerald-600 hover:underline"><Plus className="h-3.5 w-3.5"/>增加一行</button></div>}
-    </div><div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4"><button type="button" disabled={busy} onClick={()=>setDialog(null)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs text-slate-600 hover:bg-slate-50">取消</button><button type="button" disabled={busy||(dialog==='project'&&!name.trim())||(dialog==='repos'&&!repoDrafts.some(r=>r.url.trim()))||(dialog==='services'&&!serviceDrafts.some(s=>s.repoID&&s.name.trim()&&s.path.trim()))} onClick={()=>void run(async()=>{if(dialog==='project'){const created=await client.createTarget({name:name.trim(),remark:remark.trim(),type:'project',kind:'project'});await refresh();setProjectID(String(created.id));setName('');setRemark('');setMessageType('success');setMessage('项目创建成功');}else if(dialog==='repos'){const rows=repoDrafts.filter(r=>r.url.trim()).map(r=>({url:r.url.trim(),default_branch:r.branch.trim()||'main'}));const result=await client.batchAddProjectRepositories(Number(projectID),rows);const failed=result.results.filter(v=>v.error);setMessageType(failed.length?'error':'success');setMessage(failed.length?`${rows.length-failed.length} 条成功，${failed.length} 条失败`:`${rows.length} 个仓库全部添加成功`);setRepoDrafts([{url:'',branch:'main'}]);await refreshProject();}else{const rows=serviceDrafts.filter(s=>s.repoID&&s.name.trim()&&s.path.trim()).map(s=>({repo_id:Number(s.repoID),name:s.name.trim(),source_path:s.path.trim(),kind:s.kind,build_context:s.path.trim()}));const result=await client.batchAddProjectServices(Number(projectID),rows);const failed=result.results.filter(v=>v.error);setMessageType(failed.length?'error':'success');setMessage(failed.length?`${rows.length-failed.length} 条成功，${failed.length} 条失败`:`${rows.length} 个子服务全部创建成功`);setServiceDrafts([{repoID:'',name:'',path:'',kind:'api_service'}]);await refreshProject();}setDialog(null);})} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">{busy?'提交中…':'确认提交'}</button></div></div></div>}
+    </div><div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4"><button type="button" disabled={busy} onClick={()=>setDialog(null)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs text-slate-600 hover:bg-slate-50">取消</button><button type="button" disabled={busy||(dialog==='project'&&!name.trim())||(dialog==='repos'&&!repoDrafts.some(r=>r.url.trim()))||(dialog==='services'&&!serviceDrafts.some(s=>s.repoID&&s.name.trim()&&s.path.trim()))} onClick={()=>void run(async()=>{if(dialog==='project'){const created=await client.createTarget({name:name.trim(),remark:remark.trim(),type:'project',kind:'project'});await refreshProject();catalog.selectProject(String(created.id));setName('');setRemark('');setMessageType('success');setMessage('项目创建成功');}else if(dialog==='repos'){const rows=repoDrafts.filter(r=>r.url.trim()).map(r=>({url:r.url.trim(),default_branch:r.branch.trim()||'main'}));const result=await client.batchAddProjectRepositories(Number(projectID),rows);const failed=result.results.filter(v=>v.error);setMessageType(failed.length?'error':'success');setMessage(failed.length?`${rows.length-failed.length} 条成功，${failed.length} 条失败`:`${rows.length} 个仓库全部添加成功`);setRepoDrafts([{url:'',branch:'main'}]);await refreshProject();}else{const rows=serviceDrafts.filter(s=>s.repoID&&s.name.trim()&&s.path.trim()).map(s=>({repo_id:Number(s.repoID),name:s.name.trim(),source_path:s.path.trim(),kind:s.kind,build_context:s.path.trim()}));const result=await client.batchAddProjectServices(Number(projectID),rows);setRequestedAnalysis((ids)=>[...ids,...result.results.flatMap((item)=>item.id?[item.id]:[])]);const failed=result.results.filter(v=>v.error);setMessageType(failed.length?'error':'success');setMessage(failed.length?`${rows.length-failed.length} 条成功，${failed.length} 条失败`:`${rows.length} 个子服务全部创建成功`);setServiceDrafts([{repoID:'',name:'',path:'',kind:'api_service'}]);await refreshProject();}setDialog(null);})} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">{busy?'提交中…':'确认提交'}</button></div></div></div>}
   </div>;
 }

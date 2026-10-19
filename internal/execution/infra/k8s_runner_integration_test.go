@@ -15,7 +15,7 @@ import (
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
 
-// TestK8sRunner 在 kind gp-runner 命名空间建 busybox Job，验证 pass + 证据哈希 + 回收。
+// TestK8sRunner 在 kind gp-runner 命名空间用声明式 HTTP 用例建 Job，验证真实请求、断言、证据哈希与回收。
 func TestK8sRunner(t *testing.T) {
 	kc := os.Getenv("KUBECONFIG")
 	if kc == "" {
@@ -33,7 +33,18 @@ func TestK8sRunner(t *testing.T) {
 	ctx := context.Background()
 	spec := []*domain.CaseSpec{{
 		CaseID: 4001, CaseVersion: 1, TargetID: 1003, Env: "test",
-		Script: map[string]any{"image": "curlimages/curl:8.10.1", "command": []any{"sh", "-c", "curl --fail --silent http://gateway.open-im-local.svc.cluster.local:3002/actuator/health && echo gp-runner-ok"}},
+		BaseURL: "http://gp-server.gp.svc.cluster.local:8080", RequiresSandbox: true,
+		Script: map[string]any{
+			"scenario": "api",
+			"request": map[string]any{
+				"method": "GET", "path": "/healthz",
+				"headers": map[string]any{"Accept": "application/json"},
+			},
+			"assertions": []any{
+				map[string]any{"type": "status", "expected_status": float64(200)},
+				map[string]any{"type": "body_contains", "value": "ok"},
+			},
+		},
 	}}
 	results, err := r.Execute(ctx, spec)
 	if err != nil {
@@ -51,8 +62,8 @@ func TestK8sRunner(t *testing.T) {
 	if len(results[0].Evidence.Screenshots) != 0 {
 		t.Fatalf("API runner must not publish synthetic screenshots: %+v", results[0].Evidence.Screenshots)
 	}
-	if !strings.Contains(results[0].ResultText, "gp-runner-ok") {
-		t.Fatalf("want log captured got text=%q", results[0].ResultText)
+	if !strings.Contains(results[0].ResultText, "assertions=passed") {
+		t.Fatalf("want declarative HTTP assertions to pass, got text=%q", results[0].ResultText)
 	}
 	t.Logf("k8s runner ok: status=%s hash=%s", results[0].Status, results[0].Evidence.Hash)
 }

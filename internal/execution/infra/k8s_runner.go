@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/openware-io/open-green-pass/internal/execution/domain"
+	"github.com/openware-io/open-green-pass/internal/execution/infra/httpcase"
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
 
@@ -46,7 +47,7 @@ func NewK8sRunner(gen *id.Generator, cfg K8sRunnerConfig) (*K8sRunner, error) {
 		cfg.Namespace = "gp-runner"
 	}
 	if cfg.Image == "" {
-		cfg.Image = "busybox:1.36"
+		cfg.Image = "curlimages/curl:8.10.1"
 	}
 	if cfg.ServiceAccountName == "" {
 		cfg.ServiceAccountName = "gp-runner-job"
@@ -120,8 +121,17 @@ func (r *K8sRunner) executeOne(ctx context.Context, s *domain.CaseSpec) (*domain
 		image = r.cfg.Image
 	}
 	cmd := ss.Command
+	var err error
+	if root, ok := s.Script.(map[string]any); ok {
+		if _, hasRequest := root["request"].(map[string]any); hasRequest {
+			cmd, err = httpcase.BuildCommand(s.Script, s.BaseURL)
+			if err != nil {
+				return nil, fmt.Errorf("build declarative API case: %w", err)
+			}
+		}
+	}
 	if len(cmd) == 0 {
-		cmd = []string{"sh", "-c", "echo gp-runner-ok"}
+		return nil, fmt.Errorf("case has no executable script or supported declarative API request")
 	}
 	jobName := fmt.Sprintf("gp-run-%d-%d", s.CaseID, time.Now().UnixNano()%1000000)
 	job := &batchv1.Job{
@@ -172,7 +182,7 @@ func (r *K8sRunner) executeOne(ctx context.Context, s *domain.CaseSpec) (*domain
 			},
 		},
 	}
-	_, err := r.cl.BatchV1().Jobs(r.cfg.Namespace).Create(ctx, job, metav1.CreateOptions{})
+	_, err = r.cl.BatchV1().Jobs(r.cfg.Namespace).Create(ctx, job, metav1.CreateOptions{})
 	if err != nil && !apierrors.IsAlreadyExists(err) {
 		return nil, err
 	}

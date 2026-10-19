@@ -44,11 +44,19 @@ func transitionGeneration(ctx context.Context, input BatchActivityInput, next do
 }
 
 func FetchSource(ctx context.Context, input BatchActivityInput) error {
-	return transitionGeneration(generationContext(ctx, input), input, domain.GenerationFetching)
+	actCtx := generationContext(ctx, input)
+	if err := transitionGeneration(actCtx, input, domain.GenerationFetching); err != nil {
+		return err
+	}
+	return generationDeps.store.FreezeSource(actCtx, input.TeamID, input.BatchID)
 }
 
 func ParseAndNormalize(ctx context.Context, input BatchActivityInput) error {
-	return transitionGeneration(generationContext(ctx, input), input, domain.GenerationParsing)
+	actCtx := generationContext(ctx, input)
+	if err := transitionGeneration(actCtx, input, domain.GenerationParsing); err != nil {
+		return err
+	}
+	return generationDeps.store.NormalizeSourceSnapshot(actCtx, input.TeamID, input.BatchID)
 }
 
 func GenerateSeeds(ctx context.Context, input BatchActivityInput) error {
@@ -64,7 +72,13 @@ func QualityGate(ctx context.Context, input BatchActivityInput) error {
 	if err := transitionGeneration(actCtx, input, domain.GenerationQualityCheck); err != nil {
 		return err
 	}
-	if err := generationDeps.store.MarkSeedsQuality(actCtx, input.TeamID, input.BatchID, "passed"); err != nil {
+	if err := generationDeps.store.QualityCheckSeeds(actCtx, input.TeamID, input.BatchID); err != nil {
+		return err
+	}
+	// The durable record is an evidence envelope, not a second source-code
+	// repository. This runs only after the model and deterministic gate have
+	// consumed the bounded source bodies.
+	if err := generationDeps.store.PurgeSourceContents(actCtx, input.TeamID, input.BatchID); err != nil {
 		return err
 	}
 	return transitionGeneration(actCtx, input, domain.GenerationReview)
@@ -76,7 +90,13 @@ func FailGeneration(ctx context.Context, input BatchActivityInput) error {
 	if err != nil {
 		return err
 	}
-	if batch.State == domain.GenerationFailed || batch.State == domain.GenerationApproved || batch.State == domain.GenerationRejected {
+	if batch.State == domain.GenerationApproved || batch.State == domain.GenerationRejected {
+		return nil
+	}
+	if err := generationDeps.store.RecordFailureStage(actCtx, input.TeamID, input.BatchID, input.FailureStage); err != nil {
+		return err
+	}
+	if batch.State == domain.GenerationFailed {
 		return nil
 	}
 	_, err = generationDeps.svc.Transition(actCtx, input.TeamID, input.BatchID, batch.StateVersion, domain.GenerationFailed)
@@ -87,7 +107,7 @@ func RecordReview(ctx context.Context, payload ReviewSignalPayload) error {
 	if generationDeps == nil {
 		return fmt.Errorf("generation dependencies are not configured")
 	}
-	return nil
+	return generationDeps.store.RecordReview(rls.WithTenant(context.Background(), payload.TeamID), payload.TeamID, payload.BatchID, payload.ActorID, payload.StateVersion, payload.Decision, payload.RequestID)
 }
 
 func CommitVersions(ctx context.Context, payload ReviewSignalPayload) error {
@@ -95,18 +115,35 @@ func CommitVersions(ctx context.Context, payload ReviewSignalPayload) error {
 		return fmt.Errorf("generation dependencies are not configured")
 	}
 	actCtx := rls.WithTenant(context.Background(), payload.TeamID)
-	if err := generationDeps.store.CommitSeeds(actCtx, payload.TeamID, payload.BatchID, generationDeps.gen.Next); err != nil {
+	// Review is a human decision, but the final commit boundary must still
+	// re-run the deterministic quality gate. This protects against legacy or
+	// manually altered batches that reached review with stale "passed" flags.
+	if err := generationDeps.store.QualityCheckSeeds(actCtx, payload.TeamID, payload.BatchID); err != nil {
+		return err
+	}
+	if err := generationDeps.store.RecordReview(actCtx, payload.TeamID, payload.BatchID, payload.ActorID, payload.StateVersion, "approve", payload.RequestID); err != nil {
+		return err
+	}
+	if err := generationDeps.store.CommitSeeds(actCtx, payload.TeamID, payload.BatchID, payload.ActorID, generationDeps.gen.Next); err != nil {
 		return err
 	}
 	batch, err := generationDeps.svc.Find(actCtx, payload.TeamID, payload.BatchID)
 	if err != nil {
 		return err
 	}
+	if batch.State == domain.GenerationApproved {
+		return nil
+	}
 	_, err = generationDeps.svc.Transition(actCtx, payload.TeamID, payload.BatchID, batch.StateVersion, domain.GenerationApproved)
 	return err
 }
 
-func ApplyRollback(ctx context.Context, payload RollbackSignalPayload) error { return nil }
+func ApplyRollback(ctx context.Context, payload RollbackSignalPayload) error {
+	if generationDeps == nil {
+		return fmt.Errorf("generation dependencies are not configured")
+	}
+	return generationDeps.store.RecordReview(rls.WithTenant(context.Background(), payload.TeamID), payload.TeamID, payload.BatchID, payload.ActorID, payload.StateVersion, "rollback", payload.RequestID)
+}
 func EmitAudit(ctx context.Context, payload ReviewSignalPayload) error {
 	activity.GetLogger(ctx).Info("generation batch approved", "batch_id", payload.BatchID)
 	return nil

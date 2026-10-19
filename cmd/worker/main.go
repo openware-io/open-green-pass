@@ -17,6 +17,7 @@ import (
 
 	aiapp "github.com/openware-io/open-green-pass/internal/ai/application"
 	aiinfra "github.com/openware-io/open-green-pass/internal/ai/infra"
+	aiaudit "github.com/openware-io/open-green-pass/internal/ai/trusted_audit"
 	aiworkflow "github.com/openware-io/open-green-pass/internal/ai/workflow"
 	cicdapp "github.com/openware-io/open-green-pass/internal/cicd/application"
 	cicdinfra "github.com/openware-io/open-green-pass/internal/cicd/infra"
@@ -161,10 +162,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer c.Close()
-	generationStore := aiinfra.NewGenerationBatchStore(dbb)
+	generationStore := aiinfra.NewGenerationBatchStore(dbb, gen)
 	generationSvc := aiapp.NewGenerationBatchService(generationStore)
+	generationSvc.SetScopePort(generationStore)
 	generationController := aiworkflow.NewTemporalController(c)
-	generationSvc.SetReviewPorts(generationController, nil)
+	generationSvc.SetReviewPorts(generationController, aiaudit.New(auditSvc))
 	aiworkflow.SetGenerationDeps(generationSvc, generationStore, gen)
 	temporalController := workflow.NewTemporalController(c)
 	runSvc.SetWorkflowController(temporalController)
@@ -174,6 +176,7 @@ func main() {
 	w.RegisterWorkflow(workflow.ExecuteRunWorkflow)
 	w.RegisterActivity(workflow.ActivityRunVersionCheck)
 	w.RegisterActivity(workflow.ActivityExecuteRun)
+	w.RegisterActivity(workflow.ActivityMarkRunFailed)
 
 	gw := worker.New(c, "gp-generation", worker.Options{})
 	gw.RegisterWorkflow(aiworkflow.GenerationPipelineWorkflow)

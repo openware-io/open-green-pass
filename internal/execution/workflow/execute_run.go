@@ -39,9 +39,11 @@ func ExecuteRunWorkflow(ctx workflow.Context, input ExecuteRunInput) (*ExecuteRu
 	// 1) 版本校验（"测了没白测"前置阻断）
 	var vc VersionCheckResult
 	if err := workflow.ExecuteActivity(ctx, ActivityRunVersionCheck, input.TeamID, input.RunID).Get(ctx, &vc); err != nil {
+		_ = workflow.ExecuteActivity(ctx, ActivityMarkRunFailed, input.TeamID, input.RunID).Get(ctx, nil)
 		return nil, err
 	}
 	if !vc.Ok {
+		_ = workflow.ExecuteActivity(ctx, ActivityMarkRunFailed, input.TeamID, input.RunID).Get(ctx, nil)
 		return &ExecuteRunResult{State: domain.RunFailed}, nil
 	}
 	var ignored struct{}
@@ -51,8 +53,16 @@ func ExecuteRunWorkflow(ctx workflow.Context, input ExecuteRunInput) (*ExecuteRu
 	// Pause is a durable workflow signal. A pause request is consumed before
 	// dispatch, and the workflow remains suspended until resume arrives.
 	// 2) 执行（含 collect→gate→report→done）
+	// Executing an API case can have externally visible effects. Do not
+	// transparently retry the entire batch after an ambiguous runner failure;
+	// close the run and require an explicit user retry instead.
+	executeCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Minute,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 1},
+	})
 	var ex ExecuteResult
-	if err := workflow.ExecuteActivity(ctx, ActivityExecuteRun, input.TeamID, input.RunID).Get(ctx, &ex); err != nil {
+	if err := workflow.ExecuteActivity(executeCtx, ActivityExecuteRun, input.TeamID, input.RunID).Get(executeCtx, &ex); err != nil {
+		_ = workflow.ExecuteActivity(ctx, ActivityMarkRunFailed, input.TeamID, input.RunID).Get(ctx, nil)
 		return nil, err
 	}
 	return &ExecuteRunResult{State: ex.State, PassCount: ex.PassCount, TotalCount: ex.TotalCount}, nil

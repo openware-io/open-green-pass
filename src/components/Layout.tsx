@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { SidebarProvider, SidebarInset, Sidebar } from '@/components/ui/sidebar';
@@ -6,10 +6,13 @@ import { NAV_GROUPS, ASSET_TREE, CASES, REQUIREMENTS, CONTRACTS, TEAMS, CURRENT_
 import { cn } from '@/lib/utils';
 import { useCurrentUser, loginStore } from '@/context/login';
 import { createGreenPassClient } from '@/api/client';
+import { useObjectCatalog } from '@/context/objectCatalog';
 const accountApi = createGreenPassClient(Number(import.meta.env.VITE_GP_TEAM_ID ?? 1001), undefined, Number(import.meta.env.VITE_GP_USER_ID ?? 42));
 const LOGIN_LABEL: Record<string, string> = { password: '账号密码', phone: '手机号', wechat: '微信扫码' };
 import { AssetLevelContext, LEVEL_ORDER, LEVEL_LABEL, type AssetLevel } from '@/context';
-import { Target, Settings2, Files, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, ChevronRight, Search, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes, UserCircle, LogOut, Smartphone, MessageCircle, Workflow, Zap, Plug, Settings } from 'lucide-react';
+import { AssistantDialog } from '@/components/AssistantDialog';
+import type { AssistantUIAction } from '@/api/client';
+import { Target, Settings2, Files, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, ChevronRight, Search, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes, UserCircle, LogOut, Smartphone, MessageCircle, Workflow, Zap, Plug, Settings, BotMessageSquare } from 'lucide-react';
 
 const ICONS: Record<string, typeof Target> = {
   '/target': Target,
@@ -30,6 +33,7 @@ const ICONS: Record<string, typeof Target> = {
   '/cicd-trigger': Zap,
   '/cicd-connector': Plug,
   '/settings': Settings,
+  '/assistant': BotMessageSquare,
   '/teams': Users,
   '/models': Brain,
 };
@@ -38,7 +42,7 @@ const PARENT_ICONS: Record<string, typeof Target> = {
 };
 
 // 平台级/全局级页面：不隶属于某个被测对象，页首不显示被测对象面包屑路径与工程层次筛选
-const PLATFORM_ROUTES = ['/settings', '/teams', '/models', '/cicd', '/cicd-trigger', '/cicd-connector', '/audit', '/audit-cost', '/audit-exec', '/audit-op'];
+const PLATFORM_ROUTES = ['/settings', '/teams', '/models', '/cicd', '/cicd-trigger', '/cicd-connector', '/audit', '/audit-cost', '/audit-exec', '/audit-op', '/assistant'];
 // 运行相关页面：展示当前关联的 CI 运行编号与运行态；其余页面显示「CI 未运行」灰色态
 const RUN_RELATED_ROUTES = ['/exec', '/history', '/report', '/gate', '/audit', '/audit-cost', '/audit-exec', '/audit-op'];
 
@@ -59,27 +63,44 @@ const TYPE_LEVEL_COLOR: Record<string, string> = {
 };
 
 // 被测对象维度下拉：点击面包屑中间节点，显示同级被测对象选项，选中联动全局上下文
-function CrumbSelect({ label, siblings, children, currentId, onSelect, active }: {
-  label: string; siblings: IAssetNode[]; children?: IAssetNode[]; currentId: string; onSelect: (n: IAssetNode) => void; active?: boolean;
+function CrumbSelect({ label, siblings, children, currentId, onSelect, active, showMetrics = true }: {
+  label: string; siblings: IAssetNode[]; children?: IAssetNode[]; currentId: string; onSelect: (n: IAssetNode) => void; active?: boolean; showMetrics?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLSpanElement>(null);
+  const menuId = useId();
+  useEffect(() => {
+    if (!open) return;
+    const closeWhenOutside = (event: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', closeWhenOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeWhenOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
   return (
-    <span className="relative inline-flex items-center">
-      <button type="button" onClick={() => setOpen(!open)}
+    <span ref={rootRef} className="relative inline-flex items-center">
+      <button type="button" aria-expanded={open} aria-controls={menuId} onClick={() => setOpen((value) => !value)}
         className={'inline-flex items-center gap-0.5 font-medium ' + (active ? 'text-emerald-600' : 'text-slate-600 hover:text-emerald-600')}>
         {label}<ChevronDown className="w-3 h-3 text-slate-400" />
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[200px] max-h-[320px] overflow-y-auto">
+        <div id={menuId} role="menu" aria-label={`${label} 的被测对象目录`} className="absolute top-full left-0 mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[200px] max-h-[320px] overflow-y-auto">
           {children && children.length > 0 && (
             <>
               <div className="px-3 py-1 text-[10px] text-slate-400">进入子级 · {children.length} 项</div>
               {children.map((ch) => (
-                <button key={ch.id} type="button" onClick={() => { onSelect(ch); setOpen(false); }}
+                <button key={ch.id} type="button" role="menuitem" onClick={() => { onSelect(ch); setOpen(false); }}
                   className="block w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-1.5">
                   <span className={'w-1.5 h-1.5 rounded-sm ' + (TYPE_LEVEL_COLOR[ch.type] ?? 'bg-slate-300')} />
                   <span className="truncate">{ch.name}</span>
-                  <span className="ml-auto text-[9px] text-slate-400 flex-shrink-0">{ch.coverage}%</span>
+                  {showMetrics && <span className="ml-auto text-[9px] text-slate-400 flex-shrink-0">{ch.coverage}%</span>}
                   <ChevronRight className="w-3 h-3 text-slate-300 flex-shrink-0" />
                 </button>
               ))}
@@ -88,13 +109,13 @@ function CrumbSelect({ label, siblings, children, currentId, onSelect, active }:
           )}
           <div className="px-3 py-1 text-[10px] text-slate-400">同级被测对象 · {siblings.length} 项</div>
           {siblings.map((s) => (
-            <button key={s.id} type="button" onClick={() => { onSelect(s); setOpen(false); }}
+            <button key={s.id} type="button" role="menuitem" onClick={() => { onSelect(s); setOpen(false); }}
               className={'block w-full text-left px-3 py-1.5 text-xs ' + (s.id === currentId ? 'bg-emerald-50 text-emerald-600 font-medium' : 'text-slate-600 hover:bg-slate-50')}>
               <span className="inline-flex items-center gap-1.5">
                 <span className={'w-1.5 h-1.5 rounded-sm ' + (TYPE_LEVEL_COLOR[s.type] ?? 'bg-slate-300')} />
                 {s.name}
               </span>
-              <span className="ml-2 text-[9px] text-slate-400">{s.coverage}%</span>
+              {showMetrics && <span className="ml-2 text-[9px] text-slate-400">{s.coverage}%</span>}
             </button>
           ))}
         </div>
@@ -116,7 +137,7 @@ const STAGE_BAR = [
 ];
 const STAGE_BAR_DOT: Record<string, string> = { done: 'bg-emerald-500', partial: 'bg-amber-500', block: 'bg-red-500', todo: 'bg-slate-300' };
 
-function ObjectStageBar({ asset, current }: { asset: IAssetNode; current: string }) {
+function ObjectStageBar({ asset, current, real = false }: { asset: IAssetNode; current: string; real?: boolean }) {
   return (
     <div className="mb-5 rounded-xl border border-slate-200 bg-white px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-2">
       <span className="inline-flex items-center gap-2.5">
@@ -134,8 +155,7 @@ function ObjectStageBar({ asset, current }: { asset: IAssetNode; current: string
               className={'inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] transition ' + (active ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-emerald-50')}>
               <Icon className="w-3.5 h-3.5" />
               <span className="font-medium">{s.label}</span>
-              <span className={'w-1.5 h-1.5 rounded-full ' + STAGE_BAR_DOT[s.status]} />
-              <span className="opacity-75">{s.value}</span>
+              {!real && <><span className={'w-1.5 h-1.5 rounded-full ' + STAGE_BAR_DOT[s.status]} /><span className="opacity-75">{s.value}</span></>}
             </Link>
           );
         })}
@@ -152,20 +172,35 @@ const PREP_STEPS = [
 ];
 const PREP_ROUTES = ['/target', '/generation', '/trace'];
 
-function PrepStepBar({ asset, current, realServiceName }: { asset: IAssetNode; current: string; realServiceName?: string }) {
+function PrepStepBar({ asset, current, real = false, definitionReady = false }: {
+  asset: IAssetNode;
+  current: string;
+  /** Real mode deliberately uses persisted service state, not the current URL. */
+  real?: boolean;
+  definitionReady?: boolean;
+}) {
   return (
     <div className="mb-5 rounded-xl border border-slate-200 bg-white px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-2">
       <span className="inline-flex items-center gap-2.5">
         <span className="w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center"><Target className="w-4 h-4" /></span>
-        <span className="text-sm font-semibold text-slate-800">{realServiceName || asset.name}</span>
+        <span className="text-sm font-semibold text-slate-800">{asset.name}</span>
         <span className="text-[10px] text-slate-400">被测对象 · 测试准备流程</span>
+        {real && <span className={'rounded-full px-2 py-0.5 text-[10px] font-medium ' + (definitionReady ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>
+          {definitionReady ? '技术画像已确认' : '待完成技术画像'}
+        </span>}
       </span>
       <span className="w-px h-5 bg-slate-200" />
       <span className="inline-flex items-center flex-wrap gap-1">
         {PREP_STEPS.map((s, i) => {
           const Icon = s.icon;
           const active = current === s.path;
-          const done = PREP_STEPS.findIndex((x) => x.path === current) > i;
+          // A route is not evidence that its predecessor has completed. In
+          // real mode only the persisted service/profile confirmation marks
+          // "定义对象" complete; generation and trace completion are owned by
+          // their respective workflows and must not be inferred here.
+          const done = real
+            ? s.path === '/target' && definitionReady && !active
+            : PREP_STEPS.findIndex((x) => x.path === current) > i;
           return (
             <span key={s.path} className="inline-flex items-center gap-1">
               {i > 0 && <ChevronRight className="w-3.5 h-3.5 text-slate-300" />}
@@ -185,28 +220,66 @@ function PrepStepBar({ asset, current, realServiceName }: { asset: IAssetNode; c
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [selectedAsset, setSelectedAsset] = useState<IAssetNode>(ASSET_TREE.children![0].children![0].children![0]);
-  const [realServiceName, setRealServiceName] = useState(() => { try { return localStorage.getItem('greenpass_active_service_name') ?? ''; } catch { return ''; } });
-  useEffect(() => { const onService = (event: Event) => setRealServiceName((event as CustomEvent<string>).detail ?? ''); window.addEventListener('greenpass-service-context', onService); return () => window.removeEventListener('greenpass-service-context', onService); }, []);
+  const catalog = useObjectCatalog();
+  const [selectedMockAsset, setSelectedMockAsset] = useState<IAssetNode>(ASSET_TREE.children![0].children![0].children![0]);
+  const [teamName, setTeamName] = useState('');
+  useEffect(() => { if (catalog.enabled) void accountApi.currentTeam().then((team) => setTeamName(team.name)).catch(() => setTeamName('')); }, [catalog.enabled]);
+  const assetTree: IAssetNode = catalog.enabled ? {
+    id: 'catalog-root', name: '被测对象库', type: 'service-group', coverage: 0, gateRate: 0,
+    children: catalog.projects.map((project) => ({
+      id: String(project.id), name: project.name, type: 'project', coverage: 0, gateRate: 0,
+      children: String(project.id) === catalog.projectId ? catalog.repos.map((repo) => ({
+        id: `repository:${repo.id}`, name: repo.url.split('/').pop()?.replace(/\.git$/, '') || repo.url,
+        type: 'service-group', coverage: 0, gateRate: 0,
+        children: catalog.services.filter((service) => service.repo_id === repo.id).map((service) => ({
+          id: String(service.id), name: service.name, type: 'service', coverage: 0, gateRate: 0, repo: repo.url,
+        })),
+      })) : [],
+    })),
+  } : ASSET_TREE;
+  const realSelectedId = catalog.serviceId ? String(catalog.serviceId) : catalog.repoId ? `repository:${catalog.repoId}` : catalog.projectId;
+  const selectedAsset = catalog.enabled ? findChain(assetTree, realSelectedId)?.at(-1) ?? assetTree : selectedMockAsset;
+  const selectedCatalogService = catalog.services.find((service) => service.id === catalog.serviceId) ?? null;
+  const definitionReady = Boolean(
+    selectedCatalogService
+      && selectedCatalogService.generation_status === 'confirmed'
+      && selectedCatalogService.profile_status === 'confirmed'
+      && [selectedCatalogService.language, selectedCatalogService.framework]
+        .every((value) => Boolean(value?.trim())),
+  );
+  const setSelectedAsset = (node: IAssetNode) => {
+    if (!catalog.enabled) { setSelectedMockAsset(node); return; }
+    if (node.type === 'project') catalog.selectProject(node.id);
+    else if (node.id.startsWith('repository:')) catalog.selectRepository(Number(node.id.slice('repository:'.length)));
+    else if (node.type === 'service') catalog.selectService(Number(node.id));
+  };
   const [navOpen, setNavOpen] = useState<Record<string, boolean>>({});
   const [userMenu, setUserMenu] = useState(false);
   const [wechatBinding, setWechatBinding] = useState<{bound:boolean;display_name?:string}>({bound:false});
   useEffect(()=>{if(userMenu)void accountApi.wechatBinding().then(setWechatBinding).catch(()=>setWechatBinding({bound:false}));},[userMenu]);
   const user = useCurrentUser()!;
   const isSuperAdmin = user.role === '团队所有者';
-  const [level, setLevel] = useState<AssetLevel>('service');
+  const [mockLevel, setLevel] = useState<AssetLevel>('service');
+  const level: AssetLevel = catalog.enabled ? catalog.serviceId ? 'service' : catalog.repoId ? 'group' : 'system' : mockLevel;
   const [query, setQuery] = useState('');
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const isPlatform = PLATFORM_ROUTES.includes(location.pathname);
   const isRunCtx = RUN_RELATED_ROUTES.includes(location.pathname);
 
   const setLevelAndAsset = (l: AssetLevel) => {
+    if (catalog.enabled) {
+      if (l === 'system') catalog.selectProject(catalog.projectId);
+      else if (l === 'group') { const repoId = catalog.repoId ?? catalog.repos[0]?.id; if (repoId) catalog.selectRepository(repoId); }
+      else if (l === 'service') { const serviceId = catalog.serviceId ?? catalog.services.find((service) => !catalog.repoId || service.repo_id === catalog.repoId)?.id; if (serviceId) catalog.selectService(serviceId); }
+      return;
+    }
     setLevel(l);
     if (l === 'system') setSelectedAsset(ASSET_TREE.children![0]);
     else if (l === 'group') setSelectedAsset(ASSET_TREE.children![0].children![0]);
     else if (l === 'service') { if (selectedAsset.type !== 'service') setSelectedAsset(ASSET_TREE.children![0].children![0].children![0]); }
     else if (l === 'module') { if (selectedAsset.type === 'service' && selectedAsset.children) setSelectedAsset(selectedAsset.children[0]); }
   };
-  const chain = findChain(ASSET_TREE, selectedAsset.id) ?? [ASSET_TREE];
+  const chain = findChain(assetTree, selectedAsset.id) ?? [assetTree];
   const crumbs = chain;
   // 面包屑选中同级被测对象：同步全局上下文 + 层次高亮（与被测对象维度/层次两筛选联动）
   const selectCrumb = (node: IAssetNode) => {
@@ -220,6 +293,16 @@ export function Layout() {
   const handleSearch = () => {
     const q = query.trim().toLowerCase();
     if (!q) { toast('请输入关键词（用例 / 需求 / 契约 / 服务）'); return; }
+    if (catalog.enabled) {
+      const project = catalog.projects.find((item) => item.name.toLowerCase().includes(q));
+      const service = catalog.services.find((item) => (item.name + ' ' + item.source_path).toLowerCase().includes(q));
+      const page = NAV_GROUPS.flatMap((group) => group.items).find((item) => (item.label + item.path).toLowerCase().includes(q));
+      if (service) { catalog.selectService(service.id); navigate('/generation'); }
+      else if (project) { catalog.selectProject(String(project.id)); navigate('/target'); }
+      else if (page) navigate(page.path);
+      else toast.warning('未找到匹配的项目、当前项目服务或页面');
+      return;
+    }
     const match = (arr: { id: string; title?: string; name?: string; provider?: string }[]) =>
       arr.filter((x) => (x.id + ' ' + (x.title ?? x.name ?? x.provider ?? '')).toLowerCase().includes(q));
     const cases = match(CASES);
@@ -315,21 +398,23 @@ export function Layout() {
         </div>
       </Sidebar>
 
-      <SidebarInset className="flex flex-col overflow-hidden !bg-slate-100">
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center px-6 flex-shrink-0">
-          <div className="flex items-center text-sm text-slate-500 gap-0 flex-wrap">
-            {!isPlatform && (
+      <SidebarInset className="!h-[100dvh] !min-h-0 flex flex-col overflow-hidden !bg-slate-100">
+        <header className="min-h-16 bg-white border-b border-slate-200 flex flex-wrap items-center gap-x-4 gap-y-2 px-6 py-3 flex-shrink-0">
+          <div className="flex min-w-0 items-center text-sm text-slate-500 gap-0 flex-wrap" aria-label="当前被测对象导航">
+            {!isPlatform && location.pathname !== '/target' && (
               <>
                 {crumbs.map((n, i) => (
                   <span key={n.id} className="inline-flex items-center">
                     {i > 0 && <span className="mx-2 text-slate-300">/</span>}
                     {i > 0 ? (
-                      <CrumbSelect label={n.name} siblings={crumbs[i - 1]?.children ?? []} children={n.children ?? []} currentId={n.id} onSelect={selectCrumb} active={i === crumbs.length - 1} />
+                      <CrumbSelect label={n.name} siblings={crumbs[i - 1]?.children ?? []} children={n.children ?? []} currentId={n.id} onSelect={selectCrumb} active={i === crumbs.length - 1} showMetrics={!catalog.enabled} />
                     ) : (
                       <span className="text-slate-400">{n.name}</span>
                     )}
                   </span>
                 ))}
+                {catalog.enabled && !catalog.projectId && <span className="ml-2 text-xs text-slate-400">{catalog.loading ? '加载项目中…' : '暂无项目'}</span>}
+                {catalog.enabled && catalog.error && <button type="button" onClick={() => void catalog.refresh()} title={catalog.error} className="ml-2 text-xs text-red-600">加载失败 · 重试</button>}
                 <span className="mx-2 text-slate-300">/</span>
               </>
             )}
@@ -338,12 +423,12 @@ export function Layout() {
             </span>
           </div>
           <div className="ml-auto flex items-center gap-4">
-            {!isPlatform && (
+            {!isPlatform && location.pathname !== '/target' && (
               <div className="flex items-center bg-slate-100 rounded-lg p-0.5 text-[11px]">
-                {LEVEL_ORDER.map((lv) => (
-                  <button key={lv} type="button" onClick={() => setLevelAndAsset(lv)}
-                    className={cn('px-2.5 py-1 rounded', level === lv ? 'bg-emerald-600 text-white' : 'text-slate-500')}>
-                    {LEVEL_LABEL[lv]}
+                {(catalog.enabled ? LEVEL_ORDER.filter((lv) => lv !== 'module') : LEVEL_ORDER).map((lv) => (
+                  <button key={lv} type="button" onClick={() => setLevelAndAsset(lv)} disabled={catalog.enabled && (catalog.loading || (lv === 'group' && !catalog.repos.length) || (lv === 'service' && !catalog.services.some((service) => !catalog.repoId || service.repo_id === catalog.repoId)))}
+                    className={cn('px-2.5 py-1 rounded disabled:opacity-40', level === lv ? 'bg-emerald-600 text-white' : 'text-slate-500')}>
+                    {catalog.enabled && lv === 'group' ? '仓库' : LEVEL_LABEL[lv]}
                   </button>
                 ))}
               </div>
@@ -352,7 +437,7 @@ export function Layout() {
               <Search className="absolute left-3 top-1.5 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="搜索用例、需求、契约…"
+                placeholder={catalog.enabled ? '搜索项目、服务、页面…' : '搜索用例、需求、契约…'}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
@@ -362,12 +447,16 @@ export function Layout() {
                 <CornerDownLeft className="w-3.5 h-3.5" />
               </button>
             </div>
+            <button type="button" onClick={() => setAssistantOpen((open) => !open)} aria-pressed={assistantOpen}
+              className={cn('inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition', assistantOpen ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm hover:bg-emerald-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100')}>
+              <BotMessageSquare className="h-3.5 w-3.5" />{assistantOpen ? 'AI 对话已开启' : 'AI 对话'}
+              <span aria-hidden="true" className={cn('h-1.5 w-1.5 rounded-full', assistantOpen ? 'bg-emerald-100' : 'bg-emerald-500')} />
+            </button>
             <div className="flex items-center gap-2">
-              <span className="text-[11px] bg-emerald-50 text-emerald-600 px-2 py-1 rounded flex items-center gap-1"><Users className="w-3 h-3" />{TEAMS.find((t) => t.id === CURRENT_TEAM_ID)?.name}</span>
-              <span className={'text-xs font-mono px-2 py-1 rounded ' + (isRunCtx ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400')}>
+              <span className="text-[11px] bg-emerald-50 text-emerald-600 px-2 py-1 rounded flex items-center gap-1"><Users className="w-3 h-3" />{catalog.enabled ? teamName || '当前团队' : TEAMS.find((t) => t.id === CURRENT_TEAM_ID)?.name}</span>
+              {!catalog.enabled && <><span className={'text-xs font-mono px-2 py-1 rounded ' + (isRunCtx ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400')}>
                 {isRunCtx ? 'CI #4821' : 'CI 未运行'}
-              </span>
-              <span className={'w-2 h-2 rounded-full ' + (isRunCtx ? 'bg-emerald-400' : 'bg-slate-300')} />
+              </span><span className={'w-2 h-2 rounded-full ' + (isRunCtx ? 'bg-emerald-400' : 'bg-slate-300')} /></>}
             </div>
             <div className="h-8 w-px bg-slate-200" />
             <div className="relative">
@@ -410,12 +499,15 @@ export function Layout() {
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-6">
-          {!isPlatform && (PREP_ROUTES.includes(location.pathname)
-            ? <PrepStepBar asset={selectedAsset} current={location.pathname} realServiceName={realServiceName} />
-            : <ObjectStageBar asset={selectedAsset} current={location.pathname} />)}
-          <Outlet context={{ selectedAsset, setSelectedAsset }} />
-        </main>
+        <div className="flex h-full min-h-0 flex-1 overflow-hidden">
+          <main className="min-w-0 flex-1 overflow-y-auto p-6">
+            {!isPlatform && location.pathname !== '/target' && (PREP_ROUTES.includes(location.pathname)
+              ? <PrepStepBar asset={selectedAsset} current={location.pathname} real={catalog.enabled} definitionReady={definitionReady} />
+              : <ObjectStageBar asset={selectedAsset} current={location.pathname} real={catalog.enabled} />)}
+            <Outlet context={{ selectedAsset, setSelectedAsset }} />
+          </main>
+          <AssistantDialog open={assistantOpen} onOpenChange={setAssistantOpen} path={location.pathname} onGuidance={(action: AssistantUIAction) => { if (action.route) navigate(action.route); }} />
+        </div>
       </SidebarInset>
     </SidebarProvider>
     </AssetLevelContext.Provider>

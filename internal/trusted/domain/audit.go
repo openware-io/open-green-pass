@@ -8,16 +8,16 @@ import (
 
 // AuditEvent 审计事件（哈希链块；hash = sha256(prev_hash || op || asset || asset_id || payload || ts)）。
 type AuditEvent struct {
-	ID       int64
-	TeamID   int64
-	Actor    int64
-	Op       string // gate.evaluate / cost.insert / case.rollback / ...
-	Asset    string
-	AssetID  int64
-	Payload  map[string]any
-	PrevHash string
-	Hash     string
-	Ts       time.Time
+	ID       int64          `json:"id"`
+	TeamID   int64          `json:"team_id"`
+	Actor    int64          `json:"actor"`
+	Op       string         `json:"op"` // gate.evaluate / cost.insert / case.rollback / ...
+	Asset    string         `json:"asset"`
+	AssetID  int64          `json:"asset_id"`
+	Payload  map[string]any `json:"payload"`
+	PrevHash string         `json:"prev_hash"`
+	Hash     string         `json:"hash"`
+	Ts       time.Time      `json:"ts"`
 }
 
 // AuditRepository 审计仓储端口（append-only）。

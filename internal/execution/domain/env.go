@@ -4,6 +4,9 @@ package domain
 
 import (
 	"context"
+	"fmt"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -23,8 +26,49 @@ type EnvRuntime struct {
 	TargetID       int64 // 归属被测对象节点（服务/工程）
 	Env            string
 	RunningVersion string
+	BaseURL        string
 	CheckedAt      time.Time
 	CreatedBy      int64
+	Requirements   []EnvironmentRequirement
+	Confirmation   EnvironmentConfirmation
+	ConfirmedAt    *time.Time
+}
+
+// EnvironmentRequirement is a non-sensitive field that must be confirmed
+// before execution. AI may suggest it from source/test evidence, but never
+// supplies its real value.
+type EnvironmentRequirement struct {
+	Key       string `json:"key"`
+	Label     string `json:"label"`
+	Required  bool   `json:"required"`
+	Reason    string `json:"reason"`
+	Evidence  string `json:"evidence,omitempty"`
+	Sensitive bool   `json:"sensitive,omitempty"`
+}
+
+// EnvironmentConfirmation deliberately stores only safe values and secret
+// references. Passwords, tokens and cookies must stay in a secret manager.
+type EnvironmentConfirmation struct {
+	Confirmed       bool              `json:"confirmed"`
+	Values          map[string]string `json:"values,omitempty"`
+	CredentialRef   string            `json:"credential_ref,omitempty"`
+	BrowserProfile  string            `json:"browser_profile,omitempty"`
+	TestDataProfile string            `json:"test_data_profile,omitempty"`
+}
+
+// ValidateRuntimeBaseURL validates an administrator-configured environment
+// origin. AI-generated test cases may choose only relative paths; the host is
+// always supplied from this trusted runtime record.
+func ValidateRuntimeBaseURL(raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" || len(value) > 2048 || strings.ContainsAny(value, "\r\n\x00") {
+		return "", fmt.Errorf("base_url is required and must be at most 2048 characters")
+	}
+	u, err := url.Parse(value)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") || u.RawPath != "" {
+		return "", fmt.Errorf("base_url must be an http(s) origin without credentials, path, query, or fragment")
+	}
+	return strings.TrimRight(value, "/"), nil
 }
 
 // EnvCheck 版本校验记录（目标 vs 环境运行版本）。
@@ -48,7 +92,10 @@ type EnvRepository interface {
 }
 
 // ErrNoEnvRuntime 被测对象在指定环境无运行版本记录。
-type ErrNoEnvRuntime struct{ TargetID int64; Env string }
+type ErrNoEnvRuntime struct {
+	TargetID int64
+	Env      string
+}
 
 func (e *ErrNoEnvRuntime) Error() string {
 	return "no env runtime recorded"

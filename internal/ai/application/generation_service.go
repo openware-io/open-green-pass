@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/openware-io/open-green-pass/internal/ai/domain"
@@ -32,6 +34,7 @@ type GenerationBatchService struct {
 	signals  GenerationSignalPort
 	audit    GenerationAuditPort
 	workflow GenerationWorkflowPort
+	scope    GenerationScopePort
 	now      func() time.Time
 }
 
@@ -71,6 +74,10 @@ type GenerationWorkflowPort interface {
 	Start(context.Context, int64, int64) error
 }
 
+type GenerationScopePort interface {
+	ReadGenerationScope(context.Context, int64, int64, int64) (*domain.GenerationScope, error)
+}
+
 type GenerationAuditEvent struct {
 	TeamID, BatchID, ActorID, StateVersion int64
 	Action, RequestID                      string
@@ -92,12 +99,84 @@ func (s *GenerationBatchService) Find(ctx context.Context, teamID, batchID int64
 	return s.batches.Find(ctx, teamID, batchID)
 }
 
+const DefaultGenerationBatchLimit = 50
+const MaxGenerationBatchLimit = 100
+
+func (s *GenerationBatchService) ListByTarget(ctx context.Context, teamID, targetID int64, limit int) ([]*domain.GenerationBatch, error) {
+	if s == nil || s.batches == nil {
+		return nil, errors.New("generation batch repository is required")
+	}
+	if teamID <= 0 || targetID <= 0 {
+		return nil, errors.New("generation batch list requires tenant and target")
+	}
+	if limit < 1 || limit > MaxGenerationBatchLimit {
+		return nil, errors.New("generation batch limit must be between 1 and 100")
+	}
+	return s.batches.ListByTarget(ctx, teamID, targetID, limit)
+}
+
 func (s *GenerationBatchService) SetReviewPorts(signals GenerationSignalPort, audit GenerationAuditPort) {
 	s.signals, s.audit = signals, audit
 }
 
 func (s *GenerationBatchService) SetWorkflowPort(workflow GenerationWorkflowPort) {
 	s.workflow = workflow
+}
+
+func (s *GenerationBatchService) SetScopePort(scope GenerationScopePort) {
+	s.scope = scope
+}
+
+func (s *GenerationBatchService) validateScope(ctx context.Context, cmd CreateGenerationBatchCommand) (string, error) {
+	if cmd.TeamID <= 0 || cmd.TargetID <= 0 || cmd.RepoID <= 0 || cmd.ServiceID == nil || *cmd.ServiceID <= 0 {
+		return "", errors.New("请选择当前项目中已确认的目录服务后生成用例")
+	}
+	if s.scope == nil {
+		return "", errors.New("generation scope reader is required")
+	}
+	scope, err := s.scope.ReadGenerationScope(ctx, cmd.TeamID, cmd.TargetID, *cmd.ServiceID)
+	if err != nil || scope == nil {
+		return "", errors.New("当前项目中不存在该目录服务或仓库")
+	}
+	if scope.TeamID != cmd.TeamID || scope.TargetID != cmd.TargetID || scope.ServiceID != *cmd.ServiceID || scope.RepoID != cmd.RepoID {
+		return "", errors.New("目录服务不属于所选项目和仓库")
+	}
+	if scope.Status != "active" || scope.GenerationStatus != "confirmed" || scope.ProfileStatus != "confirmed" {
+		return "", errors.New("请先启用目录服务并确认技术画像与用例生成范围")
+	}
+	if strings.TrimSpace(scope.Language) == "" || strings.TrimSpace(scope.Framework) == "" {
+		return "", errors.New("目录服务的技术画像不完整，请补充语言和框架后重试")
+	}
+	canonical, err := generationSourcePath(scope.SourcePath)
+	if err != nil {
+		return "", errors.New("目录服务的源码目录无效，请先修正目录登记")
+	}
+	if strings.TrimSpace(cmd.SourcePath) != "" {
+		requested, err := generationSourcePath(cmd.SourcePath)
+		if err != nil || requested != canonical {
+			return "", errors.New("请求的源码目录与已确认的目录服务不一致")
+		}
+	}
+	return canonical, nil
+}
+
+func generationSourcePath(value string) (string, error) {
+	value = strings.TrimSpace(strings.ReplaceAll(value, "\\", "/"))
+	if strings.HasPrefix(value, "/") || strings.ContainsAny(value, "\x00:\r\n") {
+		return "", errors.New("invalid repository-relative path")
+	}
+	clean := path.Clean(value)
+	if clean == ".." || strings.HasPrefix(clean, "../") {
+		return "", errors.New("source path escapes repository")
+	}
+	if clean == "." {
+		return "", nil
+	}
+	return clean, nil
+}
+
+func sameGenerationRequest(batch *domain.GenerationBatch, cmd CreateGenerationBatchCommand) bool {
+	return batch.TargetID == cmd.TargetID && batch.RepoID == cmd.RepoID && batch.ServiceID != nil && cmd.ServiceID != nil && *batch.ServiceID == *cmd.ServiceID && batch.SourcePath == cmd.SourcePath && batch.Branch == cmd.Branch && batch.RequestedVersion == cmd.RequestedVersion
 }
 
 // Create returns the existing batch for a repeated tenant-scoped idempotency
@@ -107,8 +186,16 @@ func (s *GenerationBatchService) Create(ctx context.Context, cmd CreateGeneratio
 	if s == nil || s.batches == nil {
 		return nil, false, errors.New("generation batch repository is required")
 	}
+	canonicalPath, err := s.validateScope(ctx, cmd)
+	if err != nil {
+		return nil, false, err
+	}
+	cmd.SourcePath = canonicalPath
 	existing, err := s.batches.FindByIdempotencyKey(ctx, cmd.TeamID, cmd.IdempotencyKey)
 	if err == nil {
+		if !sameGenerationRequest(existing, cmd) {
+			return nil, false, errors.New("idempotency key is already used for a different generation scope")
+		}
 		if s.workflow != nil && existing.State == domain.GenerationEnqueued {
 			if startErr := s.workflow.Start(ctx, existing.ID, existing.TeamID); startErr != nil {
 				return nil, false, fmt.Errorf("start generation workflow: %w", startErr)
@@ -129,9 +216,15 @@ func (s *GenerationBatchService) Create(ctx context.Context, cmd CreateGeneratio
 		// A competing create may have won. Re-read instead of leaking a
 		// duplicate-key error as a failed idempotent request.
 		if got, findErr := s.batches.FindByIdempotencyKey(ctx, cmd.TeamID, cmd.IdempotencyKey); findErr == nil {
+			if !sameGenerationRequest(got, cmd) {
+				return nil, false, errors.New("idempotency key is already used for a different generation scope")
+			}
 			return got, false, nil
 		}
 		return nil, false, err
+	}
+	if err := s.appendLifecycleAudit(ctx, batch, "generation.batch.created"); err != nil {
+		return nil, false, fmt.Errorf("append generation creation audit: %w", err)
 	}
 	if s.workflow != nil {
 		if err := s.workflow.Start(ctx, batch.ID, batch.TeamID); err != nil {
@@ -155,7 +248,17 @@ func (s *GenerationBatchService) Transition(ctx context.Context, teamID, batchID
 	if err := s.batches.CompareAndSwap(ctx, batch, expectedVersion); err != nil {
 		return nil, fmt.Errorf("persist generation batch transition: %w", err)
 	}
+	if err := s.appendLifecycleAudit(ctx, batch, "generation.state."+string(next)); err != nil {
+		return nil, fmt.Errorf("append generation lifecycle audit: %w", err)
+	}
 	return batch, nil
+}
+
+func (s *GenerationBatchService) appendLifecycleAudit(ctx context.Context, batch *domain.GenerationBatch, action string) error {
+	if s.audit == nil {
+		return nil
+	}
+	return s.audit.AppendGenerationAudit(ctx, GenerationAuditEvent{TeamID: batch.TeamID, BatchID: batch.ID, ActorID: batch.CreatedBy, StateVersion: batch.StateVersion, Action: action, OccurredAt: s.now()})
 }
 
 func (s *GenerationBatchService) Review(ctx context.Context, cmd ReviewGenerationCommand) (*domain.GenerationBatch, error) {

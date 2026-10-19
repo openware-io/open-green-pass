@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/openware-io/open-green-pass/internal/execution/application"
+	"github.com/openware-io/open-green-pass/internal/execution/domain"
 	"github.com/openware-io/open-green-pass/internal/gateway/httpx"
 	"github.com/openware-io/open-green-pass/internal/iam"
 	gperr "github.com/openware-io/open-green-pass/pkg/errors"
@@ -65,8 +66,11 @@ func (h *envHandler) authorizeTarget(w http.ResponseWriter, r *http.Request, act
 
 // registerRuntimeRequest 登记环境运行版本请求。
 type registerRuntimeRequest struct {
-	Env     string `json:"env"`
-	Version string `json:"version"`
+	Env          string                          `json:"env"`
+	Version      string                          `json:"version"`
+	BaseURL      string                          `json:"base_url"`
+	Requirements []domain.EnvironmentRequirement `json:"requirements"`
+	Confirmation domain.EnvironmentConfirmation  `json:"confirmation"`
 }
 
 func (h *envHandler) registerRuntime(w http.ResponseWriter, r *http.Request) {
@@ -75,6 +79,8 @@ func (h *envHandler) registerRuntime(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, gperr.Validation("invalid target id"))
 		return
 	}
+	// Authenticate/authorize before validating the body so malformed requests
+	// cannot be used to probe whether a target exists or which action is allowed.
 	if !h.authorizeTarget(w, r, "exec", id) {
 		return
 	}
@@ -84,10 +90,17 @@ func (h *envHandler) registerRuntime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Env == "" || req.Version == "" {
-		httpx.WriteErr(w, gperr.Validation("env, version required"))
+		httpx.WriteErr(w, gperr.Validation("env and version are required"))
 		return
 	}
-	rt, err := h.svc.RegisterRuntime(r.Context(), id, req.Env, req.Version)
+	if req.BaseURL != "" {
+		// Setting an execution destination is an environment-management action,
+		// not a routine tester operation.
+		if !h.authorizeTarget(w, r, "edit", id) {
+			return
+		}
+	}
+	rt, err := h.svc.RegisterRuntimeBaseline(r.Context(), id, req.Env, req.Version, req.BaseURL, req.Requirements, req.Confirmation)
 	if err != nil {
 		httpx.WriteErr(w, err)
 		return

@@ -13,8 +13,9 @@ import (
 func TestGenerationBatchCreateIsIdempotentPerTenant(t *testing.T) {
 	repo := infra.NewMemoryGenerationBatchRepository()
 	svc := NewGenerationBatchService(repo)
+	svc.SetScopePort(testGenerationScopePort{repoID: 30})
 	svc.now = func() time.Time { return time.Unix(100, 0).UTC() }
-	cmd := CreateGenerationBatchCommand{ID: 1, TeamID: 10, TargetID: 20, RepoID: 30, Branch: "main", IdempotencyKey: "same", ActorID: 40}
+	cmd := CreateGenerationBatchCommand{ID: 1, TeamID: 10, TargetID: 20, RepoID: 30, ServiceID: generationTestServiceID(), Branch: "main", IdempotencyKey: "same", ActorID: 40}
 	first, created, err := svc.Create(context.Background(), cmd)
 	if err != nil || !created {
 		t.Fatalf("first create = %#v, %v, %v", first, created, err)
@@ -35,7 +36,8 @@ func TestGenerationBatchCreateIsIdempotentPerTenant(t *testing.T) {
 func TestGenerationBatchTransitionUsesOptimisticVersion(t *testing.T) {
 	repo := infra.NewMemoryGenerationBatchRepository()
 	svc := NewGenerationBatchService(repo)
-	batch, _, err := svc.Create(context.Background(), CreateGenerationBatchCommand{ID: 1, TeamID: 1, TargetID: 1, RepoID: 1, Branch: "main", IdempotencyKey: "k", ActorID: 1})
+	svc.SetScopePort(testGenerationScopePort{repoID: 1})
+	batch, _, err := svc.Create(context.Background(), CreateGenerationBatchCommand{ID: 1, TeamID: 1, TargetID: 1, RepoID: 1, ServiceID: generationTestServiceID(), Branch: "main", IdempotencyKey: "k", ActorID: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,9 +53,10 @@ func TestGenerationBatchTransitionUsesOptimisticVersion(t *testing.T) {
 func TestGenerationReviewSignalsAndAuditsApprovedTransition(t *testing.T) {
 	repo := infra.NewMemoryGenerationBatchRepository()
 	svc := NewGenerationBatchService(repo)
+	svc.SetScopePort(testGenerationScopePort{repoID: 1})
 	ports := &generationReviewPorts{}
 	svc.SetReviewPorts(ports, ports)
-	batch, _, err := svc.Create(context.Background(), CreateGenerationBatchCommand{ID: 1, TeamID: 1, TargetID: 1, RepoID: 1, Branch: "main", IdempotencyKey: "review", ActorID: 1})
+	batch, _, err := svc.Create(context.Background(), CreateGenerationBatchCommand{ID: 1, TeamID: 1, TargetID: 1, RepoID: 1, ServiceID: generationTestServiceID(), Branch: "main", IdempotencyKey: "review", ActorID: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +70,7 @@ func TestGenerationReviewSignalsAndAuditsApprovedTransition(t *testing.T) {
 	if err != nil || batch.State != domain.GenerationCommitting {
 		t.Fatalf("review = %#v, %v", batch, err)
 	}
-	if len(ports.events) != 1 || ports.events[0].Action != "generation.review.approve" || len(ports.reviews) != 1 {
+	if !hasGenerationAudit(ports.events, "generation.batch.created") || !hasGenerationAudit(ports.events, "generation.state.review") || !hasGenerationAudit(ports.events, "generation.review.approve") || len(ports.reviews) != 1 {
 		t.Fatalf("ports = %#v", ports)
 	}
 	if _, err := svc.Review(context.Background(), ReviewGenerationCommand{TeamID: 1, BatchID: 1, ActorID: 9, ExpectedVersion: batch.StateVersion, Decision: GenerationReviewReject, RequestID: "request-2"}); !errors.Is(err, domain.ErrInvalidGenerationTransition) {
@@ -75,12 +78,22 @@ func TestGenerationReviewSignalsAndAuditsApprovedTransition(t *testing.T) {
 	}
 }
 
+func hasGenerationAudit(events []GenerationAuditEvent, action string) bool {
+	for _, event := range events {
+		if event.Action == action {
+			return true
+		}
+	}
+	return false
+}
+
 func TestGenerationRollbackRequiresApprovedBatch(t *testing.T) {
 	repo := infra.NewMemoryGenerationBatchRepository()
 	svc := NewGenerationBatchService(repo)
+	svc.SetScopePort(testGenerationScopePort{repoID: 1})
 	ports := &generationReviewPorts{}
 	svc.SetReviewPorts(ports, ports)
-	batch, _, err := svc.Create(context.Background(), CreateGenerationBatchCommand{ID: 1, TeamID: 1, TargetID: 1, RepoID: 1, Branch: "main", IdempotencyKey: "rollback", ActorID: 1})
+	batch, _, err := svc.Create(context.Background(), CreateGenerationBatchCommand{ID: 1, TeamID: 1, TargetID: 1, RepoID: 1, ServiceID: generationTestServiceID(), Branch: "main", IdempotencyKey: "rollback", ActorID: 1})
 	if err != nil {
 		t.Fatal(err)
 	}

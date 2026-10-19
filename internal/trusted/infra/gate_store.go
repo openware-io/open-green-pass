@@ -136,6 +136,32 @@ func (s *AuditStore) Append(ctx context.Context, e *domain.AuditEvent) error {
 	})
 }
 
+// List returns newest-first tenant-scoped audit events. It is read-only; the
+// append-only chain and its hashes remain the source of truth.
+func (s *AuditStore) List(ctx context.Context, teamID int64, limit int) ([]domain.AuditEvent, error) {
+	out := make([]domain.AuditEvent, 0)
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT id,team_id,actor,op,asset,asset_id,payload,prev_hash,hash,ts FROM aud_event WHERE team_id=$1 ORDER BY ts DESC,id DESC LIMIT $2`, teamID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var event domain.AuditEvent
+			var payload []byte
+			if err := rows.Scan(&event.ID, &event.TeamID, &event.Actor, &event.Op, &event.Asset, &event.AssetID, &payload, &event.PrevHash, &event.Hash, &event.Ts); err != nil {
+				return err
+			}
+			if len(payload) > 0 {
+				_ = json.Unmarshal(payload, &event.Payload)
+			}
+			out = append(out, event)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 // AppendWithHead serializes head selection and append per tenant. Advisory
 // locks are transaction-scoped and do not leak across pooled connections.
 func (s *AuditStore) AppendWithHead(ctx context.Context, teamID int64, build func(string) (*domain.AuditEvent, error)) (*domain.AuditEvent, error) {

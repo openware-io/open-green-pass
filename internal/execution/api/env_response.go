@@ -4,12 +4,16 @@ import "github.com/openware-io/open-green-pass/internal/execution/domain"
 
 // envRuntimeResponse is the execution-domain HTTP representation of a runtime version.
 type envRuntimeResponse struct {
-	ID             int64  `json:"id"`
-	TeamID         int64  `json:"team_id"`
-	TargetID       int64  `json:"target_id"`
-	Env            string `json:"env"`
-	RunningVersion string `json:"running_version"`
-	CheckedAt      string `json:"checked_at"`
+	ID             int64                           `json:"id"`
+	TeamID         int64                           `json:"team_id"`
+	TargetID       int64                           `json:"target_id"`
+	Env            string                          `json:"env"`
+	RunningVersion string                          `json:"running_version"`
+	BaseURL        string                          `json:"base_url,omitempty"`
+	CheckedAt      string                          `json:"checked_at"`
+	Requirements   []domain.EnvironmentRequirement `json:"requirements"`
+	Confirmation   domain.EnvironmentConfirmation  `json:"confirmation"`
+	ConfirmedAt    string                          `json:"confirmed_at,omitempty"`
 }
 
 // envCheckResponse is the execution-domain HTTP representation of a version check.
@@ -25,10 +29,14 @@ type envCheckResponse struct {
 }
 
 func toEnvRuntimeResponse(runtime *domain.EnvRuntime) envRuntimeResponse {
-	return envRuntimeResponse{
+	out := envRuntimeResponse{
 		ID: runtime.ID, TeamID: runtime.TeamID, TargetID: runtime.TargetID, Env: runtime.Env,
-		RunningVersion: runtime.RunningVersion, CheckedAt: runtime.CheckedAt.UTC().Format("2006-01-02T15:04:05.000Z07:00"),
+		RunningVersion: runtime.RunningVersion, BaseURL: runtime.BaseURL, CheckedAt: runtime.CheckedAt.UTC().Format("2006-01-02T15:04:05.000Z07:00"), Requirements: runtime.Requirements, Confirmation: runtime.Confirmation,
 	}
+	if runtime.ConfirmedAt != nil {
+		out.ConfirmedAt = runtime.ConfirmedAt.UTC().Format("2006-01-02T15:04:05.000Z07:00")
+	}
+	return out
 }
 
 func toEnvCheckResponse(check *domain.EnvCheck) envCheckResponse {

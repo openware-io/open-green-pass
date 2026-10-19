@@ -24,6 +24,13 @@ export type WechatAuthConfig = { team_id:number; enabled:boolean; app_id:string;
 export type WechatBinding = { bound:boolean; display_name?:string; avatar_url?:string };
 export type GenerationBatch = components['schemas']['GenerationBatch'] & { service_id?: number | null; source_path?: string };
 export type CreateGenerationBatchInput = components['schemas']['GenerationBatchCreate'] & { service_id?: number; source_path?: string };
+export type AssistantSession = components['schemas']['AssistantSession'];
+export type AssistantTurn = components['schemas']['AssistantTurn'];
+export type AssistantArtifact = components['schemas']['AssistantArtifact'];
+export type AssistantUIAction = components['schemas']['AssistantUIAction'];
+export type AssistantActionRecord = components['schemas']['AssistantActionRecord'];
+export type AssistantTurnResponse = components['schemas']['AssistantTurnResponse'];
+export type AuditEvent = components['schemas']['AuditEvent'];
 
 export type CreateTargetInput = paths['/targets']['post']['requestBody']['content']['application/json'];
 export type CreateCaseInput = paths['/cases']['post']['requestBody']['content']['application/json'];
@@ -76,8 +83,8 @@ export class GreenPassClient {
     if (!response.ok) {
       let message = response.statusText;
       try {
-        const body = await response.json() as { message?: string; error?: string };
-        message = body.message ?? body.error ?? message;
+        const body = await response.json() as { message?: string; error?: string; msg?: string };
+        message = body.message ?? body.error ?? body.msg ?? message;
       } catch {
         // Keep the HTTP status text when the server did not return JSON.
       }
@@ -98,6 +105,22 @@ export class GreenPassClient {
   }
 
   health(): JsonResponse<{ status: string }> { return this.request('/healthz'); }
+  createAssistantSession(page: components['schemas']['AssistantSessionCreate']['page']): JsonResponse<AssistantSession> {
+    return this.request('/assistant/sessions', { method: 'POST', body: JSON.stringify({ page }) });
+  }
+  assistantTurns(sessionId: number): JsonResponse<AssistantTurn[]> { return this.request(`/assistant/sessions/${sessionId}/turns`); }
+  createAssistantTurn(sessionId: number, text: string): JsonResponse<AssistantTurnResponse> {
+    return this.request(`/assistant/sessions/${sessionId}/turns`, { method: 'POST', body: JSON.stringify({ text }) });
+  }
+  startAssistantGuidance(sessionId: number): JsonResponse<AssistantUIAction[]> {
+    return this.request(`/assistant/sessions/${sessionId}/guidance`, { method: 'POST' });
+  }
+  assistantActions(sessionId: number): JsonResponse<AssistantActionRecord[]> { return this.request(`/assistant/sessions/${sessionId}/actions`); }
+  completeAssistantAction(sessionId: number, actionId: number, status: 'completed'|'cancelled'): JsonResponse<AssistantActionRecord> {
+    return this.request(`/assistant/sessions/${sessionId}/actions/${actionId}/complete`, { method: 'POST', body: JSON.stringify({ status }) });
+  }
+  assistantArtifacts(): JsonResponse<AssistantArtifact[]> { return this.request('/assistant/artifacts'); }
+  auditEvents(limit = 100): JsonResponse<AuditEvent[]> { return this.request(`/audit/events?limit=${limit}`); }
   ready(): JsonResponse<ReadinessResponse> { return this.request('/readyz'); }
   version(): JsonResponse<VersionResponse> { return this.request('/version'); }
   getModelBinding(targetId: number): JsonResponse<ModelBinding | null> { return this.request(`/targets/${targetId}/model-binding`); }
@@ -115,15 +138,16 @@ export class GreenPassClient {
   listProjectRepositories(projectId: number): JsonResponse<Array<{id:number;project_id:number;url:string;default_branch:string}>> { return this.request(`/projects/${projectId}/repositories`); }
   batchAddProjectRepositories(projectId:number,repositories:Array<{url:string;default_branch:string}>):JsonResponse<{results:Array<{index:number;id?:number;error?:string}>}>{return this.request(`/projects/${projectId}/repositories:batch`,{method:'POST',body:JSON.stringify({repositories})});}
   listProjectServices(projectId:number):JsonResponse<Array<{id:number;project_id:number;repo_id:number;name:string;source_path:string;kind:string;build_context:string;language:string;framework:string;test_tool:string;test_command:string;status:string;generation_status:'pending'|'confirmed';profile_status:'pending'|'analyzing'|'suggested'|'confirmed'|'failed';profile_source:string;profile_confidence?:number;profile_evidence?:string[];test_strategy:string;profile_analyzed_at?:string}>>{return this.request(`/projects/${projectId}/services`);}
-  batchAddProjectServices(projectId:number,services:Array<{repo_id:number;name:string;source_path:string;kind:string;build_context:string;language?:string;framework?:string;test_tool?:string;test_command?:string}>):JsonResponse<{results:Array<{index:number;id?:number;error?:string}>}>{return this.request(`/projects/${projectId}/services:batch`,{method:'POST',body:JSON.stringify({services})});}
+  batchAddProjectServices(projectId:number,services:Array<{repo_id:number;name:string;source_path:string;kind:string;build_context:string;language?:string;framework?:string}>):JsonResponse<{results:Array<{index:number;id?:number;error?:string}>}>{return this.request(`/projects/${projectId}/services:batch`,{method:'POST',body:JSON.stringify({services})});}
   updateProjectServiceKind(projectId:number,serviceId:number,kind:string):JsonResponse<{status:string}>{return this.request(`/projects/${projectId}/services/${serviceId}`,{method:'PATCH',body:JSON.stringify({kind})});}
   updateProjectServiceGenerationStatus(projectId:number,serviceId:number,status:'pending'|'confirmed'):JsonResponse<{status:string}>{return this.request(`/projects/${projectId}/services/${serviceId}`,{method:'PATCH',body:JSON.stringify({generation_status:status})});}
-  updateProjectServiceProfile(projectId:number,serviceId:number,input:{language:string;framework:string;test_tool:string;test_command:string}):JsonResponse<{status:string}>{return this.request(`/projects/${projectId}/services/${serviceId}`,{method:'PATCH',body:JSON.stringify(input)});}
+  updateProjectServiceProfile(projectId:number,serviceId:number,input:{language:string;framework:string}):JsonResponse<{status:string}>{return this.request(`/projects/${projectId}/services/${serviceId}`,{method:'PATCH',body:JSON.stringify(input)});}
   analyzeProjectServiceProfile(projectId:number,serviceId:number):JsonResponse<{status:string}>{return this.request(`/projects/${projectId}/services/${serviceId}/analyze-profile`,{method:'POST'});}
   createGenerationBatch(input: CreateGenerationBatchInput): JsonResponse<GenerationBatch> { return this.request('/generation/batches',{method:'POST',body:JSON.stringify(input)}); }
   getGenerationBatch(batchId:number): JsonResponse<GenerationBatch> { return this.request(`/generation/batches/${batchId}`); }
+  listGenerationBatches(targetId:number): JsonResponse<GenerationBatch[]> { return this.request(`/generation/batches?target_id=${targetId}`); }
   reviewGenerationBatch(batchId:number,input: paths['/generation/batches/{id}/review']['post']['requestBody']['content']['application/json']): JsonResponse<GenerationBatch> { return this.request(`/generation/batches/${batchId}/review`,{method:'POST',body:JSON.stringify(input)}); }
-  listGenerationSeeds(batchId:number): JsonResponse<Array<{id:number;batch_id:number;source_locator:string;normalized_spec:Record<string,unknown>;quality_state:string;approval_state:string}>> { return this.request(`/generation/batches/${batchId}/seeds`); }
+  listGenerationSeeds(batchId:number): JsonResponse<Array<{id:number;batch_id:number;case_id?:number|null;source_locator:string;normalized_spec:Record<string,unknown>;quality_state:string;approval_state:string}>> { return this.request(`/generation/batches/${batchId}/seeds`); }
   modelCatalog():JsonResponse<{presets:Array<{Provider:string;Name:string;ModelKey:string;Protocol:string;BaseURL:string;Capabilities:string[]}>;models:Array<{id:number;provider:string;model_key:string;status:string}>}>{return this.request('/model-catalog');}
   modelConnections():JsonResponse<{connections:Array<{id:number;provider:string;model_key:string;protocol:'api'|'cc';base_url:string;credential_status:string;configured_at?:string;token_configured:boolean}>}>{return this.request('/model-connections');}
   configureModels(input:{provider:string;protocol:string;token:string;base_url:string;model_keys:string[]}):JsonResponse<{status:string}>{return this.request('/model-connections',{method:'POST',body:JSON.stringify(input)});}

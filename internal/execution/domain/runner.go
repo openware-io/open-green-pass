@@ -5,10 +5,12 @@ import "context"
 
 // CaseSpec 单条用例执行规格。
 type CaseSpec struct {
-	CaseID      int64
-	CaseVersion int
-	TargetID    int64
-	Env         string
+	CaseID          int64
+	CaseVersion     int
+	TargetID        int64
+	Env             string
+	BaseURL         string // trusted operator-configured environment origin for API requests
+	RequiresSandbox bool   // generated requests must never execute in a mock or control-plane process
 	// Scenario selects the execution adapter (api, web_e2e, mobile_e2e,
 	// performance). Empty values are treated as api for backwards compatibility.
 	Scenario string
@@ -26,4 +28,10 @@ type RunnerPort interface {
 type CasePort interface {
 	ListIDsByTarget(ctx context.Context, teamID, targetID int64) ([]int64, error)
 	FetchScript(ctx context.Context, teamID, caseID int64) (version int, script any, err error)
+}
+
+// TargetScopedCasePort is implemented by production repositories so explicit
+// run selections cannot smuggle a case from another target into a runtime.
+type TargetScopedCasePort interface {
+	FetchScriptForTarget(ctx context.Context, teamID, targetID, caseID int64) (version int, script any, err error)
 }

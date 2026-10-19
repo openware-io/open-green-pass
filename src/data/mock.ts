@@ -623,6 +623,7 @@ export const NAV_GROUPS: { title: string; items: INavItem[]; adminOnly?: boolean
   {
     title: '测试治理',
     items: [
+      { path: '/assistant', label: 'AI 协作' },
       { path: '/scenarios', label: '测试中心' },
       { path: '/cases', label: '用例管理' },
       { path: '/resources', label: '测试资源' },

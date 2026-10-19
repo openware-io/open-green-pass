@@ -5,24 +5,204 @@
 
 export interface paths {
     "/generation/batches": {
-        parameters: { query?: never; header?: never; path?: never; cookie?: never };
-        post: { parameters: { query?: never; header?: never; path?: never; cookie?: never }; requestBody: { content: { "application/json": components["schemas"]["GenerationBatchCreate"] } }; responses: { 202: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["GenerationBatch"] } }; 200: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["GenerationBatch"] } } } };
-        get?: never; put?: never; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 查询当前项目最近的用例生成批次
+         * @description 仅返回当前租户和指定项目的批次，按创建时间降序排列，同一时间按 ID 降序排列。
+         */
+        get: {
+            parameters: {
+                query: {
+                    target_id: number;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 生成批次列表 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GenerationBatch"][];
+                    };
+                };
+                /** @description 缺少租户或项目 ID、查询参数无效 */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** 创建用例生成批次 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["GenerationBatchCreate"];
+                };
+            };
+            responses: {
+                /** @description 幂等返回已有批次 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GenerationBatch"];
+                    };
+                };
+                /** @description 批次已创建 */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GenerationBatch"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
     "/generation/batches/{id}": {
-        parameters: { query?: never; header?: never; path?: never; cookie?: never };
-        get: { parameters: { query?: never; header?: never; path: { id: number }; cookie?: never }; responses: { 200: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["GenerationBatch"] } } } };
-        post?: never; put?: never; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询用例生成批次 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 批次状态 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GenerationBatch"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
     "/generation/batches/{id}/seeds": {
-        parameters: { query?: never; header?: never; path?: never; cookie?: never };
-        get: { parameters: { query?: never; header?: never; path: { id: number }; cookie?: never }; responses: { 200: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["GenerationSeed"][] } } } };
-        post?: never; put?: never; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询候选用例种子 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 候选种子 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GenerationSeed"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
     "/generation/batches/{id}/review": {
-        parameters: { query?: never; header?: never; path?: never; cookie?: never };
-        post: { parameters: { query?: never; header?: never; path: { id: number }; cookie?: never }; requestBody: { content: { "application/json": components["schemas"]["GenerationReview"] } }; responses: { 200: { headers: { [name: string]: unknown }; content: { "application/json": components["schemas"]["GenerationBatch"] } } } };
-        get?: never; put?: never; delete?: never; options?: never; head?: never; patch?: never; trace?: never;
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 审核用例生成批次 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["GenerationReview"];
+                };
+            };
+            responses: {
+                /** @description 审核完成 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GenerationBatch"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
     "/healthz": {
         parameters: {
@@ -442,7 +622,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** 修改目录子服务类型 */
+        /** 修改目录子服务类型或确认生效 */
         patch: {
             parameters: {
                 query?: never;
@@ -903,6 +1083,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/audit/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询当前租户可信审计哈希链事件 */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 审计事件，按时间倒序 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AuditEvent"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cost/record": {
         parameters: {
             query?: never;
@@ -1039,10 +1257,203 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assistant/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 创建当前用户的 AI 对话会话 */
+        post: operations["createAssistantSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/sessions/{id}/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取对话会话 */
+        get: operations["listAssistantTurns"];
+        put?: never;
+        /** 发送一条 AI 对话 */
+        post: operations["createAssistantTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/sessions/{id}/guidance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 发起一次受限且可见的界面引导 */
+        post: operations["startAssistantGuidance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/sessions/{id}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询本会话的界面动作记录 */
+        get: operations["listAssistantActions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/sessions/{id}/actions/{actionId}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 记录用户可见引导动作的完成或取消 */
+        post: operations["completeAssistantAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/assistant/artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询 AI 协作待处理事项 */
+        get: operations["listAssistantArtifacts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AssistantSessionCreate: {
+            /** @enum {string} */
+            page: "/gate" | "/cases" | "/exec" | "/history" | "/generation" | "/trace" | "/target" | "/scenarios" | "/assistant";
+        };
+        AuditEvent: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            team_id: number;
+            /** Format: int64 */
+            actor: number;
+            op: string;
+            asset: string;
+            /** Format: int64 */
+            asset_id: number;
+            payload: {
+                [key: string]: unknown;
+            };
+            prev_hash: string;
+            hash: string;
+            /** Format: date-time */
+            ts: string;
+        };
+        AssistantSession: {
+            /** Format: int64 */
+            id: number;
+            page: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        AssistantTurnCreate: {
+            text: string;
+        };
+        AssistantTurn: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            session_id: number;
+            /** @enum {string} */
+            role: "user" | "assistant";
+            text: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AssistantArtifact: {
+            /** Format: int64 */
+            id: number;
+            kind: string;
+            /** @enum {string} */
+            priority: "high" | "medium" | "low";
+            title: string;
+            summary: string;
+            recommendation: string;
+            evidence: string[];
+            /** @enum {string} */
+            status: "open" | "archived";
+            /** Format: date-time */
+            created_at: string;
+        };
+        AssistantTurnResponse: {
+            user: components["schemas"]["AssistantTurn"];
+            assistant: components["schemas"]["AssistantTurn"];
+            artifact?: components["schemas"]["AssistantArtifact"];
+        };
+        AssistantUIAction: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "navigate" | "focus" | "prefill" | "open_evidence";
+            route?: string;
+            target?: string;
+            values?: {
+                [key: string]: string;
+            };
+            label: string;
+        };
+        AssistantActionComplete: {
+            /** @enum {string} */
+            status: "completed" | "cancelled";
+        };
+        AssistantActionRecord: {
+            /** Format: int64 */
+            id: number;
+            action: string;
+            status: string;
+            /** Format: date-time */
+            created_at: string;
+        };
         WechatAuthConfig: {
             /** Format: int64 */
             team_id: number;
@@ -1193,19 +1604,84 @@ export interface components {
             url: string;
             default_branch: string;
         };
+        GenerationBatch: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            team_id: number;
+            /** Format: int64 */
+            target_id: number;
+            /** Format: int64 */
+            repo_id: number;
+            /**
+             * Format: int64
+             * @description 项目目录中的被测子服务
+             */
+            service_id?: number;
+            /** @description 被测子服务在仓库中的源码目录 */
+            source_path?: string;
+            branch: string;
+            version?: string;
+            /** @enum {string} */
+            state: "enqueued" | "fetching" | "parsing" | "generating" | "quality_check" | "review" | "committing" | "approved" | "rejected" | "rolled_back" | "failed";
+            /** Format: int64 */
+            state_version: number;
+            workflow_id: string;
+            idempotency_key: string;
+            /** @description 生成失败原因摘要 */
+            failure_summary?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        GenerationBatchCreate: {
+            /** Format: int64 */
+            target_id: number;
+            /** Format: int64 */
+            repo_id: number;
+            /**
+             * Format: int64
+             * @description 项目目录中的被测子服务
+             */
+            service_id: number;
+            /** @description 被测子服务在仓库中的源码目录 */
+            source_path?: string;
+            branch: string;
+            version?: string;
+            idempotency_key: string;
+        };
+        GenerationReview: {
+            /** @enum {string} */
+            decision: "approve" | "reject";
+            /** Format: int64 */
+            expected_state_version: number;
+            request_id: string;
+        };
+        GenerationSeed: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            batch_id: number;
+            /**
+             * Format: int64
+             * @description 审核通过后写入正式用例库的 ID
+             */
+            case_id?: number | null;
+            source_locator: string;
+            normalized_spec: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            quality_state: "pending" | "passed" | "failed";
+            /** @enum {string} */
+            approval_state: "pending" | "approved" | "rejected";
+        };
         ProjectRepositoryInput: {
             url: string;
             /** @default main */
             default_branch: string;
         };
-        GenerationBatch: {
-            id: number; team_id: number; target_id: number; repo_id: number; branch: string; version?: string;
-            state: "enqueued" | "fetching" | "parsing" | "generating" | "quality_check" | "review" | "committing" | "approved" | "rejected" | "rolled_back" | "failed";
-            state_version: number; workflow_id: string; idempotency_key: string; created_at: string; updated_at: string;
-        };
-        GenerationBatchCreate: { target_id: number; repo_id: number; branch: string; version?: string; idempotency_key: string };
-        GenerationReview: { decision: "approve" | "reject"; expected_state_version: number; request_id: string };
-        GenerationSeed: { id: number; batch_id: number; source_locator: string; normalized_spec: { [key: string]: unknown }; quality_state: "pending" | "passed" | "failed"; approval_state: "pending" | "approved" | "rejected" };
         ProjectService: {
             /** Format: int64 */
             id: number;
@@ -1218,10 +1694,21 @@ export interface components {
             /** @enum {string} */
             kind: "api_service" | "gateway" | "websocket_service" | "web_app" | "mobile_app" | "desktop_app" | "other";
             build_context: string;
+            /** @description 服务主要编程语言；未登记时不得假设 */
+            language?: string;
+            /** @description 服务框架或前端运行时 */
+            framework?: string;
+            /** @description 系统从源码识别的测试工具或执行器；不可由用户填写 */
+            readonly test_tool?: string;
+            /** @description 系统从源码识别的项目测试命令；不可由用户填写或执行 */
+            readonly test_command?: string;
             dockerfile_path?: string | null;
             manifest_path?: string | null;
             status: string;
-            /** @enum {string} */
+            /**
+             * @description 待确认或已生效
+             * @enum {string}
+             */
             generation_status: "pending" | "confirmed";
         };
         ProjectServiceInput: {
@@ -1232,6 +1719,8 @@ export interface components {
             /** @enum {string} */
             kind?: "api_service" | "gateway" | "websocket_service" | "web_app" | "mobile_app" | "desktop_app" | "other";
             build_context?: string;
+            language?: string;
+            framework?: string;
             dockerfile_path?: string | null;
             manifest_path?: string | null;
         };
@@ -1434,8 +1923,31 @@ export interface components {
             target_id: number;
             env: string;
             running_version: string;
+            base_url?: string;
             /** Format: date-time */
             checked_at: string;
+            requirements?: components["schemas"]["EnvironmentRequirement"][];
+            confirmation?: components["schemas"]["EnvironmentConfirmation"];
+            /** Format: date-time */
+            confirmed_at?: string;
+        };
+        EnvironmentRequirement: {
+            key: string;
+            label: string;
+            required: boolean;
+            reason: string;
+            evidence?: string;
+            sensitive?: boolean;
+        };
+        EnvironmentConfirmation: {
+            confirmed: boolean;
+            values?: {
+                [key: string]: string;
+            };
+            /** @description 密钥管理器中的引用名，禁止提交密码或 Token 正文 */
+            credential_ref?: string;
+            browser_profile?: string;
+            test_data_profile?: string;
         };
         EnvCheck: {
             /** Format: int64 */
@@ -2086,6 +2598,10 @@ export interface operations {
                 "application/json": {
                     env: string;
                     version: string;
+                    /** @description 管理员登记的测试环境 HTTP(S) origin */
+                    base_url?: string;
+                    requirements?: components["schemas"]["EnvironmentRequirement"][];
+                    confirmation?: components["schemas"]["EnvironmentConfirmation"];
                 };
             };
         };
@@ -2659,6 +3175,169 @@ export interface operations {
                 };
                 content: {
                     "text/html": unknown;
+                };
+            };
+        };
+    };
+    createAssistantSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantSessionCreate"];
+            };
+        };
+        responses: {
+            /** @description 已创建会话 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantSession"];
+                };
+            };
+        };
+    };
+    listAssistantTurns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 对话列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantTurn"][];
+                };
+            };
+        };
+    };
+    createAssistantTurn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantTurnCreate"];
+            };
+        };
+        responses: {
+            /** @description 已生成回答 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantTurnResponse"];
+                };
+            };
+        };
+    };
+    startAssistantGuidance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 动作清单 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantUIAction"][];
+                };
+            };
+        };
+    };
+    listAssistantActions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 动作记录 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantActionRecord"][];
+                };
+            };
+        };
+    };
+    completeAssistantAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                actionId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantActionComplete"];
+            };
+        };
+        responses: {
+            /** @description 完成记录已写入审计链 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantActionRecord"];
+                };
+            };
+        };
+    };
+    listAssistantArtifacts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 协作事项 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantArtifact"][];
                 };
             };
         };
