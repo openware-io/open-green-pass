@@ -1,9 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CONCURRENCY_ROWS, CONFLICT_EVENTS, RESOURCE_POOLS, TEST_SCENARIOS } from '@/data/mock';
 import { scenarioNav } from '@/context/scenarioNav';
 import { PageHeader, Card } from '@/components/shared';
 import { ChevronDown, ChevronRight, CornerDownRight, Cpu, Globe, Smartphone, Sparkles, Zap, ShieldCheck, Camera, History, Waypoints } from 'lucide-react';
+
+type LocalDevice = { serial: string; state: string; product?: string; model?: string; device?: string; connected: boolean };
+type DeviceAgentResponse = { source: string; refreshed_at: string; devices: LocalDevice[]; error?: string };
+
+function deviceName(device: LocalDevice) {
+  return device.model || device.product || device.device || device.serial;
+}
 
 const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
 const FORM_BADGE: Record<string, string> = { '服务/后端': 'bg-emerald-50 text-emerald-600', 'Web 前端': 'bg-sky-50 text-sky-600', '移动端': 'bg-purple-50 text-purple-600', 'AI 专项': 'bg-indigo-50 text-indigo-600' };
@@ -24,7 +31,30 @@ const CONFLICT_DOT: Record<string, string> = { danger: 'text-red-500', warning: 
 export default function ConcurrencyPage() {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [deviceAgent, setDeviceAgent] = useState<DeviceAgentResponse | null>(null);
+  const [deviceAgentError, setDeviceAgentError] = useState('正在连接本机设备代理…');
   const toggle = (id: string) => setExpanded((cur) => (cur === id ? null : id));
+  useEffect(() => {
+    let active = true;
+    const refreshDevices = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:48173/devices', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`本机设备代理返回 ${response.status}`);
+        const payload = await response.json() as DeviceAgentResponse;
+        if (!active) return;
+        setDeviceAgent(payload);
+        setDeviceAgentError(payload.error ?? '');
+      } catch {
+        if (!active) return;
+        setDeviceAgent(null);
+        setDeviceAgentError('本机设备代理未运行');
+      }
+    };
+    void refreshDevices();
+    const timer = window.setInterval(() => void refreshDevices(), 5000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+  const onlineDevices = deviceAgent?.devices.filter((device) => device.connected) ?? [];
   return (
     <div>
       <PageHeader title="测试资源" desc="测试执行资源底座 · 真机 / 浏览器 / 沙箱并发池 · 场景测试方法与实现方案 · 调度隔离与冲突事件">
@@ -34,6 +64,10 @@ export default function ConcurrencyPage() {
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-400"></span>饱和</span>
         </div>
       </PageHeader>
+
+      <Card title="本机真机" extra={<span className={'text-[11px] ' + (deviceAgentError ? 'text-amber-600' : 'text-emerald-600')}>{deviceAgentError || '本机 ADB 实时发现 · 每 5 秒刷新'}</span>} className="p-5 mb-5">
+        {onlineDevices.length > 0 ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{onlineDevices.map((device) => <div key={device.serial} className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4"><div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-2"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">📱</span><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-800">{deviceName(device)}</p><p className="mt-0.5 text-[11px] text-slate-500">Android 真机 · {device.product || device.device || '设备信息读取中'}</p></div></div><span className="shrink-0 rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-medium text-emerald-700">在线</span></div><div className="mt-3 grid grid-cols-2 gap-2 text-[11px]"><div><span className="block text-slate-400">设备序列号</span><code className="mt-0.5 block truncate text-slate-700" title={device.serial}>{device.serial}</code></div><div><span className="block text-slate-400">ADB 状态</span><span className="mt-0.5 block text-slate-700">{device.state}</span></div></div></div>)}</div> : <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-7 text-center"><span className="text-xl">📱</span><p className="mt-2 text-xs font-medium text-slate-600">未发现已授权的 Android 真机</p><p className="mt-1 text-[11px] text-slate-400">请连接设备并确认 USB 调试授权；平台不会把演示设备当作真实资源展示。</p></div>}
+      </Card>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
         {RESOURCE_POOLS.map((p) => (
@@ -48,7 +82,7 @@ export default function ConcurrencyPage() {
             <div className="mt-2 h-1.5 bg-slate-100 rounded-full">
               <div className={LEVEL_BAR[p.level] + ' h-full rounded-full'} style={{ width: `${(p.used / p.total) * 100}%` }} />
             </div>
-            <div className="text-[11px] text-slate-400 mt-2">{p.note}</div>
+            <div className="text-[11px] text-slate-400 mt-2">演示数据 · {p.note}</div>
           </div>
         ))}
       </div>
