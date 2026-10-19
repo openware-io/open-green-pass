@@ -142,6 +142,10 @@ type GenerationBatchRepository interface {
 	Find(ctx context.Context, teamID, batchID int64) (*GenerationBatch, error)
 	// ListByTarget returns newest batches first, with descending ID breaking timestamp ties.
 	ListByTarget(ctx context.Context, teamID, targetID int64, limit int) ([]*GenerationBatch, error)
+	// FindLatestApprovedByScope returns the last effective iteration for exactly
+	// one project/repository/service. It is the system-owned baseline for the
+	// next iteration; callers must never supply a baseline batch ID.
+	FindLatestApprovedByScope(ctx context.Context, teamID, targetID, repoID, serviceID int64) (*GenerationBatch, error)
 	FindByIdempotencyKey(ctx context.Context, teamID int64, key string) (*GenerationBatch, error)
 	CompareAndSwap(ctx context.Context, batch *GenerationBatch, expectedVersion int64) error
 }

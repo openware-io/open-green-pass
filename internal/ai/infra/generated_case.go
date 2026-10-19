@@ -227,3 +227,17 @@ func seedDigest(spec map[string]any) string {
 	hash := sha256.Sum256(content)
 	return hex.EncodeToString(hash[:])
 }
+
+// generatedCaseKey is stable across iterations. It captures the request intent
+// while leaving presentation and expected behavior mutable, so a corrected
+// assertion becomes an update instead of an archive-plus-add.
+func generatedCaseKey(spec map[string]any) string {
+	request, _ := spec["request"].(map[string]any)
+	identity := map[string]any{
+		"scenario": spec["scenario"], "method": request["method"], "path": request["path"],
+		"headers": request["headers"], "body": request["body"],
+	}
+	content, _ := json.Marshal(identity)
+	hash := sha256.Sum256(content)
+	return hex.EncodeToString(hash[:])
+}

@@ -47,12 +47,13 @@ function stableValue(value: unknown): unknown {
   return value;
 }
 
-// Batch IDs, model metadata and source locations are generation bookkeeping,
-// not test semantics. Comparing only the stable case shape makes an iterative
-// diff useful even when a newer batch has a different model or source commit.
+// Batch/model metadata, presentation and assertions are not case identity.
+// This mirrors the server's stable request-intent key, so a changed assertion
+// is shown as an update instead of a removal plus a new case.
 function seedFingerprint(seed: GenerationSeed): string {
   const spec = seed.normalized_spec ?? {};
-  return JSON.stringify(stableValue({ title: spec.title, scenario: spec.scenario, request: spec.request, assertions: spec.assertions }));
+  const request = isRecord(spec.request) ? spec.request : {};
+  return JSON.stringify(stableValue({ scenario: spec.scenario, method: request.method, path: request.path, headers: request.headers, body: request.body }));
 }
 
 function GeneratedSeedReviewList({ seeds }: { seeds: GenerationSeed[] }) {
@@ -212,7 +213,6 @@ function GenerationPageContent() {
   const [realBatches, setRealBatches] = useState<GenerationBatch[]>([]);
   const [repositoryRefs, setRepositoryRefs] = useState<Record<number, RepositoryRef[]>>({});
   const [selectedRefs, setSelectedRefs] = useState<Record<number, { type: 'branch' | 'tag'; name: string }>>({});
-  const [selectedBaseBatches, setSelectedBaseBatches] = useState<Record<number, number | null>>({});
   const [refsLoading, setRefsLoading] = useState(false);
   const visibleBatches = useMemo(() => activeServiceId ? realBatches.filter((batch) => batch.service_id === activeServiceId) : realBatches, [realBatches, activeServiceId]);
   const realBatch = visibleBatches.find((batch) => batch.id === selectedBatchId) ?? visibleBatches[0] ?? null;
@@ -227,7 +227,7 @@ function GenerationPageContent() {
   const seedsMatch = Boolean(realBatch && seedResponse?.batchId === realBatch.id && seedResponse.stateVersion === realBatch.state_version);
   const seedsLoading = Boolean(realBatch && !seedsMatch);
   const seedsError = seedsMatch ? seedResponse?.error ?? '' : '';
-  const realSeeds = seedsMatch && !seedsError ? seedResponse?.items.filter((seed) => seed.batch_id === realBatch?.id) ?? [] : [];
+  const realSeeds = useMemo(() => (seedsMatch && !seedsError ? seedResponse?.items.filter((seed) => seed.batch_id === realBatch?.id) ?? [] : []), [seedsError, seedsMatch, seedResponse?.items, realBatch?.id]);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [baselineSeeds, setBaselineSeeds] = useState<GenerationSeed[] | null>(null);
   const [baselineSeedsError, setBaselineSeedsError] = useState('');
@@ -258,8 +258,6 @@ function GenerationPageContent() {
   const activeRepoRefs = realRepo ? repositoryRefs[realRepo.id] ?? [] : [];
   const selectedRef = realRepo ? selectedRefs[realRepo.id] : undefined;
   const selectedRefDetails = activeRepoRefs.find((ref) => ref.ref_type === selectedRef?.type && ref.name === selectedRef.name) ?? null;
-  const selectableBaseBatches = useMemo(() => selectedService && realRepo ? realBatches.filter((batch) => batch.service_id === selectedService.id && batch.repo_id === realRepo.id) : [], [realBatches, realRepo, selectedService]);
-  const selectedBaseBatchId = selectedService ? selectedBaseBatches[selectedService.id] ?? null : null;
   const candidateDiff = useMemo(() => {
     if (!baselineSeeds) return null;
     const current = new Set(realSeeds.map(seedFingerprint));
@@ -297,9 +295,15 @@ function GenerationPageContent() {
     } catch (error) { setRealError(error instanceof Error ? error.message : '刷新代码引用失败'); }
     finally { setRefsLoading(false); }
   };
-  useEffect(() => { if (realClient && realRepo && projectId) void loadRepositoryRefs(realRepo.id).catch(() => undefined); }, [realClient, realRepo?.id, projectId]);
   useEffect(() => {
-    if (!realClient || !realBatch?.base_batch_id) { setBaselineSeeds(null); setBaselineSeedsError(''); return; }
+    if (!realClient || !realRepo || !projectId) return;
+    queueMicrotask(() => { void loadRepositoryRefs(realRepo.id).catch(() => undefined); });
+  }, [realClient, realRepo?.id, projectId]);
+  useEffect(() => {
+    if (!realClient || !realBatch?.base_batch_id) {
+      queueMicrotask(() => { setBaselineSeeds(null); setBaselineSeedsError(''); });
+      return;
+    }
     let cancelled = false;
     void realClient.listGenerationSeeds(realBatch.base_batch_id).then((items) => { if (!cancelled) { setBaselineSeeds(items); setBaselineSeedsError(''); } }).catch((error) => { if (!cancelled) { setBaselineSeeds(null); setBaselineSeedsError(error instanceof Error ? error.message : '读取基线候选失败'); } });
     return () => { cancelled = true; };
@@ -339,8 +343,7 @@ function GenerationPageContent() {
           const refs = repositoryRefs[repo.id] ?? await loadRepositoryRefs(repo.id);
           const selection = selectedRefs[repo.id] ?? (() => { const fallback = refs.find((ref) => ref.ref_type === 'branch' && ref.name === repo.default_branch) ?? refs[0]; return fallback ? { type: fallback.ref_type, name: fallback.name } : undefined; })();
           if (!selection) throw new Error('该仓库尚未同步可用分支或 Tag，请先刷新代码引用');
-          const baselineID = selectedBaseBatches[service.id] ?? realBatches.find((batch) => batch.service_id === service.id && batch.repo_id === repo.id)?.id;
-          const batch = await realClient.createGenerationBatch({ target_id: projectID, repo_id: repo.id, service_id: service.id, source_path: service.source_path, ref_type: selection.type, branch: selection.name, base_batch_id: baselineID, idempotency_key: `ui-batch-${projectID}-${service.id}-${crypto.randomUUID()}` });
+          const batch = await realClient.createGenerationBatch({ target_id: projectID, repo_id: repo.id, service_id: service.id, source_path: service.source_path, ref_type: selection.type, branch: selection.name, idempotency_key: `ui-batch-${projectID}-${service.id}-${crypto.randomUUID()}` });
           created.push(batch); results.push({ serviceId: service.id, name: service.name, ok: true });
         } catch (error) { results.push({ serviceId: service.id, name: service.name, ok: false, error: error instanceof Error ? error.message : '创建失败' }); }
       }
@@ -475,8 +478,8 @@ function GenerationPageContent() {
               <div className="mt-2 truncate text-xs text-slate-700" title={realRepo?.url}>{realRepo?.url}</div>
               <div className="mt-3 grid gap-2 sm:grid-cols-[110px_minmax(0,1fr)]"><select aria-label="代码引用类型" value={selectedRef?.type ?? 'branch'} onChange={(event) => { const type = event.target.value as 'branch' | 'tag'; const candidate = activeRepoRefs.find((ref) => ref.ref_type === type); if (realRepo && candidate) setSelectedRefs((current) => ({ ...current, [realRepo.id]: { type, name: candidate.name } })); }} className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"><option value="branch">分支</option><option value="tag">Tag</option></select><select aria-label="代码引用" value={selectedRef?.name ?? ''} onChange={(event) => { if (realRepo && selectedRef) setSelectedRefs((current) => ({ ...current, [realRepo.id]: { ...selectedRef, name: event.target.value } })); }} disabled={!activeRepoRefs.length} className="min-w-0 rounded-md border border-slate-200 bg-white px-2 py-1.5 font-mono text-xs text-slate-700 disabled:opacity-50"><option value="">{activeRepoRefs.length ? '请选择代码引用' : '尚未同步，请刷新'}</option>{activeRepoRefs.filter((ref) => ref.ref_type === selectedRef?.type).map((ref) => <option key={`${ref.ref_type}:${ref.name}`} value={ref.name}>{ref.name}</option>)}</select></div>
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500"><span>提交 SHA <b className="font-mono text-slate-700">{selectedRefDetails?.commit_sha ? selectedRefDetails.commit_sha.slice(0, 12) : '刷新后可见'}</b></span><span>服务目录 <b className="font-mono text-slate-700">{selectedService?.source_path || '未配置'}</b></span></div>
-              {selectedService && <div className="mt-2"><label htmlFor="generation-baseline" className="mb-1 block text-[10px] text-slate-400">迭代对比基线</label><select id="generation-baseline" value={selectedBaseBatchId ?? ''} onChange={(event) => setSelectedBaseBatches((current) => ({ ...current, [selectedService.id]: event.target.value ? Number(event.target.value) : null }))} className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"><option value="">自动选择最近批次（首次生成则无基线）</option>{selectableBaseBatches.map((batch) => <option key={batch.id} value={batch.id}>#{batch.id} · {batch.ref_type === 'tag' ? 'Tag' : '分支'} {batch.branch} · {batch.head_sha ? batch.head_sha.slice(0, 12) : '冻结中'}</option>)}</select></div>}
-              <p className="mt-2 text-[10px] leading-4 text-slate-400">引用可在创建前调整；创建后服务端重新解析并冻结最终 SHA，历史记录不可被后续分支更新改写。</p>
+              <div className="mt-2 rounded-md border border-slate-200 bg-white px-2.5 py-2 text-[10px] leading-4 text-slate-500"><b className="text-slate-700">系统基线</b>：自动采用该项目、仓库和服务最近一次已生效的生成批次；没有已生效批次时作为首次生成。基线不能人工指定。</div>
+              <p className="mt-2 text-[10px] leading-4 text-slate-400">本次只选择分支或 Tag；创建后服务端重新解析并冻结最终 SHA，历史记录不会被后续分支更新改写。</p>
             </div>
           ) : (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 min-w-0">
@@ -549,7 +552,7 @@ function GenerationPageContent() {
           const active = realBatch?.id === batch.id;
           return <button type="button" key={batch.id} onClick={() => { setSelectedBatchId(batch.id); if (service) selectService(service.id); setStep(1); }} className={'w-full px-5 py-3 text-left transition ' + (active ? 'bg-emerald-50/60' : 'hover:bg-slate-50')}>
             <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-semibold text-slate-700">{service?.name ?? `服务 #${batch.service_id ?? '未绑定'}`}</span><span className={'rounded-full px-2 py-0.5 text-[10px] font-medium ' + (batch.state === 'approved' ? 'bg-emerald-100 text-emerald-700' : batch.state === 'failed' || batch.state === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700')}>{STAGE_LABEL[batch.state] ?? batch.state}</span><span className="ml-auto font-mono text-[10px] text-slate-400">#{batch.id}</span></div>
-            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500"><span>目录：{batch.source_path || service?.source_path || '项目级目录'}</span><span>{batch.ref_type === 'tag' ? 'Tag' : '分支'}：{batch.branch || '未配置'}</span><span>冻结 SHA：{batch.head_sha ? batch.head_sha.slice(0, 12) : '冻结中'}</span><span>基线：{batch.base_batch_id ? `#${batch.base_batch_id}` : '首次生成'}</span></div>
+            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500"><span>目录：{batch.source_path || service?.source_path || '项目级目录'}</span><span>{batch.ref_type === 'tag' ? 'Tag' : '分支'}：{batch.branch || '未配置'}</span><span>冻结 SHA：{batch.head_sha ? batch.head_sha.slice(0, 12) : '冻结中'}</span><span>系统基线：{batch.base_batch_id ? `已生效批次 #${batch.base_batch_id}` : '首次生成'}</span></div>
           </button>;
         })}{visibleBatches.length === 0 && <div className="px-5 py-8 text-center text-xs text-slate-500">{activeServiceId ? '当前服务暂无生成批次。选择该服务后创建批次，即可在这里查看进度和审核候选。' : '当前项目暂无生成批次。'}</div>}</div>
       </Card>}
@@ -565,11 +568,11 @@ function GenerationPageContent() {
             return <div key={state} className={'flex items-center gap-1.5 text-[10px] ' + (active ? 'text-emerald-700 font-semibold' : done ? 'text-emerald-500' : 'text-slate-300')}><span className={'w-6 h-6 rounded-full flex items-center justify-center border ' + (active ? 'bg-emerald-600 text-white border-emerald-600' : done ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200')}>{done ? '✓' : index + 1}</span><span>{STAGE_LABEL[state]}</span>{index < 7 && <span className="mx-1 text-slate-200">→</span>}</div>;
           })}
         </div>
-        <div className="mb-4 flex flex-wrap gap-3 text-xs text-slate-500"><span>已选{realBatch.ref_type === 'tag' ? ' Tag' : '分支'} <b>{realBatch.branch}</b></span><span>冻结 SHA <b className="font-mono">{realBatch.head_sha ? realBatch.head_sha.slice(0, 12) : '冻结中'}</b></span><span>对比基线 <b>{realBatch.base_batch_id ? `#${realBatch.base_batch_id}` : '首次生成'}</b></span><span>候选种子 <b>{seedsLoading ? '读取中…' : realSeeds.length}</b></span><span>当前阶段 <b className="text-emerald-700">{STAGE_LABEL[realBatch.state] ?? realBatch.state}</b></span></div>
-        {realBatch.base_batch_id && <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs"><div className="font-medium text-slate-700">与基线批次 #{realBatch.base_batch_id} 的候选差异</div>{baselineSeedsError ? <div className="mt-1 text-red-600">{baselineSeedsError}</div> : !candidateDiff ? <div className="mt-1 text-slate-500">正在读取基线候选…</div> : <div className="mt-2 flex flex-wrap gap-3 text-[11px]"><span className="text-emerald-700">新增 {candidateDiff.added}</span><span className="text-slate-600">保持 {candidateDiff.unchanged}</span><span className="text-amber-700">基线移除 {candidateDiff.removed}</span><span className="text-slate-400">按请求、断言与场景的规范化内容比较；不把批次号、模型或路径元数据计入差异。</span></div>}</div>}
+        <div className="mb-4 flex flex-wrap gap-3 text-xs text-slate-500"><span>已选{realBatch.ref_type === 'tag' ? ' Tag' : '分支'} <b>{realBatch.branch}</b></span><span>冻结 SHA <b className="font-mono">{realBatch.head_sha ? realBatch.head_sha.slice(0, 12) : '冻结中'}</b></span><span>系统基线 <b>{realBatch.base_batch_id ? `已生效批次 #${realBatch.base_batch_id}` : '首次生成'}</b></span><span>候选种子 <b>{seedsLoading ? '读取中…' : realSeeds.length}</b></span><span>当前阶段 <b className="text-emerald-700">{STAGE_LABEL[realBatch.state] ?? realBatch.state}</b></span></div>
+        {realBatch.base_batch_id && <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs"><div className="font-medium text-slate-700">系统基线 #{realBatch.base_batch_id} 的候选差异</div>{baselineSeedsError ? <div className="mt-1 text-red-600">{baselineSeedsError}</div> : !candidateDiff ? <div className="mt-1 text-slate-500">正在读取基线候选…</div> : <div className="mt-2 flex flex-wrap gap-3 text-[11px]"><span className="text-emerald-700">新增 {candidateDiff.added}</span><span className="text-slate-600">保持或更新 {candidateDiff.unchanged}</span><span className="text-amber-700">拟归档 {candidateDiff.removed}</span><span className="text-slate-400">按稳定请求意图识别；审核通过后只同步当前有效用例集。</span></div>}</div>}
         {seedsError ? <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-5 text-xs text-red-700">候选用例读取失败：{seedsError}。页面将自动重试，读取成功前不能审核或执行。</div> : seedsLoading ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-5 text-xs text-slate-500">正在读取当前批次候选用例…</div> : realSeeds.length === 0 ? <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-5 text-xs text-slate-500">{['failed', 'rejected', 'rolled_back', 'approved', 'review'].includes(realBatch.state) ? '本批次没有可展示的候选用例，不能审核或执行。' : '正在生成候选用例，页面会自动更新进度。'}</div> : <GeneratedSeedReviewList seeds={realSeeds} />}
-        {realBatch.state === 'review' && <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"><p className="text-xs font-medium text-amber-800">请先逐条展开核对请求、断言与源码证据，再决定本批次是否入库。</p><p className="mt-1 text-[11px] text-amber-700">当前版本按批次整体审核；“审核通过”会把全部通过质量门的候选写入用例库，拒绝不会写入正式用例。</p><div className="mt-3 flex justify-end gap-2"><button type="button" disabled={!canReview} onClick={() => void submitRealReview('reject')} className="text-xs px-3 py-1.5 rounded-lg border border-red-200 bg-white text-red-600 hover:bg-red-50">拒绝该批次</button><button type="button" disabled={!canReview} onClick={() => void submitRealReview('approve')} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">{reviewBusy ? '提交中…' : '确认审核通过并入库'}</button></div></div>}
-        {realBatch.state === 'approved' && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700"><span>本批次已审核通过，候选已写入当前项目的版本化用例库；进入用例库或执行页会保留本项目上下文。</span><div className="flex flex-wrap gap-2"><button type="button" onClick={() => navigate(`/cases?target_id=${realBatch.target_id}`)} className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 font-medium text-emerald-700 hover:bg-emerald-50">查看本项目用例库</button><button type="button" disabled={seedsLoading || Boolean(seedsError) || !realSeeds.some((seed) => seed.case_id)} onClick={() => { const ids = realSeeds.flatMap((seed) => seed.case_id ? [seed.case_id] : []); if (ids.length) navigate(`/exec?target_id=${realBatch.target_id}&case_ids=${ids.join(',')}`); }} className="rounded-lg bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">执行本批用例</button></div></div>}
+        {realBatch.state === 'review' && <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"><p className="text-xs font-medium text-amber-800">请先逐条展开核对请求、断言与源码证据，再决定本次迭代是否生效。</p><p className="mt-1 text-[11px] text-amber-700">审核通过会同步一份当前有效用例：新增、更新、归档均以系统基线为准；拒绝不会改变正式用例。</p><div className="mt-3 flex justify-end gap-2"><button type="button" disabled={!canReview} onClick={() => void submitRealReview('reject')} className="text-xs px-3 py-1.5 rounded-lg border border-red-200 bg-white text-red-600 hover:bg-red-50">拒绝该迭代</button><button type="button" disabled={!canReview} onClick={() => void submitRealReview('approve')} className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">{reviewBusy ? '提交中…' : '确认生效并同步用例'}</button></div></div>}
+        {realBatch.state === 'approved' && <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700"><span>本次迭代已生效，当前有效用例集已同步；变更记录仅保留用于审计与追溯，不作为多版本用例供日常操作。</span><div className="flex flex-wrap gap-2"><button type="button" onClick={() => navigate(`/cases?target_id=${realBatch.target_id}`)} className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 font-medium text-emerald-700 hover:bg-emerald-50">查看当前有效用例</button><button type="button" disabled={seedsLoading || Boolean(seedsError) || !realSeeds.some((seed) => seed.case_id)} onClick={() => { const ids = realSeeds.flatMap((seed) => seed.case_id ? [seed.case_id] : []); if (ids.length) navigate(`/exec?target_id=${realBatch.target_id}&case_ids=${ids.join(',')}`); }} className="rounded-lg bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">执行本次有效用例</button></div></div>}
         {realBatch.state === 'rejected' && <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">该批次已被拒绝，未写入正式用例。请修正技术画像、源码范围或模型配置后重新创建批次。</div>}
         {realBatch.state === 'rolled_back' && <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">该批次已回退；请在用例管理与审计记录中核对受影响的版本后再重新生成。</div>}
         {realBatch.state === 'failed' && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700"><p>生成失败：{realBatch.failure_summary || '请检查源码访问、模型连接和候选质量校验。'}</p><div className="mt-2"><button type="button" onClick={() => navigate('/target')} className="font-medium underline">前往被测对象检查仓库、服务目录和技术画像</button><span className="mx-2 text-red-300">·</span><button type="button" onClick={() => navigate('/models')} className="font-medium underline">检查项目模型绑定</button></div><p className="mt-2 text-[10px] text-red-500">失败批次不会写入正式用例；修正后请创建新批次，旧批次保留用于审计。</p></div>}

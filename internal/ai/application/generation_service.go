@@ -23,7 +23,6 @@ type CreateGenerationBatchCommand struct {
 	RefType          string
 	Branch           string
 	RequestedVersion string
-	BaseBatchID      *int64
 	IdempotencyKey   string
 	ActorID          int64
 }
@@ -178,14 +177,7 @@ func generationSourcePath(value string) (string, error) {
 }
 
 func sameGenerationRequest(batch *domain.GenerationBatch, cmd CreateGenerationBatchCommand) bool {
-	return batch.TargetID == cmd.TargetID && batch.RepoID == cmd.RepoID && batch.ServiceID != nil && cmd.ServiceID != nil && *batch.ServiceID == *cmd.ServiceID && batch.SourcePath == cmd.SourcePath && batch.RefType == cmd.RefType && batch.Branch == cmd.Branch && batch.RequestedVersion == cmd.RequestedVersion && sameOptionalBatchID(batch.BaseBatchID, cmd.BaseBatchID)
-}
-
-func sameOptionalBatchID(left, right *int64) bool {
-	if left == nil || right == nil {
-		return left == nil && right == nil
-	}
-	return *left == *right
+	return batch.TargetID == cmd.TargetID && batch.RepoID == cmd.RepoID && batch.ServiceID != nil && cmd.ServiceID != nil && *batch.ServiceID == *cmd.ServiceID && batch.SourcePath == cmd.SourcePath && batch.RefType == cmd.RefType && batch.Branch == cmd.Branch && batch.RequestedVersion == cmd.RequestedVersion
 }
 
 // Create returns the existing batch for a repeated tenant-scoped idempotency
@@ -228,12 +220,14 @@ func (s *GenerationBatchService) Create(ctx context.Context, cmd CreateGeneratio
 	batch.ServiceID = cmd.ServiceID
 	batch.SourcePath = cmd.SourcePath
 	batch.RefType = cmd.RefType
-	batch.BaseBatchID = cmd.BaseBatchID
-	if cmd.BaseBatchID != nil {
-		base, findErr := s.batches.Find(ctx, cmd.TeamID, *cmd.BaseBatchID)
-		if findErr != nil || base.TargetID != batch.TargetID || base.RepoID != batch.RepoID || base.ServiceID == nil || *base.ServiceID != *batch.ServiceID {
-			return nil, false, errors.New("对比基线必须是同一项目、仓库和服务的历史批次")
-		}
+	// The baseline is system-owned. Only an already approved batch is effective
+	// and therefore eligible; drafts, failed runs, and user input never affect
+	// the iteration chain.
+	base, baseErr := s.batches.FindLatestApprovedByScope(ctx, cmd.TeamID, cmd.TargetID, cmd.RepoID, *cmd.ServiceID)
+	if baseErr == nil {
+		batch.BaseBatchID = &base.ID
+	} else if !errors.Is(baseErr, domain.ErrGenerationNotFound) {
+		return nil, false, fmt.Errorf("find effective generation baseline: %w", baseErr)
 	}
 	if err := s.batches.Create(ctx, batch); err != nil {
 		// A competing create may have won. Re-read instead of leaking a

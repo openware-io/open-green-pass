@@ -180,7 +180,14 @@ func (h *caseHandler) deleteCase(w http.ResponseWriter, r *http.Request) {
 
 func (h *caseHandler) listCases(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	f := domain.CaseFilter{Kind: q.Get("kind"), Code: q.Get("code"), Status: q.Get("status")}
+	// A case library presents exactly one effective set by default. Archived
+	// records remain auditable, but must be explicitly requested rather than
+	// appearing alongside executable current cases.
+	status := q.Get("status")
+	if status == "" {
+		status = "active"
+	}
+	f := domain.CaseFilter{Kind: q.Get("kind"), Code: q.Get("code"), Status: status}
 	if tid := q.Get("target_id"); tid != "" {
 		if n, err := strconv.ParseInt(tid, 10, 64); err == nil {
 			f.TargetID = &n

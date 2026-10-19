@@ -50,27 +50,33 @@ func TestGenerationBatchTransitionUsesOptimisticVersion(t *testing.T) {
 	}
 }
 
-func TestGenerationBatchRequiresCompatibleBaseline(t *testing.T) {
+func TestGenerationBatchAutomaticallyUsesLatestApprovedBaseline(t *testing.T) {
 	repo := infra.NewMemoryGenerationBatchRepository()
 	svc := NewGenerationBatchService(repo)
 	svc.SetScopePort(testGenerationScopePort{repoID: 1})
-	base, created, err := svc.Create(context.Background(), CreateGenerationBatchCommand{ID: 1, TeamID: 1, TargetID: 1, RepoID: 1, ServiceID: generationTestServiceID(), Branch: "main", IdempotencyKey: "base", ActorID: 1})
-	if err != nil || !created {
-		t.Fatalf("create base = %#v, %v, %v", base, created, err)
-	}
-	if _, _, err := svc.Create(context.Background(), CreateGenerationBatchCommand{ID: 2, TeamID: 1, TargetID: 1, RepoID: 1, ServiceID: generationTestServiceID(), Branch: "v1.0.0", RefType: "tag", BaseBatchID: &base.ID, IdempotencyKey: "tag", ActorID: 1}); err != nil {
-		t.Fatalf("compatible baseline = %v", err)
-	}
-	other, _, err := svc.Create(context.Background(), CreateGenerationBatchCommand{ID: 3, TeamID: 1, TargetID: 1, RepoID: 1, ServiceID: ptr(int64(99)), Branch: "main", IdempotencyKey: "other", ActorID: 1})
+	base, err := domain.NewGenerationBatch(1, 1, 1, 1, 1, "main", "", "base", time.Unix(100, 0).UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := svc.Create(context.Background(), CreateGenerationBatchCommand{ID: 4, TeamID: 1, TargetID: 1, RepoID: 1, ServiceID: generationTestServiceID(), Branch: "main", BaseBatchID: &other.ID, IdempotencyKey: "bad", ActorID: 1}); err == nil {
-		t.Fatal("expected incompatible baseline to fail")
+	base.ServiceID = generationTestServiceID()
+	base.State = domain.GenerationApproved
+	base.UpdatedAt = time.Unix(200, 0).UTC()
+	if err := repo.Create(context.Background(), base); err != nil {
+		t.Fatal(err)
+	}
+	ignored, err := domain.NewGenerationBatch(2, 1, 1, 1, 1, "other", "", "draft", time.Unix(300, 0).UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ignored.ServiceID = generationTestServiceID()
+	if err := repo.Create(context.Background(), ignored); err != nil {
+		t.Fatal(err)
+	}
+	created, made, err := svc.Create(context.Background(), CreateGenerationBatchCommand{ID: 3, TeamID: 1, TargetID: 1, RepoID: 1, ServiceID: generationTestServiceID(), Branch: "v1.0.0", RefType: "tag", IdempotencyKey: "iteration", ActorID: 1})
+	if err != nil || !made || created.BaseBatchID == nil || *created.BaseBatchID != base.ID {
+		t.Fatalf("automatic baseline = %#v, %v, %v", created, made, err)
 	}
 }
-
-func ptr(v int64) *int64 { return &v }
 
 func TestGenerationReviewSignalsAndAuditsApprovedTransition(t *testing.T) {
 	repo := infra.NewMemoryGenerationBatchRepository()

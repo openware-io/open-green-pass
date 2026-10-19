@@ -90,6 +90,24 @@ func (r *MemoryGenerationBatchRepository) ListByTarget(_ context.Context, teamID
 	return result, nil
 }
 
+func (r *MemoryGenerationBatchRepository) FindLatestApprovedByScope(_ context.Context, teamID, targetID, repoID, serviceID int64) (*domain.GenerationBatch, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var result *domain.GenerationBatch
+	for _, batch := range r.byID {
+		if batch.TeamID != teamID || batch.TargetID != targetID || batch.RepoID != repoID || batch.ServiceID == nil || *batch.ServiceID != serviceID || batch.State != domain.GenerationApproved {
+			continue
+		}
+		if result == nil || batch.UpdatedAt.After(result.UpdatedAt) || (batch.UpdatedAt.Equal(result.UpdatedAt) && batch.ID > result.ID) {
+			result = batch
+		}
+	}
+	if result == nil {
+		return nil, domain.ErrGenerationNotFound
+	}
+	return cloneGenerationBatch(result), nil
+}
+
 func (r *MemoryGenerationBatchRepository) CompareAndSwap(_ context.Context, batch *domain.GenerationBatch, expectedVersion int64) error {
 	if batch == nil {
 		return domain.ErrGenerationNotFound
@@ -116,6 +134,10 @@ func cloneGenerationBatch(in *domain.GenerationBatch) *domain.GenerationBatch {
 	if in.ParentBatchID != nil {
 		parent := *in.ParentBatchID
 		out.ParentBatchID = &parent
+	}
+	if in.BaseBatchID != nil {
+		base := *in.BaseBatchID
+		out.BaseBatchID = &base
 	}
 	return &out
 }

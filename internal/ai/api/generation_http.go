@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -87,7 +88,6 @@ type createBatchRequest struct {
 	RefType          string `json:"ref_type"`
 	Branch           string `json:"branch"`
 	RequestedVersion string `json:"version"`
-	BaseBatchID      *int64 `json:"base_batch_id"`
 	IdempotencyKey   string `json:"idempotency_key"`
 }
 
@@ -106,8 +106,18 @@ func (h *generationHandler) create(w http.ResponseWriter, r *http.Request) {
 	if actor <= 0 {
 		actor = 1
 	}
+	var raw map[string]json.RawMessage
+	if httpx.DecodeJSON(r, &raw) != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_generation_batch"})
+		return
+	}
+	if _, supplied := raw["base_batch_id"]; supplied {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "base_batch_id_is_system_managed"})
+		return
+	}
+	encoded, _ := json.Marshal(raw)
 	var in createBatchRequest
-	if httpx.DecodeJSON(r, &in) != nil || in.TargetID <= 0 || in.RepoID <= 0 || in.ServiceID == nil || *in.ServiceID <= 0 || in.Branch == "" || in.IdempotencyKey == "" {
+	if json.Unmarshal(encoded, &in) != nil || in.TargetID <= 0 || in.RepoID <= 0 || in.ServiceID == nil || *in.ServiceID <= 0 || in.Branch == "" || in.IdempotencyKey == "" {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_generation_batch"})
 		return
 	}
@@ -121,7 +131,7 @@ func (h *generationHandler) create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	b, created, err := h.svc.Create(r.Context(), application.CreateGenerationBatchCommand{ID: h.gen.Next(), TeamID: team, TargetID: in.TargetID, RepoID: in.RepoID, ServiceID: in.ServiceID, SourcePath: in.SourcePath, RefType: in.RefType, Branch: in.Branch, RequestedVersion: in.RequestedVersion, BaseBatchID: in.BaseBatchID, IdempotencyKey: in.IdempotencyKey, ActorID: actor})
+	b, created, err := h.svc.Create(r.Context(), application.CreateGenerationBatchCommand{ID: h.gen.Next(), TeamID: team, TargetID: in.TargetID, RepoID: in.RepoID, ServiceID: in.ServiceID, SourcePath: in.SourcePath, RefType: in.RefType, Branch: in.Branch, RequestedVersion: in.RequestedVersion, IdempotencyKey: in.IdempotencyKey, ActorID: actor})
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return

@@ -1714,9 +1714,9 @@ export interface components {
             head_sha?: string;
             /**
              * Format: int64
-             * @description 本次增量对比选择的同服务历史基线批次
+             * @description 系统自动选择的同服务最近一次已生效基线批次
              */
-            base_batch_id?: number | null;
+            readonly base_batch_id?: number | null;
             /** @enum {string} */
             state: "enqueued" | "fetching" | "parsing" | "generating" | "quality_check" | "review" | "committing" | "approved" | "rejected" | "rolled_back" | "failed";
             /** Format: int64 */
@@ -1749,11 +1749,6 @@ export interface components {
             ref_type: "branch" | "tag";
             branch: string;
             version?: string;
-            /**
-             * Format: int64
-             * @description 同仓库同服务的历史基线批次
-             */
-            base_batch_id?: number | null;
             idempotency_key: string;
         };
         GenerationReview: {

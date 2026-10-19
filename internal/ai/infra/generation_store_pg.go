@@ -321,6 +321,7 @@ func (s *GenerationBatchStore) createGeneratedSeeds(ctx context.Context, teamID,
 				return err
 			}
 			digest := md5.Sum(append([]byte("model://"+provider+"/"+model+"?source="+candidate.SourceLocator), payload...))
+			caseKey := generatedCaseKey(spec)
 			locator := "model://" + provider + "/" + model + "?source_path=" + sourcePath + "&source=" + candidate.SourceLocator
 			id := seedID
 			if index > 0 {
@@ -328,9 +329,9 @@ func (s *GenerationBatchStore) createGeneratedSeeds(ctx context.Context, teamID,
 			}
 			var insertErr error
 			if snapshotID > 0 {
-				_, insertErr = tx.Exec(ctx, `INSERT INTO gen_seed(id,team_id,batch_id,source_snapshot_id,source_locator,normalized_spec,dedupe_hash) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7) ON CONFLICT (batch_id,dedupe_hash) DO NOTHING`, id, teamID, batchID, snapshotID, locator, payload, hex.EncodeToString(digest[:]))
+				_, insertErr = tx.Exec(ctx, `INSERT INTO gen_seed(id,team_id,batch_id,source_snapshot_id,source_locator,normalized_spec,dedupe_hash,case_key) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8) ON CONFLICT (batch_id,dedupe_hash) DO NOTHING`, id, teamID, batchID, snapshotID, locator, payload, hex.EncodeToString(digest[:]), caseKey)
 			} else {
-				_, insertErr = tx.Exec(ctx, `INSERT INTO gen_seed(id,team_id,batch_id,source_locator,normalized_spec,dedupe_hash) VALUES($1,$2,$3,$4,$5::jsonb,$6) ON CONFLICT (batch_id,dedupe_hash) DO NOTHING`, id, teamID, batchID, locator, payload, hex.EncodeToString(digest[:]))
+				_, insertErr = tx.Exec(ctx, `INSERT INTO gen_seed(id,team_id,batch_id,source_locator,normalized_spec,dedupe_hash,case_key) VALUES($1,$2,$3,$4,$5::jsonb,$6,$7) ON CONFLICT (batch_id,dedupe_hash) DO NOTHING`, id, teamID, batchID, locator, payload, hex.EncodeToString(digest[:]), caseKey)
 			}
 			if insertErr != nil {
 				return insertErr
@@ -445,8 +446,9 @@ func (s *GenerationBatchStore) CreateSeed(ctx context.Context, teamID int64, see
 	}
 	digest := md5.Sum(append([]byte(locator), payload...))
 	dedupeHash := hex.EncodeToString(digest[:])
+	caseKey := generatedCaseKey(spec)
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO gen_seed (id,team_id,batch_id,source_locator,normalized_spec,dedupe_hash) VALUES ($1,$2,$3,$4,$5::jsonb,$6) ON CONFLICT (batch_id,dedupe_hash) DO NOTHING`, seedID, teamID, batchID, locator, payload, dedupeHash)
+		_, err := tx.Exec(ctx, `INSERT INTO gen_seed (id,team_id,batch_id,source_locator,normalized_spec,dedupe_hash,case_key) VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7) ON CONFLICT (batch_id,dedupe_hash) DO NOTHING`, seedID, teamID, batchID, locator, payload, dedupeHash, caseKey)
 		return err
 	})
 }
@@ -708,10 +710,25 @@ func (s *GenerationBatchStore) CommitSeeds(ctx context.Context, teamID, batchID,
 		return fmt.Errorf("approved actor and ID generator are required to commit generated cases")
 	}
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		var targetID, repoID int64
+		var targetID, repoID, serviceID int64
 		var branch string
-		if err := tx.QueryRow(ctx, `SELECT target_id,repo_id,branch FROM gen_batch WHERE team_id=$1 AND id=$2`, teamID, batchID).Scan(&targetID, &repoID, &branch); err != nil {
+		var baseBatchID *int64
+		if err := tx.QueryRow(ctx, `SELECT target_id,repo_id,service_id,branch,base_batch_id FROM gen_batch WHERE team_id=$1 AND id=$2`, teamID, batchID).Scan(&targetID, &repoID, &serviceID, &branch, &baseBatchID); err != nil {
 			return err
+		}
+		// Do not allow two drafts based on the same earlier state to take turns
+		// overwriting the current set. A reviewer must regenerate if another
+		// approved iteration became effective after this batch was created.
+		var effectiveID int64
+		err := tx.QueryRow(ctx, `SELECT id FROM gen_batch WHERE team_id=$1 AND target_id=$2 AND repo_id=$3 AND service_id=$4 AND state='approved' ORDER BY updated_at DESC,id DESC LIMIT 1`, teamID, targetID, repoID, serviceID).Scan(&effectiveID)
+		if err == nil && (baseBatchID == nil || effectiveID != *baseBatchID) {
+			return fmt.Errorf("当前有效用例已被其他迭代更新，请基于最新生效批次重新生成")
+		}
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		if err != nil && baseBatchID != nil {
+			return fmt.Errorf("系统基线已不再生效，请重新生成")
 		}
 		var totalSeeds, passedSeeds int
 		if err := tx.QueryRow(ctx, `SELECT count(*),count(*) FILTER (WHERE quality_state='passed') FROM gen_seed WHERE team_id=$1 AND batch_id=$2`, teamID, batchID).Scan(&totalSeeds, &passedSeeds); err != nil {
@@ -720,25 +737,40 @@ func (s *GenerationBatchStore) CommitSeeds(ctx context.Context, teamID, batchID,
 		if totalSeeds == 0 || totalSeeds != passedSeeds {
 			return fmt.Errorf("all generated seeds must pass the quality gate before commit")
 		}
-		rows, err := tx.Query(ctx, `SELECT id,case_id,normalized_spec FROM gen_seed WHERE team_id=$1 AND batch_id=$2 AND quality_state='passed' ORDER BY id`, teamID, batchID)
+		var committedSeeds int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM gen_seed WHERE team_id=$1 AND batch_id=$2 AND approval_state='approved' AND case_id IS NOT NULL`, teamID, batchID).Scan(&committedSeeds); err != nil {
+			return err
+		}
+		// CommitVersions can be retried after the transaction has committed but
+		// before the workflow persisted its final state transition. The original
+		// commit is already the complete atomic current-set update in that case.
+		if committedSeeds == totalSeeds {
+			return nil
+		}
+		if committedSeeds != 0 {
+			return fmt.Errorf("generation commit is partially recorded; refusing to overwrite the current case set")
+		}
+		rows, err := tx.Query(ctx, `SELECT id,case_id,normalized_spec,case_key FROM gen_seed WHERE team_id=$1 AND batch_id=$2 AND quality_state='passed' ORDER BY id`, teamID, batchID)
 		if err != nil {
 			return err
 		}
 		type seedRow struct {
-			id     int64
-			caseID *int64
-			raw    []byte
+			id      int64
+			caseID  *int64
+			raw     []byte
+			caseKey string
 		}
 		seeds := make([]seedRow, 0)
 		for rows.Next() {
 			var seedID int64
 			var caseID *int64
 			var raw []byte
-			if err := rows.Scan(&seedID, &caseID, &raw); err != nil {
+			var caseKey string
+			if err := rows.Scan(&seedID, &caseID, &raw, &caseKey); err != nil {
 				rows.Close()
 				return err
 			}
-			seeds = append(seeds, seedRow{id: seedID, caseID: caseID, raw: raw})
+			seeds = append(seeds, seedRow{id: seedID, caseID: caseID, raw: raw, caseKey: caseKey})
 		}
 		if err := rows.Err(); err != nil {
 			rows.Close()
@@ -748,44 +780,133 @@ func (s *GenerationBatchStore) CommitSeeds(ctx context.Context, teamID, batchID,
 		if len(seeds) == 0 {
 			return fmt.Errorf("no quality-passed generated seeds are available for commit")
 		}
-		for _, seed := range seeds {
-			seedID, raw := seed.id, seed.raw
-			if seed.caseID != nil && *seed.caseID > 0 {
-				if _, err := tx.Exec(ctx, `UPDATE gen_seed SET approval_state='approved' WHERE team_id=$1 AND batch_id=$2 AND id=$3`, teamID, batchID, seedID); err != nil {
+		type existingCase struct {
+			id      int64
+			raw     []byte
+			version int
+		}
+		baseline := make(map[string]existingCase)
+		if baseBatchID != nil {
+			baseRows, err := tx.Query(ctx, `SELECT s.case_id,s.normalized_spec,s.case_key,c.current_version FROM gen_seed s JOIN cas_case c ON c.id=s.case_id WHERE s.team_id=$1 AND s.batch_id=$2 AND s.approval_state='approved' AND s.case_id IS NOT NULL`, teamID, *baseBatchID)
+			if err != nil {
+				return err
+			}
+			for baseRows.Next() {
+				var item existingCase
+				var raw []byte
+				var key string
+				if err := baseRows.Scan(&item.id, &raw, &key, &item.version); err != nil {
+					baseRows.Close()
 					return err
 				}
-				continue
+				if key == "" {
+					var spec map[string]any
+					if err := json.Unmarshal(raw, &spec); err != nil {
+						baseRows.Close()
+						return err
+					}
+					key = generatedCaseKey(spec)
+					if _, err := tx.Exec(ctx, `UPDATE gen_seed SET case_key=$4 WHERE team_id=$1 AND batch_id=$2 AND case_id=$3`, teamID, *baseBatchID, item.id, key); err != nil {
+						baseRows.Close()
+						return err
+					}
+				}
+				if _, duplicate := baseline[key]; duplicate {
+					baseRows.Close()
+					return fmt.Errorf("effective baseline contains duplicate generated case identity")
+				}
+				item.raw = raw
+				baseline[key] = item
 			}
+			if err := baseRows.Err(); err != nil {
+				baseRows.Close()
+				return err
+			}
+			baseRows.Close()
+		}
+		seen := make(map[string]struct{}, len(seeds))
+		for _, seed := range seeds {
 			var spec map[string]any
-			if err := json.Unmarshal(raw, &spec); err != nil {
+			if err := json.Unmarshal(seed.raw, &spec); err != nil {
 				return err
 			}
-			code := fmt.Sprintf("GEN-%d-%d", batchID, seedID)
-			title, _ := spec["title"].(string)
-			if title == "" {
-				title = fmt.Sprintf("生成候选种子 %d", seedID)
+			key := seed.caseKey
+			if key == "" {
+				key = generatedCaseKey(spec)
 			}
-			caseID, versionID := genNext(), genNext()
-			kind, _ := spec["kind"].(string)
-			if kind == "" {
-				kind = "api"
+			if _, duplicate := seen[key]; duplicate {
+				return fmt.Errorf("generated iteration contains duplicate case identity")
 			}
-			if _, err := tx.Exec(ctx, `INSERT INTO cas_case (id,team_id,target_id,code,title,kind,current_version,status,created_by) VALUES ($1,$2,$3,$4,$5,$6,1,'active',$7) ON CONFLICT (team_id,target_id,code) DO NOTHING`, caseID, teamID, targetID, code, title, kind, actorID); err != nil {
+			seen[key] = struct{}{}
+			if _, err := tx.Exec(ctx, `UPDATE gen_seed SET case_key=$4 WHERE team_id=$1 AND batch_id=$2 AND id=$3`, teamID, batchID, seed.id, key); err != nil {
 				return err
 			}
+			current, exists := baseline[key]
 			var persistedCaseID int64
-			if err := tx.QueryRow(ctx, `SELECT id FROM cas_case WHERE team_id=$1 AND target_id=$2 AND code=$3`, teamID, targetID, code).Scan(&persistedCaseID); err != nil {
+			if exists {
+				persistedCaseID = current.id
+				if caseContentDigest(seed.raw) != caseContentDigest(current.raw) {
+					version := current.version + 1
+					title, _ := spec["title"].(string)
+					kind, _ := spec["kind"].(string)
+					if kind == "" {
+						kind = "api"
+					}
+					if _, err := tx.Exec(ctx, `UPDATE cas_case SET title=$3,kind=$4,current_version=$5,status='active',deleted_at=NULL,updated_by=$6,updated_at=now() WHERE team_id=$1 AND id=$2`, teamID, persistedCaseID, title, kind, version, actorID); err != nil {
+						return err
+					}
+					if _, err := tx.Exec(ctx, `INSERT INTO cas_version(id,team_id,case_id,version,change_type,source_repo_id,source_branch,script_json,approved_by,approved_at,created_by) VALUES($1,$2,$3,$4,'updated',$5,$6,$7,$8,now(),$8)`, genNext(), teamID, persistedCaseID, version, repoID, branch, seed.raw, actorID); err != nil {
+						return err
+					}
+				} else if _, err := tx.Exec(ctx, `UPDATE cas_case SET status='active',deleted_at=NULL,updated_by=$3,updated_at=now() WHERE team_id=$1 AND id=$2`, teamID, persistedCaseID, actorID); err != nil {
+					return err
+				}
+				delete(baseline, key)
+			} else {
+				title, _ := spec["title"].(string)
+				if title == "" {
+					title = fmt.Sprintf("生成候选种子 %d", seed.id)
+				}
+				kind, _ := spec["kind"].(string)
+				if kind == "" {
+					kind = "api"
+				}
+				persistedCaseID = genNext()
+				code := fmt.Sprintf("GEN-%d-%s", serviceID, key[:12])
+				if _, err := tx.Exec(ctx, `INSERT INTO cas_case(id,team_id,target_id,code,title,kind,current_version,status,created_by) VALUES($1,$2,$3,$4,$5,$6,1,'active',$7)`, persistedCaseID, teamID, targetID, code, title, kind, actorID); err != nil {
+					return err
+				}
+				if _, err := tx.Exec(ctx, `INSERT INTO cas_version(id,team_id,case_id,version,change_type,source_repo_id,source_branch,script_json,approved_by,approved_at,created_by) VALUES($1,$2,$3,1,'added',$4,$5,$6,$7,now(),$7)`, genNext(), teamID, persistedCaseID, repoID, branch, seed.raw, actorID); err != nil {
+					return err
+				}
+			}
+			if _, err := tx.Exec(ctx, `UPDATE gen_seed SET approval_state='approved',case_id=$4 WHERE team_id=$1 AND batch_id=$2 AND id=$3`, teamID, batchID, seed.id, persistedCaseID); err != nil {
 				return err
 			}
-			if _, err := tx.Exec(ctx, `INSERT INTO cas_version (id,team_id,case_id,version,change_type,source_repo_id,source_branch,script_json,approved_by,approved_at,created_by) VALUES ($1,$2,$3,1,'added',$4,$5,$6,$7,now(),$7) ON CONFLICT (case_id,version) DO NOTHING`, versionID, teamID, persistedCaseID, repoID, branch, raw, actorID); err != nil {
+		}
+		for _, removed := range baseline {
+			version := removed.version + 1
+			if _, err := tx.Exec(ctx, `UPDATE cas_case SET current_version=$3,status='archived',updated_by=$4,updated_at=now() WHERE team_id=$1 AND id=$2`, teamID, removed.id, version, actorID); err != nil {
 				return err
 			}
-			if _, err := tx.Exec(ctx, `UPDATE gen_seed SET approval_state='approved',case_id=$4 WHERE team_id=$1 AND batch_id=$2 AND id=$3`, teamID, batchID, seedID, persistedCaseID); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO cas_version(id,team_id,case_id,version,change_type,source_repo_id,source_branch,script_json,approved_by,approved_at,created_by) VALUES($1,$2,$3,$4,'deleted',$5,$6,$7,$8,now(),$8)`, genNext(), teamID, removed.id, version, repoID, branch, removed.raw, actorID); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
+}
+
+func caseContentDigest(raw []byte) string {
+	var spec map[string]any
+	if json.Unmarshal(raw, &spec) != nil {
+		return string(raw)
+	}
+	delete(spec, "batch_id")
+	delete(spec, "provider")
+	delete(spec, "model")
+	delete(spec, "source_path")
+	return seedDigest(spec)
 }
 
 func (s *GenerationBatchStore) ListSeeds(ctx context.Context, teamID, batchID int64) ([]GenerationSeed, error) {
@@ -882,6 +1003,23 @@ func (s *GenerationBatchStore) ListByTarget(ctx context.Context, teamID, targetI
 		return rows.Err()
 	})
 	return out, err
+}
+
+func (s *GenerationBatchStore) FindLatestApprovedByScope(ctx context.Context, teamID, targetID, repoID, serviceID int64) (*domain.GenerationBatch, error) {
+	var batch domain.GenerationBatch
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		return scanBatch(tx.QueryRow(ctx, `SELECT id,team_id,target_id,repo_id,service_id,COALESCE(source_path,''),ref_type,branch,COALESCE(requested_version,''),COALESCE(head_sha,''),state,state_version,COALESCE(workflow_id,''),idempotency_key,parent_batch_id,base_batch_id,created_by,COALESCE(failure_summary,''),created_at,updated_at
+			FROM gen_batch
+			WHERE team_id=$1 AND target_id=$2 AND repo_id=$3 AND service_id=$4 AND state='approved'
+			ORDER BY updated_at DESC,id DESC LIMIT 1`, teamID, targetID, repoID, serviceID), &batch)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ErrGenerationNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &batch, nil
 }
 
 func (s *GenerationBatchStore) CompareAndSwap(ctx context.Context, b *domain.GenerationBatch, expected int64) error {

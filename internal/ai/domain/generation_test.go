@@ -65,6 +65,9 @@ func (contextRepositoryProbe) Find(context.Context, int64, int64) (*GenerationBa
 func (contextRepositoryProbe) ListByTarget(context.Context, int64, int64, int) ([]*GenerationBatch, error) {
 	return nil, nil
 }
+func (contextRepositoryProbe) FindLatestApprovedByScope(context.Context, int64, int64, int64, int64) (*GenerationBatch, error) {
+	return nil, ErrGenerationNotFound
+}
 func (contextRepositoryProbe) FindByIdempotencyKey(context.Context, int64, string) (*GenerationBatch, error) {
 	return nil, ErrGenerationNotFound
 }
