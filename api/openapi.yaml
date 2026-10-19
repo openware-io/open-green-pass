@@ -51,6 +51,23 @@ paths:
         content: { application/json: { schema: { $ref: '#/components/schemas/GenerationReview' } } }
       responses:
         '200': { description: 审核完成, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationBatch' } } } }
+  /projects/{id}/repositories/{repoID}/refs:
+    get:
+      summary: 查询已同步的仓库分支与 Tag
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+        - { name: repoID, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        '200': { description: 代码引用, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RepositoryRef' } } } } }
+  /projects/{id}/repositories/{repoID}/refs:refresh:
+    post:
+      summary: 刷新仓库分支与 Tag
+      description: 由服务端源码连接器读取，客户端不能提交 Git 命令或任意引用。
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+        - { name: repoID, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        '200': { description: 刷新后的代码引用, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RepositoryRef' } } } } }
   /healthz:
     get:
       summary: 健康检查
@@ -986,8 +1003,11 @@ components:
         repo_id: { type: integer, format: int64 }
         service_id: { type: integer, format: int64, description: 项目目录中的被测子服务 }
         source_path: { type: string, description: 被测子服务在仓库中的源码目录 }
-        branch: { type: string }
-        version: { type: string }
+        ref_type: { type: string, enum: [ branch, tag ], description: 代码引用类型 }
+        branch: { type: string, description: 所选代码引用名称；字段为兼容保留，Tag 时同样存储 Tag 名称 }
+        version: { type: string, description: 业务候选版本，不等同于代码 Tag }
+        head_sha: { type: string, description: 工作流实际冻结并用于生成的不可变提交 SHA }
+        base_batch_id: { type: integer, format: int64, nullable: true, description: 本次增量对比选择的同服务历史基线批次 }
         state: { type: string, enum: [ enqueued, fetching, parsing, generating, quality_check, review, committing, approved, rejected, rolled_back, failed ] }
         state_version: { type: integer, format: int64 }
         workflow_id: { type: string }
@@ -1003,8 +1023,10 @@ components:
         repo_id: { type: integer, format: int64 }
         service_id: { type: integer, format: int64, description: 项目目录中的被测子服务 }
         source_path: { type: string, description: 被测子服务在仓库中的源码目录 }
+        ref_type: { type: string, enum: [ branch, tag ], default: branch }
         branch: { type: string }
         version: { type: string }
+        base_batch_id: { type: integer, format: int64, nullable: true, description: 同仓库同服务的历史基线批次 }
         idempotency_key: { type: string }
     GenerationReview:
       type: object
@@ -1024,6 +1046,15 @@ components:
         normalized_spec: { type: object, additionalProperties: true }
         quality_state: { type: string, enum: [ pending, passed, failed ] }
         approval_state: { type: string, enum: [ pending, approved, rejected ] }
+        dedupe_hash: { type: string, description: 规范化候选的去重摘要，用于批次差异比较 }
+    RepositoryRef:
+      type: object
+      required: [ ref_type, name, commit_sha, fetched_at ]
+      properties:
+        ref_type: { type: string, enum: [ branch, tag ] }
+        name: { type: string }
+        commit_sha: { type: string }
+        fetched_at: { type: string, format: date-time }
     ProjectRepositoryInput:
       type: object
       required: [ url ]

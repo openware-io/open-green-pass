@@ -76,6 +76,15 @@ type githubSourceReader struct {
 	token   string
 }
 
+// repositoryRef is deliberately resolved by the server-side SCM connector.
+// The browser receives names and immutable commit IDs, never credentials or
+// an ability to pass a repository URL to the reader.
+type repositoryRef struct {
+	Type string
+	Name string
+	SHA  string
+}
+
 func newGitHubSourceReader() *githubSourceReader {
 	// The token is intentionally read only from the worker environment. It is
 	// never accepted from a request, persisted in a batch, or included in an
@@ -161,6 +170,89 @@ func (r *githubSourceReader) Fetch(ctx context.Context, repoURL, branch, sourceP
 		return nil, "", fmt.Errorf("no readable source or contract files found under %q", root)
 	}
 	return files, commit.SHA, nil
+}
+
+func (r *githubSourceReader) ListRefs(ctx context.Context, repoURL string) ([]repositoryRef, error) {
+	owner, repo, err := parsePublicGitHubRepository(repoURL)
+	if err != nil {
+		return nil, err
+	}
+	base := fmt.Sprintf("%s/repos/%s/%s", r.apiRoot, url.PathEscape(owner), url.PathEscape(repo))
+	branchesBody, err := r.get(ctx, base+"/branches?per_page=100", 2*1024*1024)
+	if err != nil {
+		return nil, fmt.Errorf("list GitHub branches: %w", err)
+	}
+	var branches []struct {
+		Name   string `json:"name"`
+		Commit struct {
+			SHA string `json:"sha"`
+		} `json:"commit"`
+	}
+	if err := json.Unmarshal(branchesBody, &branches); err != nil {
+		return nil, fmt.Errorf("decode GitHub branches: %w", err)
+	}
+	tagsBody, err := r.get(ctx, base+"/tags?per_page=100", 2*1024*1024)
+	if err != nil {
+		return nil, fmt.Errorf("list GitHub tags: %w", err)
+	}
+	var tags []struct {
+		Name   string `json:"name"`
+		Commit struct {
+			SHA string `json:"sha"`
+		} `json:"commit"`
+	}
+	if err := json.Unmarshal(tagsBody, &tags); err != nil {
+		return nil, fmt.Errorf("decode GitHub tags: %w", err)
+	}
+	refs := make([]repositoryRef, 0, len(branches)+len(tags))
+	for _, item := range branches {
+		if safeBranch(item.Name) && item.Commit.SHA != "" {
+			refs = append(refs, repositoryRef{Type: "branch", Name: item.Name, SHA: item.Commit.SHA})
+		}
+	}
+	for _, item := range tags {
+		if safeBranch(item.Name) && item.Commit.SHA != "" {
+			commit, resolveErr := r.resolveTagCommit(ctx, owner, repo, item.Commit.SHA)
+			if resolveErr != nil {
+				return nil, fmt.Errorf("resolve GitHub tag %q: %w", item.Name, resolveErr)
+			}
+			refs = append(refs, repositoryRef{Type: "tag", Name: item.Name, SHA: commit})
+		}
+	}
+	sort.Slice(refs, func(i, j int) bool {
+		if refs[i].Type != refs[j].Type {
+			return refs[i].Type < refs[j].Type
+		}
+		return refs[i].Name < refs[j].Name
+	})
+	return refs, nil
+}
+
+func (r *githubSourceReader) resolveTagCommit(ctx context.Context, owner, repo, objectSHA string) (string, error) {
+	endpoint := fmt.Sprintf("%s/repos/%s/%s/git/tags/%s", r.apiRoot, url.PathEscape(owner), url.PathEscape(repo), url.PathEscape(objectSHA))
+	body, err := r.get(ctx, endpoint, 128*1024)
+	if err != nil {
+		// GitHub's tag list points directly at a commit for lightweight tags;
+		// GET git/tags then returns 404. In that case the listed SHA is already
+		// the immutable commit that must be shown to the user.
+		if strings.Contains(err.Error(), "HTTP 404") {
+			return objectSHA, nil
+		}
+		return "", err
+	}
+	var tag struct {
+		Object struct {
+			SHA  string `json:"sha"`
+			Type string `json:"type"`
+		} `json:"object"`
+	}
+	if err := json.Unmarshal(body, &tag); err != nil || tag.Object.SHA == "" {
+		return "", fmt.Errorf("decode annotated tag")
+	}
+	if tag.Object.Type != "commit" {
+		return "", fmt.Errorf("annotated tag does not resolve directly to a commit")
+	}
+	return tag.Object.SHA, nil
 }
 
 func (r *githubSourceReader) get(ctx context.Context, endpoint string, maxBytes int64) ([]byte, error) {

@@ -41,6 +41,7 @@ type GenerationBatch struct {
 	RepoID           int64
 	ServiceID        *int64
 	SourcePath       string
+	RefType          string
 	Branch           string
 	RequestedVersion string
 	HeadSHA          string
@@ -49,6 +50,7 @@ type GenerationBatch struct {
 	WorkflowID       string
 	IdempotencyKey   string
 	ParentBatchID    *int64
+	BaseBatchID      *int64
 	CreatedBy        int64
 	FailureSummary   string
 	CreatedAt        time.Time
@@ -77,7 +79,7 @@ func NewGenerationBatch(id, teamID, targetID, repoID, createdBy int64, branch, r
 	}
 	return &GenerationBatch{
 		ID: id, TeamID: teamID, TargetID: targetID, RepoID: repoID,
-		Branch: branch, RequestedVersion: requestedVersion,
+		RefType: "branch", Branch: branch, RequestedVersion: requestedVersion,
 		State: GenerationEnqueued, StateVersion: 1, WorkflowID: fmt.Sprintf("generation/%d/%d", teamID, id), IdempotencyKey: idempotencyKey,
 		CreatedBy: createdBy, CreatedAt: now, UpdatedAt: now,
 	}, nil

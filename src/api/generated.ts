@@ -204,6 +204,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{id}/repositories/{repoID}/refs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询已同步的仓库分支与 Tag */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                    repoID: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 代码引用 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RepositoryRef"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{id}/repositories/{repoID}/refs:refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 刷新仓库分支与 Tag
+         * @description 由服务端源码连接器读取，客户端不能提交 Git 命令或任意引用。
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                    repoID: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 刷新后的代码引用 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RepositoryRef"][];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -1620,8 +1701,22 @@ export interface components {
             service_id?: number;
             /** @description 被测子服务在仓库中的源码目录 */
             source_path?: string;
+            /**
+             * @description 代码引用类型
+             * @enum {string}
+             */
+            ref_type?: "branch" | "tag";
+            /** @description 所选代码引用名称；字段为兼容保留，Tag 时同样存储 Tag 名称 */
             branch: string;
+            /** @description 业务候选版本，不等同于代码 Tag */
             version?: string;
+            /** @description 工作流实际冻结并用于生成的不可变提交 SHA */
+            head_sha?: string;
+            /**
+             * Format: int64
+             * @description 本次增量对比选择的同服务历史基线批次
+             */
+            base_batch_id?: number | null;
             /** @enum {string} */
             state: "enqueued" | "fetching" | "parsing" | "generating" | "quality_check" | "review" | "committing" | "approved" | "rejected" | "rolled_back" | "failed";
             /** Format: int64 */
@@ -1647,8 +1742,18 @@ export interface components {
             service_id: number;
             /** @description 被测子服务在仓库中的源码目录 */
             source_path?: string;
+            /**
+             * @default branch
+             * @enum {string}
+             */
+            ref_type: "branch" | "tag";
             branch: string;
             version?: string;
+            /**
+             * Format: int64
+             * @description 同仓库同服务的历史基线批次
+             */
+            base_batch_id?: number | null;
             idempotency_key: string;
         };
         GenerationReview: {
@@ -1676,6 +1781,16 @@ export interface components {
             quality_state: "pending" | "passed" | "failed";
             /** @enum {string} */
             approval_state: "pending" | "approved" | "rejected";
+            /** @description 规范化候选的去重摘要，用于批次差异比较 */
+            dedupe_hash?: string;
+        };
+        RepositoryRef: {
+            /** @enum {string} */
+            ref_type: "branch" | "tag";
+            name: string;
+            commit_sha: string;
+            /** Format: date-time */
+            fetched_at: string;
         };
         ProjectRepositoryInput: {
             url: string;

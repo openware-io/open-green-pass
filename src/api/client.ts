@@ -24,6 +24,7 @@ export type WechatAuthConfig = { team_id:number; enabled:boolean; app_id:string;
 export type WechatBinding = { bound:boolean; display_name?:string; avatar_url?:string };
 export type GenerationBatch = components['schemas']['GenerationBatch'] & { service_id?: number | null; source_path?: string };
 export type CreateGenerationBatchInput = components['schemas']['GenerationBatchCreate'] & { service_id?: number; source_path?: string };
+export type RepositoryRef = components['schemas']['RepositoryRef'];
 export type AssistantSession = components['schemas']['AssistantSession'];
 export type AssistantTurn = components['schemas']['AssistantTurn'];
 export type AssistantArtifact = components['schemas']['AssistantArtifact'];
@@ -136,6 +137,8 @@ export class GreenPassClient {
     return this.request<{ status: string }>(`/targets/${targetId}/repo`, { method: 'POST', body: JSON.stringify(input) });
   }
   listProjectRepositories(projectId: number): JsonResponse<Array<{id:number;project_id:number;url:string;default_branch:string}>> { return this.request(`/projects/${projectId}/repositories`); }
+  listRepositoryRefs(projectId:number,repoId:number):JsonResponse<RepositoryRef[]> { return this.request(`/projects/${projectId}/repositories/${repoId}/refs`); }
+  refreshRepositoryRefs(projectId:number,repoId:number):JsonResponse<RepositoryRef[]> { return this.request(`/projects/${projectId}/repositories/${repoId}/refs:refresh`,{method:'POST'}); }
   batchAddProjectRepositories(projectId:number,repositories:Array<{url:string;default_branch:string}>):JsonResponse<{results:Array<{index:number;id?:number;error?:string}>}>{return this.request(`/projects/${projectId}/repositories:batch`,{method:'POST',body:JSON.stringify({repositories})});}
   listProjectServices(projectId:number):JsonResponse<Array<{id:number;project_id:number;repo_id:number;name:string;source_path:string;kind:string;build_context:string;language:string;framework:string;test_tool:string;test_command:string;status:string;generation_status:'pending'|'confirmed';profile_status:'pending'|'analyzing'|'suggested'|'confirmed'|'failed';profile_source:string;profile_confidence?:number;profile_evidence?:string[];test_strategy:string;profile_analyzed_at?:string}>>{return this.request(`/projects/${projectId}/services`);}
   batchAddProjectServices(projectId:number,services:Array<{repo_id:number;name:string;source_path:string;kind:string;build_context:string;language?:string;framework?:string}>):JsonResponse<{results:Array<{index:number;id?:number;error?:string}>}>{return this.request(`/projects/${projectId}/services:batch`,{method:'POST',body:JSON.stringify({services})});}
@@ -147,7 +150,7 @@ export class GreenPassClient {
   getGenerationBatch(batchId:number): JsonResponse<GenerationBatch> { return this.request(`/generation/batches/${batchId}`); }
   listGenerationBatches(targetId:number): JsonResponse<GenerationBatch[]> { return this.request(`/generation/batches?target_id=${targetId}`); }
   reviewGenerationBatch(batchId:number,input: paths['/generation/batches/{id}/review']['post']['requestBody']['content']['application/json']): JsonResponse<GenerationBatch> { return this.request(`/generation/batches/${batchId}/review`,{method:'POST',body:JSON.stringify(input)}); }
-  listGenerationSeeds(batchId:number): JsonResponse<Array<{id:number;batch_id:number;case_id?:number|null;source_locator:string;normalized_spec:Record<string,unknown>;quality_state:string;approval_state:string}>> { return this.request(`/generation/batches/${batchId}/seeds`); }
+  listGenerationSeeds(batchId:number): JsonResponse<Array<{id:number;batch_id:number;case_id?:number|null;source_locator:string;normalized_spec:Record<string,unknown>;quality_state:string;approval_state:string;dedupe_hash?:string}>> { return this.request(`/generation/batches/${batchId}/seeds`); }
   modelCatalog():JsonResponse<{presets:Array<{Provider:string;Name:string;ModelKey:string;Protocol:string;BaseURL:string;Capabilities:string[]}>;models:Array<{id:number;provider:string;model_key:string;status:string}>}>{return this.request('/model-catalog');}
   modelConnections():JsonResponse<{connections:Array<{id:number;provider:string;model_key:string;protocol:'api'|'cc';base_url:string;credential_status:string;configured_at?:string;token_configured:boolean}>}>{return this.request('/model-connections');}
   configureModels(input:{provider:string;protocol:string;token:string;base_url:string;model_keys:string[]}):JsonResponse<{status:string}>{return this.request('/model-connections',{method:'POST',body:JSON.stringify(input)});}

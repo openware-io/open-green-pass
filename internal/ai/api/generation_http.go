@@ -84,8 +84,10 @@ type createBatchRequest struct {
 	RepoID           int64  `json:"repo_id"`
 	ServiceID        *int64 `json:"service_id"`
 	SourcePath       string `json:"source_path"`
+	RefType          string `json:"ref_type"`
 	Branch           string `json:"branch"`
 	RequestedVersion string `json:"version"`
+	BaseBatchID      *int64 `json:"base_batch_id"`
 	IdempotencyKey   string `json:"idempotency_key"`
 }
 
@@ -109,7 +111,17 @@ func (h *generationHandler) create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_generation_batch"})
 		return
 	}
-	b, created, err := h.svc.Create(r.Context(), application.CreateGenerationBatchCommand{ID: h.gen.Next(), TeamID: team, TargetID: in.TargetID, RepoID: in.RepoID, ServiceID: in.ServiceID, SourcePath: in.SourcePath, Branch: in.Branch, RequestedVersion: in.RequestedVersion, IdempotencyKey: in.IdempotencyKey, ActorID: actor})
+	if h.store != nil {
+		refType := in.RefType
+		if refType == "" {
+			refType = "branch"
+		}
+		if err := h.store.ValidateRepositoryRef(r.Context(), team, in.RepoID, refType, in.Branch); err != nil {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+	}
+	b, created, err := h.svc.Create(r.Context(), application.CreateGenerationBatchCommand{ID: h.gen.Next(), TeamID: team, TargetID: in.TargetID, RepoID: in.RepoID, ServiceID: in.ServiceID, SourcePath: in.SourcePath, RefType: in.RefType, Branch: in.Branch, RequestedVersion: in.RequestedVersion, BaseBatchID: in.BaseBatchID, IdempotencyKey: in.IdempotencyKey, ActorID: actor})
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
@@ -200,5 +212,5 @@ func (h *generationHandler) rollback(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, 200, batchResponse(b))
 }
 func batchResponse(b *domain.GenerationBatch) map[string]any {
-	return map[string]any{"id": b.ID, "team_id": b.TeamID, "target_id": b.TargetID, "repo_id": b.RepoID, "service_id": b.ServiceID, "source_path": b.SourcePath, "branch": b.Branch, "version": b.RequestedVersion, "state": b.State, "state_version": b.StateVersion, "workflow_id": b.WorkflowID, "idempotency_key": b.IdempotencyKey, "failure_summary": b.FailureSummary, "created_at": b.CreatedAt, "updated_at": b.UpdatedAt}
+	return map[string]any{"id": b.ID, "team_id": b.TeamID, "target_id": b.TargetID, "repo_id": b.RepoID, "service_id": b.ServiceID, "source_path": b.SourcePath, "ref_type": b.RefType, "branch": b.Branch, "version": b.RequestedVersion, "head_sha": b.HeadSHA, "base_batch_id": b.BaseBatchID, "state": b.State, "state_version": b.StateVersion, "workflow_id": b.WorkflowID, "idempotency_key": b.IdempotencyKey, "failure_summary": b.FailureSummary, "created_at": b.CreatedAt, "updated_at": b.UpdatedAt}
 }

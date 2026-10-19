@@ -41,6 +41,17 @@ type GenerationSeed struct {
 	NormalizedSpec map[string]any `json:"normalized_spec"`
 	QualityState   string         `json:"quality_state"`
 	ApprovalState  string         `json:"approval_state"`
+	DedupeHash     string         `json:"dedupe_hash"`
+}
+
+// RepositoryRef is a cached SCM reference that a user can select for a
+// generation. The commit is informational before creation; FreezeSource still
+// resolves and persists the exact immutable commit consumed by the workflow.
+type RepositoryRef struct {
+	Type      string    `json:"ref_type"`
+	Name      string    `json:"name"`
+	CommitSHA string    `json:"commit_sha"`
+	FetchedAt time.Time `json:"fetched_at"`
 }
 
 type modelInput struct{ Provider, Model, Protocol, BaseURL, SecretRef string }
@@ -780,7 +791,7 @@ func (s *GenerationBatchStore) CommitSeeds(ctx context.Context, teamID, batchID,
 func (s *GenerationBatchStore) ListSeeds(ctx context.Context, teamID, batchID int64) ([]GenerationSeed, error) {
 	out := make([]GenerationSeed, 0)
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id,batch_id,case_id,source_locator,normalized_spec,quality_state,approval_state FROM gen_seed WHERE team_id=$1 AND batch_id=$2 ORDER BY id`, teamID, batchID)
+		rows, err := tx.Query(ctx, `SELECT id,batch_id,case_id,source_locator,normalized_spec,quality_state,approval_state,dedupe_hash FROM gen_seed WHERE team_id=$1 AND batch_id=$2 ORDER BY id`, teamID, batchID)
 		if err != nil {
 			return err
 		}
@@ -788,7 +799,7 @@ func (s *GenerationBatchStore) ListSeeds(ctx context.Context, teamID, batchID in
 		for rows.Next() {
 			var seed GenerationSeed
 			var normalized []byte
-			if err := rows.Scan(&seed.ID, &seed.BatchID, &seed.CaseID, &seed.SourceLocator, &normalized, &seed.QualityState, &seed.ApprovalState); err != nil {
+			if err := rows.Scan(&seed.ID, &seed.BatchID, &seed.CaseID, &seed.SourceLocator, &normalized, &seed.QualityState, &seed.ApprovalState, &seed.DedupeHash); err != nil {
 				return err
 			}
 			if len(normalized) > 0 {
@@ -817,10 +828,10 @@ func (s *GenerationBatchStore) nextID() int64 {
 func (s *GenerationBatchStore) Create(ctx context.Context, b *domain.GenerationBatch) error {
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `INSERT INTO gen_batch
-            (id,team_id,target_id,repo_id,service_id,source_path,branch,requested_version,state,state_version,workflow_id,idempotency_key,parent_batch_id,created_by)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-			b.ID, b.TeamID, b.TargetID, b.RepoID, b.ServiceID, nullString(b.SourcePath), b.Branch, nullString(b.RequestedVersion), string(b.State), b.StateVersion,
-			b.WorkflowIdentity(), b.IdempotencyKey, b.ParentBatchID, b.CreatedBy)
+			(id,team_id,target_id,repo_id,service_id,source_path,ref_type,branch,requested_version,state,state_version,workflow_id,idempotency_key,parent_batch_id,base_batch_id,created_by)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+			b.ID, b.TeamID, b.TargetID, b.RepoID, b.ServiceID, nullString(b.SourcePath), b.RefType, b.Branch, nullString(b.RequestedVersion), string(b.State), b.StateVersion,
+			b.WorkflowIdentity(), b.IdempotencyKey, b.ParentBatchID, b.BaseBatchID, b.CreatedBy)
 		return err
 	})
 }
@@ -828,7 +839,7 @@ func (s *GenerationBatchStore) Create(ctx context.Context, b *domain.GenerationB
 func (s *GenerationBatchStore) Find(ctx context.Context, teamID, id int64) (*domain.GenerationBatch, error) {
 	var b domain.GenerationBatch
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		return scanBatch(tx.QueryRow(ctx, `SELECT id,team_id,target_id,repo_id,service_id,COALESCE(source_path,''),branch,COALESCE(requested_version,''),COALESCE(head_sha,''),state,state_version,COALESCE(workflow_id,''),idempotency_key,parent_batch_id,created_by,COALESCE(failure_summary,''),created_at,updated_at FROM gen_batch WHERE team_id=$1 AND id=$2`, teamID, id), &b)
+		return scanBatch(tx.QueryRow(ctx, `SELECT id,team_id,target_id,repo_id,service_id,COALESCE(source_path,''),ref_type,branch,COALESCE(requested_version,''),COALESCE(head_sha,''),state,state_version,COALESCE(workflow_id,''),idempotency_key,parent_batch_id,base_batch_id,created_by,COALESCE(failure_summary,''),created_at,updated_at FROM gen_batch WHERE team_id=$1 AND id=$2`, teamID, id), &b)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrGenerationNotFound
@@ -842,7 +853,7 @@ func (s *GenerationBatchStore) Find(ctx context.Context, teamID, id int64) (*dom
 func (s *GenerationBatchStore) FindByIdempotencyKey(ctx context.Context, teamID int64, key string) (*domain.GenerationBatch, error) {
 	var b domain.GenerationBatch
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		return scanBatch(tx.QueryRow(ctx, `SELECT id,team_id,target_id,repo_id,service_id,COALESCE(source_path,''),branch,COALESCE(requested_version,''),COALESCE(head_sha,''),state,state_version,COALESCE(workflow_id,''),idempotency_key,parent_batch_id,created_by,COALESCE(failure_summary,''),created_at,updated_at FROM gen_batch WHERE team_id=$1 AND idempotency_key=$2`, teamID, key), &b)
+		return scanBatch(tx.QueryRow(ctx, `SELECT id,team_id,target_id,repo_id,service_id,COALESCE(source_path,''),ref_type,branch,COALESCE(requested_version,''),COALESCE(head_sha,''),state,state_version,COALESCE(workflow_id,''),idempotency_key,parent_batch_id,base_batch_id,created_by,COALESCE(failure_summary,''),created_at,updated_at FROM gen_batch WHERE team_id=$1 AND idempotency_key=$2`, teamID, key), &b)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrGenerationNotFound
@@ -856,7 +867,7 @@ func (s *GenerationBatchStore) FindByIdempotencyKey(ctx context.Context, teamID 
 func (s *GenerationBatchStore) ListByTarget(ctx context.Context, teamID, targetID int64, limit int) ([]*domain.GenerationBatch, error) {
 	out := make([]*domain.GenerationBatch, 0)
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id,team_id,target_id,repo_id,service_id,COALESCE(source_path,''),branch,COALESCE(requested_version,''),COALESCE(head_sha,''),state,state_version,COALESCE(workflow_id,''),idempotency_key,parent_batch_id,created_by,COALESCE(failure_summary,''),created_at,updated_at FROM gen_batch WHERE team_id=$1 AND target_id=$2 ORDER BY created_at DESC,id DESC LIMIT $3`, teamID, targetID, limit)
+		rows, err := tx.Query(ctx, `SELECT id,team_id,target_id,repo_id,service_id,COALESCE(source_path,''),ref_type,branch,COALESCE(requested_version,''),COALESCE(head_sha,''),state,state_version,COALESCE(workflow_id,''),idempotency_key,parent_batch_id,base_batch_id,created_by,COALESCE(failure_summary,''),created_at,updated_at FROM gen_batch WHERE team_id=$1 AND target_id=$2 ORDER BY created_at DESC,id DESC LIMIT $3`, teamID, targetID, limit)
 		if err != nil {
 			return err
 		}
@@ -888,11 +899,97 @@ func (s *GenerationBatchStore) CompareAndSwap(ctx context.Context, b *domain.Gen
 
 func scanBatch(row pgx.Row, b *domain.GenerationBatch) error {
 	var state string
-	if err := row.Scan(&b.ID, &b.TeamID, &b.TargetID, &b.RepoID, &b.ServiceID, &b.SourcePath, &b.Branch, &b.RequestedVersion, &b.HeadSHA, &state, &b.StateVersion, &b.WorkflowID, &b.IdempotencyKey, &b.ParentBatchID, &b.CreatedBy, &b.FailureSummary, &b.CreatedAt, &b.UpdatedAt); err != nil {
+	if err := row.Scan(&b.ID, &b.TeamID, &b.TargetID, &b.RepoID, &b.ServiceID, &b.SourcePath, &b.RefType, &b.Branch, &b.RequestedVersion, &b.HeadSHA, &state, &b.StateVersion, &b.WorkflowID, &b.IdempotencyKey, &b.ParentBatchID, &b.BaseBatchID, &b.CreatedBy, &b.FailureSummary, &b.CreatedAt, &b.UpdatedAt); err != nil {
 		return err
 	}
 	b.State = domain.GenerationBatchState(state)
 	return nil
+}
+
+// ValidateRepositoryRef permits only a server-refreshed reference. This keeps
+// a user from turning the source selector into an arbitrary SCM fetch input.
+func (s *GenerationBatchStore) ValidateRepositoryRef(ctx context.Context, teamID, repoID int64, refType, name string) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	var found bool
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM repo_ref WHERE team_id=$1 AND repo_id=$2 AND ref_type=$3 AND name=$4)`, teamID, repoID, refType, name).Scan(&found)
+	})
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("代码引用未同步或已失效，请先刷新分支和 Tag")
+	}
+	return nil
+}
+
+func (s *GenerationBatchStore) ListRepositoryRefs(ctx context.Context, teamID, projectID, repoID int64) ([]RepositoryRef, error) {
+	out := make([]RepositoryRef, 0)
+	if s == nil || s.db == nil {
+		return out, errors.New("generation store is required")
+	}
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		var exists bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM repo_repo WHERE id=$1 AND project_id=$2 AND deleted_at IS NULL)`, repoID, projectID).Scan(&exists); err != nil {
+			return err
+		}
+		if !exists {
+			return pgx.ErrNoRows
+		}
+		rows, err := tx.Query(ctx, `SELECT ref_type,name,commit_sha,fetched_at FROM repo_ref WHERE team_id=$1 AND repo_id=$2 ORDER BY CASE ref_type WHEN 'branch' THEN 0 ELSE 1 END,name`, teamID, repoID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var v RepositoryRef
+			if err := rows.Scan(&v.Type, &v.Name, &v.CommitSHA, &v.FetchedAt); err != nil {
+				return err
+			}
+			out = append(out, v)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+func (s *GenerationBatchStore) RefreshRepositoryRefs(ctx context.Context, teamID, projectID, repoID int64) ([]RepositoryRef, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("generation store is required")
+	}
+	var repoURL string
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT url FROM repo_repo WHERE id=$1 AND project_id=$2 AND deleted_at IS NULL`, repoID, projectID).Scan(&repoURL)
+	})
+	if err != nil {
+		return nil, err
+	}
+	refs, err := newGitHubSourceReader().ListRefs(ctx, repoURL)
+	if err != nil {
+		return nil, err
+	}
+	if len(refs) == 0 {
+		return nil, fmt.Errorf("仓库未返回可用分支或 Tag")
+	}
+	err = s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		// A refresh is an authoritative snapshot for this connector: names that
+		// disappeared upstream must no longer be selectable.
+		if _, err := tx.Exec(ctx, `DELETE FROM repo_ref WHERE team_id=$1 AND repo_id=$2`, teamID, repoID); err != nil {
+			return err
+		}
+		for _, ref := range refs {
+			if _, err := tx.Exec(ctx, `INSERT INTO repo_ref(id,team_id,repo_id,ref_type,name,commit_sha,fetched_at) VALUES($1,$2,$3,$4,$5,$6,now())`, s.nextID(), teamID, repoID, ref.Type, ref.Name, ref.SHA); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return s.ListRepositoryRefs(ctx, teamID, projectID, repoID)
 }
 
 func nullString(v string) any {

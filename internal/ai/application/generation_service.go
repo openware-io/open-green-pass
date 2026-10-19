@@ -20,8 +20,10 @@ type CreateGenerationBatchCommand struct {
 	RepoID           int64
 	ServiceID        *int64
 	SourcePath       string
+	RefType          string
 	Branch           string
 	RequestedVersion string
+	BaseBatchID      *int64
 	IdempotencyKey   string
 	ActorID          int64
 }
@@ -176,7 +178,14 @@ func generationSourcePath(value string) (string, error) {
 }
 
 func sameGenerationRequest(batch *domain.GenerationBatch, cmd CreateGenerationBatchCommand) bool {
-	return batch.TargetID == cmd.TargetID && batch.RepoID == cmd.RepoID && batch.ServiceID != nil && cmd.ServiceID != nil && *batch.ServiceID == *cmd.ServiceID && batch.SourcePath == cmd.SourcePath && batch.Branch == cmd.Branch && batch.RequestedVersion == cmd.RequestedVersion
+	return batch.TargetID == cmd.TargetID && batch.RepoID == cmd.RepoID && batch.ServiceID != nil && cmd.ServiceID != nil && *batch.ServiceID == *cmd.ServiceID && batch.SourcePath == cmd.SourcePath && batch.RefType == cmd.RefType && batch.Branch == cmd.Branch && batch.RequestedVersion == cmd.RequestedVersion && sameOptionalBatchID(batch.BaseBatchID, cmd.BaseBatchID)
+}
+
+func sameOptionalBatchID(left, right *int64) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
 }
 
 // Create returns the existing batch for a repeated tenant-scoped idempotency
@@ -191,6 +200,12 @@ func (s *GenerationBatchService) Create(ctx context.Context, cmd CreateGeneratio
 		return nil, false, err
 	}
 	cmd.SourcePath = canonicalPath
+	if cmd.RefType == "" {
+		cmd.RefType = "branch"
+	}
+	if cmd.RefType != "branch" && cmd.RefType != "tag" {
+		return nil, false, errors.New("代码引用类型必须是 branch 或 tag")
+	}
 	existing, err := s.batches.FindByIdempotencyKey(ctx, cmd.TeamID, cmd.IdempotencyKey)
 	if err == nil {
 		if !sameGenerationRequest(existing, cmd) {
@@ -212,6 +227,14 @@ func (s *GenerationBatchService) Create(ctx context.Context, cmd CreateGeneratio
 	}
 	batch.ServiceID = cmd.ServiceID
 	batch.SourcePath = cmd.SourcePath
+	batch.RefType = cmd.RefType
+	batch.BaseBatchID = cmd.BaseBatchID
+	if cmd.BaseBatchID != nil {
+		base, findErr := s.batches.Find(ctx, cmd.TeamID, *cmd.BaseBatchID)
+		if findErr != nil || base.TargetID != batch.TargetID || base.RepoID != batch.RepoID || base.ServiceID == nil || *base.ServiceID != *batch.ServiceID {
+			return nil, false, errors.New("对比基线必须是同一项目、仓库和服务的历史批次")
+		}
+	}
 	if err := s.batches.Create(ctx, batch); err != nil {
 		// A competing create may have won. Re-read instead of leaking a
 		// duplicate-key error as a failed idempotent request.

@@ -63,6 +63,47 @@ func RegisterProjectCatalog(mux *http.ServeMux, store *infra.ProjectCatalog, gen
 		}
 		httpx.WriteJSON(w, 200, v)
 	})
+	mux.HandleFunc("GET /projects/{id}/repositories/{repoID}/refs", func(w http.ResponseWriter, r *http.Request) {
+		projectID, projectErr := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		repoID, repoErr := strconv.ParseInt(r.PathValue("repoID"), 10, 64)
+		teamID := principalTenantID(r)
+		if projectErr != nil || repoErr != nil || teamID <= 0 {
+			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_repository"})
+			return
+		}
+		refs, err := generationStore.ListRepositoryRefs(r.Context(), teamID, projectID, repoID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpx.WriteJSON(w, 404, map[string]string{"error": "repository_not_found"})
+			return
+		}
+		if err != nil {
+			httpx.WriteJSON(w, 500, map[string]string{"error": "repository_refs_unavailable"})
+			return
+		}
+		httpx.WriteJSON(w, 200, refs)
+	})
+	mux.HandleFunc("POST /projects/{id}/repositories/{repoID}/refs:refresh", func(w http.ResponseWriter, r *http.Request) {
+		if !catalogEditor(w, r) {
+			return
+		}
+		projectID, projectErr := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		repoID, repoErr := strconv.ParseInt(r.PathValue("repoID"), 10, 64)
+		teamID := principalTenantID(r)
+		if projectErr != nil || repoErr != nil || teamID <= 0 {
+			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_repository"})
+			return
+		}
+		refs, err := generationStore.RefreshRepositoryRefs(r.Context(), teamID, projectID, repoID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpx.WriteJSON(w, 404, map[string]string{"error": "repository_not_found"})
+			return
+		}
+		if err != nil {
+			httpx.WriteJSON(w, 400, map[string]string{"error": err.Error()})
+			return
+		}
+		httpx.WriteJSON(w, 200, refs)
+	})
 	mux.HandleFunc("POST /projects/{id}/repositories:batch", func(w http.ResponseWriter, r *http.Request) {
 		if !catalogEditor(w, r) {
 			return
