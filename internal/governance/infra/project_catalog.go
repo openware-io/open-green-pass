@@ -12,10 +12,12 @@ import (
 )
 
 type ProjectRepository struct {
-	ID            int64  `json:"id"`
-	ProjectID     int64  `json:"project_id"`
-	URL           string `json:"url"`
-	DefaultBranch string `json:"default_branch"`
+	ID                  int64  `json:"id"`
+	ProjectID           int64  `json:"project_id"`
+	URL                 string `json:"url"`
+	DefaultBranch       string `json:"default_branch"`
+	SCMConnectionID     *int64 `json:"scm_connection_id,omitempty"`
+	SCMConnectionStatus string `json:"scm_connection_status"`
 }
 type ProjectService struct {
 	ID                int64    `json:"id"`
@@ -74,14 +76,14 @@ func (s *ProjectCatalog) ListRepositories(ctx context.Context, projectID int64) 
 	// A nil slice is encoded as JSON null, while clients consume this as a list.
 	out := make([]ProjectRepository, 0)
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id,project_id,url,default_branch FROM repo_repo WHERE project_id=$1 AND deleted_at IS NULL ORDER BY created_at`, projectID)
+		rows, err := tx.Query(ctx, `SELECT r.id,r.project_id,r.url,r.default_branch,r.scm_connection_id,COALESCE(c.credential_status,'missing') FROM repo_repo r LEFT JOIN repo_scm_connection c ON c.id=r.scm_connection_id AND c.team_id=r.team_id WHERE r.project_id=$1 AND r.deleted_at IS NULL ORDER BY r.created_at`, projectID)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 		for rows.Next() {
 			var v ProjectRepository
-			if err := rows.Scan(&v.ID, &v.ProjectID, &v.URL, &v.DefaultBranch); err != nil {
+			if err := rows.Scan(&v.ID, &v.ProjectID, &v.URL, &v.DefaultBranch, &v.SCMConnectionID, &v.SCMConnectionStatus); err != nil {
 				return err
 			}
 			out = append(out, v)
@@ -89,6 +91,21 @@ func (s *ProjectCatalog) ListRepositories(ctx context.Context, projectID int64) 
 		return rows.Err()
 	})
 	return out, err
+}
+
+func (s *ProjectCatalog) BindSCMConnection(ctx context.Context, projectID, repoID, connectionID int64) error {
+	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		command, err := tx.Exec(ctx, `UPDATE repo_repo r SET scm_connection_id=$3
+			WHERE r.id=$2 AND r.project_id=$1 AND r.deleted_at IS NULL
+			  AND EXISTS (SELECT 1 FROM repo_scm_connection c WHERE c.id=$3 AND c.team_id=r.team_id AND c.credential_status IN ('configured','verified'))`, projectID, repoID, connectionID)
+		if err != nil {
+			return err
+		}
+		if command.RowsAffected() == 0 {
+			return pgx.ErrNoRows
+		}
+		return nil
+	})
 }
 func (s *ProjectCatalog) AddService(ctx context.Context, v ProjectService) (ProjectService, error) {
 	v.ID = s.gen.Next()

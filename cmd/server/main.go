@@ -85,6 +85,7 @@ func main() {
 	generationSvc := aiapp.NewGenerationBatchService(generationStore)
 	generationSvc.SetScopePort(generationStore)
 	modelStore := infra.NewModelStore(db)
+	scmConnectionStore := infra.NewSCMConnectionStore(db, gen)
 	// GP3-05 reference policy is intentionally empty until the persistent
 	// approval/whitelist store is configured; it can be injected here later.
 	caseStore := infra.NewCaseStore(db, gen)
@@ -235,6 +236,9 @@ func main() {
 		},
 		func(mux *http.ServeMux) { gapi.RegisterAuthorized(mux, treeSvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { gapi.RegisterProjectCatalog(mux, projectCatalog, generationStore) },
+		func(mux *http.ServeMux) {
+			gapi.RegisterSCMConnections(mux, scmConnectionStore, os.Getenv("GP_SCM_SECRET_NAMESPACE"), gapi.GitHubAppConfigFromEnv())
+		},
 		func(mux *http.ServeMux) { aiapi.RegisterGeneration(mux, generationSvc, gen, generationStore) },
 		func(mux *http.ServeMux) {
 			gapi.RegisterModels(mux, modelStore, gen, os.Getenv("GP_MODEL_SECRET_NAMESPACE"))

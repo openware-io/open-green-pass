@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/openware-io/open-green-pass/internal/ai/domain"
 	governance "github.com/openware-io/open-green-pass/internal/governance/infra"
+	"github.com/openware-io/open-green-pass/internal/platform/githubapp"
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
 
@@ -62,10 +64,11 @@ type modelInput struct{ Provider, Model, Protocol, BaseURL, SecretRef string }
 // promoted until a human confirms it in the catalog UI.
 func (s *GenerationBatchStore) AnalyzeServiceProfile(ctx context.Context, teamID, projectID, serviceID int64) error {
 	var targetID, repoID int64
-	var name, sourcePath, kind, repoURL, branch string
+	var name, sourcePath, kind, repoURL, branch, scmProvider, scmSecretRef, scmAuthType, scmAppID string
+	var scmInstallationID *int64
 	var input modelInput
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, `SELECT s.project_id,s.repo_id,s.name,s.source_path,s.kind,r.url,r.default_branch FROM tgt_service s JOIN repo_repo r ON r.id=s.repo_id WHERE s.project_id=$1 AND s.id=$2`, projectID, serviceID).Scan(&targetID, &repoID, &name, &sourcePath, &kind, &repoURL, &branch); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT s.project_id,s.repo_id,s.name,s.source_path,s.kind,r.url,r.default_branch,COALESCE(c.provider,''),COALESCE(c.secret_ref,''),COALESCE(c.auth_type,''),COALESCE(c.github_app_id,''),c.github_installation_id FROM tgt_service s JOIN repo_repo r ON r.id=s.repo_id LEFT JOIN repo_scm_connection c ON c.id=r.scm_connection_id AND c.team_id=r.team_id AND c.credential_status IN ('configured','verified') WHERE s.project_id=$1 AND s.id=$2`, projectID, serviceID).Scan(&targetID, &repoID, &name, &sourcePath, &kind, &repoURL, &branch, &scmProvider, &scmSecretRef, &scmAuthType, &scmAppID, &scmInstallationID); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE tgt_service SET profile_status='analyzing',profile_source='model' WHERE project_id=$1 AND id=$2`, projectID, serviceID); err != nil {
@@ -90,7 +93,12 @@ func (s *GenerationBatchStore) AnalyzeServiceProfile(ctx context.Context, teamID
 		_ = s.markProfileFailed(ctx, projectID, serviceID)
 		return err
 	}
-	sourceEvidence, err := fetchProfileSourceEvidence(ctx, repoURL, branch, sourcePath)
+	scmToken, err := resolveSCMToken(ctx, scmProvider, scmAuthType, scmSecretRef, scmAppID, scmInstallationID)
+	if err != nil {
+		_ = s.markProfileFailed(ctx, projectID, serviceID)
+		return err
+	}
+	sourceEvidence, err := fetchProfileSourceEvidence(ctx, repoURL, branch, sourcePath, scmToken)
 	if err != nil {
 		_ = s.markProfileFailed(ctx, projectID, serviceID)
 		return err
@@ -159,7 +167,7 @@ func validateProfileEvidence(evidence []string, sourceEvidence string) error {
 // clone arbitrary repositories or send credentials to third parties. Public
 // GitHub repositories are supported today; other sources return an actionable
 // error rather than producing an ungrounded AI suggestion.
-func fetchProfileSourceEvidence(ctx context.Context, repoURL, branch, sourcePath string) (string, error) {
+func fetchProfileSourceEvidence(ctx context.Context, repoURL, branch, sourcePath, token string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(repoURL))
 	if err != nil || !strings.EqualFold(u.Host, "github.com") {
 		return "", fmt.Errorf("技术画像暂仅支持可访问的 GitHub 仓库；请接入源码读取器后重试")
@@ -173,25 +181,24 @@ func fetchProfileSourceEvidence(ctx context.Context, repoURL, branch, sourcePath
 		root = ""
 	}
 	candidates := []string{"package.json", "pnpm-lock.yaml", "yarn.lock", "go.mod", "pom.xml", "build.gradle", "build.gradle.kts", "requirements.txt", "pyproject.toml", "Cargo.toml", "composer.json", "Gemfile", "README.md"}
-	client := &http.Client{Timeout: 12 * time.Second}
+	reader := newGitHubSourceReader(token)
 	evidence := make([]string, 0, 4)
 	for _, name := range candidates {
 		filePath := path.Join(root, name)
-		rawURL := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/%s", parts[0], parts[1], branch, filePath)
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-		if err != nil {
-			return "", err
-		}
-		resp, err := client.Do(req)
-		if err != nil {
+		endpoint := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s?ref=%s", url.PathEscape(parts[0]), url.PathEscape(parts[1]), url.PathEscape(filePath), url.QueryEscape(branch))
+		body, readErr := reader.get(ctx, endpoint, 32*1024)
+		if readErr != nil {
 			continue
 		}
-		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 16*1024))
-		resp.Body.Close()
-		if readErr != nil || resp.StatusCode != http.StatusOK || len(body) == 0 {
+		var file sourceBlobResponse
+		if json.Unmarshal(body, &file) != nil || file.Encoding != "base64" {
 			continue
 		}
-		evidence = append(evidence, "FILE: "+filePath+"\n"+string(body))
+		content, decodeErr := base64.StdEncoding.DecodeString(strings.ReplaceAll(file.Content, "\n", ""))
+		if decodeErr != nil || len(content) == 0 || len(content) > 16*1024 {
+			continue
+		}
+		evidence = append(evidence, "FILE: "+filePath+"\n"+string(content))
 		if len(evidence) == 4 {
 			break
 		}
@@ -371,6 +378,56 @@ func resolveModelToken(ctx context.Context, ref string) (string, error) {
 	return "", fmt.Errorf("model credential key %q is missing", key)
 }
 
+// resolveSCMToken resolves the opaque Kubernetes Secret reference recorded by
+// an approved SCM connection. There is intentionally no environment-variable
+// fallback: every production repository must name the connection it uses.
+func resolveSCMToken(ctx context.Context, provider, authType, ref, appID string, installationID *int64) (string, error) {
+	if provider != "github" || strings.TrimSpace(ref) == "" {
+		return "", fmt.Errorf("仓库尚未绑定可用的 GitHub 只读连接；请在被测对象页配置并验证源码读取连接")
+	}
+	namespace, name, key, ok := parseKubernetesSecretRef(ref)
+	if !ok {
+		return "", fmt.Errorf("源码读取连接的凭据引用无效")
+	}
+	cfg, err := rest.InClusterConfig()
+	if err != nil {
+		return "", fmt.Errorf("源码读取凭据无法解析: %w", err)
+	}
+	client, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return "", err
+	}
+	secret, err := client.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("源码读取凭据不可用")
+	}
+	if value := secret.Data[key]; len(value) > 0 {
+		if authType == "github_app" {
+			if appID == "" || installationID == nil {
+				return "", fmt.Errorf("GitHub App 安装授权不完整")
+			}
+			return githubapp.InstallationToken(ctx, appID, string(value), *installationID)
+		}
+		return string(value), nil
+	}
+	return "", fmt.Errorf("源码读取凭据不完整")
+}
+
+func parseKubernetesSecretRef(ref string) (namespace, name, key string, ok bool) {
+	if !strings.HasPrefix(ref, "k8s://") {
+		return
+	}
+	parts := strings.Split(strings.TrimPrefix(ref, "k8s://"), "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return
+	}
+	nameKey := strings.SplitN(parts[1], "#", 2)
+	if len(nameKey) != 2 || nameKey[0] == "" || nameKey[1] == "" {
+		return
+	}
+	return parts[0], nameKey[0], nameKey[1], true
+}
+
 func callModel(ctx context.Context, input modelInput, token, prompt string) (string, error) {
 	if input.Protocol == "cc" {
 		return callClaudeCompatible(ctx, input, token, prompt)
@@ -454,7 +511,8 @@ func (s *GenerationBatchStore) CreateSeed(ctx context.Context, teamID int64, see
 }
 
 func (s *GenerationBatchStore) FreezeSource(ctx context.Context, teamID, batchID int64) error {
-	var repoURL, branch, sourcePath string
+	var repoURL, branch, sourcePath, scmProvider, scmSecretRef, scmAuthType, scmAppID string
+	var scmInstallationID *int64
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		var frozen bool
 		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM gen_source_snapshot WHERE team_id=$1 AND batch_id=$2 AND source_commit<>'')`, teamID, batchID).Scan(&frozen); err != nil {
@@ -463,7 +521,7 @@ func (s *GenerationBatchStore) FreezeSource(ctx context.Context, teamID, batchID
 		if frozen {
 			return nil
 		}
-		return tx.QueryRow(ctx, `SELECT r.url,b.branch,COALESCE(b.source_path,'') FROM gen_batch b JOIN repo_repo r ON r.id=b.repo_id WHERE b.team_id=$1 AND b.id=$2`, teamID, batchID).Scan(&repoURL, &branch, &sourcePath)
+		return tx.QueryRow(ctx, `SELECT r.url,b.branch,COALESCE(b.source_path,''),COALESCE(c.provider,''),COALESCE(c.secret_ref,''),COALESCE(c.auth_type,''),COALESCE(c.github_app_id,''),c.github_installation_id FROM gen_batch b JOIN repo_repo r ON r.id=b.repo_id LEFT JOIN repo_scm_connection c ON c.id=r.scm_connection_id AND c.team_id=r.team_id AND c.credential_status IN ('configured','verified') WHERE b.team_id=$1 AND b.id=$2`, teamID, batchID).Scan(&repoURL, &branch, &sourcePath, &scmProvider, &scmSecretRef, &scmAuthType, &scmAppID, &scmInstallationID)
 	})
 	if err != nil {
 		return err
@@ -474,7 +532,11 @@ func (s *GenerationBatchStore) FreezeSource(ctx context.Context, teamID, batchID
 	if repoURL == "" {
 		return nil
 	}
-	files, commit, err := newGitHubSourceReader().Fetch(ctx, repoURL, branch, sourcePath)
+	token, err := resolveSCMToken(ctx, scmProvider, scmAuthType, scmSecretRef, scmAppID, scmInstallationID)
+	if err != nil {
+		return err
+	}
+	files, commit, err := newGitHubSourceReader(token).Fetch(ctx, repoURL, branch, sourcePath)
 	if err != nil {
 		return err
 	}
@@ -1097,14 +1159,19 @@ func (s *GenerationBatchStore) RefreshRepositoryRefs(ctx context.Context, teamID
 	if s == nil || s.db == nil {
 		return nil, errors.New("generation store is required")
 	}
-	var repoURL string
+	var repoURL, scmProvider, scmSecretRef, scmAuthType, scmAppID string
+	var scmInstallationID *int64
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT url FROM repo_repo WHERE id=$1 AND project_id=$2 AND deleted_at IS NULL`, repoID, projectID).Scan(&repoURL)
+		return tx.QueryRow(ctx, `SELECT r.url,COALESCE(c.provider,''),COALESCE(c.secret_ref,''),COALESCE(c.auth_type,''),COALESCE(c.github_app_id,''),c.github_installation_id FROM repo_repo r LEFT JOIN repo_scm_connection c ON c.id=r.scm_connection_id AND c.team_id=r.team_id AND c.credential_status IN ('configured','verified') WHERE r.id=$1 AND r.project_id=$2 AND r.deleted_at IS NULL`, repoID, projectID).Scan(&repoURL, &scmProvider, &scmSecretRef, &scmAuthType, &scmAppID, &scmInstallationID)
 	})
 	if err != nil {
 		return nil, err
 	}
-	refs, err := newGitHubSourceReader().ListRefs(ctx, repoURL)
+	token, err := resolveSCMToken(ctx, scmProvider, scmAuthType, scmSecretRef, scmAppID, scmInstallationID)
+	if err != nil {
+		return nil, err
+	}
+	refs, err := newGitHubSourceReader(token).ListRefs(ctx, repoURL)
 	if err != nil {
 		return nil, err
 	}

@@ -68,6 +68,61 @@ paths:
         - { name: repoID, in: path, required: true, schema: { type: integer, format: int64 } }
       responses:
         '200': { description: 刷新后的代码引用, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RepositoryRef' } } } } }
+  /scm-connections:
+    get:
+      summary: 查询团队源码读取连接（不返回凭据）
+      responses:
+        '200': { description: 源码连接列表, content: { application/json: { schema: { type: object, required: [ connections ], properties: { connections: { type: array, items: { $ref: '#/components/schemas/SCMConnection' } } } } } } }
+    post:
+      summary: 验证并保存 GitHub 只读连接
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SCMConnectionInput' } } }
+      responses:
+        '201': { description: 已验证并保存, content: { application/json: { schema: { $ref: '#/components/schemas/SCMConnection' } } } }
+        '502': { description: GitHub 凭据验证失败 }
+  /scm-connections/github-app:
+    get:
+      summary: 查询 GitHub App 是否已由平台管理员配置
+      responses:
+        '200': { description: GitHub App 配置状态 }
+        '409': { description: 尚未配置 }
+  /scm-connections/github-app/authorize:
+    post:
+      summary: 获取 GitHub App 安装授权跳转
+      responses:
+        '200': { description: GitHub App 安装授权地址, content: { application/json: { schema: { type: object, required: [ authorization_url ], properties: { authorization_url: { type: string, format: uri } } } } } }
+  /scm-connections/github-app/callback:
+    get:
+      summary: GitHub App 安装 Setup URL 回调，转入用户授权校验
+      parameters: [ { name: installation_id, in: query, required: true, schema: { type: integer, format: int64 } } ]
+      responses:
+        '303': { description: 前往 GitHub 用户授权 }
+  /scm-connections/github-app/oauth-callback:
+    get:
+      summary: GitHub App 用户授权回调，校验安装归属并保存连接
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, required: true, schema: { type: string, minLength: 32 } }
+      responses:
+        '303': { description: 返回被测对象页 }
+  /scm-connections/{id}/verify:
+    post:
+      summary: 重新验证源码读取连接
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      responses:
+        '200': { description: 已验证, content: { application/json: { schema: { $ref: '#/components/schemas/StatusResponse' } } } }
+  /projects/{id}/repositories/{repoID}/scm-connection:
+    patch:
+      summary: 为仓库绑定团队源码读取连接
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+        - { name: repoID, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [ scm_connection_id ], properties: { scm_connection_id: { type: integer, format: int64 } } } } }
+      responses:
+        '200': { description: 已绑定, content: { application/json: { schema: { $ref: '#/components/schemas/StatusResponse' } } } }
   /healthz:
     get:
       summary: 健康检查
@@ -993,6 +1048,30 @@ components:
         project_id: { type: integer, format: int64 }
         url: { type: string }
         default_branch: { type: string }
+        scm_connection_id: { type: integer, format: int64, nullable: true }
+        scm_connection_status: { type: string, enum: [ missing, configured, verified, failed ] }
+    SCMConnection:
+      type: object
+      required: [ id, provider, name, credential_status, token_configured ]
+      properties:
+        id: { type: integer, format: int64 }
+        provider: { type: string, enum: [ github ] }
+        name: { type: string }
+        credential_status: { type: string, enum: [ configured, verified, failed ] }
+        failure_summary: { type: string }
+        verified_at: { type: string, format: date-time, nullable: true }
+        token_configured: { type: boolean }
+        auth_type: { type: string, enum: [ pat, github_app ] }
+        github_app_id: { type: string }
+        github_installation_id: { type: integer, format: int64, nullable: true }
+        installation_account_login: { type: string }
+    SCMConnectionInput:
+      type: object
+      required: [ provider, name, token ]
+      properties:
+        provider: { type: string, enum: [ github ] }
+        name: { type: string, minLength: 1 }
+        token: { type: string, minLength: 1, writeOnly: true }
     GenerationBatch:
       type: object
       required: [ id, team_id, target_id, repo_id, branch, state, state_version, workflow_id, idempotency_key, created_at, updated_at ]

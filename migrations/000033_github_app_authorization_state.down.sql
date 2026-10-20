@@ -1,0 +1,4 @@
+DROP POLICY IF EXISTS p_repo_scm_authorization_state_rls ON repo_scm_authorization_state;
+DROP TRIGGER IF EXISTS trg_repo_scm_authorization_state_tenant ON repo_scm_authorization_state;
+DROP INDEX IF EXISTS idx_repo_scm_authorization_state_expiry;
+DROP TABLE IF EXISTS repo_scm_authorization_state;

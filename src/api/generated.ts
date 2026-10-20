@@ -285,6 +285,312 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/scm-connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询团队源码读取连接（不返回凭据） */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 源码连接列表 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            connections: components["schemas"]["SCMConnection"][];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** 验证并保存 GitHub 只读连接 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SCMConnectionInput"];
+                };
+            };
+            responses: {
+                /** @description 已验证并保存 */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SCMConnection"];
+                    };
+                };
+                /** @description GitHub 凭据验证失败 */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scm-connections/github-app": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询 GitHub App 是否已由平台管理员配置 */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description GitHub App 配置状态 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description 尚未配置 */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scm-connections/github-app/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 获取 GitHub App 安装授权跳转 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description GitHub App 安装授权地址 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** Format: uri */
+                            authorization_url: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scm-connections/github-app/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GitHub App 安装 Setup URL 回调，转入用户授权校验 */
+        get: {
+            parameters: {
+                query: {
+                    installation_id: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 前往 GitHub 用户授权 */
+                303: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scm-connections/github-app/oauth-callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GitHub App 用户授权回调，校验安装归属并保存连接 */
+        get: {
+            parameters: {
+                query: {
+                    code: string;
+                    state: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 返回被测对象页 */
+                303: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scm-connections/{id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 重新验证源码读取连接 */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description 已验证 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StatusResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{id}/repositories/{repoID}/scm-connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** 为仓库绑定团队源码读取连接 */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: number;
+                    repoID: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        scm_connection_id: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description 已绑定 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StatusResponse"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -1684,6 +1990,35 @@ export interface components {
             project_id: number;
             url: string;
             default_branch: string;
+            /** Format: int64 */
+            scm_connection_id?: number | null;
+            /** @enum {string} */
+            scm_connection_status?: "missing" | "configured" | "verified" | "failed";
+        };
+        SCMConnection: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            provider: "github";
+            name: string;
+            /** @enum {string} */
+            credential_status: "configured" | "verified" | "failed";
+            failure_summary?: string;
+            /** Format: date-time */
+            verified_at?: string | null;
+            token_configured: boolean;
+            /** @enum {string} */
+            auth_type?: "pat" | "github_app";
+            github_app_id?: string;
+            /** Format: int64 */
+            github_installation_id?: number | null;
+            installation_account_login?: string;
+        };
+        SCMConnectionInput: {
+            /** @enum {string} */
+            provider: "github";
+            name: string;
+            token: string;
         };
         GenerationBatch: {
             /** Format: int64 */

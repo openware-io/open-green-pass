@@ -136,7 +136,13 @@ export class GreenPassClient {
   attachRepo(targetId: number, input: paths['/targets/{id}/repo']['post']['requestBody']['content']['application/json']) {
     return this.request<{ status: string }>(`/targets/${targetId}/repo`, { method: 'POST', body: JSON.stringify(input) });
   }
-  listProjectRepositories(projectId: number): JsonResponse<Array<{id:number;project_id:number;url:string;default_branch:string}>> { return this.request(`/projects/${projectId}/repositories`); }
+  listProjectRepositories(projectId: number): JsonResponse<Array<{id:number;project_id:number;url:string;default_branch:string;scm_connection_id?:number|null;scm_connection_status:'missing'|'configured'|'verified'|'failed'}>> { return this.request(`/projects/${projectId}/repositories`); }
+  scmConnections():JsonResponse<{connections:Array<{id:number;provider:'github';name:string;credential_status:'configured'|'verified'|'failed';failure_summary?:string;verified_at?:string;token_configured:boolean;auth_type:'pat'|'github_app'}>}>{return this.request('/scm-connections');}
+  githubAppConfig():JsonResponse<{configured:boolean;app_id?:string}>{return this.request('/scm-connections/github-app');}
+  beginGitHubAppAuthorization():JsonResponse<{authorization_url:string}>{return this.request('/scm-connections/github-app/authorize',{method:'POST'});}
+  createSCMConnection(input:{provider:'github';name:string;token:string}):JsonResponse<{id:number;provider:'github';name:string;credential_status:'configured'|'verified'|'failed';verified_at?:string;token_configured:boolean}>{return this.request('/scm-connections',{method:'POST',body:JSON.stringify(input)});}
+  verifySCMConnection(connectionId:number):JsonResponse<{status:string}>{return this.request(`/scm-connections/${connectionId}/verify`,{method:'POST'});}
+  bindRepositorySCMConnection(projectId:number,repoId:number,connectionId:number):JsonResponse<{status:string}>{return this.request(`/projects/${projectId}/repositories/${repoId}/scm-connection`,{method:'PATCH',body:JSON.stringify({scm_connection_id:connectionId})});}
   listRepositoryRefs(projectId:number,repoId:number):JsonResponse<RepositoryRef[]> { return this.request(`/projects/${projectId}/repositories/${repoId}/refs`); }
   refreshRepositoryRefs(projectId:number,repoId:number):JsonResponse<RepositoryRef[]> { return this.request(`/projects/${projectId}/repositories/${repoId}/refs:refresh`,{method:'POST'}); }
   batchAddProjectRepositories(projectId:number,repositories:Array<{url:string;default_branch:string}>):JsonResponse<{results:Array<{index:number;id?:number;error?:string}>}>{return this.request(`/projects/${projectId}/repositories:batch`,{method:'POST',body:JSON.stringify({repositories})});}

@@ -48,8 +48,28 @@ type batchResult struct {
 	ID    *int64 `json:"id,omitempty"`
 	Error string `json:"error,omitempty"`
 }
+type bindSCMConnectionRequest struct {
+	SCMConnectionID int64 `json:"scm_connection_id"`
+}
 
 func RegisterProjectCatalog(mux *http.ServeMux, store *infra.ProjectCatalog, generationStore *aiinfra.GenerationBatchStore) {
+	mux.HandleFunc("PATCH /projects/{id}/repositories/{repoID}/scm-connection", func(w http.ResponseWriter, r *http.Request) {
+		if !catalogEditor(w, r) {
+			return
+		}
+		projectID, projectErr := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		repoID, repoErr := strconv.ParseInt(r.PathValue("repoID"), 10, 64)
+		var in bindSCMConnectionRequest
+		if projectErr != nil || repoErr != nil || httpx.DecodeJSON(r, &in) != nil || in.SCMConnectionID <= 0 {
+			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_scm_connection"})
+			return
+		}
+		if err := store.BindSCMConnection(r.Context(), projectID, repoID, in.SCMConnectionID); err != nil {
+			httpx.WriteJSON(w, 404, map[string]string{"error": "repository_or_scm_connection_not_found"})
+			return
+		}
+		httpx.WriteJSON(w, 200, map[string]string{"status": "bound"})
+	})
 	mux.HandleFunc("GET /projects/{id}/repositories", func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 		if err != nil {

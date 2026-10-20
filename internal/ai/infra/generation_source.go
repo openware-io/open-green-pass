@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"sort"
 	"strings"
@@ -85,12 +84,11 @@ type repositoryRef struct {
 	SHA  string
 }
 
-func newGitHubSourceReader() *githubSourceReader {
-	// The token is intentionally read only from the worker environment. It is
-	// never accepted from a request, persisted in a batch, or included in an
-	// activity error. A GitHub App installation token or a fine-grained PAT with
-	// read-only Contents/Metadata permission is suitable here.
-	return &githubSourceReader{client: &http.Client{Timeout: 15 * time.Second}, apiRoot: "https://api.github.com", token: strings.TrimSpace(os.Getenv("GP_GITHUB_READ_TOKEN"))}
+func newGitHubSourceReader(token string) *githubSourceReader {
+	// The token comes from the repository's bound SCM connection. It is resolved
+	// inside server/worker from a Secret reference and never from a browser
+	// request, a generation batch, or an activity error.
+	return &githubSourceReader{client: &http.Client{Timeout: 15 * time.Second}, apiRoot: "https://api.github.com", token: strings.TrimSpace(token)}
 }
 
 func (r *githubSourceReader) Fetch(ctx context.Context, repoURL, branch, sourcePath string) ([]sourceFile, string, error) {

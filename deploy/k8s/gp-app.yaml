@@ -84,6 +84,10 @@ spec:
             - { name: GP_RUNNER_NS, value: gp-runner }
             - { name: GP_RUNNER_IMAGE, value: curlimages/curl:8.10.1 }
             - { name: GP_MODEL_SECRET_NAMESPACE, value: gp }
+            - { name: GP_SCM_SECRET_NAMESPACE, value: gp }
+            # GitHub App 的 App ID/Client ID/Client Secret、安装 URL、OAuth 回调、
+            # 回跳前端 URL 和私钥 Secret 引用均从 gp-app-config 注入；未配置时页面
+            # 明确提示。私钥本体存于 gp-github-app，不能放入 gp-app-config。
             - { name: GP_AUTH_SECRET_NAMESPACE, value: gp }
             - { name: GP_TEMPORAL_ADDR, value: gp-temporal-frontend.gp.svc.cluster.local:7233 }
             - { name: GP_QUOTA_RUN_GLOBAL, value: "50" }
