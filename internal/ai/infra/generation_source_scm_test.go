@@ -91,6 +91,25 @@ func TestGitHubSourceListRefsPaginates(t *testing.T) {
 	}
 }
 
+func TestGitHubSourceGetRetriesSecondaryRateLimit(t *testing.T) {
+	var calls int32
+	reader := newTestGitHubReader(func(r *http.Request) (*http.Response, error) {
+		if atomic.AddInt32(&calls, 1) == 1 {
+			header := http.Header{}
+			header.Set("Retry-After", "0")
+			return fakeResponse(http.StatusForbidden, `secondary rate limit`, header), nil
+		}
+		return fakeResponse(http.StatusOK, `{"ok":true}`, nil), nil
+	})
+	body, err := reader.get(context.Background(), "https://api.github.test/secondary-limit", 1024)
+	if err != nil || string(body) != `{"ok":true}` {
+		t.Fatalf("secondary retry result: body=%q err=%v", body, err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected 2 attempts, got %d", calls)
+	}
+}
+
 func TestGitHubSourceGetRetriesRateLimit(t *testing.T) {
 	var calls int32
 	reader := newTestGitHubReader(func(r *http.Request) (*http.Response, error) {

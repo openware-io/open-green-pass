@@ -332,7 +332,8 @@ func (r *githubSourceReader) get(ctx context.Context, endpoint string, maxBytes 
 			}
 			continue
 		}
-		if resp.StatusCode == http.StatusTooManyRequests || (resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0") {
+		secondaryLimit := resp.StatusCode == http.StatusForbidden && (resp.Header.Get("X-RateLimit-Remaining") == "0" || resp.Header.Get("Retry-After") != "" || resp.Header.Get("X-RateLimit-Reset") != "")
+		if resp.StatusCode == http.StatusTooManyRequests || secondaryLimit {
 			wait := githubRetryDelay(resp.Header)
 			resp.Body.Close()
 			if attempt == maxAttempts {
