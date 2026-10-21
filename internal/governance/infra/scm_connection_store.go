@@ -103,6 +103,28 @@ func (s *SCMConnectionStore) Delete(ctx context.Context, teamID, connectionID in
 	return item, secretRef, err
 }
 
+// BoundRepositoryURLs returns the repositories currently bound to a
+// connection so verification can prove the credential still reads all of them.
+func (s *SCMConnectionStore) BoundRepositoryURLs(ctx context.Context, teamID, connectionID int64) ([]string, error) {
+	out := make([]string, 0)
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT r.url FROM repo_repo r WHERE r.team_id=$1 AND r.scm_connection_id=$2 AND r.deleted_at IS NULL ORDER BY r.id`, teamID, connectionID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var url string
+			if err := rows.Scan(&url); err != nil {
+				return err
+			}
+			out = append(out, url)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 func nullIfEmpty(value string) any {
 	if value == "" {
 		return nil

@@ -172,6 +172,12 @@ func (r *githubSourceReader) Fetch(ctx context.Context, repoURL, branch, sourceP
 	return files, commit.SHA, nil
 }
 
+// ValidateGitHubRepository is the exported wrapper used by the SCM
+// re-verification flow; it proves a credential can read one bound repository.
+func ValidateGitHubRepository(ctx context.Context, token, repoURL string) error {
+	return newGitHubSourceReader(token).ValidateRepo(ctx, repoURL)
+}
+
 // ValidateRepo checks the exact repository the connection will be bound to,
 // not just whether the token can call a generic GitHub endpoint.
 func (r *githubSourceReader) ValidateRepo(ctx context.Context, repoURL string) error {

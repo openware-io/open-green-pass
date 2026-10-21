@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	aiinfra "github.com/openware-io/open-green-pass/internal/ai/infra"
 	"github.com/openware-io/open-green-pass/internal/gateway/httpx"
 	"github.com/openware-io/open-green-pass/internal/governance/infra"
 	"github.com/openware-io/open-green-pass/internal/iam"
@@ -177,16 +178,28 @@ func RegisterSCMConnections(mux *http.ServeMux, store *infra.SCMConnectionStore,
 			return
 		}
 		token, err := resolveSCMConnectionToken(r.Context(), authType, ref, appID, installationID)
+		boundRepos := make([]string, 0)
 		if err == nil {
 			_, err = probeGitHubReadToken(r.Context(), token, authType)
 		}
+		if err == nil {
+			boundRepos, err = store.BoundRepositoryURLs(r.Context(), tenantID(r), connectionID)
+		}
+		if err == nil {
+			for _, repoURL := range boundRepos {
+				if validateErr := aiinfra.ValidateGitHubRepository(r.Context(), token, repoURL); validateErr != nil {
+					err = fmt.Errorf("repository %s: %w", repoURL, validateErr)
+					break
+				}
+			}
+		}
 		principal, _ := iam.PrincipalFromContext(r.Context())
 		if err != nil {
-			_ = store.MarkVerification(r.Context(), tenantID(r), connectionID, "failed", "无法验证 GitHub 只读凭据")
+			_ = store.MarkVerification(r.Context(), tenantID(r), connectionID, "failed", "无法验证 GitHub 只读凭据或绑定仓库的 Contents 权限")
 			emitSCMAudit(r.Context(), audit, principal, "scm.connection.verify_failed", "scm_connection", connectionID, map[string]any{
-				"provider": provider, "auth_type": authType,
+				"provider": provider, "auth_type": authType, "bound_repository_count": len(boundRepos),
 			})
-			httpx.WriteJSON(w, 502, map[string]string{"error": "github_connection_failed"})
+			httpx.WriteJSON(w, 502, map[string]string{"error": "github_connection_failed", "message": "Token 或已绑定仓库的读取权限验证失败"})
 			return
 		}
 		if err = store.MarkVerification(r.Context(), tenantID(r), connectionID, "verified", ""); err != nil {
@@ -194,7 +207,7 @@ func RegisterSCMConnections(mux *http.ServeMux, store *infra.SCMConnectionStore,
 			return
 		}
 		emitSCMAudit(r.Context(), audit, principal, "scm.connection.verified", "scm_connection", connectionID, map[string]any{
-			"provider": provider, "auth_type": authType,
+			"provider": provider, "auth_type": authType, "bound_repository_count": len(boundRepos),
 		})
 		httpx.WriteJSON(w, 200, map[string]string{"status": "verified"})
 	})
