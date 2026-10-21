@@ -70,13 +70,37 @@ func (s *SCMConnectionStore) Create(ctx context.Context, item SCMConnection, sec
 
 func (s *SCMConnectionStore) CredentialRef(ctx context.Context, teamID, connectionID int64) (provider, authType, ref, appID string, installationID *int64, err error) {
 	err = s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, `SELECT provider,auth_type,secret_ref,COALESCE(github_app_id,''),github_installation_id FROM repo_scm_connection WHERE team_id=$1 AND id=$2 AND credential_status IN ('configured','verified')`, teamID, connectionID).Scan(&provider, &authType, &ref, &appID, &installationID)
+		err := tx.QueryRow(ctx, `SELECT provider,auth_type,secret_ref,COALESCE(github_app_id,''),github_installation_id FROM repo_scm_connection WHERE team_id=$1 AND id=$2`, teamID, connectionID).Scan(&provider, &authType, &ref, &appID, &installationID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrSCMConnectionNotFound
 		}
 		return err
 	})
 	return
+}
+
+// Delete removes a connection only after clearing repository bindings in the
+// same tenant-scoped transaction. It returns the operator-visible metadata and
+// the secret reference so the HTTP layer can clean up the PAT Secret.
+func (s *SCMConnectionStore) Delete(ctx context.Context, teamID, connectionID int64) (SCMConnection, string, error) {
+	var item SCMConnection
+	var secretRef string
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `SELECT id,provider,name,credential_status,failure_summary,verified_at,auth_type,COALESCE(github_app_id,''),github_installation_id,installation_account_login,secret_ref FROM repo_scm_connection WHERE team_id=$1 AND id=$2 FOR UPDATE`, teamID, connectionID).Scan(&item.ID, &item.Provider, &item.Name, &item.CredentialStatus, &item.FailureSummary, &item.VerifiedAt, &item.AuthType, &item.GitHubAppID, &item.InstallationID, &item.InstallationLogin, &secretRef)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrSCMConnectionNotFound
+		}
+		if err != nil {
+			return err
+		}
+		item.TokenConfigured = true
+		if _, err := tx.Exec(ctx, `UPDATE repo_repo SET scm_connection_id=NULL WHERE team_id=$1 AND scm_connection_id=$2`, teamID, connectionID); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM repo_scm_connection WHERE team_id=$1 AND id=$2`, teamID, connectionID)
+		return err
+	})
+	return item, secretRef, err
 }
 
 func nullIfEmpty(value string) any {

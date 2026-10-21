@@ -53,6 +53,39 @@ func InstallationToken(ctx context.Context, appID, privateKey string, installati
 	return payload.Token, nil
 }
 
+// InstallationAccountLogin resolves the account/org login for an installation
+// so operators can identify a connection without memorizing installation IDs.
+func InstallationAccountLogin(ctx context.Context, appID, privateKey string, installationID int64) (string, error) {
+	jwt, err := appJWT(appID, privateKey, time.Now())
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/app/installations/%d", apiRoot, installationID), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Authorization", "Bearer "+jwt)
+	req.Header.Set("User-Agent", "greenpass-github-app")
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("GitHub App installation details request returned HTTP %d", resp.StatusCode)
+	}
+	var payload struct {
+		Account struct {
+			Login string `json:"login"`
+		} `json:"account"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 128*1024)).Decode(&payload); err != nil {
+		return "", fmt.Errorf("GitHub App installation details response is invalid")
+	}
+	return strings.TrimSpace(payload.Account.Login), nil
+}
+
 // ExchangeUserAuthorizationCode trades a GitHub App user-authorization code
 // for a short-lived user token. The token is used only for installation
 // ownership verification and is never persisted by GreenPass.

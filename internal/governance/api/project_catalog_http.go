@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -52,7 +53,7 @@ type bindSCMConnectionRequest struct {
 	SCMConnectionID int64 `json:"scm_connection_id"`
 }
 
-func RegisterProjectCatalog(mux *http.ServeMux, store *infra.ProjectCatalog, generationStore *aiinfra.GenerationBatchStore) {
+func RegisterProjectCatalog(mux *http.ServeMux, store *infra.ProjectCatalog, generationStore *aiinfra.GenerationBatchStore, audit SCMAuditFunc) {
 	mux.HandleFunc("PATCH /projects/{id}/repositories/{repoID}/scm-connection", func(w http.ResponseWriter, r *http.Request) {
 		if !catalogEditor(w, r) {
 			return
@@ -64,10 +65,27 @@ func RegisterProjectCatalog(mux *http.ServeMux, store *infra.ProjectCatalog, gen
 			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_scm_connection"})
 			return
 		}
+		teamID := tenantID(r)
+		if err := generationStore.ValidateRepositoryConnection(r.Context(), teamID, projectID, repoID, in.SCMConnectionID); err != nil {
+			switch {
+			case errors.Is(err, aiinfra.ErrSCMConnectionNotBound):
+				httpx.WriteJSON(w, 404, map[string]string{"error": "repository_or_scm_connection_not_found"})
+			case errors.Is(err, aiinfra.ErrRepositoryNotReadable):
+				httpx.WriteJSON(w, 422, map[string]string{"error": "repository_not_readable", "message": "该连接无法读取目标仓库的 Contents；请检查 PAT 的仓库范围与 Contents 只读权限"})
+			default:
+				slog.Error("validate repository SCM connection failed", "project_id", projectID, "repo_id", repoID, "error", err)
+				httpx.WriteJSON(w, 502, map[string]string{"error": "scm_connection_validation_failed"})
+			}
+			return
+		}
 		if err := store.BindSCMConnection(r.Context(), projectID, repoID, in.SCMConnectionID); err != nil {
 			httpx.WriteJSON(w, 404, map[string]string{"error": "repository_or_scm_connection_not_found"})
 			return
 		}
+		principal, _ := iam.PrincipalFromContext(r.Context())
+		emitSCMAudit(r.Context(), audit, principal, "scm.connection.bound", "repository", repoID, map[string]any{
+			"project_id": projectID, "scm_connection_id": in.SCMConnectionID,
+		})
 		httpx.WriteJSON(w, 200, map[string]string{"status": "bound"})
 	})
 	mux.HandleFunc("GET /projects/{id}/repositories", func(w http.ResponseWriter, r *http.Request) {

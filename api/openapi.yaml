@@ -106,6 +106,26 @@ paths:
         - { name: state, in: query, required: true, schema: { type: string, minLength: 32 } }
       responses:
         '303': { description: 返回被测对象页 }
+  /scm-connections/{id}:
+    delete:
+      summary: 删除源码读取连接并解除仓库绑定
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      responses:
+        '204': { description: 已删除 }
+        '404': { description: 连接不存在 }
+  /scm-connections/{id}/rotate:
+    post:
+      summary: 轮换 PAT 源码读取连接凭据
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SCMConnectionRotateInput' }
+      responses:
+        '200': { description: 已轮换, content: { application/json: { schema: { $ref: '#/components/schemas/StatusResponse' } } } }
+        '409': { description: GitHub App 连接不支持直接轮换 }
+        '422': { description: 新 Token 未通过只读验证 }
   /scm-connections/{id}/verify:
     post:
       summary: 重新验证源码读取连接
@@ -1071,6 +1091,11 @@ components:
       properties:
         provider: { type: string, enum: [ github ] }
         name: { type: string, minLength: 1 }
+        token: { type: string, minLength: 1, writeOnly: true }
+    SCMConnectionRotateInput:
+      type: object
+      required: [ token ]
+      properties:
         token: { type: string, minLength: 1, writeOnly: true }
     GenerationBatch:
       type: object

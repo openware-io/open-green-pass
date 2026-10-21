@@ -35,6 +35,15 @@ type GenerationBatchStore struct {
 	gen *id.Generator
 }
 
+var (
+	// ErrSCMConnectionNotBound means the repository is not bound to the
+	// requested, still-usable SCM connection.
+	ErrSCMConnectionNotBound = errors.New("repository is not bound to a usable SCM connection")
+	// ErrRepositoryNotReadable means the bound credential cannot read the
+	// repository metadata and root contents.
+	ErrRepositoryNotReadable = errors.New("repository is not readable with the selected SCM connection")
+)
+
 type GenerationSeed struct {
 	ID             int64          `json:"id"`
 	BatchID        int64          `json:"batch_id"`
@@ -1153,6 +1162,31 @@ func (s *GenerationBatchStore) ListRepositoryRefs(ctx context.Context, teamID, p
 		return rows.Err()
 	})
 	return out, err
+}
+
+// ValidateRepositoryConnection proves the selected connection can actually
+// read the target repository before the binding is persisted. This prevents a
+// valid-looking token for repository A from being bound to repository B.
+func (s *GenerationBatchStore) ValidateRepositoryConnection(ctx context.Context, teamID, projectID, repoID, connectionID int64) error {
+	if s == nil || s.db == nil {
+		return errors.New("generation store is required")
+	}
+	var repoURL, scmProvider, scmSecretRef, scmAuthType, scmAppID string
+	var scmInstallationID *int64
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT r.url,COALESCE(c.provider,''),COALESCE(c.secret_ref,''),COALESCE(c.auth_type,''),COALESCE(c.github_app_id,''),c.github_installation_id FROM repo_repo r JOIN repo_scm_connection c ON c.id=$4 AND c.team_id=r.team_id AND c.credential_status IN ('configured','verified') WHERE r.id=$1 AND r.project_id=$2 AND r.team_id=$3 AND r.deleted_at IS NULL`, repoID, projectID, teamID, connectionID).Scan(&repoURL, &scmProvider, &scmSecretRef, &scmAuthType, &scmAppID, &scmInstallationID)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrSCMConnectionNotBound
+	}
+	if err != nil {
+		return err
+	}
+	token, err := resolveSCMToken(ctx, scmProvider, scmAuthType, scmSecretRef, scmAppID, scmInstallationID)
+	if err != nil {
+		return err
+	}
+	return newGitHubSourceReader(token).ValidateRepo(ctx, repoURL)
 }
 
 func (s *GenerationBatchStore) RefreshRepositoryRefs(ctx context.Context, teamID, projectID, repoID int64) ([]RepositoryRef, error) {

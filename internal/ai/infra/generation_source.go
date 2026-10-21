@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -24,6 +25,7 @@ const (
 	maxSourceFileBytes  = 24 * 1024
 	maxSourceTotalBytes = 96 * 1024
 	maxGitTreeBytes     = 8 * 1024 * 1024
+	maxRefPages         = 10
 )
 
 type sourceFile struct {
@@ -170,28 +172,56 @@ func (r *githubSourceReader) Fetch(ctx context.Context, repoURL, branch, sourceP
 	return files, commit.SHA, nil
 }
 
+// ValidateRepo checks the exact repository the connection will be bound to,
+// not just whether the token can call a generic GitHub endpoint.
+func (r *githubSourceReader) ValidateRepo(ctx context.Context, repoURL string) error {
+	owner, repo, err := parsePublicGitHubRepository(repoURL)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrRepositoryNotReadable, err)
+	}
+	base := fmt.Sprintf("%s/repos/%s/%s", r.apiRoot, url.PathEscape(owner), url.PathEscape(repo))
+	if _, err := r.get(ctx, base, 256*1024); err != nil {
+		return fmt.Errorf("%w: %v", ErrRepositoryNotReadable, err)
+	}
+	if _, err := r.get(ctx, base+"/contents/", 256*1024); err != nil {
+		return fmt.Errorf("%w: %v", ErrRepositoryNotReadable, err)
+	}
+	return nil
+}
+
 func (r *githubSourceReader) ListRefs(ctx context.Context, repoURL string) ([]repositoryRef, error) {
 	owner, repo, err := parsePublicGitHubRepository(repoURL)
 	if err != nil {
 		return nil, err
 	}
 	base := fmt.Sprintf("%s/repos/%s/%s", r.apiRoot, url.PathEscape(owner), url.PathEscape(repo))
-	branchesBody, err := r.get(ctx, base+"/branches?per_page=100", 2*1024*1024)
-	if err != nil {
-		return nil, fmt.Errorf("list GitHub branches: %w", err)
-	}
 	var branches []struct {
 		Name   string `json:"name"`
 		Commit struct {
 			SHA string `json:"sha"`
 		} `json:"commit"`
 	}
-	if err := json.Unmarshal(branchesBody, &branches); err != nil {
-		return nil, fmt.Errorf("decode GitHub branches: %w", err)
-	}
-	tagsBody, err := r.get(ctx, base+"/tags?per_page=100", 2*1024*1024)
-	if err != nil {
-		return nil, fmt.Errorf("list GitHub tags: %w", err)
+	for page := 1; page <= maxRefPages; page++ {
+		body, err := r.get(ctx, fmt.Sprintf("%s/branches?per_page=100&page=%d", base, page), 2*1024*1024)
+		if err != nil {
+			return nil, fmt.Errorf("list GitHub branches: %w", err)
+		}
+		var batch []struct {
+			Name   string `json:"name"`
+			Commit struct {
+				SHA string `json:"sha"`
+			} `json:"commit"`
+		}
+		if err := json.Unmarshal(body, &batch); err != nil {
+			return nil, fmt.Errorf("decode GitHub branches: %w", err)
+		}
+		branches = append(branches, batch...)
+		if len(batch) < 100 {
+			break
+		}
+		if page == maxRefPages {
+			return nil, fmt.Errorf("repository has more than %d branches; refusing to truncate silently", maxRefPages*100)
+		}
 	}
 	var tags []struct {
 		Name   string `json:"name"`
@@ -199,8 +229,27 @@ func (r *githubSourceReader) ListRefs(ctx context.Context, repoURL string) ([]re
 			SHA string `json:"sha"`
 		} `json:"commit"`
 	}
-	if err := json.Unmarshal(tagsBody, &tags); err != nil {
-		return nil, fmt.Errorf("decode GitHub tags: %w", err)
+	for page := 1; page <= maxRefPages; page++ {
+		body, err := r.get(ctx, fmt.Sprintf("%s/tags?per_page=100&page=%d", base, page), 2*1024*1024)
+		if err != nil {
+			return nil, fmt.Errorf("list GitHub tags: %w", err)
+		}
+		var batch []struct {
+			Name   string `json:"name"`
+			Commit struct {
+				SHA string `json:"sha"`
+			} `json:"commit"`
+		}
+		if err := json.Unmarshal(body, &batch); err != nil {
+			return nil, fmt.Errorf("decode GitHub tags: %w", err)
+		}
+		tags = append(tags, batch...)
+		if len(batch) < 100 {
+			break
+		}
+		if page == maxRefPages {
+			return nil, fmt.Errorf("repository has more than %d tags; refusing to truncate silently", maxRefPages*100)
+		}
 	}
 	refs := make([]repositoryRef, 0, len(branches)+len(tags))
 	for _, item := range branches {
@@ -254,31 +303,98 @@ func (r *githubSourceReader) resolveTagCommit(ctx context.Context, owner, repo, 
 }
 
 func (r *githubSourceReader) get(ctx context.Context, endpoint string, maxBytes int64) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, err
+	const maxAttempts = 3
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/vnd.github+json")
+		req.Header.Set("User-Agent", "greenpass-generation-worker")
+		if r.token != "" {
+			req.Header.Set("Authorization", "Bearer "+r.token)
+		}
+		resp, err := r.client.Do(req)
+		if err != nil {
+			lastErr = err
+			if attempt == maxAttempts {
+				return nil, err
+			}
+			if err := sleepGitHub(ctx, time.Duration(attempt)*200*time.Millisecond); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if resp.StatusCode == http.StatusTooManyRequests || (resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0") {
+			wait := githubRetryDelay(resp.Header)
+			resp.Body.Close()
+			if attempt == maxAttempts {
+				return nil, fmt.Errorf("GitHub API rate limited (HTTP %d)", resp.StatusCode)
+			}
+			if err := sleepGitHub(ctx, wait); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if resp.StatusCode >= 500 && attempt < maxAttempts {
+			resp.Body.Close()
+			if err := sleepGitHub(ctx, time.Duration(attempt)*200*time.Millisecond); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 4*1024))
+			resp.Body.Close()
+			return nil, fmt.Errorf("GitHub API returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		}
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
+		resp.Body.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
+		if int64(len(body)) > maxBytes {
+			return nil, fmt.Errorf("GitHub response exceeded the configured size limit")
+		}
+		return body, nil
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "greenpass-generation-worker")
-	if r.token != "" {
-		req.Header.Set("Authorization", "Bearer "+r.token)
+	return nil, lastErr
+}
+
+func githubRetryDelay(header http.Header) time.Duration {
+	if value := strings.TrimSpace(header.Get("Retry-After")); value != "" {
+		if seconds, err := strconv.Atoi(value); err == nil {
+			return capGitHubWait(time.Duration(seconds) * time.Second)
+		}
 	}
-	resp, err := r.client.Do(req)
-	if err != nil {
-		return nil, err
+	if value := strings.TrimSpace(header.Get("X-RateLimit-Reset")); value != "" {
+		if unix, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return capGitHubWait(time.Until(time.Unix(unix, 0)))
+		}
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("GitHub API returned HTTP %d", resp.StatusCode)
+	return time.Second
+}
+
+func capGitHubWait(wait time.Duration) time.Duration {
+	if wait <= 0 {
+		return time.Second
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
-	if err != nil {
-		return nil, err
+	if wait > 5*time.Second {
+		return 5 * time.Second
 	}
-	if int64(len(body)) > maxBytes {
-		return nil, fmt.Errorf("GitHub response exceeded the configured size limit")
+	return wait
+}
+
+func sleepGitHub(ctx context.Context, wait time.Duration) error {
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
-	return body, nil
 }
 
 func parsePublicGitHubRepository(raw string) (string, string, error) {

@@ -218,6 +218,10 @@ func main() {
 	// Header identity is a development-only compatibility path. Production
 	// must wire a verified AuthenticationProvider before serving business APIs.
 	allowHeaderFallback := cfg.Env != "prod" && os.Getenv("GP_ALLOW_HEADER_AUTH") == "true"
+	scmAudit := gapi.SCMAuditFunc(func(ctx context.Context, actor int64, op, asset string, assetID int64, payload map[string]any) error {
+		_, err := auditSvc.Append(ctx, actor, op, asset, assetID, payload)
+		return err
+	})
 	handler := gateway.NewRouterWithAuth(log, authStore, allowHeaderFallback,
 		func(mux *http.ServeMux) { iamapi.RegisterAuth(mux, authStore, cfg.Env == "prod") },
 		func(mux *http.ServeMux) {
@@ -235,9 +239,9 @@ func main() {
 			})
 		},
 		func(mux *http.ServeMux) { gapi.RegisterAuthorized(mux, treeSvc, iamAuthorizer) },
-		func(mux *http.ServeMux) { gapi.RegisterProjectCatalog(mux, projectCatalog, generationStore) },
+		func(mux *http.ServeMux) { gapi.RegisterProjectCatalog(mux, projectCatalog, generationStore, scmAudit) },
 		func(mux *http.ServeMux) {
-			gapi.RegisterSCMConnections(mux, scmConnectionStore, os.Getenv("GP_SCM_SECRET_NAMESPACE"), gapi.GitHubAppConfigFromEnv())
+			gapi.RegisterSCMConnections(mux, scmConnectionStore, os.Getenv("GP_SCM_SECRET_NAMESPACE"), gapi.GitHubAppConfigFromEnv(), scmAudit)
 		},
 		func(mux *http.ServeMux) { aiapi.RegisterGeneration(mux, generationSvc, gen, generationStore) },
 		func(mux *http.ServeMux) {
