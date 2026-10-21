@@ -8,13 +8,13 @@
 - 本次已完成：创建只读 fine-grained PAT 连接 `im-saas-readonly-20261021`（连接 ID `2900333722734592`，`auth_type=pat`，`credential_status=verified`），并将 8 个仓库全部绑定到该连接；`GET /api/projects/.../repositories` 返回 8/8 `verified`。
 - 端到端验证：对 `open-im-server` 调用 `POST /api/projects/.../repositories/2876819928027136/refs:refresh` 返回 200，读取到 4 个分支和 3 个 Tag，证明连接和 Secret 解析链路可用。
 - 过程中发现并**已修复**一个 P0：PAT 连接创建必然失败（`auth_type` 空字符串违反数据库 CHECK，接口却返回 409）。修复为显式写入 `AuthType: "pat"`，提交为 `9a602af`（分支 `fix/scm-pat-auth-type`）。
-- 部署规范纠正：首次为尽快验证曾临时构建 `0.3.1-scmfix` 并直接 `kubectl set image`，违反“唯一入口 `init-kind.ps1`”和 `X.Y.Z-SNAPSHOT` 命名规范。现已改由 `scripts/dev/init-kind.ps1 -Version 0.3.1-SNAPSHOT -ImageSource local-build` 重新部署，server/worker/web/migrate 全部为 `0.3.1-SNAPSHOT`，临时 tag 已由脚本清理；发布记录见 [`DEPLOYMENT-0.3.1-SNAPSHOT-2026-10-21.md`](DEPLOYMENT-0.3.1-SNAPSHOT-2026-10-21.md)。
+- 部署规范纠正：首次为尽快验证曾临时构建 `0.3.1-scmfix` 并直接 `kubectl set image`，违反“唯一入口 `init-kind.ps1`”和 `X.Y.Z-SNAPSHOT` 命名规范。现已改由 `scripts/dev/init-kind.ps1 -Version 0.3.3-SNAPSHOT -ImageSource local-build` 重新部署，server/worker/web/migrate 全部为 `0.3.3-SNAPSHOT`，临时 tag 已由脚本清理；发布记录见 [`DEPLOYMENT-0.3.1-SNAPSHOT-2026-10-21.md`](DEPLOYMENT-0.3.1-SNAPSHOT-2026-10-21.md) 与 [`DEPLOYMENT-0.3.3-SNAPSHOT-2026-10-21.md`](DEPLOYMENT-0.3.3-SNAPSHOT-2026-10-21.md)。
 
 ## 问题清单
 
 | ID | 优先级 | 领域 | 问题与证据 | 影响 | 建议处理 | 状态 |
 |---|---|---|---|---|---|---|
-| SCM-01 | P0 | 连接创建 | `POST /scm-connections` 构造 `infra.SCMConnection` 时未设置 `AuthType`，插入时 `auth_type=''` 违反 `repo_scm_connection` 的 `CHECK (auth_type IN ('pat','github_app'))`。实测：Secret 已创建、DB 无行、接口返回 `409 scm_connection_name_conflict`。 | 所有 PAT 连接都无法创建，功能实际不可用。 | 已显式设置 `AuthType: "pat"`，提交 `9a602af`，并按规范部署 `0.3.1-SNAPSHOT`；补一条接口级回归测试并走 PR 合并。 | 已修复并部署，待评审/合并 |
+| SCM-01 | P0 | 连接创建 | `POST /scm-connections` 构造 `infra.SCMConnection` 时未设置 `AuthType`，插入时 `auth_type=''` 违反 `repo_scm_connection` 的 `CHECK (auth_type IN ('pat','github_app'))`。实测：Secret 已创建、DB 无行、接口返回 `409 scm_connection_name_conflict`。 | 所有 PAT 连接都无法创建，功能实际不可用。 | 已显式设置 `AuthType: "pat"`，提交 `9a602af`，并按规范部署 `0.3.1-SNAPSHOT`；补一条接口级回归测试并走 PR 合并。 | 已修复；0.3.3 已发布；待评审/合并 |
 | SCM-02 | P0 | 错误处理/一致性 | 同一处 `store.Create` 的任何错误都被映射为 `409 scm_connection_name_conflict`；且 Secret 先于 DB 插入创建，插入失败后留下孤儿 Secret。本次已手工删除 `gp-scm-1001-2900329347747840`。 | 运维无法从状态码区分重名、RLS、约束、DB 故障；泄漏 Secret 且难清理。 | 仅对唯一键冲突返回 409，其余返回 500 并记录去敏错误；插入失败时删除刚创建的 Secret，或改为可补偿的事务/outbox 流程；补集成测试。 | 已修复（错误映射+Secret 清理+delete RBAC），随 0.3.3 发布 |
 | SCM-03 | P1 | 前端状态 | `TargetPage` 的 `scmConnections` 初始为空，只在打开“源码读取连接”弹窗时加载；仓库行和绑定下拉在页面加载后仍显示“尚未配置/未绑定”，即使后台已有已验证连接。 | 用户误以为凭据没保存，重复录入；绑定入口不可用。 | 在页面/项目切换时加载连接；区分 loading/error/empty；绑定下拉使用同一份已加载数据。 | 已修复（页面加载即拉取连接+独立弹窗组件），随 0.3.3 发布 |
 | SCM-04 | P1 | 可发现性 | PAT 录入入口藏在 `<details>` 的“兼容方式：fine-grained PAT”中；GitHub App 未配置时只显示“尚未由平台管理员配置”，没有直接引导到 PAT。 | 新用户不知道该在哪里粘贴 Token，正是本次“怎么录入”的直接原因。 | 未配置 GitHub App 时，把“使用只读 PAT”提升为主操作；附创建 PAT 的最短路径和权限说明；配置 App 后再把 App 作为推荐路径。 | 已修复（未配置 App 时 PAT 表单默认可见），随 0.3.3 发布 |
