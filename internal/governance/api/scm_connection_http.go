@@ -112,7 +112,7 @@ func RegisterSCMConnections(mux *http.ServeMux, store *infra.SCMConnectionStore,
 		}
 		principal, _ := iam.PrincipalFromContext(r.Context())
 		now := time.Now()
-		item := infra.SCMConnection{ID: connectionID, Provider: "github", Name: strings.TrimSpace(in.Name), CredentialStatus: "verified", VerifiedAt: &now, TokenConfigured: true}
+		item := infra.SCMConnection{ID: connectionID, Provider: "github", Name: strings.TrimSpace(in.Name), CredentialStatus: "verified", VerifiedAt: &now, TokenConfigured: true, AuthType: "pat"}
 		if err := store.Create(r.Context(), item, "k8s://"+namespace+"/"+secretName+"#token", parseSubject(principal.Subject)); err != nil {
 			httpx.WriteJSON(w, 409, map[string]string{"error": "scm_connection_name_conflict"})
 			return
