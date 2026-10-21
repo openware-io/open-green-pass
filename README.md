@@ -1,4 +1,4 @@
-# GreenPass · 软件工程测试治理平台（前端原型）
+# GreenPass · 软件工程测试治理平台
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/openware-io/open-green-pass/actions/workflows/ci.yml/badge.svg)](https://github.com/openware-io/open-green-pass/actions)
@@ -7,7 +7,7 @@
 [![Vite](https://img.shields.io/badge/Vite-8-purple)](https://vitejs.dev/)
 > **GreenPass**：软件工程测试治理平台 —— 站在软件工程"测试阶段"的位置，对（AI 生成 / 人写的）被测工程与系统做**质量量化、测试管控与可信治理**，系统本身由 AI 驱动。
 
-本仓库以 React + Vite + TypeScript + Tailwind + shadcn/ui 提供产品原型；默认仍使用本地 mock，已具备按 OpenAPI 生成类型并接入真实 GreenPass API 的基础能力。
+本仓库包含 React + Vite + TypeScript + Tailwind + shadcn/ui 前端与 Go 后端（server / worker / migrate）。前端默认可使用本地 mock；配置 `VITE_GP_API_BASE`、`VITE_GP_TEAM_ID` 后接入真实 GreenPass API；后端按 `api/openapi.yaml` 提供对象、SCM、用例、执行、门禁、审计与报告能力。
 
 ## 产品定位
 
@@ -24,7 +24,7 @@
 - 图标：lucide-react
 - 路由：react-router-dom（**HashRouter**，兼容 `file://` 静态打开）
 - 提示：sonner（`<Toaster/>`）
-- 后端技术栈（规划）：Go + Temporal + PostgreSQL(RLS 多租户) + TimescaleDB + Redis + S3 兼容对象存储(SeaweedFS)，详见 [`docs/architecture/TECH-DESIGN.md`](./docs/architecture/TECH-DESIGN.md) 与 [`docs/engineering/ENGINEERING-SPEC.md`](./docs/engineering/ENGINEERING-SPEC.md)
+- 后端：Go + Temporal + PostgreSQL(RLS 多租户) + TimescaleDB + Redis + S3 兼容对象存储(SeaweedFS)，详见 [`docs/architecture/TECH-DESIGN.md`](./docs/architecture/TECH-DESIGN.md) 与 [`docs/engineering/ENGINEERING-SPEC.md`](./docs/engineering/ENGINEERING-SPEC.md)
 
 ## 功能页面
 
@@ -131,7 +131,7 @@ npm run lint:eslint    # eslint src
 
 ## 说明
 
-- 原型阶段**不做后端业务**，所有交互（重新判定、搜索、成员/模型配置、资产联动）均为前端 mock 反馈。
+- 前端保留 mock 演示路径；真实 API、SCM 源码读取、生成、执行、门禁与审计由 Go 后端提供。源码读取连接优先 GitHub App，本地/无 HTTPS 回调时使用 fine-grained PAT，详见 [`docs/runbooks/IM-SAAS-SCM-ONBOARDING.md`](./docs/runbooks/IM-SAAS-SCM-ONBOARDING.md) 与 [`docs/runbooks/GITHUB-APP-CONNECTION-RUNBOOK.md`](./docs/runbooks/GITHUB-APP-CONNECTION-RUNBOOK.md)。
 - 产品需求文档见 [`docs/product/PRD.md`](./docs/product/PRD.md)、设计规范 [`docs/architecture/DESIGN-SPEC.md`](./docs/architecture/DESIGN-SPEC.md)；完整文档分类与位置规则见 [`docs/README.md`](./docs/README.md)。
 - 开源许可：[MIT](./LICENSE)。
 

@@ -2,7 +2,7 @@
 
 ## 目标与边界
 
-GreenPass 使用 GitHub App 读取被测仓库。平台不会接收个人 Token：数据库只记录团队、App 安装 ID 和私钥引用；运行时才由 App 私钥交换短时 installation token。Fine-grained PAT 仅用于兼容既有连接。
+GreenPass 优先使用 GitHub App 读取被测仓库：数据库只记录团队、App 安装 ID 和私钥引用；运行时才由 App 私钥交换短时 installation token。GitHub App 需要 GitHub 可访问的公网 HTTPS 回调，本地/内网没有该入口时使用 Fine-grained PAT 兼容路径（PAT 只保存在服务端 K8s Secret，数据库只存引用，不写入日志或审计载荷）。
 
 授权流程如下：
 
@@ -50,7 +50,7 @@ GP_GITHUB_APP_OAUTH_CALLBACK_URL=https://<greenpass-domain>/api/scm-connections/
 GP_GITHUB_APP_FRONTEND_URL=https://<greenpass-domain>
 ```
 
-重启 `gp-server` 后，在“被测对象 → 源码读取连接”中应出现“前往 GitHub 授权”。完成授权后，将连接绑定到具体仓库；分支/Tag 刷新、技术画像和源码冻结都复用这个已验证连接。
+以上 7 个键必须同时存在（包括 `GP_GITHUB_APP_FRONTEND_URL`），否则 `GET /api/scm-connections/github-app` 返回 409，页面会回退到 PAT 表单。重启 `gp-server` 后，在“被测对象 → 源码读取连接”中应出现“前往 GitHub 授权”。完成授权后，将连接绑定到具体仓库；绑定前会检查该安装令牌能否读取目标仓库的 Metadata 和根 Contents。分支/Tag 刷新、技术画像和源码冻结都复用这个已验证连接。
 
 ## 验收与轮换
 
