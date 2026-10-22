@@ -1,8 +1,8 @@
-﻿# GreenPass migration validator (Windows native, equivalent to validate-migrations.sh)
+# GreenPass migration validator (Windows native, equivalent to validate-migrations.sh)
 # Checks: file name format / up-down pairing / table prefix registry (ENGINEERING-SPEC 8)
 param([string]$MigDir = "migrations")
 $ErrorActionPreference = "Stop"
-$prefixes = @("tgt_","cas_","ctr_","rpt_","tnt_","iam_","mdl_","repo_","run_","res_","env_","gen_","gate_","cost_","aud_","evd_","ts_","svc_","cicd_","auth_","assistant_")
+$prefixes = @("tgt_","cas_","ctr_","rpt_","tnt_","iam_","mdl_","repo_","def_","cov_","run_","res_","env_","gen_","gate_","cost_","aud_","evd_","ts_","svc_","cicd_","auth_","assistant_")
 $err = 0
 $up = @{}; $down = @{}
 Get-ChildItem (Join-Path (Get-Location) $MigDir) -Filter *.sql -ErrorAction SilentlyContinue | ForEach-Object {

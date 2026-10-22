@@ -48,7 +48,7 @@
 
 1. `ENGINEERING-SPEC §8.2` 已登记 `def_`、`cov_`；
 2. 数据所有权、RLS、`gp_trusted_writer` 已写入 §2.3/§8.1；
-3. 迁移编号：`000034_defect_finding`、`000035_coverage_cell`、`000036_evidence`、`000037_execution_fixture`；
+3. 迁移编号：`000034_defect_finding`、`000035_coverage_cell`、`000036_evidence`、`000037_execution_fixture`、`000038_case_execution_columns`；
 4. `open-green-pass-dsh-gateway` 镜像已登记 §12；
 5. `cmd/dsh-gateway` 已登记 §2.1/服务目录；
 6. 测试分层、沙箱/egress、OpenAPI 约束已写入规格。
@@ -63,14 +63,15 @@
 
 未完成上述实施项前不得发布 gateway 或写业务数据。
 
-### 0.4 数据策略：Greenfield，无历史数据包袱
+### 0.4 数据策略：业务优先，开发期无历史包袱
 
-- `def_*`、`cov_*`、`evd_evidence`、`gen_job`、`ctr_*`、`run_fixture`、`env_lease` 均为**新表**；
-- 不做数据回填、不双写、不做兼容视图、不做旧表改造；
-- 迁移仅 DDL：`CREATE TABLE`/索引/RLS/授权；`down` 只删除新表；
-- 现有平台表（target/case/run/model/scm 等）不动；
+- 新表：`def_*`、`cov_*`、`evd_evidence`、`gen_job`、`ctr_*`、`run_fixture`、`env_lease`；
+- **现有表可直接改**：`cas_case` 增加 `coverage_cell_ids`/`oracle_source`/`source_snapshot_sha`，`run_case_result` 增加 `failure_class`/`finding_id`/`evidence_ref`；后续按业务需要允许 `ALTER/DROP/类型变更`；
+- 开发/本地允许直接 DDL、drop/recreate、启动建表；不做数据回填、不双写、不做兼容视图；
+- 测试/CI 合入前把最终 schema 固化为迁移，空库 `migrate up` 可重建；不允许手工漂移；
+- 生产仍走版本化迁移；有数据环境先快照，变更按 `SCHEMA-CHANGE-CHECKLIST` 记录范围/回滚/审批；
 - 测试数据由 fixture/seed 生成，不迁移历史用例/缺陷；
-- 因此 M0 不含数据搬迁/回填验证，仅做 schema、RLS、契约和测试。
+- M0 不含数据搬迁/回填验证，仅做 schema、RLS、契约和测试。
 
 ## 1. 边界与原则
 
@@ -565,7 +566,7 @@ DSH Analyst 输出：
 ### M0（1 周，Greenfield）：只读护栏 + 缺陷模型 + 工程门禁
 
 - SCM scope 校验和只读标识；
-- 迁移 `000034_defect_finding`（`def_finding`/`def_event`/`def_suggestion`）、`000035_coverage_cell`（`cov_cell`/`cov_waiver`）、`000036_evidence`（`evd_evidence`）、`000037_execution_fixture`（`run_fixture`/`env_lease`）；**仅 DDL，无数据回填/双写/兼容视图**；
+- 迁移 `000034_defect_finding`（`def_finding`/`def_event`/`def_suggestion`）、`000035_coverage_cell`（`cov_cell`/`cov_waiver`）、`000036_evidence`（`evd_evidence`）、`000037_execution_fixture`（`run_fixture`/`env_lease`）、`000038_case_execution_columns`（`cas_case`/`run_case_result` 加列）；**仅 DDL，无数据回填/双写/兼容视图**；
 - RLS 策略、`gp_trusted_writer` 对 `evd_evidence` 的授权、`aud_event` 事件；
 - 执行结果增加 `failure_class`/`finding_id`；
 - `api/openapi.yaml` 补 `/findings`、`/coverage`，生成类型 + 契约测试；

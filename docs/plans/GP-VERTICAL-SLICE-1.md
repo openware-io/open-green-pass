@@ -99,7 +99,7 @@ steps:
 
 | 天 | 工作 |
 |---|---|
-| D1 | 迁移 34-37（仅 DDL，无回填）、RLS、OpenAPI `/findings`/`/coverage`、生成类型 |
+| D1 | 迁移 34-38（仅 DDL，含现有表加列，无回填）、RLS、OpenAPI `/findings`/`/coverage`、生成类型 |
 | D2 | Coverage plan + user 模块 Cell 入库 |
 | D3 | gateway job + DSH 多步 session + 用例入库 |
 | D4 | fixture + 执行 + 证据采集 |

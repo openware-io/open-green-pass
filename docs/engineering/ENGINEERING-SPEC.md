@@ -2,7 +2,7 @@
 
 > 状态：生效（v1.0）
 > 适用范围：`open-green-pass` 后端工作区（GreenPass 服务仓库）、构建脚本、CI 与本地开发环境
-> 定位：GreenPass 后端（Go + Temporal）的全量工程规范。参考 `open-im-server` 的 Java 工程治理骨架（模块边界 / 依赖方向 / 分层职责 / 日志埋点 / 构建门禁 / DB 表前缀 / 迁移只增不改 / 可观测 / 分层测试 / 发布），并按 Go 技术栈 + 业界工程实践（Google Go Style、Uber Go Style、字节 CloudWeGo 工程规范、golangci-lint 生态）**改写为 Go 原生表达**，非机械照抄。
+> 定位：GreenPass 后端（Go + Temporal）的全量工程规范。参考 `open-im-server` 的 Java 工程治理骨架（模块边界 / 依赖方向 / 分层职责 / 日志埋点 / 构建门禁 / DB 表前缀 / 迁移与变更范围受控 / 可观测 / 分层测试 / 发布），并按 Go 技术栈 + 业界工程实践（Google Go Style、Uber Go Style、字节 CloudWeGo 工程规范、golangci-lint 生态）**改写为 Go 原生表达**，非机械照抄。
 > 前端 UI/交互规范见 [DESIGN-SPEC.md](../architecture/DESIGN-SPEC.md)，本规范只约束后端工程与前后端接口契约。
 
 ---
@@ -60,7 +60,7 @@ green-pass/
 | `internal/<domain>/infra` | 技术适配 | 仓储实现、PO 映射、缓存、事件投递、配置 | API DTO、业务规则 |
 | `pkg/` | 跨域纯技术 | 无业务语义的工具/协议/基础设施抽象 | 领域对象、业务 Repository |
 | `api/` | 对外契约 | OpenAPI/生成 DTO | 内部实现、PO、Mapper |
-| `migrations/` | 数据迁移 | 只增不改的版本脚本 | 运行时 ddl、业务逻辑 |
+| `migrations/` | 数据迁移 | 可重放的版本脚本（范围受控） | 运行时 ddl、业务逻辑 |
 
 ### 2.3 服务域（限界上下文）划分
 
@@ -225,7 +225,7 @@ lint     : golangci-lint run  # 含 depguard(依赖边界)/revive(godoc)/gocyclo
 test     : go test -race ./... --cover   # 分层单元 + 集成(本地标记)
 build    : go build ./cmd/... && go vet ./...
 vuln     : govulncheck ./...
-migcheck : 迁移脚本只增不改校验 + RLS/表前缀扫描
+migcheck : 迁移命名/up-down/表前缀/RLS 扫描
 check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 用
 ```
 
@@ -289,12 +289,16 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 - 禁止 JSON 列作为核心查询字段（JSONB 存扩展属性可以，不参与核心筛选）；核心查询路径必须有二级索引。
 - 所有表显式字符集/时区一致（UTF-8、UTC 存时间）。
 
-### 8.4 迁移（golang-migrate，只增不改）
+### 8.4 迁移与 schema 变更（业务优先，范围受控）
 
-- 迁移唯一权威：`migrations/000NNN_<desc>.up/down.sql`；**历史脚本只增不改**，修正结构新增后续版本。
-- 禁止运行时 `AutoMigrate` / ddl 自动改表；禁止在 main 链路执行建表。
-- 拥有权威数据的域是迁移唯一所有者；跨域不得修改他人迁移。
-- 生产/开发重建走统一脚本，输出落 `.outputs/`。
+- **开发/本地**：允许直接 DDL、`DROP`/重建、启动时建表；不要求历史数据回填、双写、兼容视图。开发过程不为历史数据束手束脚。
+- **测试/CI**：合入前必须把最终 schema 固化为 `migrations/000NNN_<desc>.up/down.sql`；空库 `migrate up` 可完整重建。禁止“只存在于手工库”的结构漂移。
+- **生产**：schema 变更仍通过版本化迁移发布；允许 `ALTER`/`DROP`/类型变更，但必须有范围、备份、回滚和审批。禁止应用启动时隐式建表，避免环境漂移。
+- **现有表可直接改**：加列/改类型/加索引/改约束/RLS 均可；有数据的共享/生产环境先快照，开发/测试可直接 reset。
+- 迁移文件：已应用的迁移不改写；未应用的开发迁移可 squash/改写；生产修正必须新增迁移。
+- **范围控制**：每次迁移只做一个变更集，列出表/列/索引/RLS/授权/数据影响/回滚；禁止顺手改无关表。
+- 数据所有权：权威域 owner 审批跨域表变更；跨域不得静默改他人表。
+- 每次变更按 [`SCHEMA-CHANGE-CHECKLIST.md`](SCHEMA-CHANGE-CHECKLIST.md) 记录范围与回滚。
 
 ---
 
@@ -366,7 +370,7 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 
 - 新增服务/域前：确认归属 `internal/<domain>`，明确限界上下文、聚合根、权威表、跨域契约、领域事件与数据所有权。
 - 新增依赖前：检查是否已有 `go.mod` 治理；确认仅该包需要；禁浮动态版本。
-- 改迁移/RLS/表结构前：`migcheck` + testcontainers 专项；登记表前缀；只增不改。
+- 改迁移/RLS/表结构前：`migcheck` + testcontainers 专项；登记表前缀；范围受控、可回滚。
 - 改契约（OpenAPI）前：契约校验 + 前端类型生成 + 消费方契约测试。
 - 改 Makefile/go.mod 后：`make validate` + 根 `make check`。
 - 提交前：全量 `make check` 通过才可声明"完成"；任一门禁失败不得跳过、排除或降级。

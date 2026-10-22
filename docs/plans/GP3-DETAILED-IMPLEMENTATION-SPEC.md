@@ -34,7 +34,7 @@
 - 分层固定为 `api -> application -> domain <- infra`；领域层不得依赖 Temporal、HTTP、数据库驱动、Redis 或 provider SDK。
 - 新的 HTTP request/response 先落 `api/openapi.yaml`，再运行 `npm run api:check`；事件要定义稳定的 `type`、`version`、`event_id`、`occurred_at`、`team_id`、关联 ID 与幂等键，不能直接传领域对象。
 - 权威数据只能写入所属域；AI 写成本只能经 Trusted 的显式 `MeterPort`/内部契约，不能直接写 `cost_line_item`。审计只能经 Trusted 审计端口。
-- 所有时间 UTC 存储；所有业务表带 `team_id` 并启用 RLS；迁移只增不改。敏感输入、完整 prompt/response、API key 不写日志和审计 payload。
+- 所有时间 UTC 存储；所有业务表带 `team_id` 并启用 RLS；schema 变更范围受控、可回滚。敏感输入、完整 prompt/response、API key 不写日志和审计 payload。
 - 每个新增 workflow/activity、外部模型调用、成本写入和锚定操作带 `trace_id`、`request_id`、`team_id`、`target_id`、`gen_batch_id`（按链路最小集合）。
 
 ## 1. 跨 GP3 的契约与事件基线

@@ -390,7 +390,7 @@ green-pass/
 
 ### 9.3 数据模型（DDL 级，PG15 + TimescaleDB）
 
-> 表前缀/命名/审计字段遵循 ENGINEERING-SPEC §8；迁移 golang-migrate 只增不改。以下为核心表落库形态。
+> 表前缀/命名/审计字段遵循 ENGINEERING-SPEC §8；schema 变更范围受控、可回滚。以下为核心表落库形态。
 
 ```sql
 -- ========= 治理域 =========

@@ -10,7 +10,7 @@
 ## 0. 执行总则（硬标准）
 
 1. **先做后验**：任务「完成」= DoD 满足 + 对应 `make check`/测试全绿；不得跳过/排除制造假绿。
-2. **规范即底线**（ENGINEERING-SPEC）：`domain` 零三方依赖；`api→application→domain←infra`；表前缀登记；迁移只增不改；RLS 强制；分层测试；slog+OTel。
+2. **规范即底线**（ENGINEERING-SPEC）：`domain` 零三方依赖；`api→application→domain←infra`；表前缀登记；schema 变更范围受控/可回滚；RLS 强制；分层测试；slog+OTel。
 3. **口径自洽**（贯穿）：总览=Σ明细、版本可溯源、成本/审计单点计量。
 4. **依赖顺序**：P0 → P1 串行；P1 内先 governance（被测对象/用例）→ execution → trusted/AI。
 5. **部署形态与本地调试（硬约束）**：GP 全部组件（server/worker + 基础设施）以 **版本化 Kubernetes 清单和部署脚本部署到 kind 集群内命名空间**（ns: gp 控制面+基础设施、ns: gp-runner 执行沙箱）；本地调试 = 直接部署到 kind，或 **`go run ./cmd/server` + 依赖经 kind 代理暴露后连接**（port-forward / NodePort / ingress-nginx + kind extraPortMappings）；**不使用 docker 部署形式做调试**。
@@ -107,7 +107,7 @@ CREATE FUNCTION gp.set_tenant() RETURNS trigger AS $$ BEGIN
 -- RLS 策略模板：USING (team_id = current_setting('gp.team_id')::bigint)  对 tgt_*/cas_*/run_*/cost_*/aud_* 等业务表启用
 ALTER TABLE ... ENABLE ROW LEVEL SECURITY;
 ```
-`scripts/validate/validate-migrations.sh`（Windows 等价 `.ps1`）：校验脚本名 `000NNN_*.up/down.sql`、历史只增不改、表前缀归属（对照 ENGINEERING-SPEC §8 登记表）。
+`scripts/validate/validate-migrations.sh`（Windows 等价 `.ps1`）：校验脚本名 `000NNN_*.up/down.sql`、up/down 配对、表前缀归属（对照 ENGINEERING-SPEC §8 登记表）。
 **验证**：`golang-migrate up` 成功；`make migcheck` 通过；重跑幂等。
 
 ### GP0-05 platform 基础包 + pkg 基础包

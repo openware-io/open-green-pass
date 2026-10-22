@@ -26,7 +26,7 @@
 | 1 | 新增服务/域先定义限界上下文、聚合、权威表、跨域契约 | ✅ 设计已补 | `def_`/`cov_` 归属、gateway 部署单元已登记；实现待做 |
 | 2 | 表前缀登记 | ✅ 已登记 | `def_`/`cov_` 已登记；`evd_` 复用；映射见方案 0.3 |
 | 3 | 多租户 RLS + 可信域独立写角色 | ⚠️ 部分 | 方案提到 team_id，但未写 RLS 策略、`gp_trusted_writer`、可信表边界 |
-| 4 | 迁移只增不改、编号、migcheck | ⚠️ 部分 | 有 DDL 草案，无迁移编号、up/down、migcheck/testcontainers |
+| 4 | 迁移/变更范围受控、编号、migcheck | ⚠️ 部分 | 有 DDL 草案；迁移编号已定，up/down/testcontainers 待实现 |
 | 5 | OpenAPI 唯一契约、生成类型 | ⚠️ 部分 | `/findings`、`/coverage` 未写入 `api/openapi.yaml`；原型为本地数据 |
 | 6 | 测试分层（domain/application/infra/api/e2e） | ❌ 不合规 | 未定义 finding 状态机、覆盖算法、网关 stdio、RLS 的测试 |
 | 7 | 发布入口唯一、镜像命名、kind 校验 | ⚠️ 镜像已登记，部署待接 | `open-green-pass-dsh-gateway` 已登记 §12；脚本/manifest/CI 待实现 |
@@ -80,7 +80,7 @@
 ### 4. 迁移
 
 - 新增 `migrations/0000NN_defect_finding.up/down.sql`、`0000NN_coverage_cell.up/down.sql`、`0000NN_evidence.up/down.sql`；
-- 只增不改；`down` 可回滚；
+- 范围受控；`down` 可回滚；
 - `migcheck` + testcontainers PG；
 - 不运行时 AutoMigrate；不在 server main 建表。
 
