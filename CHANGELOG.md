@@ -3,6 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
+- **M2 证据元数据（0.1.113-SNAPSHOT）**：新增 `POST/GET /findings/{id}/evidence`，Trusted `evd_evidence` 登记 kind/MIME/大小/SHA-256/尺寸；截图≤10MB、视频≤100MB；预签名上传/下载仍待补。
 - **M2 fixtures/环境租约（0.1.112-SNAPSHOT）**：新增 run fixture prepare/list/cleanup 与 env lease/release API；验证 prepare/list/cleanup/lease/release；evidence 上传仍待补。
 - **M2 归因闭环（0.1.110-SNAPSHOT）**：新增 `POST /runs/{id}/triage`，把 failed/blocked run_case_result 转为 finding，回写 `failure_class`/`finding_id`；execution 经 FindingPort 调 governance，finding 带仓库/提交/证据摘要。fixtures/evidence 上传/真实执行仍待补。
 - **M1 完成：真实 DSH 生成 12 条 user 用例（0.1.106-SNAPSHOT）**：迁移 43 修复审计列；新增 `POST /generation/jobs/{id}/cases:import`，解析 DSH JSON、创建 cas_case/version、回填 cov_cell.case_id；user 模块 24/24 Cell 覆盖、uncovered=0；真实 SDK runner 本地验证，集群 gateway 仍为 stub。
