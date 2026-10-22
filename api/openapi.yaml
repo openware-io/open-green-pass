@@ -663,6 +663,15 @@ paths:
       responses:
         '200': { description: 已恢复, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
   # ---------- 门禁（trusted，GP1-05） ----------
+  /gates/coverage:
+    get:
+      summary: 覆盖/缺陷门禁
+      operationId: evaluateCoverageGate
+      parameters:
+        - { name: project_id, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: module, in: query, schema: { type: string } }
+      responses:
+        '200': { description: 门禁结果, content: { application/json: { schema: { $ref: '#/components/schemas/CoverageGateResult' } } } }
   /gates/rules:
     put:
       summary: 装载门禁策略（版本化，策略即代码）
@@ -1126,6 +1135,22 @@ components:
       properties:
         cells: { type: array, items: { $ref: '#/components/schemas/CoverageCell' } }
         summary: { $ref: '#/components/schemas/CoverageSummary' }
+    CoverageGateResult:
+      type: object
+      required: [ project_id, module, total_required, design_covered, executed, passed, design_coverage, execution_coverage, open_p0, open_p1, gate_passed, blockers ]
+      properties:
+        project_id: { type: integer, format: int64 }
+        module: { type: string }
+        total_required: { type: integer }
+        design_covered: { type: integer }
+        executed: { type: integer }
+        passed: { type: integer }
+        design_coverage: { type: number }
+        execution_coverage: { type: number }
+        open_p0: { type: integer }
+        open_p1: { type: integer }
+        gate_passed: { type: boolean }
+        blockers: { type: array, items: { type: string } }
     EvidenceCreate:
       type: object
       required: [ kind, storage_uri, mime_type, size_bytes, sha256 ]

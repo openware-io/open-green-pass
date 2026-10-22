@@ -1651,6 +1651,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/gates/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 覆盖/缺陷门禁 */
+        get: operations["evaluateCoverageGate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/gates/rules": {
         parameters: {
             query?: never;
@@ -2264,6 +2281,21 @@ export interface components {
         CoveragePlanResponse: {
             cells: components["schemas"]["CoverageCell"][];
             summary: components["schemas"]["CoverageSummary"];
+        };
+        CoverageGateResult: {
+            /** Format: int64 */
+            project_id: number;
+            module: string;
+            total_required: number;
+            design_covered: number;
+            executed: number;
+            passed: number;
+            design_coverage: number;
+            execution_coverage: number;
+            open_p0: number;
+            open_p1: number;
+            gate_passed: boolean;
+            blockers: string[];
         };
         EvidenceCreate: {
             /** @enum {string} */
@@ -4239,6 +4271,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"];
+                };
+            };
+        };
+    };
+    evaluateCoverageGate: {
+        parameters: {
+            query: {
+                project_id: number;
+                module?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 门禁结果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverageGateResult"];
                 };
             };
         };

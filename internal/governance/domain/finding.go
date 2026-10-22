@@ -140,6 +140,8 @@ type FindingRepository interface {
 	List(ctx context.Context, teamID int64, f FindingFilter) ([]*Finding, error)
 	UpdateStatus(ctx context.Context, f *Finding, event *FindingEvent) error
 	Events(ctx context.Context, teamID, findingID int64) ([]FindingEvent, error)
+	// CountOpen returns unresolved P0/P1 findings for a project/module.
+	CountOpen(ctx context.Context, teamID, projectID int64, module string) (p0, p1 int, err error)
 }
 
 // Validate 校验缺陷必填字段与枚举。

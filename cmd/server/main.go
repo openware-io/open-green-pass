@@ -91,8 +91,11 @@ func main() {
 	// approval/whitelist store is configured; it can be injected here later.
 	caseStore := infra.NewCaseStore(db, gen)
 	caseSvc := application.NewCaseService(caseStore, gen)
-	findingSvc := application.NewFindingService(infra.NewFindingStore(db), gen)
-	coverageSvc := application.NewCoverageService(infra.NewCoverageStore(db, gen))
+	findingStore := infra.NewFindingStore(db)
+	coverageStore := infra.NewCoverageStore(db, gen)
+	findingSvc := application.NewFindingService(findingStore, gen)
+	coverageSvc := application.NewCoverageService(coverageStore)
+	coverageGateSvc := application.NewCoverageGateService(coverageStore, findingStore)
 	var dshClient aidomain.DSHJobClient
 	if gatewayURL := os.Getenv("GP_DSH_GATEWAY_URL"); gatewayURL != "" {
 		dshClient = aiinfra.NewDSHGatewayClient(gatewayURL, os.Getenv("GP_DSH_INTERNAL_TOKEN"))
@@ -265,6 +268,7 @@ func main() {
 		func(mux *http.ServeMux) { gapi.RegisterCasesAuthorized(mux, caseSvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { gapi.RegisterFindings(mux, findingSvc) },
 		func(mux *http.ServeMux) { gapi.RegisterCoverage(mux, coverageSvc) },
+		func(mux *http.ServeMux) { gapi.RegisterCoverageGate(mux, coverageGateSvc) },
 		func(mux *http.ServeMux) { gapi.RegisterCaseImport(mux, caseImportSvc) },
 		func(mux *http.ServeMux) { eapi.RegisterAuthorized(mux, envSvc, runSvc, policySvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { eapi.RegisterFixtures(mux, fixtureSvc, runSvc, iamAuthorizer) },

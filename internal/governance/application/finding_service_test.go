@@ -46,6 +46,9 @@ func (r *fakeFindingRepo) UpdateStatus(_ context.Context, f *domain.Finding, e *
 func (r *fakeFindingRepo) Events(context.Context, int64, int64) ([]domain.FindingEvent, error) {
 	return nil, nil
 }
+func (r *fakeFindingRepo) CountOpen(context.Context, int64, int64, string) (int, int, error) {
+	return 0, 0, nil
+}
 
 func findingInput() CreateFindingInput {
 	return CreateFindingInput{

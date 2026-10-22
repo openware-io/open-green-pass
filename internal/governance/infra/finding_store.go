@@ -179,6 +179,22 @@ func (s *FindingStore) UpdateStatus(ctx context.Context, f *domain.Finding, even
 	})
 }
 
+// CountOpen 统计未关闭 P0/P1 缺陷。
+func (s *FindingStore) CountOpen(ctx context.Context, teamID, projectID int64, module string) (int, int, error) {
+	var p0, p1 int
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			SELECT
+				COUNT(*) FILTER (WHERE severity='P0'),
+				COUNT(*) FILTER (WHERE severity='P1')
+			FROM def_finding
+			WHERE team_id=$1 AND project_id=$2
+			  AND ($3='' OR module=$3)
+			  AND status NOT IN ('closed','false_positive')`, teamID, projectID, module).Scan(&p0, &p1)
+	})
+	return p0, p1, err
+}
+
 // Events 查询流转记录（升序）。
 func (s *FindingStore) Events(ctx context.Context, teamID, findingID int64) ([]domain.FindingEvent, error) {
 	var out []domain.FindingEvent
