@@ -3,6 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
+- **生成页项目级模型选择（0.1.87-SNAPSHOT）**：生成页模型横幅增加“生成模型”下拉，列出团队已审批模型；切换即更新项目 `model-binding`，支持在 DeepSeek V4 Pro / Flash 间切换。
 - **供应商级模型选择（0.1.86-SNAPSHOT）**：模型连接按供应商聚合，一个供应商配置一次 Token；新增模型通过“启用”复用既有 Secret，无需重复输入 Token；修正 DeepSeek 预置模型为 `deepseek-flash`；后端 `POST /model-connections` 支持空 Token 读取既有 Secret 探测。
 - **AI 模型连接（2026-10-22）**：接入 DeepSeek `deepseek-v4-pro`（API / OpenAI-compatible，Secret 托管），im-saas 项目绑定切换为 DeepSeek；下线原 GPT `gpt-5.6-terra` 连接并删除其 Secret。实测生成批次 `2902560158584832` 完成 5 条候选（均通过质量校验，进入 review）。
 - **生成用例代码引用确认（0.1.85-SNAPSHOT）**：确认面板逐服务显示并可直接修改“本次代码引用”（分支/Tag + SHA）；打开确认前为所有已选服务加载引用；创建时不再静默回退默认分支，缺少引用明确阻断；区分“当前查看服务的代码来源”和批量确认范围。
