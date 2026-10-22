@@ -99,13 +99,13 @@ steps:
 
 | 天 | 工作 |
 |---|---|
-| D1 | 迁移 34-38（仅 DDL，含现有表加列，无回填）、RLS、OpenAPI `/findings`/`/coverage`、生成类型 |
-| D2 | Coverage plan + user 模块 Cell 入库 |
+| D1 | 迁移 34-38（仅 DDL，含现有表加列，无回填）+ Finding API/OpenAPI |
+| D2 | 缺陷中心接真数据 + Coverage plan + user 模块 Cell 入库 |
 | D3 | gateway job + DSH 多步 session + 用例入库 |
-| D4 | fixture + 执行 + 证据采集 |
-| D5 | 失败归因 + finding + 截图 + 建议 |
-| D6 | 门禁 + 报告 + 演示脚本 |
-| D7 | 修复问题/补测试/发布记录 |
+| D4 | fixture + 执行 + 证据采集（开发实现） |
+| D5 | 失败归因 + finding + 截图 + 建议（开发实现） |
+| D6 | 门禁 + 报告 + 演示脚本（开发实现） |
+| D7 | 集中验证：契约/RLS/E2E/清理/发布记录（可后置） |
 
 ## 8. 演示脚本（15 分钟）
 

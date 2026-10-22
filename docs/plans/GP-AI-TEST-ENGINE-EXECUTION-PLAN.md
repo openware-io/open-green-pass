@@ -563,22 +563,24 @@ DSH Analyst 输出：
 
 ## 12. 交付计划
 
-### M0（1 周，Greenfield）：只读护栏 + 缺陷模型 + 工程门禁
+### M0-Dev（3 天）：finding 最小闭环（开发优先）
 
-- SCM scope 校验和只读标识；
-- 迁移 `000034_defect_finding`（`def_finding`/`def_event`/`def_suggestion`）、`000035_coverage_cell`（`cov_cell`/`cov_waiver`）、`000036_evidence`（`evd_evidence`）、`000037_execution_fixture`（`run_fixture`/`env_lease`）、`000038_case_execution_columns`（`cas_case`/`run_case_result` 加列）；**仅 DDL，无数据回填/双写/兼容视图**；
-- RLS 策略、`gp_trusted_writer` 对 `evd_evidence` 的授权、`aud_event` 事件；
-- 执行结果增加 `failure_class`/`finding_id`；
-- `api/openapi.yaml` 补 `/findings`、`/coverage`，生成类型 + 契约测试；
-- 缺陷中心列表/详情/流转 UI 接真实 API；
-- 截图证据优先：预签名上传/预览/大图/哈希；视频列为建议项；
-- 新增 `cmd/dsh-gateway` 的目录/镜像/部署脚本/CI 骨架（feature flag 关闭）；
-- 迁移 `migcheck` + testcontainers；domain/application/infra/api 测试；
-- 验收：失败用例可创建缺陷，P0/P1 有截图，源码写权限为 0，`make check` 通过。
+只做可运行闭环，验证后置：
 
-### M1（2 周）：覆盖账本 + SDK 网关 + 单模块生成
+- D1：迁移 `000034`–`000038`（全部 schema + RLS）；Finding 状态机/severity/dedupe/repo；Store。
+- D2：Finding API（列表/详情/创建/流转）；`api/openapi.yaml` `/findings`；生成类型。
+- D3：缺陷中心列表/详情接真实 API；6 条 seed；smoke。
+- 最低限度 in-loop：编译、状态机单测、迁移 apply、API smoke。
+- 不做：coverage/evidence/gateway 代码、全量契约/RLS/e2e、发布。
 
-- `ctr_endpoint`/`ctr_parameter`/`ctr_error`、`cov_cell`/`cov_waiver`、`gen_job`/`gen_job_event`；
+### M0-V（0.5-1 天，集中验证时补）
+
+- RLS 跨租户负向、OpenAPI 契约、空库迁移、E2E、发布记录。
+- 与 M2/M3 验证合并，不阻塞开发。
+
+### M1（1.5-2 周）：覆盖账本 + SDK 网关 + 单模块生成
+
+- `ctr_endpoint`/`ctr_parameter`/`ctr_error`、`cov_cell`/`cov_waiver`、`gen_job`/`gen_job_event`（表已在 M0 建好，本阶段写代码）；
 - OpenAPI/路由盘点；规则枚举 Cell；
 - `gp-dsh-gateway` Deployment + SDK worker pool + 有界队列；
 - 网关 sandbox：专用 SA、no token automount、非 root、seccomp、drop caps、只读根、readiness/liveness；
@@ -588,7 +590,7 @@ DSH Analyst 输出：
 - 静态校验 + 入库；
 - 验收：该模块 100% 必需 Cell 有生成用例；无源码写操作；同一 session 可连续多轮；取消/超时后进程/workspace 清理。
 
-### M2（2 周）：执行闭环 + 失败归因 + 建议
+### M2（1.5-2 周）：执行闭环 + 失败归因 + 建议
 
 - 执行沙箱、fixtures、证据采集；
 - `POST /runs/{id}/triage`；
@@ -596,7 +598,7 @@ DSH Analyst 输出：
 - 缺陷中心关联运行/用例/Cell；
 - 验收：P0/P1 失败可归因并生成建议；误报可标记。
 
-### M3（2 周）：并行模块 + 覆盖门禁 + 报告
+### M3（1.5-2 周）：并行模块 + 覆盖门禁 + 报告
 
 - gateway worker pool 按 service/module 并行；
 - 覆盖账本门禁：未覆盖 Cell = 0（含 waiver）；
@@ -604,6 +606,22 @@ DSH Analyst 输出：
 - 报告：覆盖/缺陷/建议/回归；
 - 发布记录包含 gateway commit/image digest、迁移版本、readiness、IM 不变更核对；
 - 验收：`open-chat-admin` 18 模块全部纳入；端到端可复跑。
+
+### V（1 周，开发完成后）：集中验证
+
+开发阶段只保留编译/单测/smoke；以下验证统一后置：
+
+- OpenAPI 契约 + 前端类型一致性；
+- RLS 跨租户读/写负向；
+- 空库 `migrate up` + down 回滚；
+- DSH gateway 取消/超时/崩溃/恢复；
+- 执行 + fixture 清理 + 证据完整性；
+- 浏览器 E2E、截图大图、finding 流转；
+- egress staging default-deny + allowlist；
+- 性能/成本/配额 baseline；
+- 发布记录、回滚演练、IM 不变更核对。
+
+门禁：`make check`、契约、RLS、E2E、安全清单全部通过后才进入生产。
 
 ### M4（后续）：增量生成 + 多租户隔离
 
