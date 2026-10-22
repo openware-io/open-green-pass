@@ -41,6 +41,8 @@ export type CoveragePlanInput = components['schemas']['CoveragePlanRequest'];
 export type GenerationJob = components['schemas']['GenerationJob'];
 export type GenerationJobCreateInput = components['schemas']['GenerationJobCreate'];
 export type TriageRequest = components['schemas']['TriageRequest'];
+export type RunFixture = components['schemas']['RunFixture'];
+export type EnvLease = components['schemas']['EnvLease'];
 
 export type CreateTargetInput = paths['/targets']['post']['requestBody']['content']['application/json'];
 export type CreateCaseInput = paths['/cases']['post']['requestBody']['content']['application/json'];
@@ -276,6 +278,17 @@ export class GreenPassClient {
   triageRunResult(runId: number, input: TriageRequest): JsonResponse<CaseResult> {
     return this.request(`/runs/${runId}/triage`, { method: 'POST', body: JSON.stringify(input) });
   }
+  prepareFixture(runId: number, input: { namespace?: string; manifest?: Record<string, unknown>; ttl_seconds?: number }): JsonResponse<RunFixture> {
+    return this.request(`/runs/${runId}/fixtures:prepare`, { method: 'POST', body: JSON.stringify(input) });
+  }
+  listFixtures(runId: number): JsonResponse<RunFixture[]> { return this.request(`/runs/${runId}/fixtures`); }
+  cleanupFixtures(runId: number, namespace = ''): JsonResponse<{ status: string }> {
+    return this.request(`/runs/${runId}/fixtures:cleanup`, { method: 'POST', body: JSON.stringify({ namespace }) });
+  }
+  leaseEnvironment(envId: number, input: { run_id: number; owner?: string; ttl_seconds?: number }): JsonResponse<EnvLease> {
+    return this.request(`/envs/${envId}/lease`, { method: 'POST', body: JSON.stringify(input) });
+  }
+  releaseEnvironment(envId: number): JsonResponse<{ status: string }> { return this.request(`/envs/${envId}/lease`, { method: 'DELETE' }); }
   upsertGateRule(input: paths['/gates/rules']['put']['requestBody']['content']['application/json']): JsonResponse<GateRule> {
     return this.request('/gates/rules', { method: 'PUT', body: JSON.stringify(input) });
   }

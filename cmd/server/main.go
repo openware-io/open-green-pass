@@ -130,6 +130,7 @@ func main() {
 		log.Info("runner", "type", "mock")
 	}
 	runSvc := eapp.NewRunService(runStore, envSvc, caseReader, policySvc, runner, gen)
+	fixtureSvc := eapp.NewFixtureService(einfra.NewFixtureStore(db), gen)
 	if os.Getenv("GP_EXECUTION_POOL_ENABLED") == "true" {
 		registry, poolErr := pgpool.New(pool)
 		if poolErr != nil {
@@ -265,6 +266,7 @@ func main() {
 		func(mux *http.ServeMux) { gapi.RegisterCoverage(mux, coverageSvc) },
 		func(mux *http.ServeMux) { gapi.RegisterCaseImport(mux, caseImportSvc) },
 		func(mux *http.ServeMux) { eapi.RegisterAuthorized(mux, envSvc, runSvc, policySvc, iamAuthorizer) },
+		func(mux *http.ServeMux) { eapi.RegisterFixtures(mux, fixtureSvc, runSvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc, costSvc, reportSvc) },
 		func(mux *http.ServeMux) { assistantapi.Register(mux, assistantSvc) },
 	)

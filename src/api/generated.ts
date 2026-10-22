@@ -1497,6 +1497,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{id}/fixtures:prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 准备本次 run 的 fixture 命名空间 */
+        post: operations["prepareRunFixture"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs/{id}/fixtures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询 run fixtures */
+        get: operations["listRunFixtures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs/{id}/fixtures:cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 清理 run fixtures */
+        post: operations["cleanupRunFixtures"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/envs/{id}/lease": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 获取环境租约 */
+        post: operations["leaseEnvironment"];
+        /** 释放环境租约 */
+        delete: operations["releaseEnvironment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{id}/triage": {
         parameters: {
             query?: never;
@@ -2813,6 +2882,50 @@ export interface components {
             expected?: string;
             actual?: string;
         };
+        FixturePrepare: {
+            namespace?: string;
+            manifest?: {
+                [key: string]: unknown;
+            };
+            /** Format: int64 */
+            ttl_seconds?: number;
+        };
+        RunFixture: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            team_id: number;
+            /** Format: int64 */
+            run_id: number;
+            namespace: string;
+            manifest?: {
+                [key: string]: unknown;
+            };
+            state: string;
+            /** Format: date-time */
+            expires_at?: string | null;
+            cleanup_state: string;
+        };
+        EnvLeaseCreate: {
+            /** Format: int64 */
+            run_id: number;
+            owner?: string;
+            /** Format: int64 */
+            ttl_seconds?: number;
+        };
+        EnvLease: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            team_id: number;
+            /** Format: int64 */
+            env_id: number;
+            /** Format: int64 */
+            run_id: number;
+            owner: string;
+            /** Format: date-time */
+            lease_until: string;
+        };
         CaseResult: {
             /** Format: int64 */
             id: number;
@@ -3806,6 +3919,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseResult"][];
+                };
+            };
+        };
+    };
+    prepareRunFixture: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FixturePrepare"];
+            };
+        };
+        responses: {
+            /** @description fixture */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunFixture"];
+                };
+            };
+        };
+    };
+    listRunFixtures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description fixtures */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunFixture"][];
+                };
+            };
+        };
+    };
+    cleanupRunFixtures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    namespace?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description cleaned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+        };
+    };
+    leaseEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnvLeaseCreate"];
+            };
+        };
+        responses: {
+            /** @description lease */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvLease"];
+                };
+            };
+        };
+    };
+    releaseEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description released */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponse"];
                 };
             };
         };

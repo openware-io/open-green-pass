@@ -576,6 +576,47 @@ paths:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
         '200': { description: 用例结果列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CaseResult' } } } } }
+  /runs/{id}/fixtures:prepare:
+    post:
+      summary: 准备本次 run 的 fixture 命名空间
+      operationId: prepareRunFixture
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/FixturePrepare' } } }
+      responses:
+        '201': { description: fixture, content: { application/json: { schema: { $ref: '#/components/schemas/RunFixture' } } } }
+  /runs/{id}/fixtures:
+    get:
+      summary: 查询 run fixtures
+      operationId: listRunFixtures
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+      responses:
+        '200': { description: fixtures, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RunFixture' } } } } }
+  /runs/{id}/fixtures:cleanup:
+    post:
+      summary: 清理 run fixtures
+      operationId: cleanupRunFixtures
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+      requestBody: { required: false, content: { application/json: { schema: { type: object, properties: { namespace: { type: string } } } } } }
+      responses:
+        '200': { description: cleaned, content: { application/json: { schema: { $ref: '#/components/schemas/StatusResponse' } } } }
+  /envs/{id}/lease:
+    post:
+      summary: 获取环境租约
+      operationId: leaseEnvironment
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/EnvLeaseCreate' } } }
+      responses:
+        '201': { description: lease, content: { application/json: { schema: { $ref: '#/components/schemas/EnvLease' } } } }
+    delete:
+      summary: 释放环境租约
+      operationId: releaseEnvironment
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+      responses:
+        '200': { description: released, content: { application/json: { schema: { $ref: '#/components/schemas/StatusResponse' } } } }
   /runs/{id}/triage:
     post:
       summary: 执行失败归因并创建缺陷
@@ -1623,6 +1664,41 @@ components:
         source_line: { type: integer }
         expected: { type: string }
         actual: { type: string }
+    FixturePrepare:
+      type: object
+      properties:
+        namespace: { type: string }
+        manifest: { type: object, additionalProperties: true }
+        ttl_seconds: { type: integer, format: int64 }
+    RunFixture:
+      type: object
+      required: [ id, team_id, run_id, namespace, state, cleanup_state ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        run_id: { type: integer, format: int64 }
+        namespace: { type: string }
+        manifest: { type: object, additionalProperties: true }
+        state: { type: string }
+        expires_at: { type: string, format: date-time, nullable: true }
+        cleanup_state: { type: string }
+    EnvLeaseCreate:
+      type: object
+      required: [ run_id ]
+      properties:
+        run_id: { type: integer, format: int64 }
+        owner: { type: string }
+        ttl_seconds: { type: integer, format: int64 }
+    EnvLease:
+      type: object
+      required: [ id, team_id, env_id, run_id, owner, lease_until ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        env_id: { type: integer, format: int64 }
+        run_id: { type: integer, format: int64 }
+        owner: { type: string }
+        lease_until: { type: string, format: date-time }
     CaseResult:
       type: object
       required: [ id, team_id, run_id, case_id, case_version, status, result_text, attempt_seq ]
