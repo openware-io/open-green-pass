@@ -138,6 +138,7 @@ run_case_result
 ```text
 finding
   id, team_id, project_id, service_id, endpoint_id,
+  repository_id, repo_url, branch, commit_sha,
   title, description, severity(P0/P1/P2/P3), category,
   status(open/triaged/confirmed/in_progress/pending_regression/closed/false_positive),
   expected, actual, root_cause, impact,
@@ -146,8 +147,15 @@ finding
   created_by, created_at, updated_at
 
 finding_evidence
-  id, finding_id, kind(request/response/log/trace/screenshot),
-  uri, sha256, redacted, created_at
+  id, finding_id, kind(request/response/log/trace/screenshot/video),
+  storage_uri, mime_type, width, height, duration_ms,
+  sha256, redacted, created_at
+
+finding_evidence_policy
+  - 截图：UI/实机用例必需（P0/P1 必须 100%）
+  - 视频：关键流程/复杂交互建议提供
+  - 服务端保存 MIME、尺寸、时长、SHA-256；证据只读不可篡改
+  - 证据与 finding/run/case/commit 绑定，支持大图/视频播放与下载审计
 
 finding_suggestion
   id, finding_id, summary, approach, affected_files jsonb,
@@ -188,6 +196,9 @@ PATCH /findings/{id}
 POST /findings/{id}/transition
 POST /findings/{id}/suggestions
 GET  /findings/{id}/suggestions
+POST /findings/{id}/evidence:presign   # 获取截图/视频上传地址
+POST /findings/{id}/evidence           # 登记证据元数据（MIME/尺寸/时长/SHA-256）
+GET  /findings/{id}/evidence/{eid}     # 受控读取/播放，审计
 POST /runs/{id}/triage
 POST /runs/{id}/findings
 ```
@@ -489,10 +500,11 @@ DSH Analyst 输出：
 ### M0（1 周）：只读护栏 + 缺陷模型
 
 - SCM scope 校验和只读标识；
-- `finding`/`finding_event`/`finding_evidence` 表；
+- `finding`/`finding_event`/`finding_evidence` 表（含 repository_id/repo_url/branch/commit_sha）；
 - 执行结果增加 `failure_class`；
 - 缺陷中心列表/详情/流转 UI 骨架；
-- 验收：失败用例可创建缺陷，源码写权限为 0。
+- 截图证据优先：上传/预览/大图/哈希；视频列为建议项；
+- 验收：失败用例可创建缺陷，P0/P1 有截图，源码写权限为 0。
 
 ### M1（2 周）：覆盖账本 + SDK 网关 + 单模块生成
 
@@ -538,7 +550,8 @@ DSH Analyst 输出：
 | 必需 Cell 设计覆盖 | 100%（含 waiver） |
 | 用例执行率 | ≥ 90% |
 | 失败归因率 | 100% 失败有分类 |
-| 缺陷证据完整率 | 100% P0/P1 有请求/响应/日志/版本 |
+| 缺陷证据完整率 | 100% P0/P1 有请求/响应/日志/版本/截图 |
+| 截图证据 | UI/实机用例 100% 有截图；关键流程建议视频 |
 | 源码写操作 | 0 |
 | P0/P1 缺陷建议 | 100% 有根因/建议/回归建议 |
 
