@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import { Layout } from '@/components/Layout';
@@ -24,10 +25,17 @@ import CicdTriggerPage from '@/pages/CicdTriggerPage/CicdTriggerPage';
 import CicdConnectorPage from '@/pages/CicdConnectorPage/CicdConnectorPage';
 import SettingsPage from '@/pages/SettingsPage/SettingsPage';
 import AssistantPage from '@/pages/AssistantPage/AssistantPage';
-import { useCurrentUser, useLoginReady } from '@/context/login';
+import { loginStore, useCurrentUser, useLoginReady } from '@/context/login';
 
 function ProtectedLayout() {
   const user=useCurrentUser(); const ready=useLoginReady();
+  useEffect(() => {
+    if (!user) return;
+    const validate = () => { if (document.visibilityState === 'visible') void loginStore.restore(); };
+    const timer = window.setInterval(validate, 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', validate);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', validate); };
+  }, [user]);
   if(!ready) return <div className="min-h-screen grid place-items-center text-sm text-slate-500">正在验证登录状态…</div>;
   return user ? <Layout /> : <Navigate to="/login" replace />;
 }

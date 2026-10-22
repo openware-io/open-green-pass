@@ -15,7 +15,7 @@ export const loginStore={
   get:()=>current,
   isReady:()=>ready,
   subscribe:(l:()=>void)=>{listeners.add(l);return()=>{listeners.delete(l);};},
-  async restore(){ try { const r=await fetch(`${API_BASE}/auth/me`,{credentials:'same-origin'}); if(r.ok) current=account(((await r.json()) as {user:ApiUser}).user); } finally {ready=true;emit();} },
+  async restore(){ try { const r=await fetch(`${API_BASE}/auth/me`,{credentials:'same-origin'}); if(r.ok) current=account(((await r.json()) as {user:ApiUser}).user); else if(r.status===401) current=null; } catch { /* keep the current view on transient network errors */ } finally {ready=true;emit();} },
   async login(username:string,password:string){ const r=await fetch(`${API_BASE}/auth/login`,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})}); if(!r.ok) throw new Error('账号或密码错误'); const body=await r.json() as {user:ApiUser}; current=account(body.user);ready=true;emit();return current; },
   async logout(){ await fetch(`${API_BASE}/auth/logout`,{method:'POST',credentials:'same-origin'});current=null;ready=true;emit(); },
 };

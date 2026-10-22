@@ -5,7 +5,8 @@ import { PageHeader, GhostButton, PrimaryButton, Card, ListFilter } from '@/comp
 import { toast } from 'sonner';
 import { Sparkles, Plug, ShieldCheck, UserCheck, Database, GitBranch, BookOpen, CloudDownload, ChevronLeft, ChevronRight, Check, Crosshair, Layers } from 'lucide-react';
 import { configuredGreenPassClient } from '@/api/runtime';
-import type { GenerationBatch, RepositoryRef } from '@/api/client';
+import { GreenPassApiError, type GenerationBatch, type RepositoryRef } from '@/api/client';
+import { loginStore } from '@/context/login';
 import { useObjectCatalog } from '@/context/objectCatalog';
 type GenerationSeed = { id: number; batch_id: number; case_id?: number | null; source_locator: string; normalized_spec: Record<string, unknown>; quality_state: string; approval_state: string; dedupe_hash?: string };
 
@@ -294,8 +295,15 @@ function GenerationPageContent() {
         return fallback ? { ...current, [realRepo.id]: { type: fallback.ref_type, name: fallback.name } } : current;
       });
       toast.success('代码引用已刷新', { description: `已同步 ${refs.filter((ref) => ref.ref_type === 'branch').length} 个分支和 ${refs.filter((ref) => ref.ref_type === 'tag').length} 个 Tag` });
-    } catch (error) { setRealError(error instanceof Error ? error.message : '刷新代码引用失败'); }
-    finally { setRefsLoading(false); }
+    } catch (error) {
+      if (error instanceof GreenPassApiError && (error.status === 401 || error.status === 403)) {
+        await loginStore.restore();
+        if (!loginStore.get()) { navigate('/login', { replace: true }); return; }
+        setRealError(error.status === 403 ? '当前账号无权限刷新分支/Tag；请使用 owner/admin 登录' : '登录已过期，请重新登录');
+        return;
+      }
+      setRealError(error instanceof Error ? error.message : '刷新代码引用失败');
+    } finally { setRefsLoading(false); }
   };
   useEffect(() => { if (!realClient) return; void realClient.scmConnections().then((result) => setSCMConnections(result.connections)).catch(() => setSCMConnections([])); }, [realClient]);
   useEffect(() => {
