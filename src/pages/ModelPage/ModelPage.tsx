@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Cpu, KeyRound, Pencil, ShieldCheck, X } from "lucide-react";
+import { Check, Cpu, KeyRound, Pencil, ShieldCheck, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared";
 import { configuredGreenPassClient } from "@/api/runtime";
@@ -14,6 +14,10 @@ export default function ModelPage() {
     [providers, setProviders] = useState<Provider[]>([]),
     [models, setModels] = useState<Model[]>([]),
     [connections, setConnections] = useState<Connection[]>([]),
+    [projects, setProjects] = useState<Array<{ id: number; name: string }>>([]),
+    [projectID, setProjectID] = useState<number | null>(null),
+    [binding, setBinding] = useState<{ provider: string; model: string } | null>(null),
+    [bindingBusy, setBindingBusy] = useState(false),
     [open, setOpen] = useState(false),
     [selectedConnection, setSelectedConnection] = useState<Connection | null>(null),
     [provider, setProvider] = useState("openai"),
@@ -30,20 +34,45 @@ export default function ModelPage() {
 
   const load = useCallback(async () => {
     if (!c) return;
-    const [catalog, detail] = await Promise.all([c.modelCatalog(), c.modelConnections()]);
+    const [catalog, detail, targets] = await Promise.all([c.modelCatalog(), c.modelConnections(), c.listTargets()]);
     setProviders(catalog.providers);
     setModels(catalog.models);
     setConnections(detail.connections);
+    const projectTargets = targets
+      .filter((target) => target.type === "project" || target.kind === "project")
+      .map((target) => ({ id: target.id, name: target.name }));
+    setProjects(projectTargets);
+    setProjectID((current) => current ?? projectTargets[0]?.id ?? null);
   }, [c]);
 
   useEffect(() => {
-    if (!c) return;
-    void Promise.all([c.modelCatalog(), c.modelConnections()]).then(([catalog, detail]) => {
-      setProviders(catalog.providers);
-      setModels(catalog.models);
-      setConnections(detail.connections);
-    }).catch(() => setConnections([]));
-  }, [c]);
+    queueMicrotask(() => { void load().catch(() => setConnections([])); });
+  }, [load]);
+
+  useEffect(() => {
+    if (!c || !projectID) { queueMicrotask(() => setBinding(null)); return; }
+    let cancelled = false;
+    void c.getModelBinding(projectID).then((value) => {
+      if (!cancelled) setBinding(value ? { provider: value.provider, model: value.model } : null);
+    }).catch(() => { if (!cancelled) setBinding(null); });
+    return () => { cancelled = true; };
+  }, [c, projectID]);
+
+  const changeProjectModel = async (value: string) => {
+    if (!c || !projectID) return;
+    const [providerKey, modelKey] = value.split("::");
+    if (!providerKey || !modelKey) return;
+    setBindingBusy(true);
+    try {
+      await c.setModelBinding(projectID, { provider: providerKey, model: modelKey });
+      setBinding({ provider: providerKey, model: modelKey });
+      toast.success("项目默认模型已更新", { description: `${providerKey} / ${modelKey}` });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "切换项目模型失败");
+    } finally {
+      setBindingBusy(false);
+    }
+  };
 
   const apiProviders = [...new Set(providers.filter((item) => item.Protocol === "api").map((item) => item.Provider))];
   const providerLabel = (value: string) => value === "cc-proxy" ? "CC 代理" : (providers.find((item) => item.Provider === value)?.Name ?? value);
@@ -88,6 +117,7 @@ export default function ModelPage() {
     protocolArg = protocol,
     tokenArg = token,
     urlArg = url,
+    notify = true,
   ) => {
     if (!c) return;
     setDiscovering(true);
@@ -102,10 +132,13 @@ export default function ModelPage() {
       setDiscovered(result.models);
       setKeys((current) => current.filter((key) => result.models.some((model) => model.id === key)));
       if (!result.models.length) setDiscoverError(protocolArg === "cc" ? "CC 代理不提供模型列表，请直接填写模型名。" : "供应商返回的模型列表为空，请检查 Base URL 与 Token。");
+      else if (notify) toast.success(`已获取 ${result.models.length} 个官方模型`, { description: result.models.map((model) => model.id).join(" · ") });
     } catch (e) {
       const message = e instanceof Error ? e.message : "获取模型列表失败";
-      setDiscoverError(message === "provider_connection_failed" ? "无法读取供应商模型列表，请检查 Base URL、Token 与网络。" : message === "token_required" ? "请先填写 Token。" : message);
+      const friendly = message === "provider_connection_failed" ? "无法读取供应商模型列表，请检查 Base URL、Token 与网络。" : message === "token_required" ? "请先填写 Token。" : message;
+      setDiscoverError(friendly);
       setDiscovered([]);
+      if (notify) toast.error(friendly);
     } finally {
       setDiscovering(false);
     }
@@ -140,7 +173,7 @@ export default function ModelPage() {
     setToken("");
     setSelectedConnection(null);
     setOpen(true);
-    if (connection.protocol === "api") void discoverModels(connection.provider, connection.protocol, "", connection.base_url);
+    if (connection.protocol === "api") void discoverModels(connection.provider, connection.protocol, "", connection.base_url, false);
   };
 
   const openProviderForm = (item: Provider) => {
@@ -215,6 +248,32 @@ export default function ModelPage() {
           配置供应商连接
         </button>
       </PageHeader>
+
+      {projects.length > 0 && <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border bg-white px-5 py-3">
+        <span className="text-xs font-semibold text-slate-700">项目默认模型</span>
+        <select
+          aria-label="项目"
+          value={projectID ?? ""}
+          onChange={(e) => setProjectID(Number(e.target.value) || null)}
+          className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700"
+        >
+          {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+        </select>
+        <span className="text-slate-300">/</span>
+        <select
+          aria-label="当前使用模型"
+          value={binding ? `${binding.provider}::${binding.model}` : ""}
+          onChange={(e) => void changeProjectModel(e.target.value)}
+          disabled={bindingBusy}
+          className="min-w-[240px] rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 disabled:opacity-50"
+        >
+          <option value="" disabled>{binding ? "选择模型" : "未绑定"}</option>
+          {binding && !models.some((model) => model.provider === binding.provider && model.model_key === binding.model) && <option value={`${binding.provider}::${binding.model}`}>{binding.provider} / {binding.model}（当前）</option>}
+          {models.filter((model) => model.status === "approved").map((model) => <option key={model.id} value={`${model.provider}::${model.model_key}`}>{model.provider} / {model.model_key}</option>)}
+        </select>
+        {bindingBusy && <span className="text-[11px] text-slate-400">保存中…</span>}
+        <span className="ml-auto text-[11px] text-slate-400">生成页也可切换</span>
+      </div>}
 
       <section className="overflow-hidden rounded-xl border bg-white">
         <div className="flex items-center justify-between border-b px-5 py-4">
@@ -378,19 +437,22 @@ export default function ModelPage() {
                 {modelOptions.length ? <div className="grid grid-cols-2 gap-2">
                   {modelOptions.map((model) => {
                     const configured = Boolean(connectionFor(provider, model.id));
-                    return <label className={`rounded-lg border p-3 ${configured ? "border-emerald-200 bg-emerald-50/40" : ""}`} key={model.id}>
-                      <input
-                        type="checkbox"
-                        className="mr-2 accent-emerald-600"
-                        checked={keys.includes(model.id)}
-                        disabled={Boolean(editingGroup && configured)}
-                        onChange={(e) => setKeys((current) => e.target.checked ? [...current, model.id] : current.filter((key) => key !== model.id))}
-                      />
-                      <span className="font-mono text-xs">{model.id}</span>
-                      {configured && <span className="ml-1 text-[10px] text-emerald-700">已启用</span>}
-                    </label>;
+                    const selected = configured || keys.includes(model.id);
+                    return <button
+                      key={model.id}
+                      type="button"
+                      role="checkbox"
+                      aria-checked={selected}
+                      disabled={configured}
+                      onClick={() => setKeys((current) => selected ? current.filter((key) => key !== model.id) : [...current, model.id])}
+                      className={`flex items-center justify-between gap-2 rounded-lg border p-3 text-left transition ${selected ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-white hover:border-emerald-200"} disabled:cursor-default`}
+                    >
+                      <span className="font-mono text-xs text-slate-700">{model.id}</span>
+                      {configured ? <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-700">已启用</span> : selected ? <Check className="h-4 w-4 text-emerald-600" /> : <span className="h-4 w-4 rounded border border-slate-300" />}
+                    </button>;
                   })}
                 </div> : <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-[11px] text-slate-500">{discovering ? "正在读取供应商模型列表…" : "填写 Token 后点击“获取官方模型列表”，再从返回结果中选择模型。"}</div>}
+                {discovered.length > 0 && <div className="mt-2 text-[10px] text-emerald-700">已从官方 /models 获取 {discovered.length} 个模型</div>}
               </div>}
             </div>
             <div className="flex justify-end gap-2 border-t p-4">
