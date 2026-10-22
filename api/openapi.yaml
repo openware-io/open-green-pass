@@ -360,12 +360,21 @@ paths:
         '200': { description: 已设置, content: { application/json: { schema: { $ref: '#/components/schemas/Target' } } } }
   /model-catalog:
     get:
-      summary: 查询可接入模型目录与团队已配置模型
+      summary: 查询供应商默认配置与团队已配置模型（模型 ID 来自供应商官方 /models）
       responses:
         '200': { description: 模型目录, content: { application/json: { schema: { $ref: '#/components/schemas/ModelCatalog' } } } }
+  /model-provider-models:
+    post:
+      summary: 读取供应商官方模型列表（不持久化）
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ModelProviderModelsInput' } } }
+      responses:
+        '200': { description: 官方模型列表, content: { application/json: { schema: { $ref: '#/components/schemas/ModelProviderModelsResponse' } } } }
+        '502': { description: 供应商连接失败 }
   /model-connections:
     post:
-      summary: 验证并保存团队模型连接
+      summary: 验证并保存团队模型连接（模型必须在供应商官方列表中）
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/ModelConnectionInput' } } }
@@ -995,16 +1004,15 @@ components:
         permission: { type: string, enum: [ full, edit, exec, view, none ] }
         concurrent_quota: { type: integer, format: int64, minimum: 0 }
         sandbox_quota: { type: integer, format: int64, minimum: 0 }
-    ModelPreset:
+    ModelProvider:
       type: object
-      required: [ Provider, Name, ModelKey, Protocol, BaseURL, Capabilities ]
+      description: 供应商默认配置；不包含任何内置模型版本
+      required: [ Provider, Name, Protocol, BaseURL ]
       properties:
         Provider: { type: string }
         Name: { type: string }
-        ModelKey: { type: string }
         Protocol: { type: string, enum: [ api, cc ] }
         BaseURL: { type: string }
-        Capabilities: { type: array, items: { type: string } }
     ConfiguredModel:
       type: object
       required: [ id, provider, model_key, status ]
@@ -1015,17 +1023,36 @@ components:
         status: { type: string, description: 服务启用状态 }
     ModelCatalog:
       type: object
-      required: [ presets, models ]
+      required: [ providers, models ]
       properties:
-        presets: { type: array, items: { $ref: '#/components/schemas/ModelPreset' } }
+        providers: { type: array, items: { $ref: '#/components/schemas/ModelProvider' } }
         models: { type: array, items: { $ref: '#/components/schemas/ConfiguredModel' } }
-    ModelConnectionInput:
+    ProviderModel:
       type: object
-      required: [ provider, protocol, token, model_keys ]
+      required: [ id ]
+      properties:
+        id: { type: string, description: 供应商官方模型 ID }
+        owned_by: { type: string }
+    ModelProviderModelsInput:
+      type: object
+      required: [ provider, protocol ]
       properties:
         provider: { type: string }
         protocol: { type: string, enum: [ api, cc ] }
-        token: { type: string, minLength: 1, writeOnly: true }
+        token: { type: string, writeOnly: true, description: 留空时复用该供应商已保存的 Secret }
+        base_url: { type: string, description: 留空时使用供应商默认地址 }
+    ModelProviderModelsResponse:
+      type: object
+      required: [ models ]
+      properties:
+        models: { type: array, items: { $ref: '#/components/schemas/ProviderModel' } }
+    ModelConnectionInput:
+      type: object
+      required: [ provider, protocol, model_keys ]
+      properties:
+        provider: { type: string }
+        protocol: { type: string, enum: [ api, cc ] }
+        token: { type: string, writeOnly: true, description: 编辑已有连接时可为空，复用已保存的 Secret }
         base_url: { type: string }
         model_keys: { type: array, minItems: 1, items: { type: string } }
     ReadinessResponse:

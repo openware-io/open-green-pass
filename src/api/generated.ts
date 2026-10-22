@@ -1168,7 +1168,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 查询可接入模型目录与团队已配置模型 */
+        /** 查询供应商默认配置与团队已配置模型（模型 ID 来自供应商官方 /models） */
         get: {
             parameters: {
                 query?: never;
@@ -1197,6 +1197,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/model-provider-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 读取供应商官方模型列表（不持久化） */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ModelProviderModelsInput"];
+                };
+            };
+            responses: {
+                /** @description 官方模型列表 */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ModelProviderModelsResponse"];
+                    };
+                };
+                /** @description 供应商连接失败 */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/model-connections": {
         parameters: {
             query?: never;
@@ -1206,7 +1253,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 验证并保存团队模型连接 */
+        /** 验证并保存团队模型连接（模型必须在供应商官方列表中） */
         post: {
             parameters: {
                 query?: never;
@@ -2023,14 +2070,13 @@ export interface components {
             /** Format: int64 */
             sandbox_quota: number;
         };
-        ModelPreset: {
+        /** @description 供应商默认配置；不包含任何内置模型版本 */
+        ModelProvider: {
             Provider: string;
             Name: string;
-            ModelKey: string;
             /** @enum {string} */
             Protocol: "api" | "cc";
             BaseURL: string;
-            Capabilities: string[];
         };
         ConfiguredModel: {
             /** Format: int64 */
@@ -2041,14 +2087,32 @@ export interface components {
             status: string;
         };
         ModelCatalog: {
-            presets: components["schemas"]["ModelPreset"][];
+            providers: components["schemas"]["ModelProvider"][];
             models: components["schemas"]["ConfiguredModel"][];
+        };
+        ProviderModel: {
+            /** @description 供应商官方模型 ID */
+            id: string;
+            owned_by?: string;
+        };
+        ModelProviderModelsInput: {
+            provider: string;
+            /** @enum {string} */
+            protocol: "api" | "cc";
+            /** @description 留空时复用该供应商已保存的 Secret */
+            token?: string;
+            /** @description 留空时使用供应商默认地址 */
+            base_url?: string;
+        };
+        ModelProviderModelsResponse: {
+            models: components["schemas"]["ProviderModel"][];
         };
         ModelConnectionInput: {
             provider: string;
             /** @enum {string} */
             protocol: "api" | "cc";
-            token: string;
+            /** @description 编辑已有连接时可为空，复用已保存的 Secret */
+            token?: string;
             base_url?: string;
             model_keys: string[];
         };

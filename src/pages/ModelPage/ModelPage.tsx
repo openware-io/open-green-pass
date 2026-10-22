@@ -3,20 +3,16 @@ import { Cpu, Eye, KeyRound, Pencil, ShieldCheck, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared";
 import { configuredGreenPassClient } from "@/api/runtime";
-type P = {
-  Provider: string;
-  Name: string;
-  ModelKey: string;
-  Protocol: string;
-  BaseURL: string;
-  Capabilities: string[];
-};
-type M = { id: number; provider: string; model_key: string; status: string };
+
+type Provider = { Provider: string; Name: string; Protocol: string; BaseURL: string };
+type Model = { id: number; provider: string; model_key: string; status: string };
 type Connection = { id: number; provider: string; model_key: string; protocol: "api" | "cc"; base_url: string; credential_status: string; configured_at?: string; token_configured: boolean };
+type DiscoveredModel = { id: string; owned_by?: string };
+
 export default function ModelPage() {
   const c = useMemo(() => configuredGreenPassClient(), []),
-    [ps, setPs] = useState<P[]>([]),
-    [ms, setMs] = useState<M[]>([]),
+    [providers, setProviders] = useState<Provider[]>([]),
+    [models, setModels] = useState<Model[]>([]),
     [connections, setConnections] = useState<Connection[]>([]),
     [open, setOpen] = useState(false),
     [selectedConnection, setSelectedConnection] = useState<Connection | null>(null),
@@ -26,33 +22,32 @@ export default function ModelPage() {
     [url, setURL] = useState(""),
     [keys, setKeys] = useState<string[]>([]),
     [customModel, setCustomModel] = useState(""),
+    [discovered, setDiscovered] = useState<DiscoveredModel[]>([]),
+    [discovering, setDiscovering] = useState(false),
+    [discoverError, setDiscoverError] = useState(""),
     [editingGroup, setEditingGroup] = useState<{ provider: string; protocol: string; baseURL: string } | null>(null),
-    [enablingModel, setEnablingModel] = useState(""),
     [busy, setBusy] = useState(false);
+
   const load = useCallback(async () => {
-    if (c) {
-      const [d, detail] = await Promise.all([c.modelCatalog(), c.modelConnections()]);
-      setPs(d.presets);
-      setMs(d.models);
-      setConnections(detail.connections);
-    }
+    if (!c) return;
+    const [catalog, detail] = await Promise.all([c.modelCatalog(), c.modelConnections()]);
+    setProviders(catalog.providers);
+    setModels(catalog.models);
+    setConnections(detail.connections);
   }, [c]);
+
   useEffect(() => {
     if (!c) return;
-    void Promise.all([c.modelCatalog(), c.modelConnections()]).then(([data, detail]) => {
-      setPs(data.presets);
-      setMs(data.models);
+    void Promise.all([c.modelCatalog(), c.modelConnections()]).then(([catalog, detail]) => {
+      setProviders(catalog.providers);
+      setModels(catalog.models);
       setConnections(detail.connections);
     }).catch(() => setConnections([]));
   }, [c]);
-  const apiProviders = [...new Set(ps.filter((p) => p.Protocol === "api").map((p) => p.Provider))],
-    providers = [...new Set([...ps.map((p) => p.Provider), ...ms.map((m) => m.provider)])],
-    available = ps.filter(
-      (p) => p.Provider === provider && p.Protocol === protocol,
-    );
-  const effectiveKeys = protocol === "cc" && customModel.trim() ? [customModel.trim()] : keys;
-  const providerLabel = (value: string) => value === "cc-proxy" ? "CC 代理" : value;
-  const connectionFor = (provider: string, modelKey: string) => connections.find((item) => item.provider === provider && item.model_key === modelKey);
+
+  const apiProviders = [...new Set(providers.filter((item) => item.Protocol === "api").map((item) => item.Provider))];
+  const providerLabel = (value: string) => value === "cc-proxy" ? "CC 代理" : (providers.find((item) => item.Provider === value)?.Name ?? value);
+  const connectionFor = (providerKey: string, modelKey: string) => connections.find((item) => item.provider === providerKey && item.model_key === modelKey);
   const connectionGroups = useMemo(() => {
     const groups = new Map<string, { provider: string; protocol: string; baseURL: string; models: Connection[] }>();
     for (const connection of connections) {
@@ -63,6 +58,12 @@ export default function ModelPage() {
     }
     return [...groups.values()];
   }, [connections]);
+  const modelOptions = useMemo(() => {
+    const options = [...discovered];
+    for (const key of keys) if (!options.some((item) => item.id === key)) options.push({ id: key });
+    return options;
+  }, [discovered, keys]);
+  const effectiveKeys = protocol === "cc" && customModel.trim() ? [customModel.trim()] : keys;
   const formatConfiguredAt = (value?: string) => value ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "—";
   const isValidBaseURL = (value: string) => {
     try {
@@ -72,14 +73,46 @@ export default function ModelPage() {
       return false;
     }
   };
+
+  const discoverModels = async (
+    providerArg = provider,
+    protocolArg = protocol,
+    tokenArg = token,
+    urlArg = url,
+  ) => {
+    if (!c) return;
+    setDiscovering(true);
+    setDiscoverError("");
+    try {
+      const result = await c.discoverProviderModels({
+        provider: protocolArg === "cc" ? "cc-proxy" : providerArg,
+        protocol: protocolArg,
+        token: tokenArg,
+        base_url: urlArg,
+      });
+      setDiscovered(result.models);
+      setKeys((current) => current.filter((key) => result.models.some((model) => model.id === key)));
+      if (!result.models.length) setDiscoverError(protocolArg === "cc" ? "CC 代理不提供模型列表，请直接填写模型名。" : "供应商返回的模型列表为空，请检查 Base URL 与 Token。");
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "获取模型列表失败";
+      setDiscoverError(message === "provider_connection_failed" ? "无法读取供应商模型列表，请检查 Base URL、Token 与网络。" : message === "token_required" ? "请先填写 Token。" : message);
+      setDiscovered([]);
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
   const openConnectionForm = (connection?: Connection) => {
     if (!connection) {
+      const first = providers.find((item) => item.Protocol === "api") ?? providers[0];
       setEditingGroup(null);
-      setProvider(apiProviders[0] ?? "openai");
+      setProvider(first?.Provider ?? "openai");
       setProtocol("api");
-      setURL("");
+      setURL(first?.BaseURL ?? "");
       setKeys([]);
       setCustomModel("");
+      setDiscovered([]);
+      setDiscoverError("");
       setToken("");
       setOpen(true);
       return;
@@ -93,50 +126,22 @@ export default function ModelPage() {
     setURL(connection.base_url);
     setKeys(connection.protocol === "api" ? groupKeys : []);
     setCustomModel(connection.protocol === "cc" ? connection.model_key : "");
+    setDiscovered([]);
+    setDiscoverError("");
     setToken("");
     setSelectedConnection(null);
     setOpen(true);
+    if (connection.protocol === "api") void discoverModels(connection.provider, connection.protocol, "", connection.base_url);
   };
-  const openNewForProvider = (preset: P) => {
-    setEditingGroup(null);
-    setProvider(preset.Provider);
-    setProtocol(preset.Protocol);
-    setURL(preset.BaseURL);
-    setKeys([preset.ModelKey]);
-    setCustomModel(preset.Protocol === "cc" ? preset.ModelKey : "");
-    setToken("");
-    setOpen(true);
-  };
-  const enableModel = async (preset: P) => {
-    if (!c) return;
-    const existing = connections.find((item) => item.provider === preset.Provider && item.protocol === preset.Protocol);
-    if (!existing) { openNewForProvider(preset); return; }
-    setEnablingModel(preset.ModelKey);
-    try {
-      await c.configureModels({
-        provider: preset.Provider,
-        protocol: preset.Protocol,
-        token: "",
-        base_url: existing.base_url,
-        model_keys: [preset.ModelKey],
-      });
-      toast.success(`${preset.Name} 已启用`, { description: "沿用该供应商已保存的 Token，无需重新输入。" });
-      await load();
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "启用失败";
-      toast.error(message === "token_required" ? "该供应商还没有保存 Token" : message);
-    } finally {
-      setEnablingModel("");
-    }
-  };
+
   const save = async () => {
     if (!c) return;
     if (!editingGroup && !token.trim()) {
       toast.error("请填写供应商 Token / API Key");
       return;
     }
-    if (!effectiveKeys.length) {
-      toast.error("请选择至少一个模型");
+    if (protocol === "api" && !effectiveKeys.length) {
+      toast.error("请先获取官方模型列表并选择至少一个模型");
       return;
     }
     if (protocol === "cc" && !customModel.trim()) {
@@ -166,7 +171,7 @@ export default function ModelPage() {
       const friendly = message === "provider_connection_failed"
         ? "模型服务连接失败"
         : message === "invalid_model_selection"
-          ? "模型配置不完整"
+          ? "模型不在供应商官方列表中"
           : message === "invalid_base_url"
             ? "Base URL 格式不正确"
             : message === "token_required"
@@ -177,33 +182,31 @@ export default function ModelPage() {
       setBusy(false);
     }
   };
+
   return (
     <div>
       <PageHeader
         title="AI 模型配置"
-        desc="主流模型目录 · API / Claude Code 兼容规范 · Token 安全托管"
+        desc="供应商一次接入 · 模型从官方 /models 动态发现 · Token 安全托管"
       >
-        <button
-          onClick={() => openConnectionForm()}
-          className="rounded-lg bg-emerald-600 px-4 py-2 text-xs text-white"
-        >
+        <button onClick={() => openConnectionForm()} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs text-white">
           配置供应商连接
         </button>
       </PageHeader>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3 mb-5">
-        {providers.map((v) => (
-          <div className="rounded-xl border bg-white p-5" key={v}>
+        {providers.map((item) => {
+          const count = models.filter((model) => model.provider === item.Provider && model.status === "approved").length;
+          return <div className="rounded-xl border bg-white p-5" key={`${item.Provider}-${item.Protocol}`}>
             <div className="flex gap-2 font-semibold">
               <Cpu className="h-4 w-4 text-emerald-500" />
-              {providerLabel(v)}
+              {providerLabel(item.Provider)}
             </div>
-            <div className="mt-2 text-xs text-slate-400">
-              {ps.filter((p) => p.Provider === v).length} 个版本 ·{" "}
-              {ms.filter((m) => m.provider === v).length} 个已配置
-            </div>
-          </div>
-        ))}
+            <div className="mt-2 text-xs text-slate-400">{count} 个已配置模型</div>
+          </div>;
+        })}
       </div>
+
       <section className="mb-5 overflow-hidden rounded-xl border bg-white">
         <div className="flex items-center justify-between border-b px-5 py-4">
           <div>
@@ -228,72 +231,58 @@ export default function ModelPage() {
           </div>)}
         </div> : <div className="px-5 py-8 text-center text-sm text-slate-500">暂无已验证供应商。配置成功后会在这里显示。</div>}
       </section>
-      <div className="overflow-hidden rounded-xl border bg-white">
+
+      <section className="overflow-hidden rounded-xl border bg-white">
+        <div className="flex items-center justify-between border-b px-5 py-4">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">已配置模型</h2>
+            <p className="mt-1 text-xs text-slate-500">模型 ID 来自供应商官方 `/models`，不再使用系统内置的模型版本列表。</p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{models.length} 个模型</span>
+        </div>
         <table className="w-full text-xs">
           <thead className="bg-slate-50 text-left">
             <tr>
               <th className="p-4">厂商</th>
-              <th>模型版本</th>
+              <th>模型 ID</th>
               <th>规范</th>
-              <th>能力</th>
               <th>状态</th>
             </tr>
           </thead>
           <tbody>
-            {ps.map((p) => (
-              <tr className="border-t" key={p.ModelKey}>
-                <td className="p-4">{providerLabel(p.Provider)}</td>
-                <td>
-                  {p.Name}
-                  <div className="font-mono text-[10px] text-slate-400">
-                    {p.ModelKey}
-                  </div>
-                </td>
-                <td>{p.Protocol === "cc" ? "CC / Anthropic Messages" : "API / OpenAI-compatible"}</td>
-                <td>{p.Capabilities.join(" · ")}</td>
-                <td>{(() => {
-                  const connection = connectionFor(p.Provider, p.ModelKey);
-                  if (connection) return <button onClick={() => setSelectedConnection(connection)} className="inline-flex items-center gap-1 text-emerald-600 hover:underline"><ShieldCheck className="h-4 w-4" />已配置</button>;
-                  const providerConnection = connections.find((item) => item.provider === p.Provider && item.protocol === p.Protocol);
-                  if (providerConnection) return <button disabled={enablingModel === p.ModelKey} onClick={() => void enableModel(p)} className="inline-flex items-center gap-1 rounded-md border border-emerald-200 px-2 py-1 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">{enablingModel === p.ModelKey ? "启用中…" : "启用"}</button>;
-                  return <button onClick={() => openNewForProvider(p)} className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-50">配置</button>;
-                })()}</td>
-              </tr>
-            ))}
-            {ms.filter((m) => m.provider === "cc-proxy" && !ps.some((p) => p.Provider === m.provider && p.ModelKey === m.model_key)).map((m) => (
-              <tr className="border-t bg-emerald-50/30" key={`configured-${m.id}`}>
-                <td className="p-4">CC 代理</td>
-                <td>
-                  {m.model_key}
-                  <div className="font-mono text-[10px] text-slate-400">{m.model_key}</div>
-                </td>
-                <td>CC / Anthropic Messages</td>
-                <td>code</td>
-                <td>{(() => { const connection = connectionFor(m.provider, m.model_key); return connection ? <button onClick={() => setSelectedConnection(connection)} className="inline-flex items-center gap-1 text-emerald-600 hover:underline"><ShieldCheck className="h-4 w-4" />已配置</button> : "—"; })()}</td>
-              </tr>
-            ))}
+            {models.length ? models.map((model) => {
+              const connection = connectionFor(model.provider, model.model_key);
+              return <tr className="border-t" key={model.id}>
+                <td className="p-4">{providerLabel(model.provider)}</td>
+                <td className="font-mono">{model.model_key}</td>
+                <td>{connection?.protocol === "cc" ? "CC / Anthropic Messages" : "API / OpenAI-compatible"}</td>
+                <td>{connection ? <button onClick={() => setSelectedConnection(connection)} className="inline-flex items-center gap-1 text-emerald-600 hover:underline"><ShieldCheck className="h-4 w-4" />已配置</button> : <span className="text-slate-400">{model.status}</span>}</td>
+              </tr>;
+            }) : <tr><td colSpan={4} className="p-8 text-center text-sm text-slate-500">暂无已配置模型。配置供应商后从官方模型列表中选择。</td></tr>}
           </tbody>
         </table>
-      </div>
+      </section>
+
       {selectedConnection && <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/45" onMouseDown={() => setSelectedConnection(null)}>
         <aside className="h-full w-full max-w-md bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
           <div className="flex items-center justify-between border-b px-6 py-5"><div><div className="text-sm font-semibold">连接配置</div><div className="mt-1 text-xs text-slate-500">仅展示非敏感连接信息</div></div><button onClick={() => setSelectedConnection(null)} aria-label="关闭"><X className="h-4 w-4" /></button></div>
-          <dl className="divide-y px-6"><div className="py-4"><dt className="text-xs text-slate-500">厂商</dt><dd className="mt-1 text-sm font-medium">{providerLabel(selectedConnection.provider)}</dd></div><div className="py-4"><dt className="text-xs text-slate-500">协议</dt><dd className="mt-1 text-sm">{selectedConnection.protocol === "cc" ? "CC / Anthropic Messages" : "API / OpenAI-compatible"}</dd></div><div className="py-4"><dt className="text-xs text-slate-500">模型名</dt><dd className="mt-1 font-mono text-sm">{selectedConnection.model_key}</dd></div><div className="py-4"><dt className="text-xs text-slate-500">Base URL</dt><dd className="mt-1 break-all font-mono text-sm">{selectedConnection.base_url}</dd></div><div className="py-4"><dt className="text-xs text-slate-500">Token / API Key</dt><dd className="mt-1 text-sm text-emerald-700">已安全保存，不可回显</dd></div><div className="py-4"><dt className="text-xs text-slate-500">最后配置时间</dt><dd className="mt-1 text-sm">{formatConfiguredAt(selectedConnection.configured_at)}</dd></div></dl>
+          <dl className="divide-y px-6"><div className="py-4"><dt className="text-xs text-slate-500">厂商</dt><dd className="mt-1 text-sm font-medium">{providerLabel(selectedConnection.provider)}</dd></div><div className="py-4"><dt className="text-xs text-slate-500">协议</dt><dd className="mt-1 text-sm">{selectedConnection.protocol === "cc" ? "CC / Anthropic Messages" : "API / OpenAI-compatible"}</dd></div><div className="py-4"><dt className="text-xs text-slate-500">模型 ID</dt><dd className="mt-1 font-mono text-sm">{selectedConnection.model_key}</dd></div><div className="py-4"><dt className="text-xs text-slate-500">Base URL</dt><dd className="mt-1 break-all font-mono text-sm">{selectedConnection.base_url}</dd></div><div className="py-4"><dt className="text-xs text-slate-500">Token / API Key</dt><dd className="mt-1 text-sm text-emerald-700">已安全保存，不可回显</dd></div><div className="py-4"><dt className="text-xs text-slate-500">最后配置时间</dt><dd className="mt-1 text-sm">{formatConfiguredAt(selectedConnection.configured_at)}</dd></div></dl>
           <div className="border-t px-6 py-4"><button onClick={() => openConnectionForm(selectedConnection)} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white"><Pencil className="h-4 w-4" />管理模型</button></div>
         </aside>
       </div>}
+
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45">
           <div className="w-full max-w-2xl rounded-2xl bg-white">
             <div className="flex justify-between border-b p-5">
               <b>{editingGroup ? "管理供应商模型" : "配置供应商连接"}</b>
-              <button onClick={() => setOpen(false)}>
+              <button onClick={() => setOpen(false)} aria-label="关闭">
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="space-y-4 p-5">
               <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-[11px] leading-5 text-emerald-800">
-                一个供应商只需配置一次 Token；在下方勾选要启用的模型。编辑已有连接时可留空 Token，沿用已保存凭据。
+                先配置供应商 Token；模型列表从供应商官方 `/models` 读取，不再内置固定版本。编辑已有连接时可留空 Token，沿用已保存凭据。
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {protocol === "cc" ? (
@@ -308,12 +297,13 @@ export default function ModelPage() {
                     onChange={(e) => {
                       setProvider(e.target.value);
                       setKeys([]);
+                      setDiscovered([]);
+                      setDiscoverError("");
+                      setURL(providers.find((item) => item.Provider === e.target.value && item.Protocol === protocol)?.BaseURL ?? "");
                     }}
                     className="rounded-lg border p-2 disabled:bg-slate-100 disabled:text-slate-500"
                   >
-                    {apiProviders.map((v) => (
-                      <option key={v}>{v}</option>
-                    ))}
+                    {apiProviders.map((value) => <option key={value}>{value}</option>)}
                   </select>
                 )}
                 <select
@@ -321,11 +311,16 @@ export default function ModelPage() {
                   disabled={Boolean(editingGroup)}
                   onChange={(e) => {
                     setProtocol(e.target.value);
+                    setKeys([]);
+                    setDiscovered([]);
+                    setDiscoverError("");
                     if (e.target.value === "cc") {
                       setProvider("cc-proxy");
-                      setKeys([]);
+                      setURL("");
                     } else {
-                      setProvider(apiProviders[0] ?? "openai");
+                      const first = providers.find((item) => item.Protocol === "api");
+                      setProvider(first?.Provider ?? "openai");
+                      setURL(first?.BaseURL ?? "");
                     }
                   }}
                   className="rounded-lg border p-2 disabled:bg-slate-100 disabled:text-slate-500"
@@ -334,71 +329,58 @@ export default function ModelPage() {
                   <option value="cc">CC / Anthropic Messages</option>
                 </select>
               </div>
+
               {protocol === "cc" ? (
                 <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
                   <div className="text-[11px] leading-5 text-amber-800">
-                    代理需要兼容 Anthropic Messages API。GreenPass 会调用 <code>POST {"{Base URL}"}/messages</code>，代理后端可以实际转发到 GPT。
+                    代理需要兼容 Anthropic Messages API。GreenPass 会调用 <code>POST {"{Base URL}"}/messages</code>，代理后端可以实际转发到指定模型。
                   </div>
                   <label className="block text-xs font-medium text-slate-700">CC 代理 Base URL <span className="text-rose-500">*</span>
-                    <input
-                      value={url}
-                      onChange={(e) => setURL(e.target.value)}
-                      placeholder="例如 http://127.0.0.1:8080/v1"
-                      className="mt-1 w-full rounded-lg border bg-white p-2"
-                    />
+                    <input value={url} onChange={(e) => setURL(e.target.value)} placeholder="例如 http://127.0.0.1:8080/v1" className="mt-1 w-full rounded-lg border bg-white p-2" />
                   </label>
                   <label className="block text-xs font-medium text-slate-700">CC 代理模型名 <span className="text-rose-500">*</span>
-                    <input
-                      value={customModel}
-                      onChange={(e) => { setCustomModel(e.target.value); setKeys([]); }}
-                      placeholder="例如 gpt-5 或 gpt-5-codex"
-                      className="mt-1 w-full rounded-lg border bg-white p-2"
-                    />
+                    <input value={customModel} onChange={(e) => setCustomModel(e.target.value)} placeholder="例如 claude-sonnet-4-5" className="mt-1 w-full rounded-lg border bg-white p-2" />
                   </label>
                 </div>
               ) : (
-                <label className="block text-xs font-medium text-slate-700">API Base URL <span className="font-normal text-slate-400">可选</span>
-                  <input
-                    value={url}
-                    onChange={(e) => setURL(e.target.value)}
-                    placeholder="留空使用厂商地址，例如 https://api.openai.com/v1"
-                    className="mt-1 w-full rounded-lg border p-2"
-                  />
+                <label className="block text-xs font-medium text-slate-700">API Base URL <span className="font-normal text-slate-400">可选，留空使用厂商默认地址</span>
+                  <input value={url} onChange={(e) => setURL(e.target.value)} placeholder="例如 https://api.deepseek.com/v1" className="mt-1 w-full rounded-lg border p-2" />
                 </label>
               )}
+
               <label className="block text-xs font-medium text-slate-700">Token / API Key {editingGroup ? <span className="font-normal text-slate-400">留空沿用已保存的 Token</span> : <span className="text-rose-500">*</span>}
-                <input
-                  type="password"
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                  placeholder={editingGroup ? "留空则沿用该供应商已保存的 Token" : "请输入供应商 Token"}
-                  className="mt-1 w-full rounded-lg border p-2"
-                />
+                <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={editingGroup ? "留空则沿用该供应商已保存的 Token" : "请输入供应商 Token"} className="mt-1 w-full rounded-lg border p-2" />
               </label>
+
               {protocol === "api" && <div>
-                <div className="mb-2 text-xs font-medium text-slate-700">该供应商下可用的模型</div>
-                <div className="grid grid-cols-2 gap-2">
-                  {available.map((p) => {
-                    const configured = Boolean(connectionFor(p.Provider, p.ModelKey));
-                    return <label className={`rounded-lg border p-3 ${configured ? "border-emerald-200 bg-emerald-50/40" : ""}`} key={p.ModelKey}>
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="text-xs font-medium text-slate-700">供应商官方模型</div>
+                  <button
+                    type="button"
+                    disabled={discovering || (!editingGroup && !token.trim())}
+                    onClick={() => void discoverModels()}
+                    className="rounded-md border border-emerald-200 px-2.5 py-1 text-[11px] text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                  >
+                    {discovering ? "读取中…" : "获取官方模型列表"}
+                  </button>
+                </div>
+                {discoverError && <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">{discoverError}</div>}
+                {modelOptions.length ? <div className="grid grid-cols-2 gap-2">
+                  {modelOptions.map((model) => {
+                    const configured = Boolean(connectionFor(provider, model.id));
+                    return <label className={`rounded-lg border p-3 ${configured ? "border-emerald-200 bg-emerald-50/40" : ""}`} key={model.id}>
                       <input
                         type="checkbox"
                         className="mr-2 accent-emerald-600"
-                        checked={keys.includes(p.ModelKey)}
+                        checked={keys.includes(model.id)}
                         disabled={Boolean(editingGroup && configured)}
-                        onChange={(e) =>
-                          setKeys((v) =>
-                            e.target.checked
-                              ? [...v, p.ModelKey]
-                              : v.filter((x) => x !== p.ModelKey),
-                          )
-                        }
+                        onChange={(e) => setKeys((current) => e.target.checked ? [...current, model.id] : current.filter((key) => key !== model.id))}
                       />
-                      {p.Name}
+                      <span className="font-mono text-xs">{model.id}</span>
                       {configured && <span className="ml-1 text-[10px] text-emerald-700">已启用</span>}
                     </label>;
                   })}
-                </div>
+                </div> : <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-[11px] text-slate-500">{discovering ? "正在读取供应商模型列表…" : "填写 Token 后点击“获取官方模型列表”，再从返回结果中选择模型。"}</div>}
               </div>}
             </div>
             <div className="flex justify-end gap-2 border-t p-4">
