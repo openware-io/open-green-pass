@@ -84,3 +84,5 @@ scripts/dev/.gp-portforward.pids
 bin/
 *.exe
 replay-payload.json
+
+dsh-gateway-linux

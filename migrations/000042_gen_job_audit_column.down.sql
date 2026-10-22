@@ -1,0 +1,1 @@
+ALTER TABLE gen_job DROP COLUMN IF EXISTS updated_by;

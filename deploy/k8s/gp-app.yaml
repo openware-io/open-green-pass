@@ -56,7 +56,7 @@ spec:
         - podSelector: {}
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: gp-runner } }
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ingress-nginx } }
-      ports: [{ protocol: TCP, port: 8080 }]
+      ports: [{ protocol: TCP, port: 8080 }, { protocol: TCP, port: 8090 }]
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -94,6 +94,9 @@ spec:
             - { name: GP_QUOTA_RUN_TEAM, value: "20" }
             - { name: GP_QUOTA_RUN_TARGET, value: "5" }
             - { name: GP_QUOTA_RUN_OWNER, value: "3" }
+            - { name: GP_DSH_GATEWAY_URL, value: "http://gp-dsh-gateway.gp.svc.cluster.local:8090" }
+            - name: GP_DSH_INTERNAL_TOKEN
+              valueFrom: { secretKeyRef: { name: gp-dsh-auth, key: token } }
           envFrom: [{ secretRef: { name: gp-app-config } }]
           readinessProbe: { httpGet: { path: /readyz, port: http } }
           livenessProbe: { httpGet: { path: /readyz, port: http } }

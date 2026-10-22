@@ -4,6 +4,7 @@ package application
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -91,9 +92,11 @@ func (s *GenerationJobService) Create(ctx context.Context, in CreateGenerationJo
 	if job.State == "" {
 		job.State = domain.GenerationJobQueued
 	}
-	_ = s.repo.Update(ctx, job, &domain.GenerationJobEvent{
+	if updateErr := s.repo.Update(ctx, job, &domain.GenerationJobEvent{
 		ID: s.gen.Next(), Seq: 2, Type: "state", State: string(job.State), Message: "submitted",
-	})
+	}); updateErr != nil {
+		slog.Error("generation job update failed", "job_id", job.ID, "error", updateErr)
+	}
 	return job, true, nil
 }
 

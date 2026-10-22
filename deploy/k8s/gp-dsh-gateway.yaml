@@ -1,0 +1,40 @@
+# GreenPass DSH gateway. Internal-only; never expose through ingress.
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: gp-dsh-gateway, namespace: gp }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app.kubernetes.io/name: gp, app.kubernetes.io/component: dsh-gateway } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: gp, app.kubernetes.io/part-of: greenpass, app.kubernetes.io/component: dsh-gateway } }
+    spec:
+      serviceAccountName: gp-dsh-gateway
+      automountServiceAccountToken: false
+      securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: dsh-gateway
+          image: IMAGE_REGISTRY/open-green-pass-dsh-gateway:VERSION
+          imagePullPolicy: IMAGE_PULL_POLICY
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          ports: [{ name: http, containerPort: 8090 }]
+          env:
+            - { name: GP_DSH_GATEWAY_ADDR, value: ":8090" }
+            - { name: GP_DSH_WORKERS, value: "2" }
+            - { name: GP_DSH_QUEUE, value: "64" }
+            - { name: GP_DSH_RUNNER, value: "stub" }
+            - name: GP_DSH_INTERNAL_TOKEN
+              valueFrom: { secretKeyRef: { name: gp-dsh-auth, key: token } }
+          readinessProbe: { httpGet: { path: /readyz, port: http }, initialDelaySeconds: 2, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /healthz, port: http }, initialDelaySeconds: 5, periodSeconds: 10 }
+          resources: { requests: { cpu: 100m, memory: 128Mi }, limits: { cpu: "1", memory: 1Gi } }
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: gp-dsh-gateway, namespace: gp, labels: { app.kubernetes.io/part-of: greenpass } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: gp-dsh-gateway, namespace: gp, labels: { app.kubernetes.io/part-of: greenpass } }
+spec:
+  selector: { app.kubernetes.io/name: gp, app.kubernetes.io/component: dsh-gateway }
+  ports: [{ name: http, port: 8090, targetPort: http }]

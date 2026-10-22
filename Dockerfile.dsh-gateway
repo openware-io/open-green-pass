@@ -1,0 +1,7 @@
+# GreenPass DSH gateway image.
+# The binary is prebuilt by scripts/dev/deploy-kind.ps1 (linux/amd64, CGO off)
+# to keep the image build offline and reproducible without a Go base image.
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY dsh-gateway-linux /usr/local/bin/dsh-gateway
+USER nonroot:nonroot
+ENTRYPOINT ["/usr/local/bin/dsh-gateway"]

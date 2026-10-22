@@ -25,7 +25,8 @@ function Remove-LocalImageHistory {
     $repositories = @(
         "$Registry/open-green-pass",
         "$Registry/open-green-pass-web",
-        "$Registry/open-green-pass-migrate"
+        "$Registry/open-green-pass-migrate",
+        "$Registry/open-green-pass-dsh-gateway"
     )
     foreach ($repository in $repositories) {
         $images = @(docker image ls $repository --format '{{.Repository}}|{{.Tag}}' 2>$null)
