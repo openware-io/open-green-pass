@@ -3,6 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
+- **生成页操作文案（0.1.84-SNAPSHOT）**：主操作由“批量生成用例”改为“生成用例”，仅在选中服务时显示数量后缀（如“生成用例（1）”），避免单选场景的批量语义歧义；同步调整“确认创建”“为所选服务创建生成批次”等辅助文案。
 - **SCM 源码连接加固（0.1.83-SNAPSHOT）**：PAT 创建显式写入 `auth_type`；错误映射、失败 Secret 清理、删除/轮换 API 与 UI、trusted audit、classic scope 拒绝、绑定前仓库 Contents 探测、GitHub App `installation_account_login`/FrontendURL 校验、非数值 actor 稳定哈希、分支/Tag 分页与 GitHub 限流退避；新增后端单元测试和 SCM 弹窗组件；修正 Web 静态资源缓存策略，避免发布后浏览器继续使用旧 shell。
 - **AI 助手架构评审稿**：新增 [`docs/architecture/AI-ASSISTANT-DESIGN.md`](./docs/architecture/AI-ASSISTANT-DESIGN.md)，定义显式助手与隐式助手的统一运行时、上下文/技能/工具/审批边界、业务接入矩阵、AI 对 GP 的语义命令与受限界面代理、全量操作审计、事件与 Temporal 接入、数据模型、安全审计和分阶段落地路径。
 - **AI 协作原型与实施稿**：新增“AI 协作”原型页、全局/门禁页引导入口，以及 [`docs/plans/AI-ASSISTANT-IMPLEMENTATION-PLAN.md`](./docs/plans/AI-ASSISTANT-IMPLEMENTATION-PLAN.md)。原型明确呈现后台建议不操作界面、显式引导定位/预填但由用户提交、每一步进入审计链的交互边界。
