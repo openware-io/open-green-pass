@@ -1,10 +1,11 @@
-# GP AI 测试引擎（DSH Runner）可执行方案
+# GP AI 测试引擎（DSH SDK 网关）可执行方案
 
 ## 0. 结论
 
 - **DSH 官方支持自动化运行**：`dsh --profile headless "job"`、`dsh --profile sdk`（JSON-RPC stdio）、`dsh --profile acp`（stdio）。
 - **DSH 没有官方的多租户 HTTP 服务**；`dsh web` 是交互式 Web UI，不适合作为 GP 的生产后端。
-- 一期采用 **headless 每模块一个 K8s Job**；二期再评估 `sdk` 长驻网关。
+- **核心采用 `dsh --profile sdk` 长驻进程 + `gp-dsh-gateway` 进程池/队列**；headless 只用于批处理、CI 和降级，不作为主链路。
+- SDK 一个进程可承载多个 SDK session，但 GP 仍需自己做 HTTP/队列、进程池、workspace/session 隔离、超时和崩溃恢复。
 - 不在 DSH 之上重做平台；在 GreenPass 内新增 **AI 测试引擎子系统**，DSH 只做规划、生成、分析和建议。
 
 ## 1. 边界与原则
@@ -18,32 +19,46 @@
 
 ## 2. DSH 官方能力与部署选择
 
-| 模式 | 官方用途 | 通信方式 | 适用 |
+| 模式 | 官方用途 | 通信方式 | 在 GP 中的定位 |
 |---|---|---|---|
-| `dsh --profile headless "job"` | 一次任务，输出最终答案后退出 | stdout | **一期 DSH Runner Job** |
-| `dsh --profile sdk` | SDK 客户端 | JSON-RPC over stdio | 二期长驻网关 |
+| `dsh --profile sdk` | 长驻 JSON-RPC 运行时，按 `sessionId` 开 session | stdio | **核心：gp-dsh-gateway 的进程池** |
+| `dsh --profile headless "job"` | 一次任务，输出最终答案后退出 | stdout | 批处理 / CI / 降级，不作为主链路 |
 | `dsh --profile acp` | 自动化客户端 | ACP over stdio | 编辑器/外部 Agent 集成 |
 | `dsh web` | Web UI | HTTP/WebSocket | 人工交互，不作为后端 |
 
-### 一期选择：Headless Job
+### 为什么 SDK 更合适
+
+Headless 的本质确实是“一次性调用”：
+
+- 每次冷启动，模型连接、工具、上下文缓存都要重建；
+- 一次任务结束进程退出，不能复用 session；
+- 多步流程（规划 → 生成 → 校验 → 修复）要么塞进一个超长 prompt，要么反复重启；
+- 对流式进度、取消、会话恢复不友好。
+
+SDK 模式：
+
+- 一个长驻进程可承载多个 `sessionId`；
+- `initialize` 握手一次，之后 `session/prompt`、`session/wait`、`session/event` 持续交互；
+- 支持 `session/resume` 恢复已持久化 session；
+- 适合 GP 的模块级多步生成、失败分析、修复建议；
+- 但传输是 stdio，GP 必须自己做 HTTP/队列网关、进程池、隔离和超时。
+
+### 采用 SDK 网关
 
 ```text
-GP Orchestrator
-  -> create K8s Job (gp-dsh-runner)
-  -> dsh --profile gp-test-engine "prompt"
-  -> read output JSON
-  -> validate -> persist
+GP Orchestrator / Temporal
+  -> gp-dsh-gateway (HTTP/内部 API)
+  -> job queue (Temporal + gateway 内部有界队列)
+  -> worker pool: 每个 worker 一个 dsh --profile gp-test-engine 子进程
+  -> JSON-RPC initialize/session/prompt/wait
+  -> 结果 + transcript/tool calls -> GP 入库
 ```
 
-优点：隔离好、超时/资源可控、无长连接、无多租户状态。
-缺点：每次启动有冷启动成本；需要 Job 控制器和结果收集。
+Headless 保留为：
 
-### 二期选择：SDK 网关
-
-- 长驻 Pod 运行 `dsh --profile sdk`；
-- 外层 `gp-dsh-gateway` 暴露 HTTP/队列；
-- 每个 session 独立 `DSH_HOME`/workspace；
-- 需要解决并发、会话隔离、超时、崩溃恢复。
+- CI 离线批处理；
+- 网关不可用时的降级；
+- 单次快速验证/对比实验。
 
 ## 3. 目标架构
 
@@ -55,7 +70,10 @@ AI Test Engine Orchestrator (Go, Temporal activities)
   |-- Contract Inventory Service
   |-- Coverage Planner (deterministic + DSH Planner)
   |-- Case Generator (DSH Generator + static validator)
-  |-- DSH Runner Controller (K8s Jobs)
+  |-- gp-dsh-gateway (HTTP/queue, worker pool)
+  |     |-- worker 1: dsh --profile gp-test-engine (stdio JSON-RPC)
+  |     |-- worker 2: dsh --profile gp-test-engine
+  |     `-- worker N: ...
   |-- Execution Orchestrator (existing worker + runners)
   |-- Failure Triage (rules + DSH Analyst)
   |-- Findings / Suggestions Service
@@ -176,85 +194,147 @@ POST /runs/{id}/findings
 
 所有接口使用团队 RLS、角色授权和审计；源码引用只返回 `file:line`，不返回仓库写权限。
 
-## 6. DSH Runner 设计
+## 6. DSH SDK 网关设计
 
-### 6.1 镜像
+### 6.1 组件
 
 ```text
-ghcr.io/openware-io/open-green-pass-dsh-runner:<version>
+gp-dsh-gateway (Go, Deployment, 2+ replicas)
+  |-- job queue + idempotency + state machine
+  |-- worker pool (per workspace/tenant)
+  |     |-- dsh --profile gp-test-engine (child process, stdio JSON-RPC)
+  |     `-- one SDK process can host multiple sessionId
+  |-- session/event ingestion -> transcript/tool calls
+  `-- result validator -> GP API/Temporal
+```
+
+- **网关**：HTTP/内部 API、队列、进程池、超时、重试、取消、事件采集。
+- **SDK 进程**：`dsh --profile gp-test-engine`，stdio JSON-RPC；一个进程可承载多个 session，但默认一个 job/workspace 一个进程，隔离优先。
+- **GP orchestrator**：Temporal workflow/activity 调网关，不直接管 DSH 进程。
+
+### 6.2 镜像与 Profile
+
+```text
+ghcr.io/openware-io/open-green-pass-dsh-gateway:<version>
   base: node:22-slim
   install: @deepseek-ai/dsh@<pinned>
   profile: /opt/gp/dsh-profile/gp-test-engine
   user: nonroot
-  entrypoint: /opt/gp/runner/run.sh
+  entrypoint: /opt/gp/gateway/gateway
 ```
 
-`run.sh`：
+`gp-test-engine` profile：
 
-```sh
-#!/bin/sh
-set -eu
-PROMPT="$(cat /workspace/input/prompt.txt)"
-exec dsh --profile gp-test-engine "$PROMPT"
+- 继承 `dsh-base` + `dsh-sdk-app`，保留 SDK JSON-RPC server；
+- 只启用读文件、grep、目录树、读 OpenAPI/路由/日志；
+- 禁用 `write`、`edit`、`bash`/`pwsh` 写操作、git commit/push、部署命令；
+- 禁止非模型网络外联；
+- `DSH_HOME=/tmp/dsh/<worker>`，不挂载用户 home，不共享 session 状态；
+- 不启用 Web、插件市场、自动更新。
+
+> 不要用 `sdk-minimal` 作为生产 profile：它带 persistent shell 和 danger-full-access，不适合只读源码场景。
+
+### 6.3 网关 API 与队列
+
+```text
+POST /internal/dsh/jobs
+  { job_id, team_id, module, prompt_ref, workspace_ref, model_route, timeout_ms }
+GET  /internal/dsh/jobs/{job_id}
+GET  /internal/dsh/jobs/{job_id}/events
+DEL  /internal/dsh/jobs/{job_id}        # 取消
 ```
 
-### 6.2 Profile
+状态机：
 
-`gp-test-engine` 只启用：
+```text
+queued -> starting -> running -> succeeded
+                           |-> failed
+                           |-> timeout
+                           |-> cancelled
+```
 
-- 读文件、grep、目录树；
-- 读取 OpenAPI/路由/日志；
-- 输出 JSON 到 stdout；
-- 禁止：写文件、shell 写操作、git commit/push、网络外联（除模型 API）。
+- `job_id` 幂等；重复提交返回同一 job。
+- 队列有界，按团队/模块限流；队列满返回 `queue_full`。
+- Temporal 负责跨步骤编排和重试；网关内部队列负责进程池调度。
+- 事件流保存 `session.event`（tool call、token、状态），用于审计和前端进度。
 
-`DSH_HOME` 使用 Job 临时目录；不挂载用户 home；不共享 profile 状态。
+### 6.4 SDK 会话流程
 
-### 6.3 K8s Job 规格
+```text
+1. gateway spawn dsh --profile gp-test-engine (stdio)
+2. send initialize { provider, model, cwd, maxTokens }
+3. send session/prompt { sessionId, content: prompt }
+4. stream session/event notifications
+5. send session/wait { sessionId }
+6. parse final assistant message -> JSON Schema
+7. persist transcript/result; kill or reuse session
+```
 
-`repo` 由 orchestrator 预置的 initContainer 以只读方式 checkout 到 emptyDir，主容器只读挂载；主容器不能写仓库。
+- `session/resume` 用于恢复被中断的持久化 session。
+- SDK 协议没有原生 cancel 方法；取消通过网关超时/终止进程/释放 session 实现，并在 GP 记录 `cancelled`。
+- 一个 job 的多步流程（规划 → 生成 → 校验 → 修复）复用同一 `sessionId`，保持上下文。
+
+### 6.5 Worker 池与隔离
+
+- 一个 worker = 一个 `dsh` 子进程 + 一个 workspace + 一个 `DSH_HOME`。
+- 默认一个 job 一个 worker；高并发时按团队/模块分池。
+- 源码 workspace 只读挂载；测试脚本/输出在独立读写目录。
+- 后端进程崩溃：网关捕获退出码，标记失败，按策略重启；session 可从持久化恢复。
+- 每个 worker 设置 CPU/内存/时长上限；空闲回收。
+
+### 6.6 K8s 部署
 
 ```yaml
-apiVersion: batch/v1
-kind: Job
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: gp-dsh-<job-id>
+  name: gp-dsh-gateway
 spec:
-  backoffLimit: 0
-  activeDeadlineSeconds: 900
+  replicas: 2
   template:
     spec:
-      restartPolicy: Never
-      serviceAccountName: gp-dsh-runner
+      serviceAccountName: gp-dsh-gateway
       containers:
-        - name: dsh
-          image: ghcr.io/openware-io/open-green-pass-dsh-runner:<version>
+        - name: gateway
+          image: ghcr.io/openware-io/open-green-pass-dsh-gateway:<version>
           env:
-            - name: DSH_HOME
-              value: /tmp/dsh-home
+            - name: DSH_PROFILE
+              value: gp-test-engine
+            - name: DSH_MAX_WORKERS
+              value: "4"
             - name: DEEPSEEK_API_KEY
               valueFrom:
                 secretKeyRef: { name: gp-dsh-deepseek, key: token }
           resources:
-            requests: { cpu: "500m", memory: "1Gi" }
-            limits: { cpu: "2", memory: "4Gi" }
+            requests: { cpu: "1", memory: "2Gi" }
+            limits: { cpu: "4", memory: "8Gi" }
           volumeMounts:
-            - { name: input, mountPath: /workspace/input, readOnly: true }
-            - { name: repo, mountPath: /workspace/repo, readOnly: true }
+            - { name: repo-cache, mountPath: /workspace/repos, readOnly: true }
             - { name: work, mountPath: /tmp }
       volumes:
-        - name: input
-          configMap: { name: gp-dsh-<job-id> }
-        - name: repo
-          emptyDir: {}
+        - name: repo-cache
+          persistentVolumeClaim: { claimName: gp-dsh-repos }
         - name: work
           emptyDir: {}
 ```
 
-仓库由 initContainer 以只读方式 checkout，主容器只读挂载；测试脚本/输出走 `/workspace/input` 和 stdout。
+- 网关用 PVC/对象存储缓存只读 checkout；每个 job 的 workspace 在 `/tmp` 下独立。
+- 网络策略只允许模型 API 和 GP API。
+- 不用 `dsh web`，不暴露 3080。
 
-### 6.4 结果协议
+### 6.7 Headless 兜底
 
-DSH 输出必须符合 JSON Schema：
+保留一个 `gp-dsh-headless` Job 仅用于：
+
+- CI 离线批处理；
+- 网关不可用时的降级；
+- 单次快速验证/对照实验。
+
+它是“一次性调用”，不作为主链路；结果协议与 SDK 模式一致。
+
+### 6.8 结果协议
+
+DSH 最终输出必须符合 JSON Schema：
 
 ```json
 {
@@ -268,7 +348,7 @@ DSH 输出必须符合 JSON Schema：
 }
 ```
 
-Runner 校验失败直接标记 `invalid_output`，不入库。
+网关校验失败标记 `invalid_output`，不入库；原始 transcript 保留在对象存储用于审计。
 
 ## 7. 覆盖方法
 
@@ -414,14 +494,15 @@ DSH Analyst 输出：
 - 缺陷中心列表/详情/流转 UI 骨架；
 - 验收：失败用例可创建缺陷，源码写权限为 0。
 
-### M1（2 周）：覆盖账本 + 单模块 DSH 生成
+### M1（2 周）：覆盖账本 + SDK 网关 + 单模块生成
 
 - `ai_contract_*`、`ai_coverage_cell`、`ai_generation_job`；
 - OpenAPI/路由盘点；规则枚举 Cell；
-- `gp-dsh-runner` 镜像 + K8s Job + 结果协议；
-- 选择一个模块（如 `user`）生成 20-40 条用例；
+- `gp-dsh-gateway` Deployment + SDK worker pool + 有界队列；
+- `gp-test-engine` profile（只读工具、SDK JSON-RPC）；
+- 选择一个模块（如 `user`）完成“规划 → 生成 → 校验 → 修复”多步 session；
 - 静态校验 + 入库；
-- 验收：该模块 100% 必需 Cell 有生成用例；无源码写操作。
+- 验收：该模块 100% 必需 Cell 有生成用例；无源码写操作；同一 session 可连续多轮。
 
 ### M2（2 周）：执行闭环 + 失败归因 + 建议
 
@@ -433,17 +514,18 @@ DSH Analyst 输出：
 
 ### M3（2 周）：并行模块 + 覆盖门禁 + 报告
 
-- 按 service/module 并行 Job；
+- gateway worker pool 按 service/module 并行；
 - 覆盖账本门禁：未覆盖 Cell = 0（含 waiver）；
 - 缺陷门禁：未关闭 P0/P1 = 0；
 - 报告：覆盖/缺陷/建议/回归；
 - 验收：`open-chat-admin` 18 模块全部纳入；端到端可复跑。
 
-### M4（后续）：SDK 长驻 + 增量生成
+### M4（后续）：增量生成 + 多租户隔离
 
-- `dsh --profile sdk` 网关；
 - 按 diff 只生成受影响 Cell；
-- 历史缺陷回归推荐。
+- 历史缺陷回归推荐；
+- 多团队 worker 池/配额/隔离；
+- 网关水平扩展；headless 仅保留 CI/降级。
 
 ## 13. 验收指标
 
@@ -464,8 +546,10 @@ DSH Analyst 输出：
 
 | 风险 | 应对 |
 |---|---|
-| DSH 无原生 HTTP 多租户 | 一期 headless Job；二期 SDK 网关 |
-| Job 冷启动/成本 | 模块级批处理；缓存 profile；限制 token |
+| DSH 无原生 HTTP 多租户 | `gp-dsh-gateway` + worker pool + 自建队列；headless 仅兜底 |
+| SDK 进程崩溃/会话恢复 | 网关捕获退出码；`session/resume` 恢复持久化 session；自动重试 |
+| 无原生 cancel | 网关超时/终止进程/释放 session；GP 标记 cancelled |
+| 长驻进程内存/上下文膨胀 | 每 job/workspace 独立进程；空闲回收；限制 session 数/token |
 | 模型输出不稳定 | JSON Schema + 静态校验 + Critic；不直接入库 |
 | 测试数据污染 | 每批 fixture/租户；清理任务；只读源码 |
 | 误报 | 失败归因 + 证据 + 人工确认；禁止自动改 oracle |
@@ -474,7 +558,7 @@ DSH Analyst 输出：
 
 ## 15. 待决策
 
-1. 一期是否只做 `headless`，还是直接上 `sdk` 网关？
+1. 网关 worker 池是一进程多 session，还是一 session 一进程？（默认后者，隔离优先）
 2. 缺陷是否对接 Jira/飞书，还是先内部闭环？
 3. 覆盖门槛按项目配置还是全局默认？
 4. 外部预签名/对象存储测试环境由谁提供？
@@ -482,6 +566,7 @@ DSH Analyst 输出：
 
 ## 16. 结论
 
-- DSH 官方支持 headless/sdk/acp 自动化，不支持多租户 HTTP 服务；一期用 headless Job 是正确路径。
+- DSH 官方支持 SDK（stdio JSON-RPC）/headless/acp，不支持多租户 HTTP 服务。
+- 核心采用 **SDK 长驻进程 + `gp-dsh-gateway` + 自建队列/进程池**；headless 只做 CI/降级。
 - GP 要补的是“覆盖账本 + 执行证据 + 缺陷模型 + 只读护栏”，不是再做一个 DSH。
-- 先做 M0/M1，用单模块证明“覆盖 Cell → DSH 生成 → 静态校验 → 执行 → 缺陷/建议”的闭环，再并行扩展到全项目。
+- 先做 M0/M1，用单模块证明“覆盖 Cell → SDK 多步 session → 静态校验 → 执行 → 缺陷/建议”的闭环，再并行扩展到全项目。
