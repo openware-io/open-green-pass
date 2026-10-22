@@ -3,6 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
+- **M1 生成 Job 控制面（0.1.100-SNAPSHOT）**：新增 `gen_job/gen_job_event`、`GenerationJobService`、`POST/GET/DELETE /ai/generation-jobs`、`DSHGatewayClient`；当前 gateway URL 未配置，提交返回 400，真实 SDK runner 待接入。
 - **M1 覆盖账本（0.1.99-SNAPSHOT）**：新增 `ctr_endpoint/ctr_parameter/ctr_error`、`cov_cell.module`；覆盖领域 archetype→Cell 枚举/稳定 hash/汇总；API `POST /coverage/plan`、`GET /coverage/cells`、`GET /coverage/summary`；user 模块 4 端点生成 24 个必需 Cell。DSH gateway/生成用例仍未完成。
 - **M0-Dev 完成：Finding 最小闭环（0.1.98-SNAPSHOT）**：迁移 34-38（def/cov/evd/fixture + cas_case/run_case_result 加列）；Finding 领域状态机/去重/仓储/API（列表/详情/创建/流转）；缺陷中心接真实 API；创建/去重/流转/审计验证通过；无截图时明确提示，不再伪造证据。
 - **Schema 变更策略放宽（2026-10-22）**：开发/本地允许直接 DDL、drop/recreate、启动建表；现有表可直接 ALTER/DROP/类型变更；无历史数据回填/双写/兼容视图。测试/CI 合入前固化为迁移；生产仍走版本化迁移 + 快照/回滚/审批；新增 `SCHEMA-CHANGE-CHECKLIST` 做范围控制。
