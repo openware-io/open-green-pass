@@ -3,7 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
-- **工程规范合规审查（2026-10-22）**：审查 AI 测试引擎方案与原型，发现表前缀未登记、领域归属/RLS/可信写、迁移编号、OpenAPI、测试分层、gateway 镜像/部署入口、沙箱 egress 等缺口；新增合规审查报告并在方案/规格中加入实施前约束；原型 sky/violet 已按 DESIGN-SPEC 改为 emerald/amber/red/slate。
+- **工程规范合规审查（2026-10-22）**：审查 AI 测试引擎方案与原型，发现表前缀未登记、领域归属/RLS/可信写、迁移编号、OpenAPI、测试分层、gateway 镜像/部署入口、沙箱 egress 等缺口；新增合规审查报告并在方案/规格中加入实施前约束；原型 sky/violet 已按 DESIGN-SPEC 改为 emerald/amber/red/slate，并发布 `0.1.95-SNAPSHOT`。
 - **AI 测试引擎实施规格（2026-10-22）**：新增 `DSH-SDK-GATEWAY-SPEC`（一 job 一进程/warm pool、取消/超时/崩溃恢复、队列/事件/错误码）、`COVERAGE-MODEL-SPEC`（端点 archetype、Cell 模型、pairwise、覆盖门禁与 DDL）、`FINDING-EVIDENCE-SPEC`（缺陷状态机、仓库/提交、截图/视频证据、上传/保留/归因规则）。
 - **缺陷仓库与多媒体证据（0.1.94-SNAPSHOT）**：缺陷列表/详情增加归属仓库、分支与冻结提交；新增“多媒体证据”区块，截图必需、视频建议，支持缩略图/大图/播放占位、证据策略与 SHA-256/MIME/时长说明；同步更新 AI 测试引擎方案的 finding 仓库字段与 evidence API。
 - **缺陷优先原型（0.1.93-SNAPSHOT）**：新增缺陷中心（列表/详情/期望实际/证据链/根因/只读建议/流转）、测试执行“缺陷候选与归因”、生成页“覆盖计划”、门禁“缺陷与覆盖门禁”、报告“缺陷与建议摘要”；明确源码只读、不写回仓库；当前为前端原型数据。
