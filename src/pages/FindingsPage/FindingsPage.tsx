@@ -223,7 +223,7 @@ function evidenceCount(finding: Finding) {
 
 export default function FindingsPage() {
   const [items, setItems] = useState<Finding[]>(SEED);
-  const [selectedID, setSelectedID] = useState<string>(SEED[0]?.id ?? '');
+  const [selectedID, setSelectedID] = useState<string>('');
   const [query, setQuery] = useState('');
   const [severity, setSeverity] = useState('全部');
   const [status, setStatus] = useState('全部');
