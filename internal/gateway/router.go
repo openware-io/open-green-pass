@@ -41,5 +41,7 @@ func NewRouterWithAuth(log *slog.Logger, provider iam.AuthenticationProvider, al
 	h = middleware.PrincipalAuth(provider, allowHeaderFallback)(h)
 	h = middleware.RequestID(h)
 	h = middleware.AccessLog(log)(h)
+	h = middleware.BodyLimit(2 << 20)(h)
+	h = middleware.SecurityHeaders(h)
 	return h
 }
