@@ -26,7 +26,15 @@ func main() {
 	}
 	workers := atoi(env("GP_DSH_WORKERS", "2"), 2)
 	queue := atoi(env("GP_DSH_QUEUE", "64"), 64)
-	manager := dshgw.NewManager(dshgw.StubRunner{}, workers, queue)
+	var runner dshgw.Runner = dshgw.StubRunner{}
+	if os.Getenv("GP_DSH_RUNNER") == "sdk" {
+		runner = dshgw.SDKRunner{
+			Binary: env("GP_DSH_BINARY", "dsh"), Profile: env("GP_DSH_PROFILE", "sdk"),
+			Provider: env("GP_DSH_PROVIDER", "deepseek-official"), Model: env("GP_DSH_MODEL", "deepseek-flash"),
+			APIKey: os.Getenv("DEEPSEEK_API_KEY"), MaxTokens: atoi(env("GP_DSH_MAX_TOKENS", "32768"), 32768),
+		}
+	}
+	manager := dshgw.NewManager(runner, workers, queue)
 	defer manager.Close()
 
 	server := &http.Server{

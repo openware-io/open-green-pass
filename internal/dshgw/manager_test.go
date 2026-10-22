@@ -50,7 +50,8 @@ func TestIdempotencyAndQueueFull(t *testing.T) {
 	if _, err := m.Submit(Job{ID: "j1", Prompt: "a", IdempotencyKey: "k1"}); err != nil {
 		t.Fatal(err)
 	}
-	// first job running or queued; second fills queue; third rejected.
+	waitState(t, m, "j1", StateRunning)
+	// first job running; second fills queue; third rejected.
 	_, err1 := m.Submit(Job{ID: "j2", Prompt: "b"})
 	if err1 != nil && !errors.Is(err1, ErrQueueFull) {
 		t.Fatalf("unexpected: %v", err1)
