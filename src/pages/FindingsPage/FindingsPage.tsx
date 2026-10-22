@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { PageHeader } from '@/components/shared';
 import { toast } from 'sonner';
-import { AlertTriangle, Bug, CheckCircle2, ChevronRight, Clipboard, FileWarning, GitBranch, Search, ShieldAlert, ShieldCheck, UserRound, X } from 'lucide-react';
+import { AlertTriangle, Bug, Camera, CheckCircle2, ChevronRight, Clipboard, FileWarning, GitBranch, Image as ImageIcon, Maximize2, Play, Search, ShieldAlert, ShieldCheck, Upload, UserRound, Video, X } from 'lucide-react';
 
 type Severity = 'P0' | 'P1' | 'P2' | 'P3';
 type FindingStatus = '待确认' | '已确认' | '修复中' | '待回归' | '已关闭' | '误报';
@@ -24,9 +24,42 @@ type Finding = {
   rootCause: string;
   suggestion: string;
   evidence: { request: string; response: string; log: string; trace: string };
+  repo: { name: string; url: string; branch: string; commit: string };
+  media: { screenshot: string; video?: { poster: string; duration: string; caption: string } };
   coverage: string[];
   timeline: Array<{ time: string; text: string; actor: string }>;
 };
+
+const REPO = {
+  name: 'open-chat-admin',
+  url: 'https://github.com/openware-io/open-chat-admin',
+  branch: '2.2.1',
+  commit: 'a44876435f69f78723e23c04d2ff1d59e1d05f96',
+};
+
+function screenshot(label: string, detail: string, tone: 'red' | 'amber' = 'red') {
+  const color = tone === 'red' ? '#f87171' : '#fbbf24';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540">
+    <rect width="960" height="540" fill="#0f172a"/>
+    <rect x="30" y="24" width="900" height="54" rx="12" fill="#1e293b"/>
+    <circle cx="56" cy="51" r="7" fill="#f87171"/><circle cx="78" cy="51" r="7" fill="#fbbf24"/><circle cx="100" cy="51" r="7" fill="#34d399"/>
+    <rect x="126" y="40" width="500" height="22" rx="6" fill="#334155"/>
+    <text x="56" y="126" fill="#94a3b8" font-family="Arial" font-size="18">GreenPass · 测试执行证据</text>
+    <rect x="56" y="150" width="230" height="42" rx="10" fill="${color}" opacity="0.16"/>
+    <text x="74" y="178" fill="${color}" font-family="Arial" font-size="22" font-weight="700">${label}</text>
+    <text x="56" y="248" fill="#e2e8f0" font-family="Arial" font-size="28" font-weight="700">${detail}</text>
+    <rect x="56" y="286" width="848" height="1" fill="#334155"/>
+    <text x="56" y="330" fill="#94a3b8" font-family="Arial" font-size="20">请求：见证据链中的 HTTP 请求</text>
+    <text x="56" y="366" fill="#94a3b8" font-family="Arial" font-size="20">实际：与契约期望不一致，详见响应与日志</text>
+    <rect x="56" y="410" width="848" height="82" rx="10" fill="#1e293b"/>
+    <text x="76" y="444" fill="#fca5a5" font-family="monospace" font-size="18">ERROR assertion.failed expected=2xx actual=5xx</text>
+    <text x="76" y="472" fill="#cbd5e1" font-family="monospace" font-size="18">INFO  evidence captured at frozen commit ${REPO.commit.slice(0, 8)}</text>
+    <text x="824" y="520" fill="#475569" font-family="Arial" font-size="14">EVIDENCE · READ ONLY</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+const DEFAULT_MEDIA = { screenshot: screenshot('截图证据', '断言失败：实际响应与契约不一致') };
 
 const SEED: Finding[] = [
   {
@@ -51,6 +84,15 @@ const SEED: Finding[] = [
       response: 'HTTP/1.1 500\n{"code":"INTERNAL_ERROR","message":"signature verify failed"}',
       log: '2026-10-22T15:42:11Z ERROR payment.callback order=ORD-20261022-001 err=invalid signature\n2026-10-22T15:42:11Z INFO order.update order=ORD-20261022-001 status=paid',
       trace: 'trace 8f2c… span payment.callback 312ms\n  └ signature.verify 4ms error\n  └ order.update 8ms status=paid',
+    },
+    repo: REPO,
+    media: {
+      ...DEFAULT_MEDIA,
+      video: {
+        poster: screenshot('视频证据', '实机操作 00:30 · 支付回调重放', 'amber'),
+        duration: '00:30',
+        caption: '支付回调重放：订单状态从 pending 变为 paid，未回滚',
+      },
     },
     coverage: ['payment.callback · error', 'payment.callback · idempotency', 'order.state · data'],
     timeline: [
@@ -81,6 +123,8 @@ const SEED: Finding[] = [
       log: '2026-10-22T15:20:04Z INFO user.delete id=10086 operator=admin',
       trace: 'trace 11ab… span user.delete 44ms\n  └ user.lookup 2ms\n  └ user.delete 12ms',
     },
+    repo: REPO,
+    media: DEFAULT_MEDIA,
     coverage: ['user.delete · error', 'user.delete · authz'],
     timeline: [
       { time: '15:20', text: '执行失败，归因为产品缺陷', actor: 'triage-bot' },
@@ -110,6 +154,8 @@ const SEED: Finding[] = [
       log: '2026-10-22T14:51:22Z ERROR release.submit id=778 expected=3 current=5',
       trace: 'trace 9d31… span release.submit 81ms\n  └ release.version.check 3ms conflict',
     },
+    repo: REPO,
+    media: DEFAULT_MEDIA,
     coverage: ['clientRelease.submit · concurrency', 'clientRelease.submit · error'],
     timeline: [
       { time: '14:51', text: '执行失败，归因为产品缺陷', actor: 'triage-bot' },
@@ -139,6 +185,8 @@ const SEED: Finding[] = [
       log: '2026-10-22T13:55:10Z INFO audit.list from=2026-02-01 to=2026-01-01 items=0',
       trace: 'trace 41cc… span audit.list 17ms\n  └ audit.query 9ms rows=0',
     },
+    repo: REPO,
+    media: DEFAULT_MEDIA,
     coverage: ['audit.list · boundary', 'audit.list · error'],
     timeline: [{ time: '13:55', text: '执行失败，归因为产品缺陷', actor: 'triage-bot' }],
   },
@@ -165,6 +213,8 @@ const SEED: Finding[] = [
       log: '2026-10-22T11:20:00Z ERROR media.presign bucket=gp-test AccessDenied',
       trace: 'trace 7b2e… span media.presign 120ms\n  └ s3.presign 18ms access-denied',
     },
+    repo: REPO,
+    media: DEFAULT_MEDIA,
     coverage: ['media.upload · boundary', 'media.upload · error'],
     timeline: [
       { time: '11:20', text: '执行失败，归因为环境问题', actor: 'triage-bot' },
@@ -194,6 +244,8 @@ const SEED: Finding[] = [
       log: '2026-10-22T10:12:00Z WARN http.query pageSize=abc parse failed',
       trace: 'trace 2d90… span http.query 1ms parse-error',
     },
+    repo: REPO,
+    media: DEFAULT_MEDIA,
     coverage: ['message.list · boundary'],
     timeline: [
       { time: '10:12', text: '执行失败，归因为用例缺陷', actor: 'triage-bot' },
@@ -221,12 +273,21 @@ function evidenceCount(finding: Finding) {
   return Object.values(finding.evidence).filter(Boolean).length;
 }
 
+function hasScreenshot(finding: Finding) {
+  return Boolean(finding.media.screenshot);
+}
+
+function hasVideo(finding: Finding) {
+  return Boolean(finding.media.video);
+}
+
 export default function FindingsPage() {
   const [items, setItems] = useState<Finding[]>(SEED);
   const [selectedID, setSelectedID] = useState<string>('');
   const [query, setQuery] = useState('');
   const [severity, setSeverity] = useState('全部');
   const [status, setStatus] = useState('全部');
+  const [lightbox, setLightbox] = useState('');
   const selected = items.find((item) => item.id === selectedID) ?? null;
 
   const filtered = useMemo(() => {
@@ -290,7 +351,7 @@ export default function FindingsPage() {
         <select aria-label="缺陷状态" value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-600">
           {['全部', '待确认', '已确认', '修复中', '待回归', '已关闭', '误报'].map((value) => <option key={value}>{value}</option>)}
         </select>
-        <span className="ml-auto text-[11px] text-slate-400">{filtered.length} 条 · 证据链完整 {items.filter((item) => evidenceCount(item) === 4).length} 条</span>
+        <span className="ml-auto text-[11px] text-slate-400">{filtered.length} 条 · 截图证据 {items.filter(hasScreenshot).length} 条 · 视频证据 {items.filter(hasVideo).length} 条</span>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -313,11 +374,17 @@ export default function FindingsPage() {
                 <td className="px-4 py-3"><span className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold ${SEV_STYLE[item.severity]}`}>{item.severity}</span></td>
                 <td className="max-w-[460px] px-4 py-3">
                   <div className="truncate font-medium text-slate-800">{item.title}</div>
-                  <div className="mt-0.5 flex items-center gap-2 text-[10px] text-slate-400"><span className="font-mono">{item.id}</span><span>{item.module}</span><span className="font-mono">{item.endpoint}</span></div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-slate-400"><span className="font-mono">{item.id}</span><span>{item.module}</span><span className="font-mono">{item.endpoint}</span><span className="inline-flex items-center gap-1 text-slate-500"><GitBranch className="h-3 w-3" />{item.repo.name}@{item.repo.commit.slice(0, 8)}</span></div>
                 </td>
                 <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-[10px] ${STATUS_STYLE[item.status]}`}>{item.status}</span></td>
                 <td className="px-4 py-3 text-slate-600"><span className="inline-flex items-center gap-1"><UserRound className="h-3 w-3 text-slate-400" />{item.owner}</span></td>
-                <td className="px-4 py-3 text-slate-600"><span className="inline-flex items-center gap-1"><FileWarning className="h-3.5 w-3.5 text-amber-500" />{evidenceCount(item)}/4</span></td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-600">
+                    <span className="inline-flex items-center gap-1"><FileWarning className="h-3.5 w-3.5 text-amber-500" />{evidenceCount(item)}/4</span>
+                    <span className="inline-flex items-center gap-1 text-sky-700"><ImageIcon className="h-3.5 w-3.5" />截图</span>
+                    {hasVideo(item) && <span className="inline-flex items-center gap-1 text-violet-700"><Video className="h-3.5 w-3.5" />视频</span>}
+                  </div>
+                </td>
                 <td className="px-4 py-3 font-mono text-emerald-700">{item.run}</td>
                 <td className="px-4 py-3 text-slate-400">{item.updated}</td>
                 <td className="px-3 py-3 text-slate-300"><ChevronRight className="h-4 w-4" /></td>
@@ -353,8 +420,13 @@ export default function FindingsPage() {
           </div>
 
           <div className="space-y-5 p-6">
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-4">
               <div className="rounded-lg border border-slate-200 p-3"><div className="text-[10px] text-slate-400">负责人</div><div className="mt-1 text-sm font-medium text-slate-700">{selected.owner}</div></div>
+              <a href={selected.repo.url} target="_blank" rel="noreferrer" className="rounded-lg border border-slate-200 p-3 hover:border-emerald-300">
+                <div className="text-[10px] text-slate-400">归属仓库 / 提交</div>
+                <div className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-slate-700"><GitBranch className="h-3.5 w-3.5" />{selected.repo.name}</div>
+                <div className="mt-0.5 font-mono text-[10px] text-slate-400">{selected.repo.branch}@{selected.repo.commit.slice(0, 8)}</div>
+              </a>
               <div className="rounded-lg border border-slate-200 p-3"><div className="text-[10px] text-slate-400">关联运行 / 用例</div><div className="mt-1 font-mono text-sm text-slate-700">{selected.run} / {selected.caseId}</div></div>
               <div className="rounded-lg border border-slate-200 p-3"><div className="text-[10px] text-slate-400">根因置信度</div><div className="mt-1 text-sm font-medium text-slate-700">{selected.confidence}</div></div>
             </div>
@@ -365,6 +437,34 @@ export default function FindingsPage() {
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3"><div className="text-[10px] font-medium text-emerald-700">契约期望</div><div className="mt-1 text-xs leading-5 text-slate-700">{selected.expected}</div></div>
                 <div className="rounded-lg border border-red-200 bg-red-50/50 p-3"><div className="text-[10px] font-medium text-red-700">实际结果</div><div className="mt-1 text-xs leading-5 text-slate-700">{selected.actual}</div></div>
               </div>
+            </section>
+
+            <section>
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700"><Camera className="h-3.5 w-3.5 text-sky-500" />多媒体证据</div>
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700">截图必需</span>
+                <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] text-violet-700">视频建议</span>
+                <button onClick={() => toast.success('原型：已预留截图/视频上传入口', { description: '接入后按 MIME、尺寸、时长、SHA-256 入库，证据只读。' })} className="ml-auto inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[10px] text-slate-600"><Upload className="h-3 w-3" />补充证据</button>
+              </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                <button type="button" onClick={() => setLightbox(selected.media.screenshot)} className="group overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-left">
+                  <div className="relative">
+                    <img src={selected.media.screenshot} alt="缺陷截图证据" className="aspect-video w-full object-cover" />
+                    <span className="absolute left-2 top-2 rounded bg-slate-900/80 px-1.5 py-0.5 text-[9px] text-white">截图 · 关键断言失败</span>
+                    <span className="absolute right-2 top-2 rounded bg-white/90 p-1 text-slate-600 opacity-0 transition group-hover:opacity-100"><Maximize2 className="h-3.5 w-3.5" /></span>
+                  </div>
+                  <div className="flex items-center justify-between px-3 py-2 text-[10px] text-slate-500"><span>点击查看大图 · 只读证据</span><ImageIcon className="h-3.5 w-3.5" /></div>
+                </button>
+                {selected.media.video ? <button type="button" onClick={() => toast.success('原型视频证据', { description: `${selected.media.video?.caption} · ${selected.media.video?.duration}` })} className="group overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-left">
+                  <div className="relative">
+                    <img src={selected.media.video.poster} alt="缺陷视频证据" className="aspect-video w-full object-cover" />
+                    <span className="absolute inset-0 grid place-items-center bg-slate-900/20"><span className="grid h-10 w-10 place-items-center rounded-full bg-white/90 text-slate-800 shadow"><Play className="ml-0.5 h-4 w-4" /></span></span>
+                    <span className="absolute left-2 top-2 rounded bg-slate-900/80 px-1.5 py-0.5 text-[9px] text-white">视频 · {selected.media.video.duration}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-3 py-2 text-[10px] text-slate-500"><span className="truncate">{selected.media.video.caption}</span><Video className="h-3.5 w-3.5" /></div>
+                </button> : <div className="grid min-h-[150px] place-items-center rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-[11px] text-slate-400">未提供视频证据<br />关键实机流程建议补充录制</div>}
+              </div>
+              <div className="mt-2 rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-[10px] leading-4 text-slate-500">证据要求：UI/实机用例必须提供截图；关键流程建议视频；服务端保存 MIME、尺寸、时长、SHA-256，证据只读不可篡改。</div>
             </section>
 
             <section>
@@ -404,6 +504,13 @@ export default function FindingsPage() {
             </section>
           </div>
         </aside>
+      </div>}
+
+      {lightbox && <div className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/80 p-8" onMouseDown={() => setLightbox('')}>
+        <div className="relative w-full max-w-5xl" onMouseDown={(event) => event.stopPropagation()}>
+          <img src={lightbox} alt="缺陷截图证据大图" className="w-full rounded-xl border border-white/10 shadow-2xl" />
+          <div className="mt-2 flex items-center justify-between text-[11px] text-white/70"><span>缺陷截图证据 · 只读 · 不修改源码</span><button onClick={() => setLightbox('')} className="inline-flex items-center gap-1 rounded-md bg-white/10 px-2 py-1 text-white"><X className="h-3.5 w-3.5" />关闭</button></div>
+        </div>
       </div>}
     </div>
   );
