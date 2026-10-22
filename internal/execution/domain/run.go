@@ -1,7 +1,8 @@
 // Run 聚合：测试运行（时间维主键）与用例执行结果。
 // 状态机（合法迁移见 validTransitions）：
-//   queued→version_check→scheduled→running→collect→gate→report→done
-//   version_check 校验 mismatch→failed；任意阶段可 Fail；running 可 Paused/Resumed。
+//
+//	queued→version_check→scheduled→running→collect→gate→report→done
+//	version_check 校验 mismatch→failed；任意阶段可 Fail；running 可 Paused/Resumed。
 package domain
 
 import (
@@ -14,16 +15,16 @@ import (
 type RunState string
 
 const (
-	RunQueued      RunState = "queued"       // 已创建待校验
+	RunQueued       RunState = "queued"        // 已创建待校验
 	RunVersionCheck RunState = "version_check" // 版本校验中（"测了没白测"）
-	RunScheduled   RunState = "scheduled"    // 校验通过已入调度
-	RunRunning     RunState = "running"      // 执行中
-	RunPaused      RunState = "paused"       // 暂停
-	RunCollect     RunState = "collect"      // 证据收集
-	RunGate        RunState = "gate"         // 门禁判定
-	RunReport      RunState = "report"       // 报告生成
-	RunDone        RunState = "done"         // 完成
-	RunFailed      RunState = "failed"       // 失败/阻断（如版本 mismatch）
+	RunScheduled    RunState = "scheduled"     // 校验通过已入调度
+	RunRunning      RunState = "running"       // 执行中
+	RunPaused       RunState = "paused"        // 暂停
+	RunCollect      RunState = "collect"       // 证据收集
+	RunGate         RunState = "gate"          // 门禁判定
+	RunReport       RunState = "report"        // 报告生成
+	RunDone         RunState = "done"          // 完成
+	RunFailed       RunState = "failed"        // 失败/阻断（如版本 mismatch）
 )
 
 // CaseStatus 用例执行结果状态。
@@ -54,6 +55,8 @@ type CaseResult struct {
 	Status       CaseStatus
 	ResultText   string
 	Evidence     *EvidenceRef
+	FailureClass string
+	FindingID    *int64
 	AITokensIn   int64
 	AITokensOut  int64
 	CostAmount   float64
@@ -91,14 +94,14 @@ func NewRun(id, teamID, scenarioID, targetID int64, env, targetVersion, targetBr
 
 // validTransitions 状态机合法迁移表。
 var validTransitions = map[RunState][]RunState{
-	RunQueued:      {RunVersionCheck, RunFailed},
+	RunQueued:       {RunVersionCheck, RunFailed},
 	RunVersionCheck: {RunScheduled, RunFailed},
-	RunScheduled:   {RunRunning, RunFailed},
-	RunRunning:     {RunPaused, RunCollect, RunFailed},
-	RunPaused:      {RunRunning, RunFailed},
-	RunCollect:     {RunGate, RunFailed},
-	RunGate:        {RunReport, RunFailed},
-	RunReport:      {RunDone, RunFailed},
+	RunScheduled:    {RunRunning, RunFailed},
+	RunRunning:      {RunPaused, RunCollect, RunFailed},
+	RunPaused:       {RunRunning, RunFailed},
+	RunCollect:      {RunGate, RunFailed},
+	RunGate:         {RunReport, RunFailed},
+	RunReport:       {RunDone, RunFailed},
 }
 
 // ErrInvalidTransition 非法状态迁移。
@@ -168,4 +171,5 @@ type RunRepository interface {
 	SaveCaseResult(ctx context.Context, c *CaseResult) error
 	CaseResults(ctx context.Context, teamID, runID int64) ([]*CaseResult, error)
 	MaxAttempt(ctx context.Context, teamID, runID, caseID int64) (int, error)
+	MarkCaseResultFinding(ctx context.Context, teamID, resultID, findingID int64, failureClass string) error
 }

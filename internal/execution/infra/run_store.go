@@ -114,14 +114,17 @@ func (s *RunStore) SaveCaseResult(ctx context.Context, c *domain.CaseResult) err
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `
 			INSERT INTO run_case_result(id, team_id, run_id, case_id, case_version, status, result_text,
-				evidence_ref, ai_tokens_in, ai_tokens_out, cost_amount, attempt_seq, started_at, ended_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+				evidence_ref, failure_class, finding_id, ai_tokens_in, ai_tokens_out, cost_amount,
+				attempt_seq, started_at, ended_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
 			ON CONFLICT (run_id, case_id, attempt_seq) DO UPDATE SET
 				status=EXCLUDED.status, result_text=EXCLUDED.result_text, evidence_ref=EXCLUDED.evidence_ref,
+				failure_class=EXCLUDED.failure_class, finding_id=EXCLUDED.finding_id,
 				ai_tokens_in=EXCLUDED.ai_tokens_in, ai_tokens_out=EXCLUDED.ai_tokens_out,
 				cost_amount=EXCLUDED.cost_amount, ended_at=EXCLUDED.ended_at`,
 			c.ID, c.TeamID, c.RunID, c.CaseID, c.CaseVersion, string(c.Status), c.ResultText,
-			ev, c.AITokensIn, c.AITokensOut, c.CostAmount, c.AttemptSeq, c.StartedAt, c.EndedAt)
+			ev, c.FailureClass, c.FindingID, c.AITokensIn, c.AITokensOut, c.CostAmount,
+			c.AttemptSeq, c.StartedAt, c.EndedAt)
 		return err
 	})
 }
@@ -132,7 +135,7 @@ func (s *RunStore) CaseResults(ctx context.Context, teamID, runID int64) ([]*dom
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
 			SELECT id, run_id, case_id, case_version, status, result_text, evidence_ref,
-				ai_tokens_in, ai_tokens_out, cost_amount, attempt_seq, started_at, ended_at
+				COALESCE(failure_class,''), COALESCE(finding_id,0), ai_tokens_in, ai_tokens_out, cost_amount, attempt_seq, started_at, ended_at
 			FROM run_case_result WHERE team_id=$1 AND run_id=$2 ORDER BY attempt_seq, case_id`, teamID, runID)
 		if err != nil {
 			return err
@@ -143,13 +146,18 @@ func (s *RunStore) CaseResults(ctx context.Context, teamID, runID int64) ([]*dom
 			var status string
 			var ev []byte
 			var ended *time.Time
+			var findingID int64
 			if err := rows.Scan(&c.ID, &c.RunID, &c.CaseID, &c.CaseVersion, &status, &c.ResultText,
-				&ev, &c.AITokensIn, &c.AITokensOut, &c.CostAmount, &c.AttemptSeq, &c.StartedAt, &ended); err != nil {
+				&ev, &c.FailureClass, &findingID, &c.AITokensIn, &c.AITokensOut, &c.CostAmount,
+				&c.AttemptSeq, &c.StartedAt, &ended); err != nil {
 				return err
 			}
 			c.Status = domain.CaseStatus(status)
 			if len(ev) > 0 && string(ev) != "null" {
 				_ = json.Unmarshal(ev, &c.Evidence)
+			}
+			if findingID > 0 {
+				c.FindingID = &findingID
 			}
 			c.TeamID = teamID
 			c.EndedAt = ended
@@ -158,6 +166,22 @@ func (s *RunStore) CaseResults(ctx context.Context, teamID, runID int64) ([]*dom
 		return rows.Err()
 	})
 	return out, err
+}
+
+// MarkCaseResultFinding 把执行结果关联到缺陷并记录失败分类。
+func (s *RunStore) MarkCaseResultFinding(ctx context.Context, teamID, resultID, findingID int64, failureClass string) error {
+	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `
+			UPDATE run_case_result SET failure_class=$1, finding_id=$2, updated_at=now()
+			WHERE team_id=$3 AND id=$4`, failureClass, findingID, teamID, resultID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return pgx.ErrNoRows
+		}
+		return nil
+	})
 }
 
 // MaxAttempt 查询同 run 同 case 当前最大 attempt 序号。

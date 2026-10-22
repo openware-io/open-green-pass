@@ -576,6 +576,19 @@ paths:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
         '200': { description: 用例结果列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CaseResult' } } } } }
+  /runs/{id}/triage:
+    post:
+      summary: 执行失败归因并创建缺陷
+      operationId: triageRunResult
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TriageRequest' }
+      responses:
+        '200': { description: 已归因/已关联, content: { application/json: { schema: { $ref: '#/components/schemas/CaseResult' } } } }
+        '201': { description: 已创建缺陷, content: { application/json: { schema: { $ref: '#/components/schemas/CaseResult' } } } }
   /runs/{id}/version-check:
     post:
       summary: 触发版本校验阶段
@@ -1588,6 +1601,28 @@ components:
         selected_cases: { type: array, items: { type: integer, format: int64 } }
         started_at: { type: string, format: date-time, nullable: true }
         ended_at: { type: string, format: date-time, nullable: true }
+    TriageRequest:
+      type: object
+      required: [ case_result_id, project_id, repo_url, commit_sha ]
+      properties:
+        case_result_id: { type: integer, format: int64 }
+        project_id: { type: integer, format: int64 }
+        target_id: { type: integer, format: int64 }
+        repo_name: { type: string }
+        repo_url: { type: string }
+        branch: { type: string }
+        commit_sha: { type: string }
+        module: { type: string }
+        endpoint: { type: string }
+        title: { type: string }
+        severity: { type: string, enum: [P0, P1, P2, P3] }
+        root_cause: { type: string }
+        impact: { type: string }
+        confidence: { type: string, enum: [high, medium, low] }
+        source_file: { type: string }
+        source_line: { type: integer }
+        expected: { type: string }
+        actual: { type: string }
     CaseResult:
       type: object
       required: [ id, team_id, run_id, case_id, case_version, status, result_text, attempt_seq ]

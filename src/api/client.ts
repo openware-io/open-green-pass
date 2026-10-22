@@ -40,6 +40,7 @@ export type CoverageSummary = components['schemas']['CoverageSummary'];
 export type CoveragePlanInput = components['schemas']['CoveragePlanRequest'];
 export type GenerationJob = components['schemas']['GenerationJob'];
 export type GenerationJobCreateInput = components['schemas']['GenerationJobCreate'];
+export type TriageRequest = components['schemas']['TriageRequest'];
 
 export type CreateTargetInput = paths['/targets']['post']['requestBody']['content']['application/json'];
 export type CreateCaseInput = paths['/cases']['post']['requestBody']['content']['application/json'];
@@ -272,6 +273,9 @@ export class GreenPassClient {
   pauseRun(runId: number): JsonResponse<Run> { return this.request(`/runs/${runId}/pause`, { method: 'POST' }); }
   resumeRun(runId: number): JsonResponse<Run> { return this.request(`/runs/${runId}/resume`, { method: 'POST' }); }
   caseResults(runId: number): JsonResponse<CaseResult[]> { return this.request(`/runs/${runId}/case-results`); }
+  triageRunResult(runId: number, input: TriageRequest): JsonResponse<CaseResult> {
+    return this.request(`/runs/${runId}/triage`, { method: 'POST', body: JSON.stringify(input) });
+  }
   upsertGateRule(input: paths['/gates/rules']['put']['requestBody']['content']['application/json']): JsonResponse<GateRule> {
     return this.request('/gates/rules', { method: 'PUT', body: JSON.stringify(input) });
   }

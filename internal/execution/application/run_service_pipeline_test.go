@@ -30,6 +30,9 @@ func (r *pipelineRepo) CaseResults(context.Context, int64, int64) ([]*domain.Cas
 	return nil, nil
 }
 func (r *pipelineRepo) MaxAttempt(context.Context, int64, int64, int64) (int, error) { return 0, nil }
+func (r *pipelineRepo) MarkCaseResultFinding(context.Context, int64, int64, int64, string) error {
+	return nil
+}
 
 type pipelineCases struct{}
 

@@ -38,11 +38,19 @@ type RunService struct {
 	pool               domain.ExecutionPoolPort
 	schedule           domain.ScheduleQueuePort
 	leaseRenewInterval time.Duration
+	finding            FindingPort
 }
 
 // NewRunService 创建运行编排服务。
 func NewRunService(repo domain.RunRepository, envSvc *EnvService, cases domain.CasePort, policy domain.PolicyPort, runner domain.RunnerPort, gen *id.Generator) *RunService {
 	return &RunService{repo: repo, envSvc: envSvc, cases: cases, policy: policy, runner: runner, gen: gen, log: slog.Default(), workflow: NoopWorkflowController{}, conflict: domain.NoopConflictPort{}, quota: domain.NoopQuotaPort{}, audit: domain.NoopAuditPort{}, gate: domain.NoopGatePort{}, report: domain.NoopReportPort{}, cost: domain.NoopCostPort{}, leaseRenewInterval: 30 * time.Second}
+}
+
+// SetFindingPort injects the governance finding boundary.
+func (s *RunService) SetFindingPort(port FindingPort) {
+	if port != nil {
+		s.finding = port
+	}
 }
 
 // SetQuotaPort injects the shared scheduling quota implementation.
@@ -588,5 +596,9 @@ func (s *RunService) CaseResults(ctx context.Context, runID int64) ([]*domain.Ca
 	if !ok {
 		return nil, ErrTenantRequired
 	}
-	return s.repo.CaseResults(ctx, teamID, runID)
+	results, err := s.repo.CaseResults(ctx, teamID, runID)
+	if err != nil {
+		s.log.Error("list case results failed", "run_id", runID, "error", err)
+	}
+	return results, err
 }

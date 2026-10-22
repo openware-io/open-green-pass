@@ -25,17 +25,19 @@ type runResponse struct {
 }
 
 type caseResultResponse struct {
-	ID          int64               `json:"id"`
-	TeamID      int64               `json:"team_id"`
-	RunID       int64               `json:"run_id"`
-	CaseID      int64               `json:"case_id"`
-	CaseVersion int                 `json:"case_version"`
-	Status      string              `json:"status"`
-	ResultText  string              `json:"result_text"`
-	Evidence    *domain.EvidenceRef `json:"evidence,omitempty"`
-	AttemptSeq  int                 `json:"attempt_seq"`
-	StartedAt   time.Time           `json:"started_at"`
-	EndedAt     *time.Time          `json:"ended_at,omitempty"`
+	ID           int64               `json:"id"`
+	TeamID       int64               `json:"team_id"`
+	RunID        int64               `json:"run_id"`
+	CaseID       int64               `json:"case_id"`
+	CaseVersion  int                 `json:"case_version"`
+	Status       string              `json:"status"`
+	ResultText   string              `json:"result_text"`
+	Evidence     *domain.EvidenceRef `json:"evidence,omitempty"`
+	FailureClass string              `json:"failure_class,omitempty"`
+	FindingID    *int64              `json:"finding_id,omitempty"`
+	AttemptSeq   int                 `json:"attempt_seq"`
+	StartedAt    time.Time           `json:"started_at"`
+	EndedAt      *time.Time          `json:"ended_at,omitempty"`
 }
 
 func toRunResponse(run *domain.Run) runResponse {
@@ -51,7 +53,7 @@ func toCaseResultResponse(result *domain.CaseResult) caseResultResponse {
 	return caseResultResponse{
 		ID: result.ID, TeamID: result.TeamID, RunID: result.RunID, CaseID: result.CaseID,
 		CaseVersion: result.CaseVersion, Status: string(result.Status), ResultText: result.ResultText,
-		Evidence: result.Evidence, AttemptSeq: result.AttemptSeq, StartedAt: result.StartedAt, EndedAt: result.EndedAt,
+		Evidence: result.Evidence, FailureClass: result.FailureClass, FindingID: result.FindingID, AttemptSeq: result.AttemptSeq, StartedAt: result.StartedAt, EndedAt: result.EndedAt,
 	}
 }
 

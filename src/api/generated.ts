@@ -1497,6 +1497,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{id}/triage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 执行失败归因并创建缺陷 */
+        post: operations["triageRunResult"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{id}/version-check": {
         parameters: {
             query?: never;
@@ -2771,6 +2788,31 @@ export interface components {
             /** Format: date-time */
             ended_at?: string | null;
         };
+        TriageRequest: {
+            /** Format: int64 */
+            case_result_id: number;
+            /** Format: int64 */
+            project_id: number;
+            /** Format: int64 */
+            target_id?: number;
+            repo_name?: string;
+            repo_url: string;
+            branch?: string;
+            commit_sha: string;
+            module?: string;
+            endpoint?: string;
+            title?: string;
+            /** @enum {string} */
+            severity?: "P0" | "P1" | "P2" | "P3";
+            root_cause?: string;
+            impact?: string;
+            /** @enum {string} */
+            confidence?: "high" | "medium" | "low";
+            source_file?: string;
+            source_line?: number;
+            expected?: string;
+            actual?: string;
+        };
         CaseResult: {
             /** Format: int64 */
             id: number;
@@ -3764,6 +3806,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseResult"][];
+                };
+            };
+        };
+    };
+    triageRunResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TriageRequest"];
+            };
+        };
+        responses: {
+            /** @description 已归因/已关联 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseResult"];
+                };
+            };
+            /** @description 已创建缺陷 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseResult"];
                 };
             };
         };

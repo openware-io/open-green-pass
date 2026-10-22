@@ -201,6 +201,7 @@ func main() {
 	}), gen)
 	assistantSvc.SetModelResponder(aiinfra.NewAssistantResponder(db))
 	runSvc.SetAuditPort(einfra.NewTrustedAuditPort(auditSvc))
+	runSvc.SetFindingPort(einfra.NewGovernanceFindingPort(findingSvc))
 	// Execution/run and report tables remain owned by their respective domains;
 	// the trusted connection is restricted to trusted writes only.
 	statReader := tinfra.NewRunStatReader(db)

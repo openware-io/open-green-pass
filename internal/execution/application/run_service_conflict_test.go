@@ -23,6 +23,9 @@ func (r *conflictRunRepo) CaseResults(context.Context, int64, int64) ([]*domain.
 func (r *conflictRunRepo) MaxAttempt(context.Context, int64, int64, int64) (int, error) {
 	return 0, nil
 }
+func (r *conflictRunRepo) MarkCaseResultFinding(context.Context, int64, int64, int64, string) error {
+	return nil
+}
 
 type alwaysConflict struct{}
 
