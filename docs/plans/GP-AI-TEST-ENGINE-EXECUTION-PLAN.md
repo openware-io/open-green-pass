@@ -8,6 +8,23 @@
 - SDK 一个进程可承载多个 SDK session，但 GP 仍需自己做 HTTP/队列、进程池、workspace/session 隔离、超时和崩溃恢复。
 - 不在 DSH 之上重做平台；在 GreenPass 内新增 **AI 测试引擎子系统**，DSH 只做规划、生成、分析和建议。
 
+### 0.1 实施规格
+
+- [`../architecture/DSH-SDK-GATEWAY-SPEC.md`](../architecture/DSH-SDK-GATEWAY-SPEC.md)
+- [`../architecture/COVERAGE-MODEL-SPEC.md`](../architecture/COVERAGE-MODEL-SPEC.md)
+- [`../architecture/FINDING-EVIDENCE-SPEC.md`](../architecture/FINDING-EVIDENCE-SPEC.md)
+
+### 0.2 已确认决策（2026-10-22）
+
+| 决策 | 采用方案 |
+|---|---|
+| 进程模型 | 一 job 一进程 + warm pool；同 job 复用 session；不跨租户/仓库复用 |
+| 取消/超时 | 进程组终止 + 销毁 workspace/DSH_HOME；不复用；保留 transcript |
+| Cell 维度 | 端点 archetype 矩阵 + 参数等价类 + pairwise；P0 额外权限/并发/数据一致性 |
+| 证据存储 | 私有对象存储 + 预签名 PUT/GET + 元数据/SHA-256；截图必需、视频建议 |
+| Fixtures | 每 run 独立命名空间；API 优先；破坏性用例独立 lane；TTL/GC |
+| 失败归因 | 确定性规则优先；AI 只建议；产品缺陷不改 oracle；P0/P1 人工确认 |
+
 ## 1. 边界与原则
 
 1. 产品源码只读：GP 不写仓库、不建 PR、不提交 commit、不修改源码。

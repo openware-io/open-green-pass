@@ -28,7 +28,7 @@
 ## 索引
 
 - 产品：[`product/PRD.md`](product/PRD.md)
-- 架构：[`architecture/TECH-DESIGN.md`](architecture/TECH-DESIGN.md)、[`architecture/DESIGN-SPEC.md`](architecture/DESIGN-SPEC.md)、[`architecture/AI-ASSISTANT-DESIGN.md`](architecture/AI-ASSISTANT-DESIGN.md)
+- 架构：[`architecture/TECH-DESIGN.md`](architecture/TECH-DESIGN.md)、[`architecture/DESIGN-SPEC.md`](architecture/DESIGN-SPEC.md)、[`architecture/AI-ASSISTANT-DESIGN.md`](architecture/AI-ASSISTANT-DESIGN.md)、[`architecture/DSH-SDK-GATEWAY-SPEC.md`](architecture/DSH-SDK-GATEWAY-SPEC.md)、[`architecture/COVERAGE-MODEL-SPEC.md`](architecture/COVERAGE-MODEL-SPEC.md)、[`architecture/FINDING-EVIDENCE-SPEC.md`](architecture/FINDING-EVIDENCE-SPEC.md)
 - 工程：[`engineering/ENGINEERING-SPEC.md`](engineering/ENGINEERING-SPEC.md)、[`engineering/SECURITY-BASELINE.md`](engineering/SECURITY-BASELINE.md)
 - 计划：[`plans/IMPLEMENTATION-PLAN.md`](plans/IMPLEMENTATION-PLAN.md)、[`plans/GP3-GP4-EXECUTION-BACKLOG.md`](plans/GP3-GP4-EXECUTION-BACKLOG.md)、[`plans/AI-ASSISTANT-IMPLEMENTATION-PLAN.md`](plans/AI-ASSISTANT-IMPLEMENTATION-PLAN.md)、[`plans/GP-AI-TEST-ENGINE-EXECUTION-PLAN.md`](plans/GP-AI-TEST-ENGINE-EXECUTION-PLAN.md)
 - 运维：[`runbooks/GP-DATABASE-RECOVERY-RUNBOOK.md`](runbooks/GP-DATABASE-RECOVERY-RUNBOOK.md)、[`runbooks/OBSERVABILITY-RUNBOOK.md`](runbooks/OBSERVABILITY-RUNBOOK.md)、[`runbooks/GITHUB-APP-CONNECTION-RUNBOOK.md`](runbooks/GITHUB-APP-CONNECTION-RUNBOOK.md)、[`runbooks/IM-SAAS-SCM-ONBOARDING.md`](runbooks/IM-SAAS-SCM-ONBOARDING.md)

@@ -3,6 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
+- **AI 测试引擎实施规格（2026-10-22）**：新增 `DSH-SDK-GATEWAY-SPEC`（一 job 一进程/warm pool、取消/超时/崩溃恢复、队列/事件/错误码）、`COVERAGE-MODEL-SPEC`（端点 archetype、Cell 模型、pairwise、覆盖门禁与 DDL）、`FINDING-EVIDENCE-SPEC`（缺陷状态机、仓库/提交、截图/视频证据、上传/保留/归因规则）。
 - **缺陷仓库与多媒体证据（0.1.94-SNAPSHOT）**：缺陷列表/详情增加归属仓库、分支与冻结提交；新增“多媒体证据”区块，截图必需、视频建议，支持缩略图/大图/播放占位、证据策略与 SHA-256/MIME/时长说明；同步更新 AI 测试引擎方案的 finding 仓库字段与 evidence API。
 - **缺陷优先原型（0.1.93-SNAPSHOT）**：新增缺陷中心（列表/详情/期望实际/证据链/根因/只读建议/流转）、测试执行“缺陷候选与归因”、生成页“覆盖计划”、门禁“缺陷与覆盖门禁”、报告“缺陷与建议摘要”；明确源码只读、不写回仓库；当前为前端原型数据。
 - **AI 测试引擎可执行方案（2026-10-22）**：新增 `docs/plans/GP-AI-TEST-ENGINE-EXECUTION-PLAN.md`，明确 DSH 官方 headless/sdk/acp 能力边界、SDK 长驻网关与自建进程池/队列方案、覆盖账本/缺陷模型/失败归因/只读护栏、M0-M4 交付与验收指标。
