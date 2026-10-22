@@ -1945,10 +1945,119 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/coverage/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 保存契约端点并生成 Coverage Cell */
+        post: operations["planCoverage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/coverage/cells": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询覆盖账本 */
+        get: operations["listCoverageCells"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/coverage/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 覆盖汇总（Design/Execution/Pass 分开） */
+        get: operations["getCoverageSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CoverageEndpointInput: {
+            /** @enum {string} */
+            method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+            path: string;
+            module?: string;
+            operation_id?: string;
+            /** @enum {string} */
+            auth_mode?: "bearer" | "public" | "presigned" | "internal";
+            source_file?: string;
+            source_line?: number;
+        };
+        CoveragePlanRequest: {
+            /** Format: int64 */
+            project_id: number;
+            /** Format: int64 */
+            service_id?: number;
+            module?: string;
+            endpoints: components["schemas"]["CoverageEndpointInput"][];
+        };
+        CoverageCell: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            team_id: number;
+            /** Format: int64 */
+            project_id: number;
+            /** Format: int64 */
+            service_id?: number | null;
+            /** Format: int64 */
+            endpoint_id?: number;
+            endpoint_hash: string;
+            method: string;
+            path: string;
+            module: string;
+            dimension: string;
+            equivalence_class: string;
+            role: string;
+            state: string;
+            required: boolean;
+            priority: string;
+            status: string;
+            /** Format: int64 */
+            case_id?: number | null;
+            /** Format: int64 */
+            waiver_id?: number | null;
+        };
+        CoverageSummary: {
+            total_required: number;
+            design_covered: number;
+            executed: number;
+            passed: number;
+            waived: number;
+            uncovered: number;
+        };
+        CoveragePlanResponse: {
+            cells: components["schemas"]["CoverageCell"][];
+            summary: components["schemas"]["CoverageSummary"];
+        };
         FindingRepository: {
             /** Format: int64 */
             id?: number | null;
@@ -4258,6 +4367,86 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    planCoverage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoveragePlanRequest"];
+            };
+        };
+        responses: {
+            /** @description 计划与汇总 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoveragePlanResponse"];
+                };
+            };
+            /** @description 参数校验失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listCoverageCells: {
+        parameters: {
+            query?: {
+                project_id?: number;
+                service_id?: number;
+                module?: string;
+                status?: "planned" | "generated" | "executed" | "passed" | "failed" | "blocked" | "waived";
+                required?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cell 列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverageCell"][];
+                };
+            };
+        };
+    };
+    getCoverageSummary: {
+        parameters: {
+            query?: {
+                project_id?: number;
+                module?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 汇总 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverageSummary"];
+                };
             };
         };
     };

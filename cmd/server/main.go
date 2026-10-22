@@ -91,6 +91,7 @@ func main() {
 	caseStore := infra.NewCaseStore(db, gen)
 	caseSvc := application.NewCaseService(caseStore, gen)
 	findingSvc := application.NewFindingService(infra.NewFindingStore(db), gen)
+	coverageSvc := application.NewCoverageService(infra.NewCoverageStore(db, gen))
 
 	// 执行域依赖组装（版本校验 + 运行编排）
 	envStore := einfra.NewEnvStore(db, gen)
@@ -251,6 +252,7 @@ func main() {
 		},
 		func(mux *http.ServeMux) { gapi.RegisterCasesAuthorized(mux, caseSvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { gapi.RegisterFindings(mux, findingSvc) },
+		func(mux *http.ServeMux) { gapi.RegisterCoverage(mux, coverageSvc) },
 		func(mux *http.ServeMux) { eapi.RegisterAuthorized(mux, envSvc, runSvc, policySvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc, costSvc, reportSvc) },
 		func(mux *http.ServeMux) { assistantapi.Register(mux, assistantSvc) },

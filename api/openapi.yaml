@@ -887,8 +887,97 @@ paths:
       responses:
         '200': { description: 流转后的缺陷, content: { application/json: { schema: { $ref: '#/components/schemas/Finding' } } } }
         '409': { description: 非法状态流转 }
+  # ---------- 覆盖账本（governance coverage） ----------
+  /coverage/plan:
+    post:
+      summary: 保存契约端点并生成 Coverage Cell
+      operationId: planCoverage
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CoveragePlanRequest' } } }
+      responses:
+        '201': { description: 计划与汇总, content: { application/json: { schema: { $ref: '#/components/schemas/CoveragePlanResponse' } } } }
+        '400': { description: 参数校验失败 }
+  /coverage/cells:
+    get:
+      summary: 查询覆盖账本
+      operationId: listCoverageCells
+      parameters:
+        - { name: project_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: service_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: module, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [planned, generated, executed, passed, failed, blocked, waived] } }
+        - { name: required, in: query, schema: { type: boolean } }
+      responses:
+        '200': { description: Cell 列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CoverageCell' } } } } }
+  /coverage/summary:
+    get:
+      summary: 覆盖汇总（Design/Execution/Pass 分开）
+      operationId: getCoverageSummary
+      parameters:
+        - { name: project_id, in: query, schema: { type: integer, format: int64 } }
+        - { name: module, in: query, schema: { type: string } }
+      responses:
+        '200': { description: 汇总, content: { application/json: { schema: { $ref: '#/components/schemas/CoverageSummary' } } } }
 components:
   schemas:
+    CoverageEndpointInput:
+      type: object
+      required: [ method, path ]
+      properties:
+        method: { type: string, enum: [GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS] }
+        path: { type: string }
+        module: { type: string }
+        operation_id: { type: string }
+        auth_mode: { type: string, enum: [bearer, public, presigned, internal] }
+        source_file: { type: string }
+        source_line: { type: integer }
+    CoveragePlanRequest:
+      type: object
+      required: [ project_id, endpoints ]
+      properties:
+        project_id: { type: integer, format: int64 }
+        service_id: { type: integer, format: int64 }
+        module: { type: string }
+        endpoints: { type: array, items: { $ref: '#/components/schemas/CoverageEndpointInput' } }
+    CoverageCell:
+      type: object
+      required: [ id, team_id, project_id, endpoint_hash, method, path, module, dimension, equivalence_class, role, state, required, priority, status ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        project_id: { type: integer, format: int64 }
+        service_id: { type: integer, format: int64, nullable: true }
+        endpoint_id: { type: integer, format: int64 }
+        endpoint_hash: { type: string }
+        method: { type: string }
+        path: { type: string }
+        module: { type: string }
+        dimension: { type: string }
+        equivalence_class: { type: string }
+        role: { type: string }
+        state: { type: string }
+        required: { type: boolean }
+        priority: { type: string }
+        status: { type: string }
+        case_id: { type: integer, format: int64, nullable: true }
+        waiver_id: { type: integer, format: int64, nullable: true }
+    CoverageSummary:
+      type: object
+      required: [ total_required, design_covered, executed, passed, waived, uncovered ]
+      properties:
+        total_required: { type: integer }
+        design_covered: { type: integer }
+        executed: { type: integer }
+        passed: { type: integer }
+        waived: { type: integer }
+        uncovered: { type: integer }
+    CoveragePlanResponse:
+      type: object
+      required: [ cells, summary ]
+      properties:
+        cells: { type: array, items: { $ref: '#/components/schemas/CoverageCell' } }
+        summary: { $ref: '#/components/schemas/CoverageSummary' }
     FindingRepository:
       type: object
       required: [ name, url, branch, commit_sha ]

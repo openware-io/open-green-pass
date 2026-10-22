@@ -35,6 +35,9 @@ export type AuditEvent = components['schemas']['AuditEvent'];
 export type Finding = components['schemas']['Finding'];
 export type FindingCreateInput = components['schemas']['FindingCreate'];
 export type FindingTransitionInput = components['schemas']['FindingTransition'];
+export type CoverageCell = components['schemas']['CoverageCell'];
+export type CoverageSummary = components['schemas']['CoverageSummary'];
+export type CoveragePlanInput = components['schemas']['CoveragePlanRequest'];
 
 export type CreateTargetInput = paths['/targets']['post']['requestBody']['content']['application/json'];
 export type CreateCaseInput = paths['/cases']['post']['requestBody']['content']['application/json'];
@@ -133,6 +136,19 @@ export class GreenPassClient {
   getFinding(id: number): JsonResponse<Finding> { return this.request(`/findings/${id}`); }
   createFinding(input: FindingCreateInput): JsonResponse<Finding> { return this.request('/findings', { method: 'POST', body: JSON.stringify(input) }); }
   transitionFinding(id: number, input: FindingTransitionInput): JsonResponse<Finding> { return this.request(`/findings/${id}/transition`, { method: 'POST', body: JSON.stringify(input) }); }
+  planCoverage(input: CoveragePlanInput): JsonResponse<{ cells: CoverageCell[]; summary: CoverageSummary }> {
+    return this.request('/coverage/plan', { method: 'POST', body: JSON.stringify(input) });
+  }
+  listCoverageCells(params: { project_id?: number; service_id?: number; module?: string; status?: string; required?: boolean } = {}): JsonResponse<CoverageCell[]> {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => { if (value !== undefined) query.set(key, String(value)); });
+    return this.request(`/coverage/cells${query.size ? `?${query}` : ''}`);
+  }
+  coverageSummary(params: { project_id?: number; module?: string } = {}): JsonResponse<CoverageSummary> {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => { if (value !== undefined) query.set(key, String(value)); });
+    return this.request(`/coverage/summary${query.size ? `?${query}` : ''}`);
+  }
   ready(): JsonResponse<ReadinessResponse> { return this.request('/readyz'); }
   version(): JsonResponse<VersionResponse> { return this.request('/version'); }
   getModelBinding(targetId: number): JsonResponse<ModelBinding | null> { return this.request(`/targets/${targetId}/model-binding`); }

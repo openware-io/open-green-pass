@@ -1,0 +1,219 @@
+// 覆盖账本领域模型：端点 archetype → Coverage Cell → 覆盖汇总。
+// 零第三方依赖；Cell ID 稳定，不依赖 Agent 自报。
+package domain
+
+import (
+	"context"
+	"crypto/sha1"
+	"encoding/hex"
+	"strings"
+)
+
+// Endpoint 契约盘点后的端点（ctr_endpoint）。
+type Endpoint struct {
+	ID          int64
+	TeamID      int64
+	ProjectID   int64
+	ServiceID   *int64
+	Module      string
+	Method      string
+	Path        string
+	OperationID string
+	AuthMode    string
+	SourceFile  string
+	SourceLine  int
+	Parameters  []EndpointParameter
+	ErrorCodes  []int
+}
+
+// EndpointParameter 端点参数（ctr_parameter）。
+type EndpointParameter struct {
+	Location string
+	Name     string
+	Type     string
+	Required bool
+	Enum     []string
+	Min      *float64
+	Max      *float64
+	Pattern  string
+}
+
+// CoverageCell 最小覆盖单元（cov_cell）。
+type CoverageCell struct {
+	ID               int64
+	TeamID           int64
+	ProjectID        int64
+	ServiceID        *int64
+	EndpointID       int64
+	EndpointHash     string
+	Method           string
+	Path             string
+	Module           string
+	Dimension        string
+	EquivalenceClass string
+	Role             string
+	State            string
+	Required         bool
+	Priority         string
+	Status           string
+	CaseID           *int64
+	WaiverID         *int64
+}
+
+// CoverageFilter 覆盖账本筛选。
+type CoverageFilter struct {
+	ProjectID int64
+	ServiceID *int64
+	Module    string
+	Status    string
+	Required  *bool
+}
+
+// CoverageSummary 覆盖汇总（口径可复算）。
+type CoverageSummary struct {
+	TotalRequired int `json:"total_required"`
+	DesignCovered int `json:"design_covered"`
+	Executed      int `json:"executed"`
+	Passed        int `json:"passed"`
+	Waived        int `json:"waived"`
+	Uncovered     int `json:"uncovered"`
+}
+
+// CoverageRepository 覆盖账本仓储端口（实现负责 RLS）。
+type CoverageRepository interface {
+	SaveEndpoints(ctx context.Context, teamID int64, endpoints []Endpoint) ([]Endpoint, error)
+	SaveCells(ctx context.Context, teamID int64, cells []CoverageCell) ([]CoverageCell, error)
+	ListCells(ctx context.Context, teamID int64, f CoverageFilter) ([]CoverageCell, error)
+	Summary(ctx context.Context, teamID int64, f CoverageFilter) (CoverageSummary, error)
+}
+
+// BuildCoveragePlan 根据端点 archetype 枚举必需 Cell。
+func BuildCoveragePlan(projectID int64, endpoints []Endpoint) []CoverageCell {
+	out := make([]CoverageCell, 0, len(endpoints)*6)
+	for _, ep := range endpoints {
+		hash := EndpointHash(ep.Method, ep.Path)
+		for _, dimension := range requiredDimensions(ep) {
+			out = append(out, CoverageCell{
+				ProjectID: projectID, ServiceID: ep.ServiceID, EndpointID: ep.ID,
+				EndpointHash: hash, Method: ep.Method, Path: ep.Path, Module: ep.Module,
+				Dimension: dimension, EquivalenceClass: cellClass(dimension),
+				Role: "any", State: "none", Required: true, Priority: priorityFor(ep, dimension),
+				Status: "planned",
+			})
+		}
+	}
+	return out
+}
+
+// EndpointHash 端点稳定哈希（method + 规范化 path）。
+func EndpointHash(method, path string) string {
+	sum := sha1.Sum([]byte(strings.ToUpper(strings.TrimSpace(method)) + " " + normalizePath(path)))
+	return hex.EncodeToString(sum[:])[:12]
+}
+
+func normalizePath(path string) string {
+	parts := strings.Fields(strings.TrimSpace(path))
+	if len(parts) == 0 {
+		return "/"
+	}
+	p := parts[0]
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return strings.TrimSuffix(p, "/")
+}
+
+// Archetype 端点类型。
+func Archetype(ep Endpoint) string {
+	path := strings.ToLower(ep.Path)
+	if strings.HasPrefix(path, "/auth") || strings.Contains(path, "/auth/") {
+		return "auth"
+	}
+	if strings.Contains(path, "upload") || strings.Contains(path, "artifact") || strings.Contains(path, "media") {
+		return "upload"
+	}
+	if strings.Contains(path, "submit") || strings.Contains(path, "approve") || strings.Contains(path, "reject") ||
+		strings.Contains(path, "revoke") || strings.Contains(path, "rollout") || strings.Contains(path, "pause") ||
+		strings.Contains(path, "resume") || strings.Contains(path, "withdraw") || strings.Contains(path, "archive") {
+		return "state"
+	}
+	switch strings.ToUpper(ep.Method) {
+	case "GET":
+		if strings.Contains(ep.Path, "{") {
+			return "detail"
+		}
+		return "list"
+	case "POST":
+		if strings.Contains(ep.Path, "{") {
+			return "action"
+		}
+		return "create"
+	case "PUT", "PATCH":
+		return "update"
+	case "DELETE":
+		return "delete"
+	}
+	return "action"
+}
+
+func requiredDimensions(ep Endpoint) []string {
+	switch Archetype(ep) {
+	case "list":
+		return []string{"happy", "authn", "authz", "pagination", "empty", "invalid_filter", "sort"}
+	case "detail":
+		return []string{"happy", "not_found", "authz", "invalid_id", "tenant_isolation"}
+	case "create":
+		return []string{"happy", "required_missing", "type_format", "enum", "duplicate_conflict", "authz", "side_effect"}
+	case "update":
+		return []string{"happy", "not_found", "partial_invalid", "stale_version", "authz", "state_transition"}
+	case "delete":
+		return []string{"happy", "not_found", "repeat_idempotent", "authz", "referential_conflict", "confirm_mismatch"}
+	case "action":
+		return []string{"happy", "not_found", "invalid_state", "authz", "idempotency", "side_effect"}
+	case "state":
+		return []string{"allowed_transition", "forbidden_transition", "concurrent_transition", "authz"}
+	case "upload":
+		return []string{"happy", "size_limit", "mime_limit", "presign_expiry", "checksum_mismatch", "cancel_resume", "authz"}
+	case "auth":
+		return []string{"success", "bad_credentials", "lockout_rate_limit", "expired_token", "reset_invalid"}
+	}
+	return []string{"happy", "authn", "authz"}
+}
+
+func cellClass(dimension string) string {
+	switch dimension {
+	case "happy", "success", "allowed_transition":
+		return "success"
+	case "authn":
+		return "missing_or_expired"
+	case "authz", "tenant_isolation":
+		return "role_or_tenant_denied"
+	case "pagination":
+		return "boundary"
+	case "empty":
+		return "empty"
+	case "invalid_filter", "invalid_id", "type_format", "partial_invalid", "required_missing", "enum", "invalid_state":
+		return "invalid_input"
+	case "not_found":
+		return "not_found"
+	case "duplicate_conflict", "stale_version", "referential_conflict", "concurrent_transition":
+		return "conflict"
+	case "presign_expiry", "checksum_mismatch", "size_limit", "mime_limit", "cancel_resume":
+		return "boundary_or_external"
+	case "lockout_rate_limit", "expired_token", "reset_invalid", "bad_credentials":
+		return "auth_failure"
+	default:
+		return dimension
+	}
+}
+
+func priorityFor(ep Endpoint, dimension string) string {
+	m := strings.ToUpper(ep.Method)
+	if m == "DELETE" || strings.Contains(strings.ToLower(ep.Path), "callback") {
+		return "P0"
+	}
+	if dimension == "authz" || dimension == "authn" || dimension == "tenant_isolation" {
+		return "P1"
+	}
+	return "P2"
+}
