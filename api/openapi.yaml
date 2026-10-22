@@ -617,6 +617,13 @@ paths:
       parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
       responses:
         '200': { description: released, content: { application/json: { schema: { $ref: '#/components/schemas/StatusResponse' } } } }
+  /runs/{id}/coverage-sync:
+    post:
+      summary: 回写运行结果到覆盖账本
+      operationId: syncRunCoverage
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+      responses:
+        '200': { description: 更新数量, content: { application/json: { schema: { type: object, required: [ updated ], properties: { updated: { type: integer } } } } } }
   /runs/{id}/triage:
     post:
       summary: 执行失败归因并创建缺陷

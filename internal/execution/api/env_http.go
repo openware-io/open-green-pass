@@ -44,6 +44,7 @@ func register(mux *http.ServeMux, envSvc *application.EnvService, runSvc *applic
 	mux.HandleFunc("GET /runs/{id}/events", rh.events)
 	mux.HandleFunc("GET /runs/{id}/case-results", rh.caseResults)
 	mux.HandleFunc("POST /runs/{id}/triage", rh.triage)
+	mux.HandleFunc("POST /runs/{id}/coverage-sync", rh.syncCoverage)
 	mux.HandleFunc("POST /runs/{id}/version-check", rh.startVersionCheck)
 	mux.HandleFunc("POST /runs/{id}/execute", rh.executeRun)
 	mux.HandleFunc("POST /runs/{id}/pause", rh.pauseRun)

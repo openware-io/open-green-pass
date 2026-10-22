@@ -39,6 +39,7 @@ type RunService struct {
 	schedule           domain.ScheduleQueuePort
 	leaseRenewInterval time.Duration
 	finding            FindingPort
+	coverage           CoveragePort
 }
 
 // NewRunService 创建运行编排服务。
@@ -50,6 +51,13 @@ func NewRunService(repo domain.RunRepository, envSvc *EnvService, cases domain.C
 func (s *RunService) SetFindingPort(port FindingPort) {
 	if port != nil {
 		s.finding = port
+	}
+}
+
+// SetCoveragePort injects the coverage ledger boundary.
+func (s *RunService) SetCoveragePort(port CoveragePort) {
+	if port != nil {
+		s.coverage = port
 	}
 }
 

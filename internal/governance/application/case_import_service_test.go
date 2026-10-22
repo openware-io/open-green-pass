@@ -55,6 +55,9 @@ func (r *importCoverageRepo) AssignCase(_ context.Context, _ int64, cellIDs []in
 	r.assigned = append(r.assigned, cellIDs...)
 	return nil
 }
+func (r *importCoverageRepo) MarkCaseResult(context.Context, int64, int64, string) error {
+	return nil
+}
 
 type importReader struct {
 	state, output string

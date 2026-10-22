@@ -70,6 +70,15 @@ func (s *CoverageService) List(ctx context.Context, filter domain.CoverageFilter
 	return s.repo.ListCells(ctx, teamID, filter)
 }
 
+// MarkCaseResult 回写用例执行状态到覆盖 Cell。
+func (s *CoverageService) MarkCaseResult(ctx context.Context, caseID int64, status string) error {
+	teamID, ok := rls.TenantFrom(ctx)
+	if !ok {
+		return gperr.Unauthorized("tenant required")
+	}
+	return s.repo.MarkCaseResult(ctx, teamID, caseID, status)
+}
+
 // Summary 查询覆盖汇总。
 func (s *CoverageService) Summary(ctx context.Context, filter domain.CoverageFilter) (domain.CoverageSummary, error) {
 	teamID, ok := rls.TenantFrom(ctx)

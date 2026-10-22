@@ -161,6 +161,26 @@ func (s *CoverageStore) AssignCase(ctx context.Context, teamID int64, cellIDs []
 	})
 }
 
+// MarkCaseResult 按 case_id 回写覆盖 Cell 执行状态。
+func (s *CoverageStore) MarkCaseResult(ctx context.Context, teamID, caseID int64, status string) error {
+	switch status {
+	case "pass", "passed":
+		status = "passed"
+	case "fail", "failed":
+		status = "failed"
+	case "blocked":
+		status = "blocked"
+	default:
+		status = "executed"
+	}
+	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `
+			UPDATE cov_cell SET status=$1, updated_at=now()
+			WHERE team_id=$2 AND case_id=$3`, status, teamID, caseID)
+		return err
+	})
+}
+
 // Summary 计算覆盖汇总（Design/Execution/Pass 分开）。
 func (s *CoverageStore) Summary(ctx context.Context, teamID int64, f domain.CoverageFilter) (domain.CoverageSummary, error) {
 	cells, err := s.ListCells(ctx, teamID, f)
@@ -180,7 +200,7 @@ func (s *CoverageStore) Summary(ctx context.Context, teamID int64, f domain.Cove
 		if c.CaseID != nil || (c.Status != "planned" && c.Status != "blocked") {
 			sum.DesignCovered++
 		}
-		if c.Status == "executed" || c.Status == "passed" {
+		if c.Status == "executed" || c.Status == "passed" || c.Status == "failed" || c.Status == "blocked" {
 			sum.Executed++
 		}
 		if c.Status == "passed" {
