@@ -3,6 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
+- **M2 归因闭环（0.1.110-SNAPSHOT）**：新增 `POST /runs/{id}/triage`，把 failed/blocked run_case_result 转为 finding，回写 `failure_class`/`finding_id`；execution 经 FindingPort 调 governance，finding 带仓库/提交/证据摘要。fixtures/evidence 上传/真实执行仍待补。
 - **M1 完成：真实 DSH 生成 12 条 user 用例（0.1.106-SNAPSHOT）**：迁移 43 修复审计列；新增 `POST /generation/jobs/{id}/cases:import`，解析 DSH JSON、创建 cas_case/version、回填 cov_cell.case_id；user 模块 24/24 Cell 覆盖、uncovered=0；真实 SDK runner 本地验证，集群 gateway 仍为 stub。
 - **M1 gateway 部署（0.1.103-SNAPSHOT）**：新增 `gp-dsh-gateway` Deployment/Service/SA、`gp-dsh-auth` token、server 注入 `GP_DSH_GATEWAY_URL`、迁移 42 修复 `gen_job.updated_by`；生成 Job 端到端成功（stub runner），真实 SDK runner 仍待镜像/启用。
 - **M1 生成 Job 控制面（0.1.100-SNAPSHOT）**：新增 `gen_job/gen_job_event`、`GenerationJobService`、`POST/GET/DELETE /ai/generation-jobs`、`DSHGatewayClient`；当前 gateway URL 未配置，提交返回 400，真实 SDK runner 待接入。
