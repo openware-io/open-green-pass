@@ -193,6 +193,7 @@ func main() {
 	gateStore := tinfra.NewGateStore(trustedDB, gen)
 	auditStore := tinfra.NewAuditStore(trustedDB, gen)
 	auditSvc := tapp.NewAuditService(auditStore, gen)
+	evidenceSvc := tapp.NewEvidenceService(tinfra.NewEvidenceStore(trustedDB, gen), gen)
 	findingSvc.SetAuditPort(infra.NewTrustedAuditPort(auditSvc))
 	generationSvc.SetReviewPorts(generationController, aiaudit.New(auditSvc))
 	assistantStore := assistantinfra.NewStore(db)
@@ -268,6 +269,7 @@ func main() {
 		func(mux *http.ServeMux) { eapi.RegisterAuthorized(mux, envSvc, runSvc, policySvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { eapi.RegisterFixtures(mux, fixtureSvc, runSvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc, costSvc, reportSvc) },
+		func(mux *http.ServeMux) { tapi.RegisterEvidence(mux, evidenceSvc) },
 		func(mux *http.ServeMux) { assistantapi.Register(mux, assistantSvc) },
 	)
 	srv := &http.Server{

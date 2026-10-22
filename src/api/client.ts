@@ -43,6 +43,8 @@ export type GenerationJobCreateInput = components['schemas']['GenerationJobCreat
 export type TriageRequest = components['schemas']['TriageRequest'];
 export type RunFixture = components['schemas']['RunFixture'];
 export type EnvLease = components['schemas']['EnvLease'];
+export type Evidence = components['schemas']['Evidence'];
+export type EvidenceCreateInput = components['schemas']['EvidenceCreate'];
 
 export type CreateTargetInput = paths['/targets']['post']['requestBody']['content']['application/json'];
 export type CreateCaseInput = paths['/cases']['post']['requestBody']['content']['application/json'];
@@ -139,6 +141,10 @@ export class GreenPassClient {
     return this.request(`/findings${query.size ? `?${query}` : ''}`);
   }
   getFinding(id: number): JsonResponse<Finding> { return this.request(`/findings/${id}`); }
+  listFindingEvidence(findingId: number): JsonResponse<Evidence[]> { return this.request(`/findings/${findingId}/evidence`); }
+  createFindingEvidence(findingId: number, input: EvidenceCreateInput): JsonResponse<Evidence> {
+    return this.request(`/findings/${findingId}/evidence`, { method: 'POST', body: JSON.stringify(input) });
+  }
   createFinding(input: FindingCreateInput): JsonResponse<Finding> { return this.request('/findings', { method: 'POST', body: JSON.stringify(input) }); }
   transitionFinding(id: number, input: FindingTransitionInput): JsonResponse<Finding> { return this.request(`/findings/${id}/transition`, { method: 'POST', body: JSON.stringify(input) }); }
   planCoverage(input: CoveragePlanInput): JsonResponse<{ cells: CoverageCell[]; summary: CoverageSummary }> {

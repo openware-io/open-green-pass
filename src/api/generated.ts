@@ -1997,6 +1997,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/findings/{id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询缺陷证据 */
+        get: operations["listFindingEvidence"];
+        put?: never;
+        /** 登记缺陷证据元数据（文件已在对象存储） */
+        post: operations["createFindingEvidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings/{id}/evidence/{eid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询单条证据 */
+        get: operations["getFindingEvidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/findings/{id}": {
         parameters: {
             query?: never;
@@ -2229,6 +2264,41 @@ export interface components {
         CoveragePlanResponse: {
             cells: components["schemas"]["CoverageCell"][];
             summary: components["schemas"]["CoverageSummary"];
+        };
+        EvidenceCreate: {
+            /** @enum {string} */
+            kind: "request" | "response" | "log" | "trace" | "screenshot" | "video";
+            storage_uri: string;
+            mime_type: string;
+            /** Format: int64 */
+            size_bytes: number;
+            width?: number;
+            height?: number;
+            duration_ms?: number;
+            sha256: string;
+            thumbnail_uri?: string;
+            redacted?: boolean;
+        };
+        Evidence: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            team_id: number;
+            /** Format: int64 */
+            finding_id: number;
+            kind: string;
+            storage_uri: string;
+            mime_type: string;
+            /** Format: int64 */
+            size_bytes: number;
+            width?: number | null;
+            height?: number | null;
+            duration_ms?: number | null;
+            sha256: string;
+            thumbnail_uri?: string | null;
+            redacted?: boolean;
+            /** Format: int64 */
+            created_by: number;
         };
         FindingRepository: {
             /** Format: int64 */
@@ -4705,6 +4775,77 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    listFindingEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 证据列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Evidence"][];
+                };
+            };
+        };
+    };
+    createFindingEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvidenceCreate"];
+            };
+        };
+        responses: {
+            /** @description 已登记 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Evidence"];
+                };
+            };
+        };
+    };
+    getFindingEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                eid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 证据 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Evidence"];
+                };
             };
         };
     };
