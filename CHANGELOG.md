@@ -3,6 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
+- **DSH 用例生成对照评估（2026-10-22）**：对 `open-chat-admin` 2.2.1 做单轮 API 与 DSH headless 对照；基线 5 条/5 模块/仅 GET/1 条 status 断言，DSH 40 条/18 模块/43 个端点（49.4%）/170 条断言；结论：DSH 显著提升清单质量，但源码解析单次全量仍不满足大型项目“可靠、专业、覆盖全面”，需分层生成 + 覆盖率账本 + 执行反馈。详见 `docs/status/DSH-GENERATION-EVALUATION-2026-10-22.md`。
 - **项目默认模型与发现反馈（0.1.91-SNAPSHOT）**：模型页增加项目/模型下拉，可直接切换项目 `model-binding`；官方模型获取增加成功 toast 和“已获取 N 个模型”状态；模型卡片改为可点击选中态，已启用模型用绿色“已启用”标识。
 - **模型页信息架构重做（0.1.90-SNAPSHOT）**：删除 4 张大供应商卡、重复的“已配置供应商”和“已配置模型”两段；收敛为一张供应商表（供应商/状态/Base URL/模型/操作），一行一个供应商；未配置供应商用描边“配置”，已连接用“管理模型”。
 - **官方模型目录（0.1.88-SNAPSHOT）**：移除代码中的硬编码模型版本列表，只保留供应商默认配置；新增 `POST /model-provider-models` 从供应商官方 `GET /models` 动态发现模型；保存连接时校验模型 ID 必须在官方列表中；模型页不再展示 GPT-6/Claude Opus/Qwen3.8 等内置假版本。

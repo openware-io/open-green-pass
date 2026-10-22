@@ -1,0 +1,4434 @@
+{
+  "meta": {
+    "project": "open-chat-admin",
+    "version": "2.2.1",
+    "stack": "Vue 3 + Vite + Axios + Vue Router + Pinia",
+    "analysis_mode": "read-only source inspection; no files modified, no dependencies installed, no tests executed",
+    "generated_from": "src/api/*.js, src/views/**, src/router/index.js, src/utils/adminErrorMessage.js, src/stores/auth.js, docs/*.md",
+    "base_url": "http://127.0.0.1:3002/api/v1 (overridable via VITE_API_BASE_URL)",
+    "response_model": "For this inventory, response = {status, headers, body}; body is the parsed JSON payload returned by axios interceptor (res.data).",
+    "variables": {
+      "ADMIN_TOKEN": "valid admin bearer token",
+      "ADMIN_USER_ID": "id of an enabled admin account",
+      "ADMIN_USERNAME": "username of the admin account",
+      "ADMIN_PASSWORD": "password of the admin account",
+      "TEST_USER_ID": "non-admin test user id",
+      "TEST_USERNAME": "non-admin test username",
+      "TEST_GROUP_ID": "existing group id",
+      "TEST_APP_ID": "existing APPROVED open-platform appId for invalid-transition case",
+      "TEST_PENDING_APP_ID": "existing PENDING open-platform appId",
+      "TEST_RELEASE_ID": "existing draft client-release id",
+      "TEST_CURRENT_ROW_VERSION": "current rowVersion of TEST_RELEASE_ID",
+      "REPORT_ID": "existing resolved report id",
+      "CALL_ID": "existing active call id",
+      "DEVICE_TOKEN_ID": "existing device-token row id",
+      "SERVICE_TYPE_ID": "existing miniapp service-type id that has at least one service",
+      "SERVICE_ID": "existing miniapp service id",
+      "STICKER_ID": "existing user-sticker id",
+      "CANCELLATION_ID": "existing account-cancellation request id",
+      "RUN_ID": "unique numeric run id",
+      "UUID": "fresh UUID v4",
+      "SHA256_ARTIFACT": "64 lowercase hex characters",
+      "SHA256_1KB": "64 lowercase hex characters for the 1KB fixture"
+    }
+  },
+  "request_contract": {
+    "client": "axios instance src/api/request.js",
+    "base_url": "VITE_API_BASE_URL or http://127.0.0.1:3002/api/v1",
+    "timeout_ms": 15000,
+    "request_interceptor": [
+      "Attach Authorization: Bearer <admin_token> when localStorage.admin_token exists.",
+      "Always attach X-Client-Contract: im-v1.",
+      "Always attach X-Client-Version: VITE_APP_VERSION or 1.0.5.",
+      "Always attach X-Client-Platform: pc-admin.",
+      "Remove query params whose value is empty string, undefined, or null."
+    ],
+    "success_envelope": "Axios response interceptor returns res.data. Paginated endpoints observed as {items, total}. clientRelease create defensively unwraps {data}.",
+    "error_envelope": "Business errors are expected as response.data.code plus response.data.message. adminErrorMessage.js maps stable codes; HTTP status is fallback.",
+    "401_policy": "For /auth/login, show credential error without redirect. For other endpoints, clear admin_token/admin_user and set hash to #/login.",
+    "403_policy": "Show permission error; no client-side role check exists beyond token presence in router guard.",
+    "public_request": "publicRequest reuses baseURL, sends no Authorization header, unwraps data, and has no 401 redirect interceptor (used by forgot/reset password).",
+    "known_error_codes": [
+      "CLIENT_RELEASE_DOWNLOAD_HOST_NOT_ALLOWED",
+      "CLIENT_RELEASE_PLATFORM_NOT_ENABLED",
+      "CLIENT_RELEASE_INVALID_REQUEST",
+      "CLIENT_RELEASE_INVALID_STATE",
+      "CLIENT_RELEASE_NOT_FOUND",
+      "CLIENT_RELEASE_IDEMPOTENCY_REUSED",
+      "SSO_IDAAS_TOKEN_INVALID",
+      "SSO_ADMIN_ACCOUNT_NOT_FOUND",
+      "SSO_ADMIN_ACCOUNT_DISABLED",
+      "ADMIN_ACCOUNT_UNDELETABLE",
+      "USERNAME_CONFIRM_MISMATCH",
+      "CANNOT_DELETE_SELF",
+      "USER_NOT_FOUND",
+      "TIME_RANGE_INVALID"
+    ]
+  },
+  "inventory": {
+    "totals": {
+      "modules": 18,
+      "methods": 87,
+      "bearer_protected": 81,
+      "public": 4,
+      "presigned_external": 2
+    },
+    "modules": [
+      {
+        "module": "accountCancellation",
+        "file": "src/api/accountCancellation.js",
+        "auth": "bearer",
+        "error_handling": "No domain error codes in source. All failures pass through request interceptor generic status mapping; page keeps stale/empty list on failure.",
+        "key_objects": [
+          "AccountCancellation",
+          "AccountCancellationLog"
+        ],
+        "methods": [
+          {
+            "name": "getAccountCancellations",
+            "method": "GET",
+            "path": "/api/v1/admin/account-cancellations",
+            "params": {
+              "query": [
+                "page",
+                "pageSize",
+                "status",
+                "keyword"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[AccountCancellation],total}",
+            "codes": [],
+            "line": 3
+          },
+          {
+            "name": "getAccountCancellationLogs",
+            "method": "GET",
+            "path": "/api/v1/admin/account-cancellations/{id}/logs",
+            "params": {
+              "path": [
+                "id"
+              ]
+            },
+            "auth": "bearer",
+            "response": "[AccountCancellationLog]",
+            "codes": [],
+            "line": 7
+          },
+          {
+            "name": "searchAccountCancellationLogs",
+            "method": "GET",
+            "path": "/api/v1/admin/account-cancellations/logs",
+            "params": {
+              "query": [
+                "page",
+                "pageSize",
+                "userId",
+                "action"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[AccountCancellationLog],total}",
+            "codes": [],
+            "line": 11
+          }
+        ]
+      },
+      {
+        "module": "audit",
+        "file": "src/api/audit.js",
+        "auth": "bearer",
+        "error_handling": "TIME_RANGE_INVALID is mapped in adminErrorMessage.js. Other failures use generic status fallback. View resets data to empty on error.",
+        "key_objects": [
+          "AuditLog"
+        ],
+        "methods": [
+          {
+            "name": "getAuditLogs",
+            "method": "GET",
+            "path": "/api/v1/admin/audit-logs",
+            "params": {
+              "query": [
+                "page",
+                "pageSize",
+                "action",
+                "resourceType",
+                "operator",
+                "result",
+                "from",
+                "to"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[AuditLog],total,retentionFloor}",
+            "codes": [
+              "TIME_RANGE_INVALID"
+            ],
+            "line": 5
+          }
+        ]
+      },
+      {
+        "module": "auth",
+        "file": "src/api/auth.js",
+        "auth": "public for login/sso/forgot/reset; Bearer injected when a stale admin_token exists",
+        "error_handling": "Login 401 is special-cased as credential error. Other 401 clears storage and redirects. 403 shows permission message. SSO codes mapped. publicRequest has no error interceptor, so reset-token failures are surfaced by the page.",
+        "key_objects": [
+          "AdminSession",
+          "AdminUser",
+          "PasswordResetToken"
+        ],
+        "methods": [
+          {
+            "name": "login",
+            "method": "POST",
+            "path": "/api/v1/auth/login",
+            "params": {
+              "body": [
+                "username",
+                "password"
+              ]
+            },
+            "auth": "public",
+            "response": "{access_token,user}",
+            "codes": [],
+            "line": 3
+          },
+          {
+            "name": "ssoLogin",
+            "method": "POST",
+            "path": "/api/v1/auth/sso",
+            "params": {
+              "body": [
+                "ticket"
+              ]
+            },
+            "auth": "public",
+            "response": "{access_token,user}",
+            "codes": [
+              "SSO_IDAAS_TOKEN_INVALID",
+              "SSO_ADMIN_ACCOUNT_NOT_FOUND",
+              "SSO_ADMIN_ACCOUNT_DISABLED"
+            ],
+            "line": 7
+          },
+          {
+            "name": "forgotPassword",
+            "method": "POST",
+            "path": "/api/v1/auth/password/forgot",
+            "params": {
+              "body": [
+                "email"
+              ]
+            },
+            "auth": "public",
+            "response": "generic success payload",
+            "codes": [],
+            "line": 11
+          },
+          {
+            "name": "resetPassword",
+            "method": "POST",
+            "path": "/api/v1/auth/password/reset",
+            "params": {
+              "body": [
+                "token",
+                "newPassword"
+              ]
+            },
+            "auth": "public",
+            "response": "generic success payload",
+            "codes": [],
+            "line": 15
+          }
+        ]
+      },
+      {
+        "module": "clientRelease",
+        "file": "src/api/clientRelease.js",
+        "auth": "bearer; presigned PUT goes directly to object storage without API bearer",
+        "error_handling": "write() attaches an Idempotency-Key UUID and errorContext. CLIENT_RELEASE_* codes are mapped. Mutations take expectedRowVersion for optimistic concurrency. Upload helper throws local Error if uploadUrl is missing; presigned PUT errors carry plain HTTP status.",
+        "key_objects": [
+          "ClientRelease",
+          "ReleaseArtifact",
+          "ReleasePolicy",
+          "ReleaseAuditLog",
+          "ReleasePlatform"
+        ],
+        "methods": [
+          {
+            "name": "getClientReleases",
+            "method": "GET",
+            "path": "/api/v1/admin/client-releases",
+            "params": {
+              "query": [
+                "platform",
+                "channel",
+                "page",
+                "pageSize"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[ClientRelease],total}",
+            "codes": [],
+            "line": 5
+          },
+          {
+            "name": "createArtifactUploadSession",
+            "method": "POST",
+            "path": "/api/v1/admin/client-releases/artifacts/upload-sessions",
+            "params": {
+              "body": [
+                "platform",
+                "fileName",
+                "contentType"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{uploadUrl,objectKey}",
+            "codes": [
+              "CLIENT_RELEASE_INVALID_REQUEST",
+              "CLIENT_RELEASE_PLATFORM_NOT_ENABLED"
+            ],
+            "line": 10
+          },
+          {
+            "name": "putArtifactObject",
+            "method": "PUT",
+            "path": "{uploadUrl}",
+            "params": {
+              "body": [
+                "binary file"
+              ],
+              "headers": [
+                "Content-Type"
+              ]
+            },
+            "auth": "presigned URL",
+            "response": "2xx empty",
+            "codes": [],
+            "line": 15
+          },
+          {
+            "name": "completeArtifactUpload",
+            "method": "POST",
+            "path": "/api/v1/admin/client-releases/artifacts/upload-sessions/complete",
+            "params": {
+              "body": [
+                "platform",
+                "fileName",
+                "contentType",
+                "objectKey"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{downloadUrl,sha256,sizeBytes}",
+            "codes": [
+              "CLIENT_RELEASE_INVALID_REQUEST"
+            ],
+            "line": 16
+          },
+          {
+            "name": "getClientRelease",
+            "method": "GET",
+            "path": "/api/v1/admin/client-releases/{id}",
+            "params": {
+              "path": [
+                "id"
+              ]
+            },
+            "auth": "bearer",
+            "response": "ClientRelease",
+            "codes": [
+              "CLIENT_RELEASE_NOT_FOUND"
+            ],
+            "line": 46
+          },
+          {
+            "name": "createClientRelease",
+            "method": "POST",
+            "path": "/api/v1/admin/client-releases",
+            "params": {
+              "body": [
+                "platform",
+                "channel",
+                "releaseVersion",
+                "buildNumber",
+                "releaseNotes",
+                "storeUrl",
+                "mandatory",
+                "reason",
+                "compatibility",
+                "artifacts"
+              ]
+            },
+            "auth": "bearer + Idempotency-Key",
+            "response": "ClientRelease",
+            "codes": [
+              "CLIENT_RELEASE_INVALID_REQUEST",
+              "CLIENT_RELEASE_PLATFORM_NOT_ENABLED",
+              "CLIENT_RELEASE_DOWNLOAD_HOST_NOT_ALLOWED"
+            ],
+            "line": 47
+          },
+          {
+            "name": "updateClientRelease",
+            "method": "PUT",
+            "path": "/api/v1/admin/client-releases/{id}",
+            "params": {
+              "path": [
+                "id"
+              ],
+              "body": [
+                "expectedRowVersion",
+                "platform",
+                "channel",
+                "releaseVersion",
+                "buildNumber",
+                "releaseNotes",
+                "storeUrl",
+                "mandatory",
+                "reason",
+                "compatibility",
+                "artifacts"
+              ]
+            },
+            "auth": "bearer + Idempotency-Key",
+            "response": "ClientRelease",
+            "codes": [
+              "CLIENT_RELEASE_INVALID_STATE",
+              "CLIENT_RELEASE_NOT_FOUND"
+            ],
+            "line": 48
+          },
+          {
+            "name": "getClientReleasePolicies",
+            "method": "GET",
+            "path": "/api/v1/admin/client-release-policies",
+            "params": {},
+            "auth": "bearer",
+            "response": "[ReleasePolicy]",
+            "codes": [],
+            "line": 49
+          },
+          {
+            "name": "getClientReleaseAuditLogs",
+            "method": "GET",
+            "path": "/api/v1/admin/client-releases/{id}/audit-logs",
+            "params": {
+              "path": [
+                "id"
+              ],
+              "query": [
+                "page",
+                "pageSize"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[ReleaseAuditLog],total}",
+            "codes": [],
+            "line": 50
+          },
+          {
+            "name": "getClientReleasePlatforms",
+            "method": "GET",
+            "path": "/api/v1/admin/client-release-platforms",
+            "params": {},
+            "auth": "bearer",
+            "response": "[ReleasePlatform]",
+            "codes": [],
+            "line": 51
+          },
+          {
+            "name": "submitClientRelease",
+            "method": "POST",
+            "path": "/api/v1/admin/client-releases/{id}/submit",
+            "params": {
+              "path": [
+                "id"
+              ],
+              "body": [
+                "expectedRowVersion",
+                "reason",
+                "initialRolloutPercent",
+                "scheduledAt"
+              ]
+            },
+            "auth": "bearer + Idempotency-Key",
+            "response": "ClientRelease",
+            "codes": [
+              "CLIENT_RELEASE_INVALID_STATE",
+              "CLIENT_RELEASE_IDEMPOTENCY_REUSED",
+              "CLIENT_RELEASE_NOT_FOUND"
+            ],
+            "line": 52
+          },
+          {
+            "name": "rolloutClientRelease",
+            "method": "POST",
+            "path": "/api/v1/admin/client-releases/{id}/rollout",
+            "params": {
+              "path": [
+                "id"
+              ],
+              "body": [
+                "expectedRowVersion",
+                "reason",
+                "rolloutPercent"
+              ]
+            },
+            "auth": "bearer + Idempotency-Key",
+            "response": "ClientRelease",
+            "codes": [
+              "CLIENT_RELEASE_INVALID_STATE",
+              "CLIENT_RELEASE_IDEMPOTENCY_REUSED"
+            ],
+            "line": 53
+          },
+          {
+            "name": "pauseClientRelease",
+            "method": "POST",
+            "path": "/api/v1/admin/client-releases/{id}/pause",
+            "params": {
+              "path": [
+                "id"
+              ],
+              "body": [
+                "expectedRowVersion",
+                "reason"
+              ]
+            },
+            "auth": "bearer + Idempotency-Key",
+            "response": "ClientRelease",
+            "codes": [
+              "CLIENT_RELEASE_INVALID_STATE",
+              "CLIENT_RELEASE_IDEMPOTENCY_REUSED"
+            ],
+            "line": 54
+          },
+          {
+            "name": "resumeClientRelease",
+            "method": "POST",
+            "path": "/api/v1/admin/client-releases/{id}/resume",
+            "params": {
+              "path": [
+                "id"
+              ],
+              "body": [
+                "expectedRowVersion",
+                "reason"
+              ]
+            },
+            "auth": "bearer + Idempotency-Key",
+            "response": "ClientRelease",
+            "codes": [
+              "CLIENT_RELEASE_INVALID_STATE",
+              "CLIENT_RELEASE_IDEMPOTENCY_REUSED"
+            ],
+            "line": 55
+          },
+          {
+            "name": "withdrawClientRelease",
+            "method": "POST",
+            "path": "/api/v1/admin/client-releases/{id}/withdraw",
+            "params": {
+              "path": [
+                "id"
+              ],
+              "body": [
+                "expectedRowVersion",
+                "reason"
+              ]
+            },
+            "auth": "bearer + Idempotency-Key",
+            "response": "ClientRelease",
+            "codes": [
+              "CLIENT_RELEASE_INVALID_STATE",
+              "CLIENT_RELEASE_IDEMPOTENCY_REUSED"
+            ],
+            "line": 56
+          },
+          {
+            "name": "archiveClientRelease",
+            "method": "POST",
+            "path": "/api/v1/admin/client-releases/{id}/archive",
+            "params": {
+              "path": [
+                "id"
+              ],
+              "body": [
+                "expectedRowVersion",
+                "reason"
+              ]
+            },
+            "auth": "bearer + Idempotency-Key",
+            "response": "ClientRelease",
+            "codes": [
+              "CLIENT_RELEASE_INVALID_STATE",
+              "CLIENT_RELEASE_IDEMPOTENCY_REUSED"
+            ],
+            "line": 57
+          }
+        ]
+      },
+      {
+        "module": "config",
+        "file": "src/api/config.js",
+        "auth": "bearer",
+        "error_handling": "No domain error codes. Page catches and logs; request interceptor shows generic message. Batch atomicity is not stated in source.",
+        "key_objects": [
+          "SystemConfigItem"
+        ],
+        "methods": [
+          {
+            "name": "getAllConfigs",
+            "method": "GET",
+            "path": "/api/v1/admin/config",
+            "params": {},
+            "auth": "bearer",
+            "response": "[{id,configKey,configValue}]",
+            "codes": [],
+            "line": 3
+          },
+          {
+            "name": "updateConfig",
+            "method": "PUT",
+            "path": "/api/v1/admin/config",
+            "params": {
+              "body": [
+                "configKey/configValue or config object"
+              ]
+            },
+            "auth": "bearer",
+            "response": "updated config",
+            "codes": [],
+            "line": 7
+          },
+          {
+            "name": "batchUpdateConfigs",
+            "method": "POST",
+            "path": "/api/v1/admin/config/batch",
+            "params": {
+              "body": [
+                "configs:[{configKey,configValue}]"
+              ]
+            },
+            "auth": "bearer",
+            "response": "updated configs",
+            "codes": [],
+            "line": 11
+          }
+        ]
+      },
+      {
+        "module": "deviceToken",
+        "file": "src/api/deviceToken.js",
+        "auth": "bearer",
+        "error_handling": "No domain error codes. Delete errors use resolveAdminErrorMessage in view; list errors use generic interceptor message.",
+        "key_objects": [
+          "DevicePushToken"
+        ],
+        "methods": [
+          {
+            "name": "getDeviceTokens",
+            "method": "GET",
+            "path": "/api/v1/admin/device-tokens",
+            "params": {
+              "query": [
+                "page",
+                "pageSize",
+                "userId"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[DevicePushToken],total}",
+            "codes": [],
+            "line": 3
+          },
+          {
+            "name": "deleteDeviceToken",
+            "method": "DELETE",
+            "path": "/api/v1/admin/device-tokens/{id}",
+            "params": {
+              "path": [
+                "id"
+              ]
+            },
+            "auth": "bearer",
+            "response": "empty/ack",
+            "codes": [],
+            "line": 7
+          }
+        ]
+      },
+      {
+        "module": "friend",
+        "file": "src/api/friend.js",
+        "auth": "bearer",
+        "error_handling": "No domain error codes. View clears both friend and user search results on any failure.",
+        "key_objects": [
+          "FriendRelation",
+          "UserSearchResult"
+        ],
+        "methods": [
+          {
+            "name": "getFriends",
+            "method": "GET",
+            "path": "/api/v1/admin/friends",
+            "params": {
+              "query": [
+                "keyword",
+                "status",
+                "groupName",
+                "page",
+                "pageSize"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[FriendRelation],total}",
+            "codes": [],
+            "line": 3
+          }
+        ]
+      },
+      {
+        "module": "group",
+        "file": "src/api/group.js",
+        "auth": "bearer",
+        "error_handling": "No domain error codes. Module has no consumer in src/views; contract is unvalidated by UI.",
+        "key_objects": [
+          "Group",
+          "GroupMember"
+        ],
+        "methods": [
+          {
+            "name": "getGroupList",
+            "method": "GET",
+            "path": "/api/v1/admin/groups",
+            "params": {
+              "query": [
+                "page",
+                "pageSize",
+                "keyword"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[Group],total}",
+            "codes": [],
+            "line": 3
+          },
+          {
+            "name": "getGroupMembers",
+            "method": "GET",
+            "path": "/api/v1/admin/groups/{id}/members",
+            "params": {
+              "path": [
+                "id"
+              ]
+            },
+            "auth": "bearer",
+            "response": "[GroupMember]",
+            "codes": [],
+            "line": 7
+          },
+          {
+            "name": "dissolveGroup",
+            "method": "DELETE",
+            "path": "/api/v1/admin/groups/{id}",
+            "params": {
+              "path": [
+                "id"
+              ]
+            },
+            "auth": "bearer",
+            "response": "empty/ack",
+            "codes": [],
+            "line": 11
+          }
+        ]
+      },
+      {
+        "module": "media",
+        "file": "src/api/media.js",
+        "auth": "bearer for API calls; presigned PUT goes directly to object storage",
+        "error_handling": "Local errors: Invalid media upload request, Media upload was cancelled, Object storage upload failed, missing multipart ETag, Media validation rejected, Media validation timed out (60s at 800ms polling). API errors have no domain codes. Upload session creation/complete use Idempotency-Key.",
+        "key_objects": [
+          "MediaUploadSession",
+          "MediaObject",
+          "MultipartPartSignature"
+        ],
+        "methods": [
+          {
+            "name": "createUploadSession",
+            "method": "POST",
+            "path": "/api/v1/media/upload-sessions",
+            "params": {
+              "body": [
+                "scope",
+                "mediaKind",
+                "fileName",
+                "contentType",
+                "size",
+                "sha256"
+              ]
+            },
+            "auth": "bearer + Idempotency-Key",
+            "response": "{uploadSessionId,objectId,uploadUrl,requiredHeaders}",
+            "codes": [],
+            "line": 89
+          },
+          {
+            "name": "createMultipartUploadSession",
+            "method": "POST",
+            "path": "/api/v1/media/multipart-upload-sessions",
+            "params": {
+              "body": [
+                "scope",
+                "mediaKind",
+                "fileName",
+                "contentType",
+                "size",
+                "sha256"
+              ]
+            },
+            "auth": "bearer + Idempotency-Key",
+            "response": "{uploadSessionId,objectId,partSize,partCount}",
+            "codes": [],
+            "line": 90
+          },
+          {
+            "name": "getMultipartSessionStatus",
+            "method": "GET",
+            "path": "/api/v1/media/multipart-upload-sessions/{uploadSessionId}",
+            "params": {
+              "path": [
+                "uploadSessionId"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{uploadedParts:[{partNumber,etag}],...}",
+            "codes": [],
+            "line": 47
+          },
+          {
+            "name": "deleteUploadSession",
+            "method": "DELETE",
+            "path": "/api/v1/media/upload-sessions/{uploadSessionId}",
+            "params": {
+              "path": [
+                "uploadSessionId"
+              ]
+            },
+            "auth": "bearer",
+            "response": "empty/ack",
+            "codes": [],
+            "line": 76
+          },
+          {
+            "name": "deleteMultipartUploadSession",
+            "method": "DELETE",
+            "path": "/api/v1/media/multipart-upload-sessions/{uploadSessionId}",
+            "params": {
+              "path": [
+                "uploadSessionId"
+              ]
+            },
+            "auth": "bearer",
+            "response": "empty/ack",
+            "codes": [],
+            "line": 76
+          },
+          {
+            "name": "completeSingleUpload",
+            "method": "POST",
+            "path": "/api/v1/media/upload-sessions/{uploadSessionId}/complete",
+            "params": {
+              "path": [
+                "uploadSessionId"
+              ],
+              "body": [
+                "size",
+                "sha256"
+              ]
+            },
+            "auth": "bearer + Idempotency-Key",
+            "response": "ack",
+            "codes": [],
+            "line": 102
+          },
+          {
+            "name": "signMultipartParts",
+            "method": "POST",
+            "path": "/api/v1/media/multipart-upload-sessions/{uploadSessionId}/parts/signatures",
+            "params": {
+              "path": [
+                "uploadSessionId"
+              ],
+              "body": [
+                "partNumbers"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{partUrls:[{partNumber,uploadUrl}]}",
+            "codes": [],
+            "line": 113
+          },
+          {
+            "name": "completeMultipartPart",
+            "method": "POST",
+            "path": "/api/v1/media/multipart-upload-sessions/{uploadSessionId}/parts/{partNumber}/complete",
+            "params": {
+              "path": [
+                "uploadSessionId",
+                "partNumber"
+              ],
+              "body": [
+                "etag"
+              ]
+            },
+            "auth": "bearer",
+            "response": "ack",
+            "codes": [],
+            "line": 126
+          },
+          {
+            "name": "completeMultipartUpload",
+            "method": "POST",
+            "path": "/api/v1/media/multipart-upload-sessions/{uploadSessionId}/complete",
+            "params": {
+              "path": [
+                "uploadSessionId"
+              ],
+              "body": [
+                "parts:[{partNumber,etag}]",
+                "size",
+                "sha256"
+              ]
+            },
+            "auth": "bearer",
+            "response": "ack",
+            "codes": [],
+            "line": 137
+          },
+          {
+            "name": "putPresignedObject",
+            "method": "PUT",
+            "path": "{uploadUrl}",
+            "params": {
+              "body": [
+                "binary part/blob"
+              ],
+              "headers": [
+                "requiredHeaders"
+              ]
+            },
+            "auth": "presigned URL",
+            "response": "2xx + ETag header",
+            "codes": [],
+            "line": 175
+          },
+          {
+            "name": "getMediaObject",
+            "method": "GET",
+            "path": "/api/v1/media/{objectId}",
+            "params": {
+              "path": [
+                "objectId"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{objectId,status,url?}",
+            "codes": [],
+            "line": 197
+          },
+          {
+            "name": "getMediaAccessUrl",
+            "method": "GET",
+            "path": "/api/v1/media/{objectId}/access",
+            "params": {
+              "path": [
+                "objectId"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{url}",
+            "codes": [],
+            "line": 20
+          }
+        ]
+      },
+      {
+        "module": "message",
+        "file": "src/api/message.js",
+        "auth": "bearer",
+        "error_handling": "No domain error codes. List view clears data on failure; trend response shape is not consumed by any view.",
+        "key_objects": [
+          "Message",
+          "MessageTrendPoint"
+        ],
+        "methods": [
+          {
+            "name": "getMessages",
+            "method": "GET",
+            "path": "/api/v1/admin/messages",
+            "params": {
+              "query": [
+                "keyword",
+                "chatType",
+                "msgType",
+                "status",
+                "page",
+                "pageSize"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[Message],total}",
+            "codes": [],
+            "line": 3
+          },
+          {
+            "name": "getMessageTrend",
+            "method": "GET",
+            "path": "/api/v1/admin/messages/trend",
+            "params": {
+              "query": [
+                "days"
+              ]
+            },
+            "auth": "bearer",
+            "response": "[{date,...}]",
+            "codes": [],
+            "line": 7
+          }
+        ]
+      },
+      {
+        "module": "miniappService",
+        "file": "src/api/miniappService.js",
+        "auth": "bearer",
+        "error_handling": "No domain error codes. UI blocks duplicate/empty names client-side and states a type with services cannot be deleted, but server error codes are not documented.",
+        "key_objects": [
+          "MiniappServiceType",
+          "MiniappService"
+        ],
+        "methods": [
+          {
+            "name": "getServiceTypes",
+            "method": "GET",
+            "path": "/api/v1/admin/miniapp/service-types",
+            "params": {},
+            "auth": "bearer",
+            "response": "[MiniappServiceType]",
+            "codes": [],
+            "line": 4
+          },
+          {
+            "name": "createServiceType",
+            "method": "POST",
+            "path": "/api/v1/admin/miniapp/service-types",
+            "params": {
+              "body": [
+                "name",
+                "sortOrder",
+                "hidden"
+              ]
+            },
+            "auth": "bearer",
+            "response": "MiniappServiceType",
+            "codes": [],
+            "line": 8
+          },
+          {
+            "name": "updateServiceType",
+            "method": "PUT",
+            "path": "/api/v1/admin/miniapp/service-types/{id}",
+            "params": {
+              "path": [
+                "id"
+              ],
+              "body": [
+                "name",
+                "sortOrder",
+                "hidden"
+              ]
+            },
+            "auth": "bearer",
+            "response": "MiniappServiceType",
+            "codes": [],
+            "line": 12
+          },
+          {
+            "name": "deleteServiceType",
+            "method": "DELETE",
+            "path": "/api/v1/admin/miniapp/service-types/{id}",
+            "params": {
+              "path": [
+                "id"
+              ]
+            },
+            "auth": "bearer",
+            "response": "empty/ack",
+            "codes": [],
+            "line": 16
+          },
+          {
+            "name": "batchSortServiceTypes",
+            "method": "POST",
+            "path": "/api/v1/admin/miniapp/service-types/sort",
+            "params": {
+              "body": [
+                "items:[{id,sortOrder}]"
+              ]
+            },
+            "auth": "bearer",
+            "response": "ack",
+            "codes": [],
+            "line": 20
+          },
+          {
+            "name": "getServices",
+            "method": "GET",
+            "path": "/api/v1/admin/miniapp/services",
+            "params": {
+              "query": [
+                "typeId",
+                "page",
+                "pageSize"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[MiniappService],total}",
+            "codes": [],
+            "line": 25
+          },
+          {
+            "name": "createService",
+            "method": "POST",
+            "path": "/api/v1/admin/miniapp/services",
+            "params": {
+              "body": [
+                "typeId",
+                "name",
+                "link",
+                "introduction",
+                "icon",
+                "status",
+                "audience",
+                "isTop",
+                "hidden",
+                "sortOrder"
+              ]
+            },
+            "auth": "bearer",
+            "response": "MiniappService",
+            "codes": [],
+            "line": 29
+          },
+          {
+            "name": "updateService",
+            "method": "PUT",
+            "path": "/api/v1/admin/miniapp/services/{id}",
+            "params": {
+              "path": [
+                "id"
+              ],
+              "body": [
+                "typeId",
+                "name",
+                "link",
+                "introduction",
+                "icon",
+                "status",
+                "audience",
+                "isTop",
+                "hidden",
+                "sortOrder"
+              ]
+            },
+            "auth": "bearer",
+            "response": "MiniappService",
+            "codes": [],
+            "line": 33
+          },
+          {
+            "name": "deleteService",
+            "method": "DELETE",
+            "path": "/api/v1/admin/miniapp/services/{id}",
+            "params": {
+              "path": [
+                "id"
+              ]
+            },
+            "auth": "bearer",
+            "response": "empty/ack",
+            "codes": [],
+            "line": 37
+          }
+        ]
+      },
+      {
+        "module": "monitor",
+        "file": "src/api/monitor.js",
+        "auth": "bearer",
+        "error_handling": "No domain error codes. Realtime view logs errors and keeps previous state; end-call failure is shown by interceptor.",
+        "key_objects": [
+          "OnlineCount",
+          "OnlineUser",
+          "CallRoom",
+          "ServerStats"
+        ],
+        "methods": [
+          {
+            "name": "getOnlineCount",
+            "method": "GET",
+            "path": "/api/v1/admin/monitor/online",
+            "params": {},
+            "auth": "bearer",
+            "response": "{onlineCount}",
+            "codes": [],
+            "line": 3
+          },
+          {
+            "name": "getOnlineUsers",
+            "method": "GET",
+            "path": "/api/v1/admin/monitor/online/users",
+            "params": {},
+            "auth": "bearer",
+            "response": "[OnlineUser]",
+            "codes": [],
+            "line": 7
+          },
+          {
+            "name": "getCallRooms",
+            "method": "GET",
+            "path": "/api/v1/admin/monitor/calls",
+            "params": {},
+            "auth": "bearer",
+            "response": "[CallRoom]",
+            "codes": [],
+            "line": 11
+          },
+          {
+            "name": "endCall",
+            "method": "POST",
+            "path": "/api/v1/admin/monitor/calls/{callId}/end",
+            "params": {
+              "path": [
+                "callId"
+              ]
+            },
+            "auth": "bearer",
+            "response": "empty/ack",
+            "codes": [],
+            "line": 15
+          },
+          {
+            "name": "getServerStats",
+            "method": "GET",
+            "path": "/api/v1/admin/monitor/server",
+            "params": {},
+            "auth": "bearer",
+            "response": "ServerStats",
+            "codes": [],
+            "line": 19
+          }
+        ]
+      },
+      {
+        "module": "openPlatform",
+        "file": "src/api/openPlatform.js",
+        "auth": "bearer",
+        "error_handling": "No domain error codes in source. UI hides actions by status. appSecret is returned only on approve/reset-secret and displayed once.",
+        "key_objects": [
+          "OpenPlatformApplication",
+          "AppSecret"
+        ],
+        "methods": [
+          {
+            "name": "getApplications",
+            "method": "GET",
+            "path": "/api/v1/admin/open-platform/applications",
+            "params": {
+              "query": [
+                "appType",
+                "status",
+                "page",
+                "pageSize"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[OpenPlatformApplication],total}",
+            "codes": [],
+            "line": 4
+          },
+          {
+            "name": "getApplication",
+            "method": "GET",
+            "path": "/api/v1/admin/open-platform/applications/{appId}",
+            "params": {
+              "path": [
+                "appId"
+              ]
+            },
+            "auth": "bearer",
+            "response": "OpenPlatformApplication",
+            "codes": [],
+            "line": 8
+          },
+          {
+            "name": "approveApplication",
+            "method": "POST",
+            "path": "/api/v1/admin/open-platform/applications/{appId}/approve",
+            "params": {
+              "path": [
+                "appId"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{appId,appSecret}",
+            "codes": [],
+            "line": 12
+          },
+          {
+            "name": "rejectApplication",
+            "method": "POST",
+            "path": "/api/v1/admin/open-platform/applications/{appId}/reject",
+            "params": {
+              "path": [
+                "appId"
+              ],
+              "body": [
+                "reason"
+              ]
+            },
+            "auth": "bearer",
+            "response": "empty/ack",
+            "codes": [],
+            "line": 16
+          },
+          {
+            "name": "resetSecret",
+            "method": "POST",
+            "path": "/api/v1/admin/open-platform/applications/{appId}/reset-secret",
+            "params": {
+              "path": [
+                "appId"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{appId,appSecret}",
+            "codes": [],
+            "line": 20
+          },
+          {
+            "name": "revokeApplication",
+            "method": "POST",
+            "path": "/api/v1/admin/open-platform/applications/{appId}/revoke",
+            "params": {
+              "path": [
+                "appId"
+              ]
+            },
+            "auth": "bearer",
+            "response": "empty/ack",
+            "codes": [],
+            "line": 24
+          }
+        ]
+      },
+      {
+        "module": "security",
+        "file": "src/api/security.js",
+        "auth": "bearer",
+        "error_handling": "No domain error codes in source. UI limits report transitions to pending/processing/resolved/dismissed and treats errors via the global interceptor.",
+        "key_objects": [
+          "SensitiveWord",
+          "Violation",
+          "Report"
+        ],
+        "methods": [
+          {
+            "name": "getKeywords",
+            "method": "GET",
+            "path": "/api/v1/admin/security/sensitive-words",
+            "params": {
+              "query": [
+                "page",
+                "pageSize",
+                "category",
+                "level",
+                "enabled"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[SensitiveWord],total}",
+            "codes": [],
+            "line": 3
+          },
+          {
+            "name": "addKeyword",
+            "method": "POST",
+            "path": "/api/v1/admin/security/sensitive-words",
+            "params": {
+              "body": [
+                "word",
+                "category",
+                "level"
+              ]
+            },
+            "auth": "bearer",
+            "response": "SensitiveWord",
+            "codes": [],
+            "line": 7
+          },
+          {
+            "name": "updateKeyword",
+            "method": "PUT",
+            "path": "/api/v1/admin/security/sensitive-words/{id}",
+            "params": {
+              "path": [
+                "id"
+              ],
+              "body": [
+                "word",
+                "category",
+                "level",
+                "enabled"
+              ]
+            },
+            "auth": "bearer",
+            "response": "SensitiveWord",
+            "codes": [],
+            "line": 11
+          },
+          {
+            "name": "deleteKeyword",
+            "method": "DELETE",
+            "path": "/api/v1/admin/security/sensitive-words/{id}",
+            "params": {
+              "path": [
+                "id"
+              ]
+            },
+            "auth": "bearer",
+            "response": "empty/ack",
+            "codes": [],
+            "line": 15
+          },
+          {
+            "name": "getViolations",
+            "method": "GET",
+            "path": "/api/v1/admin/security/violations",
+            "params": {
+              "query": [
+                "action",
+                "page",
+                "pageSize"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[Violation],total}",
+            "codes": [],
+            "line": 19
+          },
+          {
+            "name": "createViolation",
+            "method": "POST",
+            "path": "/api/v1/admin/security/violations",
+            "params": {
+              "body": [
+                "userId",
+                "reason",
+                "content",
+                "action"
+              ]
+            },
+            "auth": "bearer",
+            "response": "Violation",
+            "codes": [],
+            "line": 23
+          },
+          {
+            "name": "getReports",
+            "method": "GET",
+            "path": "/api/v1/admin/security/reports",
+            "params": {
+              "query": [
+                "status",
+                "page",
+                "pageSize"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[Report],total}",
+            "codes": [],
+            "line": 27
+          },
+          {
+            "name": "handleReport",
+            "method": "PUT",
+            "path": "/api/v1/admin/security/reports/{id}",
+            "params": {
+              "path": [
+                "id"
+              ],
+              "body": [
+                "status"
+              ]
+            },
+            "auth": "bearer",
+            "response": "Report/ack",
+            "codes": [],
+            "line": 31
+          },
+          {
+            "name": "getPendingReportCount",
+            "method": "GET",
+            "path": "/api/v1/admin/security/reports/pending/count",
+            "params": {},
+            "auth": "bearer",
+            "response": "{count}",
+            "codes": [],
+            "line": 35
+          }
+        ]
+      },
+      {
+        "module": "server",
+        "file": "src/api/server.js",
+        "auth": "bearer",
+        "error_handling": "No domain error codes. No view imports this module; server/logs.vue and server/performance.vue use mock data, so the API contract is unvalidated.",
+        "key_objects": [
+          "ServerMetrics",
+          "ServerNode",
+          "ServerLogEntry"
+        ],
+        "methods": [
+          {
+            "name": "getServerMetrics",
+            "method": "GET",
+            "path": "/api/v1/admin/server/metrics",
+            "params": {},
+            "auth": "bearer",
+            "response": "ServerMetrics",
+            "codes": [],
+            "line": 3
+          },
+          {
+            "name": "getServerNodes",
+            "method": "GET",
+            "path": "/api/v1/admin/server/nodes",
+            "params": {},
+            "auth": "bearer",
+            "response": "[ServerNode]",
+            "codes": [],
+            "line": 7
+          },
+          {
+            "name": "getLogs",
+            "method": "GET",
+            "path": "/api/v1/admin/server/logs",
+            "params": {
+              "query": [
+                "level",
+                "module",
+                "keyword",
+                "page",
+                "pageSize"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[ServerLogEntry],total}",
+            "codes": [],
+            "line": 11
+          }
+        ]
+      },
+      {
+        "module": "stats",
+        "file": "src/api/stats.js",
+        "auth": "bearer",
+        "error_handling": "No domain error codes. Dashboard catches errors and leaves cards/charts empty.",
+        "key_objects": [
+          "OverviewStats",
+          "TimeSeriesPoint"
+        ],
+        "methods": [
+          {
+            "name": "getOverviewStats",
+            "method": "GET",
+            "path": "/api/v1/admin/stats/overview",
+            "params": {},
+            "auth": "bearer",
+            "response": "{totalUsers,onlineCount,totalMessages,totalGroups,todayNewUsers,todayNewMessages,todayNewGroups,totalFriends,todayNewFriends}",
+            "codes": [],
+            "line": 3
+          },
+          {
+            "name": "getTimeSeriesData",
+            "method": "GET",
+            "path": "/api/v1/admin/stats/trend",
+            "params": {
+              "query": [
+                "days"
+              ]
+            },
+            "auth": "bearer",
+            "response": "[{date,newUsers,newMessages,newFriends}]",
+            "codes": [],
+            "line": 7
+          }
+        ]
+      },
+      {
+        "module": "user",
+        "file": "src/api/user.js",
+        "auth": "bearer",
+        "error_handling": "Delete has documented stable codes: USERNAME_CONFIRM_MISMATCH, ADMIN_ACCOUNT_UNDELETABLE, CANNOT_DELETE_SELF, USER_NOT_FOUND. Other failures use generic interceptor status mapping.",
+        "key_objects": [
+          "AdminUser"
+        ],
+        "methods": [
+          {
+            "name": "getUsers",
+            "method": "GET",
+            "path": "/api/v1/admin/users",
+            "params": {
+              "query": [
+                "keyword",
+                "status",
+                "page",
+                "pageSize"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[AdminUser],total}",
+            "codes": [],
+            "line": 3
+          },
+          {
+            "name": "getUserById",
+            "method": "GET",
+            "path": "/api/v1/admin/users/{id}",
+            "params": {
+              "path": [
+                "id"
+              ]
+            },
+            "auth": "bearer",
+            "response": "AdminUser",
+            "codes": [
+              "USER_NOT_FOUND"
+            ],
+            "line": 7
+          },
+          {
+            "name": "updateUserStatus",
+            "method": "PUT",
+            "path": "/api/v1/admin/users/{id}/status",
+            "params": {
+              "path": [
+                "id"
+              ],
+              "body": [
+                "status: active|disabled"
+              ]
+            },
+            "auth": "bearer",
+            "response": "AdminUser/ack",
+            "codes": [
+              "USER_NOT_FOUND"
+            ],
+            "line": 11
+          },
+          {
+            "name": "deleteUser",
+            "method": "DELETE",
+            "path": "/api/v1/admin/users/{id}",
+            "params": {
+              "path": [
+                "id"
+              ],
+              "body": [
+                "confirmUsername"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{username,cascade:{deviceSessions,deviceKeys,favorites,friendRelations,groupMembers}}",
+            "codes": [
+              "USERNAME_CONFIRM_MISMATCH",
+              "ADMIN_ACCOUNT_UNDELETABLE",
+              "CANNOT_DELETE_SELF",
+              "USER_NOT_FOUND"
+            ],
+            "line": 17
+          }
+        ]
+      },
+      {
+        "module": "userSticker",
+        "file": "src/api/userSticker.js",
+        "auth": "bearer",
+        "error_handling": "No domain error codes. Delete errors are shown through resolveAdminErrorMessage; list errors are not handled in view.",
+        "key_objects": [
+          "UserSticker"
+        ],
+        "methods": [
+          {
+            "name": "getUserStickers",
+            "method": "GET",
+            "path": "/api/v1/admin/user-stickers",
+            "params": {
+              "query": [
+                "page",
+                "pageSize",
+                "userId"
+              ]
+            },
+            "auth": "bearer",
+            "response": "{items:[UserSticker],total}",
+            "codes": [],
+            "line": 3
+          },
+          {
+            "name": "deleteUserSticker",
+            "method": "DELETE",
+            "path": "/api/v1/admin/user-stickers/{id}",
+            "params": {
+              "path": [
+                "id"
+              ]
+            },
+            "auth": "bearer",
+            "response": "empty/ack",
+            "codes": [],
+            "line": 7
+          }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "TC-001",
+      "module": "auth",
+      "priority": "P0",
+      "category": "normal",
+      "title": "管理员用户名密码登录成功并签发管理员会话",
+      "preconditions": [
+        "API is reachable at the configured base URL.",
+        "An enabled admin account exists with username ${ADMIN_USERNAME} and password ${ADMIN_PASSWORD}.",
+        "No stale admin_token is present in the test client."
+      ],
+      "steps": [
+        "Send POST /api/v1/auth/login with JSON credentials.",
+        "Capture response.body.access_token and response.body.user.",
+        "Send GET /api/v1/admin/users with the captured token to prove the token is accepted."
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "headers": {
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json"
+        },
+        "query": null,
+        "body": {
+          "username": "${ADMIN_USERNAME}",
+          "password": "${ADMIN_PASSWORD}"
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "access_token": "non-empty JWT/opaque token",
+          "user.role": "admin"
+        },
+        "followup_status": 200
+      },
+      "assertions": [
+        "response.status === 200",
+        "typeof response.body.access_token === 'string' && response.body.access_token.length > 20",
+        "response.body.user && response.body.user.role === 'admin'",
+        "typeof response.body.user.id !== 'undefined'",
+        "followup.status === 200 && Array.isArray(followup.body.items)"
+      ],
+      "cleanup": [
+        "Discard the captured token from the test harness; source exposes no logout endpoint."
+      ],
+      "source": {
+        "file": "src/api/auth.js",
+        "line": 3
+      }
+    },
+    {
+      "id": "TC-002",
+      "module": "auth",
+      "priority": "P0",
+      "category": "auth",
+      "title": "错误密码被拒绝且不签发访问令牌",
+      "preconditions": [
+        "An enabled admin account exists with username ${ADMIN_USERNAME}.",
+        "The supplied password is intentionally wrong."
+      ],
+      "steps": [
+        "Send POST /api/v1/auth/login with the wrong password.",
+        "Inspect status, body code, and absence of access_token."
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "headers": {
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json"
+        },
+        "query": null,
+        "body": {
+          "username": "${ADMIN_USERNAME}",
+          "password": "definitely-wrong-${RUN_ID}"
+        }
+      },
+      "expected": {
+        "status": 401,
+        "body": {
+          "code": "non-empty stable error code",
+          "access_token": "absent"
+        }
+      },
+      "assertions": [
+        "response.status === 401",
+        "typeof response.body.code === 'string' && response.body.code.length > 0",
+        "response.body.access_token === undefined"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/auth.js",
+        "line": 3
+      }
+    },
+    {
+      "id": "TC-003",
+      "module": "auth",
+      "priority": "P1",
+      "category": "error",
+      "title": "无效或过期的重置令牌不会修改密码",
+      "preconditions": [
+        "An admin account exists.",
+        "A deliberately invalid reset token is used.",
+        "The new password is not the current password."
+      ],
+      "steps": [
+        "Send POST /api/v1/auth/password/reset with an invalid token and a valid-length new password.",
+        "Record response as response.",
+        "Attempt login with the new password and record as followupLogin."
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/auth/password/reset",
+        "headers": {
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json"
+        },
+        "query": null,
+        "body": {
+          "token": "invalid-reset-token-${RUN_ID}",
+          "newPassword": "E2ePassw0rd!2026"
+        }
+      },
+      "expected": {
+        "status": 400,
+        "body": {
+          "code": "non-empty error code"
+        },
+        "followup_login_status": 401
+      },
+      "assertions": [
+        "response.status === 400",
+        "typeof response.body.code === 'string' && response.body.code.length > 0",
+        "followupLogin.status === 401"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/auth.js",
+        "line": 15
+      }
+    },
+    {
+      "id": "TC-004",
+      "module": "user",
+      "priority": "P0",
+      "category": "normal",
+      "title": "用户列表按状态与分页过滤并返回稳定分页结构",
+      "preconditions": [
+        "At least one active user and one disabled user exist.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/users with page=1, pageSize=20, status=active.",
+        "Inspect items and total."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/users",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": {
+          "page": 1,
+          "pageSize": 20,
+          "status": "active",
+          "keyword": ""
+        },
+        "body": null
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "items": "array of users, each status=active",
+          "total": "number >= items.length"
+        }
+      },
+      "assertions": [
+        "response.status === 200",
+        "Array.isArray(response.body.items)",
+        "response.body.items.every(x => x.status === 'active')",
+        "typeof response.body.total === 'number' && response.body.total >= response.body.items.length",
+        "response.body.items.length <= 20"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/user.js",
+        "line": 3
+      }
+    },
+    {
+      "id": "TC-005",
+      "module": "user",
+      "priority": "P1",
+      "category": "normal",
+      "title": "禁用用户后详情与列表状态一致，并可恢复启用",
+      "preconditions": [
+        "A non-admin test user ${TEST_USER_ID} exists and is active.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send PUT /api/v1/admin/users/${TEST_USER_ID}/status with status=disabled and record response.",
+        "Send GET /api/v1/admin/users/${TEST_USER_ID} and record as verify."
+      ],
+      "request": {
+        "method": "PUT",
+        "path": "/api/v1/admin/users/${TEST_USER_ID}/status",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json"
+        },
+        "query": null,
+        "body": {
+          "status": "disabled"
+        }
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "status": "disabled"
+        },
+        "verify_status": 200,
+        "verify_body_status": "disabled"
+      },
+      "assertions": [
+        "response.status === 200",
+        "response.body.status === 'disabled'",
+        "verify.status === 200 && verify.body.status === 'disabled'"
+      ],
+      "cleanup": [
+        "PUT /api/v1/admin/users/${TEST_USER_ID}/status with {\"status\":\"active\"}."
+      ],
+      "source": {
+        "file": "src/api/user.js",
+        "line": 11
+      }
+    },
+    {
+      "id": "TC-006",
+      "module": "user",
+      "priority": "P0",
+      "category": "error",
+      "title": "删除用户时确认用户名不一致必须拒绝且不删除数据",
+      "preconditions": [
+        "A non-admin test user ${TEST_USER_ID} with username ${TEST_USERNAME} exists.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send DELETE /api/v1/admin/users/${TEST_USER_ID} with confirmUsername intentionally different.",
+        "Record response.",
+        "Send GET /api/v1/admin/users/${TEST_USER_ID} and record as verify."
+      ],
+      "request": {
+        "method": "DELETE",
+        "path": "/api/v1/admin/users/${TEST_USER_ID}",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json"
+        },
+        "query": null,
+        "body": {
+          "confirmUsername": "wrong-${RUN_ID}"
+        }
+      },
+      "expected": {
+        "status": 400,
+        "body": {
+          "code": "USERNAME_CONFIRM_MISMATCH"
+        },
+        "verify_status": 200
+      },
+      "assertions": [
+        "response.status === 400",
+        "response.body.code === 'USERNAME_CONFIRM_MISMATCH'",
+        "verify.status === 200 && verify.body.username === '${TEST_USERNAME}'"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/user.js",
+        "line": 17
+      }
+    },
+    {
+      "id": "TC-007",
+      "module": "user",
+      "priority": "P0",
+      "category": "error",
+      "title": "管理员账号禁止硬删除",
+      "preconditions": [
+        "An admin account ${ADMIN_USER_ID} with username ${ADMIN_USERNAME} exists.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send DELETE /api/v1/admin/users/${ADMIN_USER_ID} with the correct confirmUsername.",
+        "Record response.",
+        "Verify the admin account can still authenticate and is still readable."
+      ],
+      "request": {
+        "method": "DELETE",
+        "path": "/api/v1/admin/users/${ADMIN_USER_ID}",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json"
+        },
+        "query": null,
+        "body": {
+          "confirmUsername": "${ADMIN_USERNAME}"
+        }
+      },
+      "expected": {
+        "status": 409,
+        "body": {
+          "code": "ADMIN_ACCOUNT_UNDELETABLE"
+        },
+        "verify_status": 200
+      },
+      "assertions": [
+        "response.status === 409",
+        "response.body.code === 'ADMIN_ACCOUNT_UNDELETABLE'",
+        "verify.status === 200 && verify.body.id == '${ADMIN_USER_ID}'"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/user.js",
+        "line": 17
+      }
+    },
+    {
+      "id": "TC-008",
+      "module": "friend",
+      "priority": "P1",
+      "category": "normal",
+      "title": "好友关系列表按状态过滤并返回分页结构",
+      "preconditions": [
+        "At least one normal friend relation exists; optionally one blocked relation.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/friends with status=normal, page=1, pageSize=20.",
+        "Inspect items and total."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/friends",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": {
+          "page": 1,
+          "pageSize": 20,
+          "status": "normal",
+          "groupName": "同事",
+          "keyword": ""
+        },
+        "body": null
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "items": "array of FriendRelation with status=normal",
+          "total": "number >= items.length"
+        }
+      },
+      "assertions": [
+        "response.status === 200",
+        "Array.isArray(response.body.items)",
+        "response.body.items.every(x => x.status === 'normal')",
+        "typeof response.body.total === 'number' && response.body.total >= response.body.items.length",
+        "response.body.items.every(x => typeof x.userId !== 'undefined' && typeof x.friendId !== 'undefined')"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/friend.js",
+        "line": 3
+      }
+    },
+    {
+      "id": "TC-009",
+      "module": "group",
+      "priority": "P2",
+      "category": "normal",
+      "title": "群组列表返回分页结构（无 UI 消费方的契约探测）",
+      "preconditions": [
+        "At least one group exists.",
+        "Admin token is valid.",
+        "Accept that src/views has no consumer for this module."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/groups with page=1, pageSize=20.",
+        "Inspect items and total."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/groups",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": {
+          "page": 1,
+          "pageSize": 20,
+          "keyword": ""
+        },
+        "body": null
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "items": "array of groups",
+          "total": "number >= items.length"
+        }
+      },
+      "assertions": [
+        "response.status === 200",
+        "Array.isArray(response.body.items)",
+        "typeof response.body.total === 'number' && response.body.total >= response.body.items.length",
+        "response.body.items.every(x => typeof x.id !== 'undefined')"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/group.js",
+        "line": 3
+      }
+    },
+    {
+      "id": "TC-010",
+      "module": "message",
+      "priority": "P1",
+      "category": "normal",
+      "title": "消息列表按会话类型、消息类型和状态过滤",
+      "preconditions": [
+        "At least one private text message with status sent exists.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/messages with chatType=private, msgType=text, status=sent, page=1, pageSize=20.",
+        "Inspect items and total."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/messages",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": {
+          "page": 1,
+          "pageSize": 20,
+          "chatType": "private",
+          "msgType": "text",
+          "status": "sent",
+          "keyword": ""
+        },
+        "body": null
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "items": "array of Message with chat_type=private, msg_type=text, status=sent",
+          "total": "number >= items.length"
+        }
+      },
+      "assertions": [
+        "response.status === 200",
+        "Array.isArray(response.body.items)",
+        "response.body.items.every(x => x.chat_type === 'private')",
+        "response.body.items.every(x => x.msg_type === 'text')",
+        "response.body.items.every(x => x.status === 'sent')",
+        "typeof response.body.total === 'number' && response.body.total >= response.body.items.length"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/message.js",
+        "line": 3
+      }
+    },
+    {
+      "id": "TC-011",
+      "module": "message",
+      "priority": "P2",
+      "category": "boundary",
+      "title": "消息趋势接受一年窗口且点数不超过请求天数",
+      "preconditions": [
+        "Admin token is valid.",
+        "Message history exists."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/messages/trend with days=365.",
+        "Normalize the response as array or response.body.points."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/messages/trend",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": {
+          "days": 365
+        },
+        "body": null
+      },
+      "expected": {
+        "status": 200,
+        "body": "array or {points:[]} with daily items",
+        "max_points": 365
+      },
+      "assertions": [
+        "response.status === 200",
+        "Array.isArray(response.body) || Array.isArray(response.body.points)",
+        "(Array.isArray(response.body) ? response.body : response.body.points).length <= 365",
+        "(Array.isArray(response.body) ? response.body : response.body.points).every(p => typeof p.date === 'string')"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/message.js",
+        "line": 7
+      }
+    },
+    {
+      "id": "TC-012",
+      "module": "audit",
+      "priority": "P1",
+      "category": "normal",
+      "title": "审计日志按动作、资源、结果和时间区间过滤",
+      "preconditions": [
+        "At least one SUCCESS audit record for action im-user.delete exists.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/audit-logs with action, resourceType, result, from, to, page, pageSize.",
+        "Inspect items, total, and retentionFloor."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/audit-logs",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": {
+          "page": 1,
+          "pageSize": 20,
+          "action": "im-user.delete",
+          "resourceType": "user_account",
+          "operator": "",
+          "result": "SUCCESS",
+          "from": "2026-01-01",
+          "to": "2026-01-31"
+        },
+        "body": null
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "items": "array of AuditLog with result=SUCCESS",
+          "total": "number >= items.length",
+          "retentionFloor": "string or null"
+        }
+      },
+      "assertions": [
+        "response.status === 200",
+        "Array.isArray(response.body.items)",
+        "response.body.items.every(x => x.result === 'SUCCESS')",
+        "typeof response.body.total === 'number' && response.body.total >= response.body.items.length",
+        "response.body.retentionFloor === null || typeof response.body.retentionFloor === 'string'"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/audit.js",
+        "line": 5
+      }
+    },
+    {
+      "id": "TC-013",
+      "module": "audit",
+      "priority": "P1",
+      "category": "error",
+      "title": "审计日志时间区间倒置返回 TIME_RANGE_INVALID",
+      "preconditions": [
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/audit-logs with from later than to.",
+        "Inspect status and body code."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/audit-logs",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": {
+          "page": 1,
+          "pageSize": 20,
+          "from": "2026-02-01",
+          "to": "2026-01-01"
+        },
+        "body": null
+      },
+      "expected": {
+        "status": 400,
+        "body": {
+          "code": "TIME_RANGE_INVALID"
+        }
+      },
+      "assertions": [
+        "response.status === 400",
+        "response.body.code === 'TIME_RANGE_INVALID'",
+        "response.body.items === undefined"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/audit.js",
+        "line": 5
+      }
+    },
+    {
+      "id": "TC-014",
+      "module": "config",
+      "priority": "P1",
+      "category": "normal",
+      "title": "系统配置全量读取返回 ConfigResponse 数组",
+      "preconditions": [
+        "Admin token is valid.",
+        "At least one system config row exists."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/config.",
+        "Inspect array shape and key fields."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/config",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": null,
+        "body": null
+      },
+      "expected": {
+        "status": 200,
+        "body": "array of {id,configKey,configValue}"
+      },
+      "assertions": [
+        "response.status === 200",
+        "Array.isArray(response.body)",
+        "response.body.length > 0",
+        "response.body.every(x => typeof x.configKey === 'string' && x.configKey.length > 0)",
+        "response.body.every(x => typeof x.configValue !== 'undefined')"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/config.js",
+        "line": 3
+      }
+    },
+    {
+      "id": "TC-015",
+      "module": "config",
+      "priority": "P1",
+      "category": "normal",
+      "title": "批量更新配置后全量读取返回新值",
+      "preconditions": [
+        "Admin token is valid.",
+        "Current value of feature.readReceiptEnabled is recorded as ${ORIGINAL_CONFIG_VALUE}."
+      ],
+      "steps": [
+        "Send POST /api/v1/admin/config/batch with configs=[{feature.readReceiptEnabled:false}].",
+        "Send GET /api/v1/admin/config and record as verify.",
+        "Locate feature.readReceiptEnabled in verify."
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/admin/config/batch",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json"
+        },
+        "query": null,
+        "body": {
+          "configs": [
+            {
+              "configKey": "feature.readReceiptEnabled",
+              "configValue": "false"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "status": 200,
+        "verify_status": 200,
+        "verify_config_value": "false"
+      },
+      "assertions": [
+        "response.status === 200",
+        "verify.status === 200 && Array.isArray(verify.body)",
+        "verify.body.some(x => x.configKey === 'feature.readReceiptEnabled' && x.configValue === 'false')"
+      ],
+      "cleanup": [
+        "POST /api/v1/admin/config/batch restoring feature.readReceiptEnabled to ${ORIGINAL_CONFIG_VALUE}."
+      ],
+      "source": {
+        "file": "src/api/config.js",
+        "line": 11
+      }
+    },
+    {
+      "id": "TC-016",
+      "module": "security",
+      "priority": "P1",
+      "category": "normal",
+      "title": "新增敏感词后列表可检索到该词",
+      "preconditions": [
+        "Admin token is valid.",
+        "Word e2e_ads_${RUN_ID} does not already exist."
+      ],
+      "steps": [
+        "Send POST /api/v1/admin/security/sensitive-words with word/category/level.",
+        "Record created id from response.",
+        "Send GET /api/v1/admin/security/sensitive-words?page=1&pageSize=200 and record as verify."
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/admin/security/sensitive-words",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json"
+        },
+        "query": null,
+        "body": {
+          "word": "e2e_ads_${RUN_ID}",
+          "category": "ads",
+          "level": "medium"
+        }
+      },
+      "expected": {
+        "status": [
+          200,
+          201
+        ],
+        "body": {
+          "id": "created id",
+          "word": "e2e_ads_${RUN_ID}"
+        },
+        "verify_contains_word": true
+      },
+      "assertions": [
+        "response.status === 200 || response.status === 201",
+        "(response.body.data || response.body).id !== undefined",
+        "(response.body.data || response.body).word === 'e2e_ads_${RUN_ID}'",
+        "verify.status === 200 && verify.body.items.some(x => x.word === 'e2e_ads_${RUN_ID}')"
+      ],
+      "cleanup": [
+        "DELETE /api/v1/admin/security/sensitive-words/${CREATED_KEYWORD_ID}."
+      ],
+      "source": {
+        "file": "src/api/security.js",
+        "line": 7
+      }
+    },
+    {
+      "id": "TC-017",
+      "module": "security",
+      "priority": "P2",
+      "category": "boundary",
+      "title": "重复敏感词被拒绝且不产生重复记录",
+      "preconditions": [
+        "Word e2e_dup_${RUN_ID} has already been created and its id recorded.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send POST /api/v1/admin/security/sensitive-words with the same word again.",
+        "Record response.",
+        "Send GET /api/v1/admin/security/sensitive-words?page=1&pageSize=200 and count matching rows."
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/admin/security/sensitive-words",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json"
+        },
+        "query": null,
+        "body": {
+          "word": "e2e_dup_${RUN_ID}",
+          "category": "ads",
+          "level": "high"
+        }
+      },
+      "expected": {
+        "status": [
+          400,
+          409
+        ],
+        "body": {
+          "code": "non-empty error code"
+        },
+        "verify_match_count": 1
+      },
+      "assertions": [
+        "response.status === 400 || response.status === 409",
+        "typeof response.body.code === 'string' && response.body.code.length > 0",
+        "verify.body.items.filter(x => x.word === 'e2e_dup_${RUN_ID}').length === 1"
+      ],
+      "cleanup": [
+        "DELETE the originally created keyword id."
+      ],
+      "source": {
+        "file": "src/api/security.js",
+        "line": 7
+      }
+    },
+    {
+      "id": "TC-018",
+      "module": "security",
+      "priority": "P1",
+      "category": "data",
+      "title": "已解决举报不能被直接回退为待处理且状态保持一致",
+      "preconditions": [
+        "A report ${REPORT_ID} exists with status resolved.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send PUT /api/v1/admin/security/reports/${REPORT_ID} with status=pending.",
+        "Record response.",
+        "Send GET /api/v1/admin/security/reports?status=resolved&page=1&pageSize=100 and locate ${REPORT_ID}."
+      ],
+      "request": {
+        "method": "PUT",
+        "path": "/api/v1/admin/security/reports/${REPORT_ID}",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json"
+        },
+        "query": null,
+        "body": {
+          "status": "pending"
+        }
+      },
+      "expected": {
+        "status": 409,
+        "body": {
+          "code": "non-empty error code"
+        },
+        "verify_status": "resolved"
+      },
+      "assertions": [
+        "response.status === 409",
+        "typeof response.body.code === 'string' && response.body.code.length > 0",
+        "verify.body.items.some(x => x.id == '${REPORT_ID}' && x.status === 'resolved')"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/security.js",
+        "line": 31
+      }
+    },
+    {
+      "id": "TC-019",
+      "module": "deviceToken",
+      "priority": "P1",
+      "category": "normal",
+      "title": "按用户查询设备推送令牌且只暴露指纹不暴露原文",
+      "preconditions": [
+        "At least one device token exists for ${TEST_USER_ID}.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/device-tokens with userId filter.",
+        "Inspect rows for tokenFingerprint and absence of raw token."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/device-tokens",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": {
+          "page": 1,
+          "pageSize": 20,
+          "userId": "${TEST_USER_ID}"
+        },
+        "body": null
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "items": "array of DevicePushToken filtered by userId",
+          "raw_token_exposed": false
+        }
+      },
+      "assertions": [
+        "response.status === 200",
+        "Array.isArray(response.body.items)",
+        "response.body.items.every(x => String(x.userId) === '${TEST_USER_ID}')",
+        "response.body.items.every(x => typeof x.tokenFingerprint === 'string')",
+        "response.body.items.every(x => x.token === undefined)"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/deviceToken.js",
+        "line": 3
+      }
+    },
+    {
+      "id": "TC-020",
+      "module": "deviceToken",
+      "priority": "P2",
+      "category": "idempotency",
+      "title": "重复删除同一设备令牌第二次返回不存在且不产生副作用",
+      "preconditions": [
+        "Device token ${DEVICE_TOKEN_ID} exists.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send DELETE /api/v1/admin/device-tokens/${DEVICE_TOKEN_ID} and record response.",
+        "Send the identical DELETE again and record as replay.",
+        "Send GET /api/v1/admin/device-tokens?page=1&pageSize=100 and record as list."
+      ],
+      "request": {
+        "method": "DELETE",
+        "path": "/api/v1/admin/device-tokens/${DEVICE_TOKEN_ID}",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": null,
+        "body": null
+      },
+      "expected": {
+        "first_status": [
+          200,
+          204
+        ],
+        "replay_status": 404,
+        "replay_body_code": "non-empty error code",
+        "list_excludes_id": true
+      },
+      "assertions": [
+        "response.status >= 200 && response.status < 300",
+        "replay.status === 404",
+        "typeof replay.body.code === 'string' && replay.body.code.length > 0",
+        "list.body.items.every(x => String(x.id) !== '${DEVICE_TOKEN_ID}')"
+      ],
+      "cleanup": [
+        "The token is intentionally deleted; reseed fixture data before rerun."
+      ],
+      "source": {
+        "file": "src/api/deviceToken.js",
+        "line": 7
+      }
+    },
+    {
+      "id": "TC-021",
+      "module": "userSticker",
+      "priority": "P2",
+      "category": "normal",
+      "title": "用户表情列表按用户过滤并返回图片字段",
+      "preconditions": [
+        "At least one sticker exists for ${TEST_USER_ID}.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/user-stickers with userId filter.",
+        "Inspect items and image fields."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/user-stickers",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": {
+          "page": 1,
+          "pageSize": 20,
+          "userId": "${TEST_USER_ID}"
+        },
+        "body": null
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "items": "array of UserSticker for userId",
+          "total": "number >= items.length"
+        }
+      },
+      "assertions": [
+        "response.status === 200",
+        "Array.isArray(response.body.items)",
+        "response.body.items.every(x => String(x.userId) === '${TEST_USER_ID}')",
+        "response.body.items.every(x => typeof x.url === 'string' && x.url.length > 0)",
+        "typeof response.body.total === 'number' && response.body.total >= response.body.items.length"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/userSticker.js",
+        "line": 3
+      }
+    },
+    {
+      "id": "TC-022",
+      "module": "userSticker",
+      "priority": "P2",
+      "category": "error",
+      "title": "删除不存在的用户表情返回 404 而非 500",
+      "preconditions": [
+        "Sticker id 999999999 does not exist.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send DELETE /api/v1/admin/user-stickers/999999999.",
+        "Inspect status and error code."
+      ],
+      "request": {
+        "method": "DELETE",
+        "path": "/api/v1/admin/user-stickers/999999999",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": null,
+        "body": null
+      },
+      "expected": {
+        "status": 404,
+        "body": {
+          "code": "non-empty error code"
+        }
+      },
+      "assertions": [
+        "response.status === 404",
+        "typeof response.body.code === 'string' && response.body.code.length > 0",
+        "response.status !== 500"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/userSticker.js",
+        "line": 7
+      }
+    },
+    {
+      "id": "TC-023",
+      "module": "miniappService",
+      "priority": "P1",
+      "category": "normal",
+      "title": "服务类型列表返回排序字段完整的数组",
+      "preconditions": [
+        "At least one miniapp service type exists.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/miniapp/service-types.",
+        "Inspect array items."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/miniapp/service-types",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": null,
+        "body": null
+      },
+      "expected": {
+        "status": 200,
+        "body": "array of MiniappServiceType"
+      },
+      "assertions": [
+        "response.status === 200",
+        "Array.isArray(response.body)",
+        "response.body.length > 0",
+        "response.body.every(x => typeof x.id !== 'undefined' && typeof x.name === 'string')",
+        "response.body.every(x => typeof x.sortOrder === 'number')"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/miniappService.js",
+        "line": 4
+      }
+    },
+    {
+      "id": "TC-024",
+      "module": "miniappService",
+      "priority": "P1",
+      "category": "normal",
+      "title": "局部更新服务 hidden 字段不影响其它字段",
+      "preconditions": [
+        "Service ${SERVICE_ID} exists under type ${SERVICE_TYPE_ID}; its name/link are recorded.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send PUT /api/v1/admin/miniapp/services/${SERVICE_ID} with only hidden=1.",
+        "Send GET /api/v1/admin/miniapp/services?typeId=${SERVICE_TYPE_ID}&page=1&pageSize=100 and record as verify.",
+        "Locate ${SERVICE_ID} in verify."
+      ],
+      "request": {
+        "method": "PUT",
+        "path": "/api/v1/admin/miniapp/services/${SERVICE_ID}",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json"
+        },
+        "query": null,
+        "body": {
+          "hidden": 1
+        }
+      },
+      "expected": {
+        "status": 200,
+        "verify_hidden": true,
+        "verify_name_unchanged": true,
+        "verify_link_unchanged": true
+      },
+      "assertions": [
+        "response.status === 200",
+        "verify.status === 200 && Array.isArray(verify.body.items)",
+        "Boolean(verify.body.items.find(x => String(x.id) === '${SERVICE_ID}').hidden) === true",
+        "verify.body.items.find(x => String(x.id) === '${SERVICE_ID}').name === '${ORIGINAL_SERVICE_NAME}'",
+        "verify.body.items.find(x => String(x.id) === '${SERVICE_ID}').link === '${ORIGINAL_SERVICE_LINK}'"
+      ],
+      "cleanup": [
+        "PUT /api/v1/admin/miniapp/services/${SERVICE_ID} with {\"hidden\":0}."
+      ],
+      "source": {
+        "file": "src/api/miniappService.js",
+        "line": 33
+      }
+    },
+    {
+      "id": "TC-025",
+      "module": "miniappService",
+      "priority": "P1",
+      "category": "data",
+      "title": "仍有服务归属的服务类型不允许删除",
+      "preconditions": [
+        "Type ${SERVICE_TYPE_ID} exists and has at least one service.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send DELETE /api/v1/admin/miniapp/service-types/${SERVICE_TYPE_ID}.",
+        "Record response.",
+        "Send GET /api/v1/admin/miniapp/service-types and record as verify."
+      ],
+      "request": {
+        "method": "DELETE",
+        "path": "/api/v1/admin/miniapp/service-types/${SERVICE_TYPE_ID}",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": null,
+        "body": null
+      },
+      "expected": {
+        "status": 409,
+        "body": {
+          "code": "non-empty error code"
+        },
+        "verify_type_still_present": true
+      },
+      "assertions": [
+        "response.status === 409",
+        "typeof response.body.code === 'string' && response.body.code.length > 0",
+        "verify.status === 200 && verify.body.some(x => String(x.id) === '${SERVICE_TYPE_ID}')"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/miniappService.js",
+        "line": 16
+      }
+    },
+    {
+      "id": "TC-026",
+      "module": "media",
+      "priority": "P1",
+      "category": "normal",
+      "title": "小文件创建单段上传会话返回可直传地址",
+      "preconditions": [
+        "Admin token is valid.",
+        "Object storage bucket and CORS allow the test client.",
+        "A 1KB test blob exists."
+      ],
+      "steps": [
+        "Send POST /api/v1/media/upload-sessions with size 1024 and a fresh Idempotency-Key.",
+        "Inspect uploadSessionId, objectId, uploadUrl, requiredHeaders."
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/media/upload-sessions",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json",
+          "Idempotency-Key": "${UUID}"
+        },
+        "query": null,
+        "body": {
+          "scope": "system",
+          "mediaKind": "image",
+          "fileName": "e2e-${RUN_ID}.png",
+          "contentType": "image/png",
+          "size": 1024,
+          "sha256": "${SHA256_1KB}"
+        }
+      },
+      "expected": {
+        "status": [
+          200,
+          201
+        ],
+        "body": {
+          "uploadSessionId": "non-empty",
+          "objectId": "non-empty",
+          "uploadUrl": "https URL",
+          "requiredHeaders": "object"
+        }
+      },
+      "assertions": [
+        "response.status === 200 || response.status === 201",
+        "typeof (response.body.data || response.body).uploadSessionId === 'string' && (response.body.data || response.body).uploadSessionId.length > 0",
+        "typeof (response.body.data || response.body).objectId === 'string' && (response.body.data || response.body).objectId.length > 0",
+        "new URL((response.body.data || response.body).uploadUrl).protocol === 'https:'",
+        "typeof (response.body.data || response.body).requiredHeaders === 'object'"
+      ],
+      "cleanup": [
+        "DELETE /api/v1/media/upload-sessions/${UPLOAD_SESSION_ID} to cancel the uncompleted session."
+      ],
+      "source": {
+        "file": "src/api/media.js",
+        "line": 89
+      }
+    },
+    {
+      "id": "TC-027",
+      "module": "media",
+      "priority": "P1",
+      "category": "boundary",
+      "title": "略高于 20MB 阈值创建多段上传会话且分段数自洽",
+      "preconditions": [
+        "Admin token is valid.",
+        "Object storage bucket and CORS allow the test client.",
+        "Size 20971521 is exactly 1 byte above the client multipart threshold."
+      ],
+      "steps": [
+        "Send POST /api/v1/media/multipart-upload-sessions with size 20971521 and a fresh Idempotency-Key.",
+        "Inspect partSize and partCount."
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/media/multipart-upload-sessions",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json",
+          "Idempotency-Key": "${UUID}"
+        },
+        "query": null,
+        "body": {
+          "scope": "system",
+          "mediaKind": "image",
+          "fileName": "e2e-large-${RUN_ID}.bin",
+          "contentType": "application/octet-stream",
+          "size": 20971521,
+          "sha256": "${SHA256_ARTIFACT}"
+        }
+      },
+      "expected": {
+        "status": [
+          200,
+          201
+        ],
+        "body": {
+          "partSize": "number > 0",
+          "partCount": "number > 1",
+          "multipart": true
+        }
+      },
+      "assertions": [
+        "response.status === 200 || response.status === 201",
+        "typeof (response.body.data || response.body).partSize === 'number' && (response.body.data || response.body).partSize > 0",
+        "typeof (response.body.data || response.body).partCount === 'number' && (response.body.data || response.body).partCount > 1",
+        "(response.body.data || response.body).partCount === Math.ceil(20971521 / (response.body.data || response.body).partSize)"
+      ],
+      "cleanup": [
+        "DELETE /api/v1/media/multipart-upload-sessions/${UPLOAD_SESSION_ID}."
+      ],
+      "source": {
+        "file": "src/api/media.js",
+        "line": 90
+      }
+    },
+    {
+      "id": "TC-028",
+      "module": "media",
+      "priority": "P2",
+      "category": "error",
+      "title": "不存在对象的访问地址请求返回 404",
+      "preconditions": [
+        "Object object_missing_${RUN_ID} does not exist.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send GET /api/v1/media/object_missing_${RUN_ID}/access.",
+        "Inspect status, code, and absence of url."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/media/object_missing_${RUN_ID}/access",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": null,
+        "body": null
+      },
+      "expected": {
+        "status": 404,
+        "body": {
+          "code": "non-empty error code",
+          "url": "absent"
+        }
+      },
+      "assertions": [
+        "response.status === 404",
+        "typeof response.body.code === 'string' && response.body.code.length > 0",
+        "response.body.url === undefined"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/media.js",
+        "line": 20
+      }
+    },
+    {
+      "id": "TC-029",
+      "module": "monitor",
+      "priority": "P2",
+      "category": "data",
+      "title": "在线人数与在线用户列表长度保持一致",
+      "preconditions": [
+        "Admin token is valid.",
+        "At least 0 users online; test environment is stable during the two calls."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/monitor/online and record as count.",
+        "Send GET /api/v1/admin/monitor/online/users and record as users."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/monitor/online",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": null,
+        "body": null
+      },
+      "expected": {
+        "count_status": 200,
+        "onlineCount": "number >= 0",
+        "users_status": 200,
+        "users_length": "equals onlineCount"
+      },
+      "assertions": [
+        "count.status === 200",
+        "typeof count.body.onlineCount === 'number' && count.body.onlineCount >= 0",
+        "users.status === 200 && Array.isArray(users.body)",
+        "users.body.every(x => x.userId !== undefined || x.id !== undefined)",
+        "count.body.onlineCount === users.body.length"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/monitor.js",
+        "line": 3
+      }
+    },
+    {
+      "id": "TC-030",
+      "module": "monitor",
+      "priority": "P1",
+      "category": "idempotency",
+      "title": "强制结束通话第二次调用不产生重复副作用",
+      "preconditions": [
+        "An active call ${CALL_ID} exists in ringing or in-call state.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send POST /api/v1/admin/monitor/calls/${CALL_ID}/end and record as first.",
+        "Send the identical request again and record as replay.",
+        "Send GET /api/v1/admin/monitor/calls and record as calls."
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/admin/monitor/calls/${CALL_ID}/end",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": null,
+        "body": null
+      },
+      "expected": {
+        "first_status": [
+          200,
+          204
+        ],
+        "replay_status": [
+          404,
+          409
+        ],
+        "replay_body_code": "non-empty error code",
+        "call_removed_from_active_list": true
+      },
+      "assertions": [
+        "first.status >= 200 && first.status < 300",
+        "replay.status === 404 || replay.status === 409",
+        "typeof replay.body.code === 'string' && replay.body.code.length > 0",
+        "(Array.isArray(calls.body) ? calls.body : calls.body.items).every(x => String(x.callId) !== '${CALL_ID}')"
+      ],
+      "cleanup": [
+        "Reseed the call fixture if the suite reruns."
+      ],
+      "source": {
+        "file": "src/api/monitor.js",
+        "line": 15
+      }
+    },
+    {
+      "id": "TC-031",
+      "module": "openPlatform",
+      "priority": "P1",
+      "category": "normal",
+      "title": "第三方应用列表按待审核状态过滤",
+      "preconditions": [
+        "At least one PENDING THIRD_PARTY application exists.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/open-platform/applications with status=PENDING and appType=THIRD_PARTY.",
+        "Inspect items and total."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/open-platform/applications",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": {
+          "page": 1,
+          "pageSize": 20,
+          "status": "PENDING",
+          "appType": "THIRD_PARTY"
+        },
+        "body": null
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "items": "array with status=PENDING and appType=THIRD_PARTY",
+          "total": "number >= items.length"
+        }
+      },
+      "assertions": [
+        "response.status === 200",
+        "Array.isArray(response.body.items)",
+        "response.body.items.every(x => x.status === 'PENDING')",
+        "response.body.items.every(x => x.appType === 'THIRD_PARTY')",
+        "typeof response.body.total === 'number' && response.body.total >= response.body.items.length"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/openPlatform.js",
+        "line": 4
+      }
+    },
+    {
+      "id": "TC-032",
+      "module": "openPlatform",
+      "priority": "P0",
+      "category": "normal",
+      "title": "审核通过待审应用并一次性返回 appSecret，后续详情不再泄露密钥",
+      "preconditions": [
+        "Application ${TEST_PENDING_APP_ID} exists with status PENDING.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send POST /api/v1/admin/open-platform/applications/${TEST_PENDING_APP_ID}/approve.",
+        "Record appId and appSecret.",
+        "Send GET /api/v1/admin/open-platform/applications/${TEST_PENDING_APP_ID} and record as verify."
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/admin/open-platform/applications/${TEST_PENDING_APP_ID}/approve",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json"
+        },
+        "query": null,
+        "body": {}
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "appId": "${TEST_PENDING_APP_ID}",
+          "appSecret": "non-empty"
+        },
+        "verify_status": "APPROVED",
+        "verify_appSecret_absent": true
+      },
+      "assertions": [
+        "response.status === 200",
+        "(response.body.data || response.body).appId === '${TEST_PENDING_APP_ID}'",
+        "typeof (response.body.data || response.body).appSecret === 'string' && (response.body.data || response.body).appSecret.length >= 16",
+        "verify.status === 200 && (verify.body.data || verify.body).status === 'APPROVED'",
+        "(verify.body.data || verify.body).appSecret === undefined"
+      ],
+      "cleanup": [
+        "POST /api/v1/admin/open-platform/applications/${TEST_PENDING_APP_ID}/revoke, or reset the fixture DB; approval has no inverse back to PENDING."
+      ],
+      "source": {
+        "file": "src/api/openPlatform.js",
+        "line": 12
+      }
+    },
+    {
+      "id": "TC-033",
+      "module": "openPlatform",
+      "priority": "P1",
+      "category": "error",
+      "title": "已通过应用不能再被驳回，状态保持 APPROVED",
+      "preconditions": [
+        "Application ${TEST_APP_ID} exists with status APPROVED.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send POST /api/v1/admin/open-platform/applications/${TEST_APP_ID}/reject with a reason.",
+        "Record response.",
+        "Send GET /api/v1/admin/open-platform/applications/${TEST_APP_ID} and record as verify."
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/admin/open-platform/applications/${TEST_APP_ID}/reject",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json"
+        },
+        "query": null,
+        "body": {
+          "reason": "e2e invalid transition ${RUN_ID}"
+        }
+      },
+      "expected": {
+        "status": 409,
+        "body": {
+          "code": "non-empty error code"
+        },
+        "verify_status": "APPROVED"
+      },
+      "assertions": [
+        "response.status === 409",
+        "typeof response.body.code === 'string' && response.body.code.length > 0",
+        "verify.status === 200 && (verify.body.data || verify.body).status === 'APPROVED'"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/openPlatform.js",
+        "line": 16
+      }
+    },
+    {
+      "id": "TC-034",
+      "module": "clientRelease",
+      "priority": "P1",
+      "category": "normal",
+      "title": "客户端发布列表按平台和渠道过滤",
+      "preconditions": [
+        "At least one android/stable release exists.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/client-releases with platform=android and channel=stable.",
+        "Inspect items and total."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/client-releases",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": {
+          "platform": "android",
+          "channel": "stable",
+          "page": 1,
+          "pageSize": 20
+        },
+        "body": null
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "items": "array with platform=android and channel=stable",
+          "total": "number >= items.length"
+        }
+      },
+      "assertions": [
+        "response.status === 200",
+        "Array.isArray(response.body.items)",
+        "response.body.items.every(x => x.platform === 'android')",
+        "response.body.items.every(x => x.channel === 'stable')",
+        "typeof response.body.total === 'number' && response.body.total >= response.body.items.length"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/clientRelease.js",
+        "line": 5
+      }
+    },
+    {
+      "id": "TC-035",
+      "module": "clientRelease",
+      "priority": "P0",
+      "category": "normal",
+      "title": "创建客户端发布草稿并可在详情读回",
+      "preconditions": [
+        "Admin token is valid.",
+        "android platform is enabled for release.",
+        "Download host example.com is allow-listed if host policy is enforced."
+      ],
+      "steps": [
+        "Send POST /api/v1/admin/client-releases with a complete draft payload and Idempotency-Key.",
+        "Record release id and rowVersion.",
+        "Send GET /api/v1/admin/client-releases/${RELEASE_ID} and record as verify."
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/admin/client-releases",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json",
+          "Idempotency-Key": "${UUID}"
+        },
+        "query": null,
+        "body": {
+          "platform": "android",
+          "channel": "stable",
+          "releaseVersion": "9.9.${RUN_ID}",
+          "buildNumber": 9000,
+          "releaseNotes": "e2e draft ${RUN_ID}",
+          "storeUrl": null,
+          "mandatory": false,
+          "reason": "e2e create draft",
+          "compatibility": {
+            "protocolVersion": "v1",
+            "minimumServerCapabilityVersion": 1
+          },
+          "artifacts": [
+            {
+              "architecture": "universal",
+              "packageType": "apk",
+              "downloadUrl": "https://example.com/e2e-${RUN_ID}.apk",
+              "sha256": "${SHA256_ARTIFACT}",
+              "sizeBytes": 1024
+            }
+          ]
+        }
+      },
+      "expected": {
+        "status": [
+          200,
+          201
+        ],
+        "body": {
+          "id": "created release id",
+          "status": "draft",
+          "rowVersion": "number"
+        },
+        "verify_releaseVersion": "9.9.${RUN_ID}"
+      },
+      "assertions": [
+        "response.status === 200 || response.status === 201",
+        "typeof (response.body.data || response.body).id !== 'undefined'",
+        "(response.body.data || response.body).status === 'draft'",
+        "typeof (response.body.data || response.body).rowVersion === 'number'",
+        "verify.status === 200 && (verify.body.data || verify.body).releaseVersion === '9.9.${RUN_ID}'"
+      ],
+      "cleanup": [
+        "POST /api/v1/admin/client-releases/${RELEASE_ID}/archive with current rowVersion and a reason; if archive is rejected, reset the release fixture DB."
+      ],
+      "source": {
+        "file": "src/api/clientRelease.js",
+        "line": 47
+      }
+    },
+    {
+      "id": "TC-036",
+      "module": "clientRelease",
+      "priority": "P0",
+      "category": "concurrency",
+      "title": "陈旧 expectedRowVersion 提交发布必须冲突且不改状态",
+      "preconditions": [
+        "Draft release ${TEST_RELEASE_ID} exists with rowVersion N and status draft.",
+        "STALE_ROW_VERSION is N-1.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send POST /api/v1/admin/client-releases/${TEST_RELEASE_ID}/submit with expectedRowVersion=N-1.",
+        "Record response.",
+        "Send GET /api/v1/admin/client-releases/${TEST_RELEASE_ID} and record as verify."
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/admin/client-releases/${TEST_RELEASE_ID}/submit",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json",
+          "Idempotency-Key": "${UUID}"
+        },
+        "query": null,
+        "body": {
+          "expectedRowVersion": "${STALE_ROW_VERSION}",
+          "reason": "e2e stale version",
+          "initialRolloutPercent": 100,
+          "scheduledAt": null
+        }
+      },
+      "expected": {
+        "status": 409,
+        "body": {
+          "code": "CLIENT_RELEASE_INVALID_STATE | CLIENT_RELEASE_IDEMPOTENCY_REUSED | CONFLICT | VERSION_CONFLICT"
+        },
+        "verify_status": "draft",
+        "verify_rowVersion": "N"
+      },
+      "assertions": [
+        "response.status === 409",
+        "['CLIENT_RELEASE_INVALID_STATE','CLIENT_RELEASE_IDEMPOTENCY_REUSED','CONFLICT','VERSION_CONFLICT'].includes(response.body.code)",
+        "(verify.body.data || verify.body).status === 'draft'",
+        "String((verify.body.data || verify.body).rowVersion) === '${TEST_CURRENT_ROW_VERSION}'"
+      ],
+      "cleanup": [
+        "Archive the untouched draft with its real rowVersion or reset fixture DB."
+      ],
+      "source": {
+        "file": "src/api/clientRelease.js",
+        "line": 52
+      }
+    },
+    {
+      "id": "TC-037",
+      "module": "clientRelease",
+      "priority": "P0",
+      "category": "idempotency",
+      "title": "相同 Idempotency-Key 重复提交发布不会生成重复发布",
+      "preconditions": [
+        "Draft release ${TEST_RELEASE_ID} exists with rowVersion N.",
+        "The same Idempotency-Key is reused for both calls.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send POST /api/v1/admin/client-releases/${TEST_RELEASE_ID}/submit with expectedRowVersion=N and Idempotency-Key K, record as first.",
+        "Send the identical request with the same K, record as replay.",
+        "Send GET /api/v1/admin/client-releases with platform/channel filters and record as list."
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/admin/client-releases/${TEST_RELEASE_ID}/submit",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin",
+          "Content-Type": "application/json",
+          "Idempotency-Key": "${UUID}"
+        },
+        "query": null,
+        "body": {
+          "expectedRowVersion": "${TEST_CURRENT_ROW_VERSION}",
+          "reason": "e2e idempotent submit",
+          "initialRolloutPercent": 100,
+          "scheduledAt": null
+        }
+      },
+      "expected": {
+        "first_status": [
+          200,
+          201
+        ],
+        "replay_status": [
+          200,
+          409
+        ],
+        "replay_conflict_code": "CLIENT_RELEASE_IDEMPOTENCY_REUSED",
+        "matching_release_count": 1
+      },
+      "assertions": [
+        "first.status >= 200 && first.status < 300",
+        "replay.status === 200 || replay.status === 409",
+        "replay.status !== 409 || replay.body.code === 'CLIENT_RELEASE_IDEMPOTENCY_REUSED'",
+        "replay.status !== 200 || String((replay.body.data || replay.body).id) === String((first.body.data || first.body).id)",
+        "list.body.items.filter(x => x.releaseVersion === '${RELEASE_VERSION}').length === 1"
+      ],
+      "cleanup": [
+        "Withdraw/archive the submitted release with its current rowVersion, or reset fixture DB."
+      ],
+      "source": {
+        "file": "src/api/clientRelease.js",
+        "line": 52
+      }
+    },
+    {
+      "id": "TC-038",
+      "module": "stats",
+      "priority": "P1",
+      "category": "normal",
+      "title": "数据看板总览字段齐全且计数关系合理",
+      "preconditions": [
+        "Admin token is valid.",
+        "Statistics tables are populated."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/stats/overview.",
+        "Inspect numeric fields and basic invariants."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/stats/overview",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": null,
+        "body": null
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "totalUsers": "number >= 0",
+          "onlineCount": "number >= 0",
+          "totalMessages": "number >= 0",
+          "totalGroups": "number >= 0",
+          "todayNewUsers": "number >= 0"
+        }
+      },
+      "assertions": [
+        "response.status === 200",
+        "typeof response.body.totalUsers === 'number' && response.body.totalUsers >= 0",
+        "typeof response.body.onlineCount === 'number' && response.body.onlineCount >= 0",
+        "typeof response.body.totalMessages === 'number' && response.body.totalMessages >= 0",
+        "typeof response.body.totalGroups === 'number' && response.body.totalGroups >= 0",
+        "typeof response.body.todayNewUsers === 'number' && response.body.todayNewUsers >= 0",
+        "response.body.onlineCount <= response.body.totalUsers",
+        "response.body.todayNewUsers <= response.body.totalUsers"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/stats.js",
+        "line": 3
+      }
+    },
+    {
+      "id": "TC-039",
+      "module": "server",
+      "priority": "P2",
+      "category": "normal",
+      "title": "服务器日志分页接口按级别过滤（契约探测）",
+      "preconditions": [
+        "Admin token is valid.",
+        "Accept that no view consumes this API; server/logs.vue uses mockLogs."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/server/logs with level=ERROR, page=1, pageSize=50.",
+        "Inspect items and total."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/server/logs",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": {
+          "level": "ERROR",
+          "module": "Gateway",
+          "keyword": "",
+          "page": 1,
+          "pageSize": 50
+        },
+        "body": null
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "items": "array of log entries with level=ERROR",
+          "total": "number >= items.length"
+        }
+      },
+      "assertions": [
+        "response.status === 200",
+        "Array.isArray(response.body.items)",
+        "response.body.items.every(x => x.level === 'ERROR')",
+        "typeof response.body.total === 'number' && response.body.total >= response.body.items.length"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/server.js",
+        "line": 11
+      }
+    },
+    {
+      "id": "TC-040",
+      "module": "accountCancellation",
+      "priority": "P1",
+      "category": "normal",
+      "title": "账号注销申请列表按 PENDING 状态过滤并返回申请时间",
+      "preconditions": [
+        "At least one PENDING cancellation request exists.",
+        "Admin token is valid."
+      ],
+      "steps": [
+        "Send GET /api/v1/admin/account-cancellations with status=PENDING, page=1, pageSize=20.",
+        "Inspect items and total."
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/admin/account-cancellations",
+        "headers": {
+          "Authorization": "Bearer ${ADMIN_TOKEN}",
+          "X-Client-Contract": "im-v1",
+          "X-Client-Version": "1.0.5",
+          "X-Client-Platform": "pc-admin"
+        },
+        "query": {
+          "page": 1,
+          "pageSize": 20,
+          "status": "PENDING",
+          "keyword": ""
+        },
+        "body": null
+      },
+      "expected": {
+        "status": 200,
+        "body": {
+          "items": "array with status=PENDING",
+          "total": "number >= items.length"
+        }
+      },
+      "assertions": [
+        "response.status === 200",
+        "Array.isArray(response.body.items)",
+        "response.body.items.every(x => x.status === 'PENDING')",
+        "response.body.items.every(x => typeof x.requestedAt === 'string')",
+        "typeof response.body.total === 'number' && response.body.total >= response.body.items.length"
+      ],
+      "cleanup": [
+        "none"
+      ],
+      "source": {
+        "file": "src/api/accountCancellation.js",
+        "line": 3
+      }
+    }
+  ],
+  "coverage": {
+    "matrix": [
+      {
+        "module": "auth",
+        "cases": [
+          "TC-001",
+          "TC-002",
+          "TC-003"
+        ],
+        "normal": 1,
+        "auth": 1,
+        "error": 1,
+        "boundary": 0,
+        "idempotency": 0,
+        "concurrency": 0,
+        "data": 0,
+        "total": 3,
+        "endpoints": 4,
+        "endpoints_touched": 2
+      },
+      {
+        "module": "user",
+        "cases": [
+          "TC-004",
+          "TC-005",
+          "TC-006",
+          "TC-007"
+        ],
+        "normal": 2,
+        "auth": 0,
+        "error": 2,
+        "boundary": 0,
+        "idempotency": 0,
+        "concurrency": 0,
+        "data": 0,
+        "total": 4,
+        "endpoints": 4,
+        "endpoints_touched": 4
+      },
+      {
+        "module": "friend",
+        "cases": [
+          "TC-008"
+        ],
+        "normal": 1,
+        "auth": 0,
+        "error": 0,
+        "boundary": 0,
+        "idempotency": 0,
+        "concurrency": 0,
+        "data": 0,
+        "total": 1,
+        "endpoints": 1,
+        "endpoints_touched": 1
+      },
+      {
+        "module": "group",
+        "cases": [
+          "TC-009"
+        ],
+        "normal": 1,
+        "auth": 0,
+        "error": 0,
+        "boundary": 0,
+        "idempotency": 0,
+        "concurrency": 0,
+        "data": 0,
+        "total": 1,
+        "endpoints": 3,
+        "endpoints_touched": 1
+      },
+      {
+        "module": "message",
+        "cases": [
+          "TC-010",
+          "TC-011"
+        ],
+        "normal": 1,
+        "auth": 0,
+        "error": 0,
+        "boundary": 1,
+        "idempotency": 0,
+        "concurrency": 0,
+        "data": 0,
+        "total": 2,
+        "endpoints": 2,
+        "endpoints_touched": 2
+      },
+      {
+        "module": "audit",
+        "cases": [
+          "TC-012",
+          "TC-013"
+        ],
+        "normal": 1,
+        "auth": 0,
+        "error": 1,
+        "boundary": 0,
+        "idempotency": 0,
+        "concurrency": 0,
+        "data": 0,
+        "total": 2,
+        "endpoints": 1,
+        "endpoints_touched": 1
+      },
+      {
+        "module": "config",
+        "cases": [
+          "TC-014",
+          "TC-015"
+        ],
+        "normal": 2,
+        "auth": 0,
+        "error": 0,
+        "boundary": 0,
+        "idempotency": 0,
+        "concurrency": 0,
+        "data": 0,
+        "total": 2,
+        "endpoints": 3,
+        "endpoints_touched": 2
+      },
+      {
+        "module": "security",
+        "cases": [
+          "TC-016",
+          "TC-017",
+          "TC-018"
+        ],
+        "normal": 1,
+        "auth": 0,
+        "error": 0,
+        "boundary": 1,
+        "idempotency": 0,
+        "concurrency": 0,
+        "data": 1,
+        "total": 3,
+        "endpoints": 9,
+        "endpoints_touched": 4
+      },
+      {
+        "module": "deviceToken",
+        "cases": [
+          "TC-019",
+          "TC-020"
+        ],
+        "normal": 1,
+        "auth": 0,
+        "error": 0,
+        "boundary": 0,
+        "idempotency": 1,
+        "concurrency": 0,
+        "data": 0,
+        "total": 2,
+        "endpoints": 2,
+        "endpoints_touched": 2
+      },
+      {
+        "module": "userSticker",
+        "cases": [
+          "TC-021",
+          "TC-022"
+        ],
+        "normal": 1,
+        "auth": 0,
+        "error": 1,
+        "boundary": 0,
+        "idempotency": 0,
+        "concurrency": 0,
+        "data": 0,
+        "total": 2,
+        "endpoints": 2,
+        "endpoints_touched": 2
+      },
+      {
+        "module": "miniappService",
+        "cases": [
+          "TC-023",
+          "TC-024",
+          "TC-025"
+        ],
+        "normal": 2,
+        "auth": 0,
+        "error": 0,
+        "boundary": 0,
+        "idempotency": 0,
+        "concurrency": 0,
+        "data": 1,
+        "total": 3,
+        "endpoints": 9,
+        "endpoints_touched": 4
+      },
+      {
+        "module": "media",
+        "cases": [
+          "TC-026",
+          "TC-027",
+          "TC-028"
+        ],
+        "normal": 1,
+        "auth": 0,
+        "error": 1,
+        "boundary": 1,
+        "idempotency": 0,
+        "concurrency": 0,
+        "data": 0,
+        "total": 3,
+        "endpoints": 12,
+        "endpoints_touched": 3
+      },
+      {
+        "module": "monitor",
+        "cases": [
+          "TC-029",
+          "TC-030"
+        ],
+        "normal": 0,
+        "auth": 0,
+        "error": 0,
+        "boundary": 0,
+        "idempotency": 1,
+        "concurrency": 0,
+        "data": 1,
+        "total": 2,
+        "endpoints": 5,
+        "endpoints_touched": 4
+      },
+      {
+        "module": "openPlatform",
+        "cases": [
+          "TC-031",
+          "TC-032",
+          "TC-033"
+        ],
+        "normal": 2,
+        "auth": 0,
+        "error": 1,
+        "boundary": 0,
+        "idempotency": 0,
+        "concurrency": 0,
+        "data": 0,
+        "total": 3,
+        "endpoints": 6,
+        "endpoints_touched": 4
+      },
+      {
+        "module": "clientRelease",
+        "cases": [
+          "TC-034",
+          "TC-035",
+          "TC-036",
+          "TC-037"
+        ],
+        "normal": 2,
+        "auth": 0,
+        "error": 0,
+        "boundary": 0,
+        "idempotency": 1,
+        "concurrency": 1,
+        "data": 0,
+        "total": 4,
+        "endpoints": 16,
+        "endpoints_touched": 4
+      },
+      {
+        "module": "stats",
+        "cases": [
+          "TC-038"
+        ],
+        "normal": 1,
+        "auth": 0,
+        "error": 0,
+        "boundary": 0,
+        "idempotency": 0,
+        "concurrency": 0,
+        "data": 0,
+        "total": 1,
+        "endpoints": 2,
+        "endpoints_touched": 1
+      },
+      {
+        "module": "server",
+        "cases": [
+          "TC-039"
+        ],
+        "normal": 1,
+        "auth": 0,
+        "error": 0,
+        "boundary": 0,
+        "idempotency": 0,
+        "concurrency": 0,
+        "data": 0,
+        "total": 1,
+        "endpoints": 3,
+        "endpoints_touched": 1
+      },
+      {
+        "module": "accountCancellation",
+        "cases": [
+          "TC-040"
+        ],
+        "normal": 1,
+        "auth": 0,
+        "error": 0,
+        "boundary": 0,
+        "idempotency": 0,
+        "concurrency": 0,
+        "data": 0,
+        "total": 1,
+        "endpoints": 3,
+        "endpoints_touched": 1
+      }
+    ],
+    "modules": [
+      {
+        "module": "auth",
+        "covered_methods": [
+          "login",
+          "resetPassword"
+        ],
+        "uncovered_methods": [
+          "ssoLogin",
+          "forgotPassword"
+        ]
+      },
+      {
+        "module": "user",
+        "covered_methods": [
+          "getUsers",
+          "getUserById",
+          "updateUserStatus",
+          "deleteUser"
+        ],
+        "uncovered_methods": []
+      },
+      {
+        "module": "friend",
+        "covered_methods": [
+          "getFriends"
+        ],
+        "uncovered_methods": []
+      },
+      {
+        "module": "group",
+        "covered_methods": [
+          "getGroupList"
+        ],
+        "uncovered_methods": [
+          "getGroupMembers",
+          "dissolveGroup"
+        ]
+      },
+      {
+        "module": "message",
+        "covered_methods": [
+          "getMessages",
+          "getMessageTrend"
+        ],
+        "uncovered_methods": []
+      },
+      {
+        "module": "audit",
+        "covered_methods": [
+          "getAuditLogs"
+        ],
+        "uncovered_methods": []
+      },
+      {
+        "module": "config",
+        "covered_methods": [
+          "getAllConfigs",
+          "batchUpdateConfigs"
+        ],
+        "uncovered_methods": [
+          "updateConfig"
+        ]
+      },
+      {
+        "module": "security",
+        "covered_methods": [
+          "getKeywords",
+          "addKeyword",
+          "getReports",
+          "handleReport"
+        ],
+        "uncovered_methods": [
+          "updateKeyword",
+          "deleteKeyword",
+          "getViolations",
+          "createViolation",
+          "getPendingReportCount"
+        ]
+      },
+      {
+        "module": "deviceToken",
+        "covered_methods": [
+          "getDeviceTokens",
+          "deleteDeviceToken"
+        ],
+        "uncovered_methods": []
+      },
+      {
+        "module": "userSticker",
+        "covered_methods": [
+          "getUserStickers",
+          "deleteUserSticker"
+        ],
+        "uncovered_methods": []
+      },
+      {
+        "module": "miniappService",
+        "covered_methods": [
+          "getServiceTypes",
+          "getServices",
+          "updateService",
+          "deleteServiceType"
+        ],
+        "uncovered_methods": [
+          "createServiceType",
+          "updateServiceType",
+          "batchSortServiceTypes",
+          "createService",
+          "deleteService"
+        ]
+      },
+      {
+        "module": "media",
+        "covered_methods": [
+          "createUploadSession",
+          "createMultipartUploadSession",
+          "getMediaAccessUrl"
+        ],
+        "uncovered_methods": [
+          "getMultipartSessionStatus",
+          "deleteUploadSession",
+          "deleteMultipartUploadSession",
+          "completeSingleUpload",
+          "signMultipartParts",
+          "completeMultipartPart",
+          "completeMultipartUpload",
+          "putPresignedObject",
+          "getMediaObject"
+        ]
+      },
+      {
+        "module": "monitor",
+        "covered_methods": [
+          "getOnlineCount",
+          "getOnlineUsers",
+          "getCallRooms",
+          "endCall"
+        ],
+        "uncovered_methods": [
+          "getServerStats"
+        ]
+      },
+      {
+        "module": "openPlatform",
+        "covered_methods": [
+          "getApplications",
+          "getApplication",
+          "approveApplication",
+          "rejectApplication"
+        ],
+        "uncovered_methods": [
+          "resetSecret",
+          "revokeApplication"
+        ]
+      },
+      {
+        "module": "clientRelease",
+        "covered_methods": [
+          "getClientReleases",
+          "getClientRelease",
+          "createClientRelease",
+          "submitClientRelease"
+        ],
+        "uncovered_methods": [
+          "createArtifactUploadSession",
+          "putArtifactObject",
+          "completeArtifactUpload",
+          "updateClientRelease",
+          "getClientReleasePolicies",
+          "getClientReleaseAuditLogs",
+          "getClientReleasePlatforms",
+          "rolloutClientRelease",
+          "pauseClientRelease",
+          "resumeClientRelease",
+          "withdrawClientRelease",
+          "archiveClientRelease"
+        ]
+      },
+      {
+        "module": "stats",
+        "covered_methods": [
+          "getOverviewStats"
+        ],
+        "uncovered_methods": [
+          "getTimeSeriesData"
+        ]
+      },
+      {
+        "module": "server",
+        "covered_methods": [
+          "getLogs"
+        ],
+        "uncovered_methods": [
+          "getServerMetrics",
+          "getServerNodes"
+        ]
+      },
+      {
+        "module": "accountCancellation",
+        "covered_methods": [
+          "getAccountCancellations"
+        ],
+        "uncovered_methods": [
+          "getAccountCancellationLogs",
+          "searchAccountCancellationLogs"
+        ]
+      }
+    ],
+    "gaps": [
+      "auth: SSO login, forgot-password happy path, login rate limiting/lockout, and password-reset success are not covered.",
+      "user: direct happy-path getUserById, invalid status enum, non-admin 403, self-delete CANNOT_DELETE_SELF, and USER_NOT_FOUND are not covered.",
+      "group: group members and dissolveGroup are not covered; the entire module has no UI consumer.",
+      "message: no test for pageSize/page upper bounds or invalid enum values.",
+      "audit: no test for action/resource/operator combinations, retentionFloor behavior, or pageSize bounds.",
+      "config: PUT /admin/config is not covered; batch partial-failure atomicity and unknown configKey handling are unknown.",
+      "security: keyword update/delete/toggle, violations list/create, pending count, and valid report transitions (pending->processing->resolved/dismissed) are not covered.",
+      "deviceToken: first-delete 404 and pagination bounds are not covered.",
+      "userSticker: happy-path delete is not covered.",
+      "miniappService: type create/update/sort, service create/delete, link/audience/status validation, and duplicate type name are not covered.",
+      "media: upload completion, multipart signatures/part completion, resume, cancel, object status active/rejected/deleted, timeout, checksum mismatch, and presigned PUT are not covered.",
+      "monitor: server stats, active/empty call room variants, and concurrent end-call races are not covered.",
+      "openPlatform: reset-secret, revoke, reject happy path, and approve on non-PENDING app are not covered.",
+      "clientRelease: update, policies, audit logs, platforms, rollout, pause, resume, withdraw, archive, preview artifact upload, invalid SemVer/SHA-256, platform-not-enabled, download-host rejection, and not-found are not covered.",
+      "server: metrics and nodes are not covered; no UI consumer exists for this module.",
+      "stats: time-series trend and days boundary are not covered.",
+      "accountCancellation: log-detail, log search, status filters, and missing-parent behavior are not covered.",
+      "Cross-cutting: no 403 authorization case, no 429 rate-limit case, no 15s timeout case, no request-size limit, no CORS/CSRF, no XSS/injection, and no audit-trail assertion after mutations."
+    ],
+    "risks": [
+      "No OpenAPI or backend contract exists in the repository. Success envelopes, HTTP statuses, and field names are inferred from axios usage and Vue templates; 12 of 18 modules have no documented error code.",
+      "Only 14 stable error codes are visible, all in src/utils/adminErrorMessage.js. Eight error cases therefore assert code presence rather than a specific code, which reduces oracle strength.",
+      "Authentication is token-presence-only in the router. The source says admin role is required but exposes no role/permission matrix, so 403 semantics and tenant isolation cannot be derived from source.",
+      "group and server are unconsumed API modules; server/logs.vue and server/performance.vue use mocks. Endpoints may be absent, renamed, or contract-drifted without any UI signal.",
+      "Media and client-release artifact uploads use presigned object-storage URLs outside the API base. Reliable execution needs a real bucket, CORS, ETag exposure, and cleanup policy not present in source.",
+      "Idempotency semantics are undocumented: clientRelease write() generates a new UUID per call, while media generates UUIDs per create/complete. Replay window, cached response, and conflict behavior are assumptions encoded in TC-020, TC-030, and TC-037.",
+      "Optimistic concurrency depends on expectedRowVersion. How clients obtain the current value and which conflict code is returned for a stale version are not specified beyond CLIENT_RELEASE_* messages.",
+      "TC-029 assumes /monitor/online/users returns the complete online set. If the endpoint caps or paginates the list, count equality is a false oracle.",
+      "TC-018 assumes resolved reports cannot transition back to pending. That rule is inferred from UI action visibility, not backend validation.",
+      "Shared mutable fixtures are required for user status, config batch, release lifecycle, and open-platform approval. There is no release-delete endpoint, and approve cannot be reversed to PENDING without DB reset.",
+      "Time handling is split: audit from/to use YYYY-MM-DD, client-release scheduledAt is converted to UTC. Boundary tests can be flaky around midnight/time zones.",
+      "Pagination bounds, enum validation, and empty-parameter behavior are not documented. The interceptor silently strips empty query params, which can hide invalid-input bugs.",
+      "Sensitive data handling must be explicit: appSecret is one-time, device tokens must expose only fingerprints, and test logs must not persist either.",
+      "The 20MB multipart threshold is client-side. Server part size and threshold may differ; TC-027 asserts internal self-consistency rather than a fixed server part size.",
+      "The 401 interceptor clears storage and redirects to #/login. UI-driven tests can lose session mid-suite; HTTP-level tests are safer.",
+      "Source-parsing alone cannot distinguish unused API wrappers from real supported endpoints, so coverage percentage overstates behavioral confidence."
+    ],
+    "summary": {
+      "cases": 40,
+      "p0": 10,
+      "p1": 19,
+      "p2": 11,
+      "normal": 22,
+      "boundary": 3,
+      "error": 7,
+      "auth": 1,
+      "idempotency": 3,
+      "concurrency": 1,
+      "data": 3,
+      "modules": 18,
+      "inventoried_methods": 87,
+      "direct_endpoint_touchpoints": 43,
+      "direct_endpoint_coverage_percent": 49.4,
+      "documented_error_codes": 14,
+      "cases_with_stable_domain_code_assertions": 4
+    }
+  },
+  "assessment": {
+    "verdict": "partially_feasible",
+    "reliable_comprehensive_suite_from_source_alone": false,
+    "summary": "Source parsing is sufficient to build a high-quality request inventory and an executable skeleton for 40 cases across all 18 API modules, but it is not sufficient to make the suite reliable or comprehensive. The repository exposes request construction, UI usage, and a small error-code vocabulary, yet omits the backend contract, fixtures, role matrix, idempotency semantics, and upload-bucket behavior needed for trustworthy oracles.",
+    "what_source_parsing_yields": [
+      "18 API modules and 87 HTTP touchpoints with method, path, parameters, auth mode, response shape hints, and source line numbers.",
+      "Global request behavior: Bearer injection, X-Client headers, empty-query stripping, 15s timeout, 401 redirect policy, and publicRequest behavior.",
+      "UI-derived field names, list envelope {items,total}, status enums, and 14 stable error codes across user, audit, auth/SSO, and client release.",
+      "Enough structure to generate 40 cases with deterministic request payloads, preconditions, cleanup, and assertions that are executable once fixtures exist.",
+      "Clear dead-code and mock signals: group is unreferenced; server is unreferenced while server views use mocks, lowering confidence in those contracts."
+    ],
+    "what_source_parsing_cannot_yield": [
+      "Authoritative success/error envelopes, exact HTTP status mapping, and error codes for 12 of 18 modules.",
+      "Role/permission matrix, tenant isolation rules, and 403 behavior.",
+      "Idempotency replay semantics, concurrency conflict codes, and whether expectedRowVersion uses body or header.",
+      "Presigned object-storage behavior, bucket CORS, ETag exposure, multipart part sizing, and cleanup APIs.",
+      "Test fixtures, database reset hooks, seed data, and safe lifecycle management for irreversible transitions.",
+      "Pagination bounds, enum validation, duplicate constraints, and numeric limits not represented in UI code.",
+      "Which unconsumed endpoints are actually supported and which are leftovers."
+    ],
+    "confidence": "medium for request inventory; low-to-medium for assertions on modules without documented error codes or UI consumers",
+    "recommended_next_inputs": [
+      "Backend OpenAPI/route schema, response envelope, status-code table, and complete stable error-code registry.",
+      "Seed/fixture API or database snapshot with deterministic admin, user, group, report, call, release, app, and media records.",
+      "Role/permission matrix including non-admin and cross-tenant negative cases.",
+      "Idempotency and optimistic-concurrency contract, including replay window and conflict codes.",
+      "Object-storage test bucket credentials, CORS policy, ETag policy, and cleanup job.",
+      "Mock-server or contract-test layer for the two dead modules and for presigned upload flows."
+    ]
+  }
+}

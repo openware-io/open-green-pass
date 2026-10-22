@@ -1,0 +1,197 @@
+﻿[
+    {
+        "id":  2902560431181824,
+        "batch_id":  2902560158584832,
+        "source_locator":  "model://deepseek/deepseek-v4-pro?source_path=\u0026source=src/api/config.js",
+        "normalized_spec":  {
+                                "assertions":  [
+                                                   {
+                                                       "expected_status":  200,
+                                                       "type":  "status"
+                                                   }
+                                               ],
+                                "batch_id":  2902560158584832,
+                                "expected":  "响应状态码为 HTTP 200",
+                                "kind":  "api",
+                                "model":  "deepseek-v4-pro",
+                                "preconditions":  [
+
+                                                  ],
+                                "provider":  "deepseek",
+                                "request":  {
+                                                "body":  null,
+                                                "headers":  {
+                                                                "Accept":  "application/json"
+                                                            },
+                                                "method":  "GET",
+                                                "path":  "/admin/config"
+                                            },
+                                "scenario":  "api",
+                                "source_locator":  "src/api/config.js",
+                                "source_path":  "",
+                                "steps":  [
+                                              "发送 GET /admin/config 请求"
+                                          ],
+                                "title":  "获取全部配置"
+                            },
+        "quality_state":  "passed",
+        "approval_state":  "pending",
+        "dedupe_hash":  "3248530935c6b641a670119a6084cb7a"
+    },
+    {
+        "id":  2902561422446592,
+        "batch_id":  2902560158584832,
+        "source_locator":  "model://deepseek/deepseek-v4-pro?source_path=\u0026source=src/api/audit.js",
+        "normalized_spec":  {
+                                "assertions":  [
+                                                   {
+                                                       "expected_status":  200,
+                                                       "type":  "status"
+                                                   }
+                                               ],
+                                "batch_id":  2902560158584832,
+                                "expected":  "响应状态码为 HTTP 200",
+                                "kind":  "api",
+                                "model":  "deepseek-v4-pro",
+                                "preconditions":  [
+
+                                                  ],
+                                "provider":  "deepseek",
+                                "request":  {
+                                                "body":  null,
+                                                "headers":  {
+                                                                "Accept":  "application/json"
+                                                            },
+                                                "method":  "GET",
+                                                "path":  "/admin/audit-logs"
+                                            },
+                                "scenario":  "api",
+                                "source_locator":  "src/api/audit.js",
+                                "source_path":  "",
+                                "steps":  [
+                                              "发送 GET /admin/audit-logs 请求"
+                                          ],
+                                "title":  "获取审计日志"
+                            },
+        "quality_state":  "passed",
+        "approval_state":  "pending",
+        "dedupe_hash":  "37bda9dcec7944b35445b0718c6d900c"
+    },
+    {
+        "id":  2902561422446593,
+        "batch_id":  2902560158584832,
+        "source_locator":  "model://deepseek/deepseek-v4-pro?source_path=\u0026source=src/api/accountCancellation.js",
+        "normalized_spec":  {
+                                "assertions":  [
+                                                   {
+                                                       "expected_status":  200,
+                                                       "type":  "status"
+                                                   }
+                                               ],
+                                "batch_id":  2902560158584832,
+                                "expected":  "响应状态码为 HTTP 200",
+                                "kind":  "api",
+                                "model":  "deepseek-v4-pro",
+                                "preconditions":  [
+
+                                                  ],
+                                "provider":  "deepseek",
+                                "request":  {
+                                                "body":  null,
+                                                "headers":  {
+                                                                "Accept":  "application/json"
+                                                            },
+                                                "method":  "GET",
+                                                "path":  "/admin/account-cancellations"
+                                            },
+                                "scenario":  "api",
+                                "source_locator":  "src/api/accountCancellation.js",
+                                "source_path":  "",
+                                "steps":  [
+                                              "发送 GET /admin/account-cancellations 请求"
+                                          ],
+                                "title":  "获取账号注销列表"
+                            },
+        "quality_state":  "passed",
+        "approval_state":  "pending",
+        "dedupe_hash":  "744444c9a366cdc07dd9afe9da3d2d2e"
+    },
+    {
+        "id":  2902561422479360,
+        "batch_id":  2902560158584832,
+        "source_locator":  "model://deepseek/deepseek-v4-pro?source_path=\u0026source=src/api/friend.js",
+        "normalized_spec":  {
+                                "assertions":  [
+                                                   {
+                                                       "expected_status":  200,
+                                                       "type":  "status"
+                                                   }
+                                               ],
+                                "batch_id":  2902560158584832,
+                                "expected":  "响应状态码为 HTTP 200",
+                                "kind":  "api",
+                                "model":  "deepseek-v4-pro",
+                                "preconditions":  [
+
+                                                  ],
+                                "provider":  "deepseek",
+                                "request":  {
+                                                "body":  null,
+                                                "headers":  {
+                                                                "Accept":  "application/json"
+                                                            },
+                                                "method":  "GET",
+                                                "path":  "/admin/friends"
+                                            },
+                                "scenario":  "api",
+                                "source_locator":  "src/api/friend.js",
+                                "source_path":  "",
+                                "steps":  [
+                                              "发送 GET /admin/friends 请求"
+                                          ],
+                                "title":  "获取好友列表"
+                            },
+        "quality_state":  "passed",
+        "approval_state":  "pending",
+        "dedupe_hash":  "65fca531ca26dc426b4d2d643c1e0c63"
+    },
+    {
+        "id":  2902561422512128,
+        "batch_id":  2902560158584832,
+        "source_locator":  "model://deepseek/deepseek-v4-pro?source_path=\u0026source=src/api/message.js",
+        "normalized_spec":  {
+                                "assertions":  [
+                                                   {
+                                                       "expected_status":  200,
+                                                       "type":  "status"
+                                                   }
+                                               ],
+                                "batch_id":  2902560158584832,
+                                "expected":  "响应状态码为 HTTP 200",
+                                "kind":  "api",
+                                "model":  "deepseek-v4-pro",
+                                "preconditions":  [
+
+                                                  ],
+                                "provider":  "deepseek",
+                                "request":  {
+                                                "body":  null,
+                                                "headers":  {
+                                                                "Accept":  "application/json"
+                                                            },
+                                                "method":  "GET",
+                                                "path":  "/admin/messages"
+                                            },
+                                "scenario":  "api",
+                                "source_locator":  "src/api/message.js",
+                                "source_path":  "",
+                                "steps":  [
+                                              "发送 GET /admin/messages 请求"
+                                          ],
+                                "title":  "获取消息列表"
+                            },
+        "quality_state":  "passed",
+        "approval_state":  "pending",
+        "dedupe_hash":  "676bab44ad530cfa25f739bb59b527a6"
+    }
+]
