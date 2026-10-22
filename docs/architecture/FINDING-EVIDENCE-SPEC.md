@@ -6,6 +6,21 @@
 | 范围 | Finding 状态机、仓库归属、截图/视频证据、失败归因 |
 | 关联方案 | `docs/plans/GP-AI-TEST-ENGINE-EXECUTION-PLAN.md` |
 
+## 0. 工程合规
+
+| 逻辑 | 物理表 | 域 | 前缀 |
+|---|---|---|---|
+| finding | `def_finding` | Governance Defect | `def_` 待登记 |
+| finding_event | `def_event` | Governance Defect | `def_` 待登记 |
+| finding_suggestion | `def_suggestion` | Governance Defect | `def_` 待登记 |
+| finding_evidence | `evd_evidence` | Trusted Evidence | `evd_` 已登记 |
+
+- Governance 通过 Trusted 端口创建/读取证据，不直接写 `evd_evidence`。
+- `evd_evidence` 由 `gp_trusted_writer` 写，server/worker 只读。
+- 所有表带 `team_id` + RLS；finding 状态流转/证据上传/读取写 `aud_event`。
+- 证据元数据不可变；不提供 UPDATE/DELETE。
+- 迁移编号/up/down/migcheck 按 ENGINEERING-SPEC §8.4；前缀登记完成前不得建表。
+
 ## 1. 目标
 
 - 缺陷可定位到 **仓库 + 分支 + 冻结提交 + 文件行**。
@@ -177,7 +192,7 @@ gp-evidence/{team_id}/{project_id}/{finding_id}/{sha256}.{ext}
 ## 11. 数据模型
 
 ```sql
-CREATE TABLE finding (
+CREATE TABLE def_finding (
   id BIGINT PRIMARY KEY,
   team_id BIGINT NOT NULL,
   project_id BIGINT NOT NULL,
@@ -208,7 +223,7 @@ CREATE TABLE finding (
   UNIQUE (team_id, dedupe_hash)
 );
 
-CREATE TABLE finding_evidence (
+CREATE TABLE evd_evidence (
   id BIGINT PRIMARY KEY,
   finding_id BIGINT NOT NULL,
   kind TEXT NOT NULL,
@@ -225,7 +240,7 @@ CREATE TABLE finding_evidence (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE finding_event (
+CREATE TABLE def_event (
   id BIGINT PRIMARY KEY,
   finding_id BIGINT NOT NULL,
   action TEXT NOT NULL,
@@ -234,7 +249,7 @@ CREATE TABLE finding_event (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE finding_suggestion (
+CREATE TABLE def_suggestion (
   id BIGINT PRIMARY KEY,
   finding_id BIGINT NOT NULL,
   summary TEXT NOT NULL,

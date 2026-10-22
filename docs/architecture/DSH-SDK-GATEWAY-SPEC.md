@@ -7,6 +7,16 @@
 | 上游 | `@deepseek-ai/dsh`（固定版本） |
 | 关联方案 | `docs/plans/GP-AI-TEST-ENGINE-EXECUTION-PLAN.md` |
 
+## 0. 工程合规
+
+- 部署单元：`cmd/dsh-gateway`（Go）；DSH 是外部 Node 运行时子进程，不承载 GP 业务域、不直接访问 GP DB。
+- 新镜像名 `ghcr.io/openware-io/open-green-pass-dsh-gateway:X.Y.Z-SNAPSHOT` 需登记到 ENGINEERING-SPEC §12；登记前不得发布。
+- 网关只通过 GP API/事件回写，不直连 `gp_` 库；job 状态由 GP AI 域持久化。
+- 必须纳入 `init-kind.ps1`/`deploy-kind.ps1`/`deploy/k8s/`/CI；只内网 Service，不暴露 ingress。
+- Runner 沙箱：专用 SA、`automountServiceAccountToken: false`、非 root、RuntimeDefault seccomp、drop ALL caps、allowPrivilegeEscalation false、只读根。
+- egress 先在 staging 做 default-deny + allowlist 验证，通过后再启用；不声称已隔离。
+- `DEEPSEEK_API_KEY` 通过 Secret 注入，记录为运行时例外，禁止日志/回显。
+
 ## 1. 目标与非目标
 
 ### 目标

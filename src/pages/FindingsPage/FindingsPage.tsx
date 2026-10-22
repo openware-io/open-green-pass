@@ -257,14 +257,14 @@ const SEED: Finding[] = [
 const SEV_STYLE: Record<Severity, string> = {
   P0: 'bg-red-50 text-red-700 border-red-200',
   P1: 'bg-amber-50 text-amber-700 border-amber-200',
-  P2: 'bg-sky-50 text-sky-700 border-sky-200',
+  P2: 'bg-slate-100 text-slate-600 border-slate-200',
   P3: 'bg-slate-100 text-slate-600 border-slate-200',
 };
 const STATUS_STYLE: Record<FindingStatus, string> = {
   待确认: 'bg-amber-50 text-amber-700',
   已确认: 'bg-red-50 text-red-700',
-  修复中: 'bg-sky-50 text-sky-700',
-  待回归: 'bg-violet-50 text-violet-700',
+  修复中: 'bg-emerald-50 text-emerald-700',
+  待回归: 'bg-amber-50 text-amber-700',
   已关闭: 'bg-emerald-50 text-emerald-700',
   误报: 'bg-slate-100 text-slate-500',
 };
@@ -330,7 +330,7 @@ export default function FindingsPage() {
           { label: '待确认', value: items.filter((item) => item.status === '待确认').length, tone: 'text-amber-700 bg-amber-50' },
           { label: '已确认', value: items.filter((item) => item.status === '已确认').length, tone: 'text-red-700 bg-red-50' },
           { label: 'P0 未关闭', value: items.filter((item) => item.severity === 'P0' && !['已关闭', '误报'].includes(item.status)).length, tone: 'text-red-700 bg-red-50' },
-          { label: '待回归', value: items.filter((item) => item.status === '待回归').length, tone: 'text-violet-700 bg-violet-50' },
+          { label: '待回归', value: items.filter((item) => item.status === '待回归').length, tone: 'text-amber-700 bg-amber-50' },
           { label: '误报', value: items.filter((item) => item.status === '误报').length, tone: 'text-slate-600 bg-slate-100' },
         ].map((stat) => (
           <div key={stat.label} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
@@ -381,8 +381,8 @@ export default function FindingsPage() {
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-600">
                     <span className="inline-flex items-center gap-1"><FileWarning className="h-3.5 w-3.5 text-amber-500" />{evidenceCount(item)}/4</span>
-                    <span className="inline-flex items-center gap-1 text-sky-700"><ImageIcon className="h-3.5 w-3.5" />截图</span>
-                    {hasVideo(item) && <span className="inline-flex items-center gap-1 text-violet-700"><Video className="h-3.5 w-3.5" />视频</span>}
+                    <span className="inline-flex items-center gap-1 text-emerald-700"><ImageIcon className="h-3.5 w-3.5" />截图</span>
+                    {hasVideo(item) && <span className="inline-flex items-center gap-1 text-slate-600"><Video className="h-3.5 w-3.5" />视频</span>}
                   </div>
                 </td>
                 <td className="px-4 py-3 font-mono text-emerald-700">{item.run}</td>
@@ -413,7 +413,7 @@ export default function FindingsPage() {
             <div className="mt-3 flex flex-wrap gap-2">
               <button onClick={() => setStatusFor(selected.id, '已确认')} className="rounded-lg bg-red-600 px-3 py-1.5 text-xs text-white">确认缺陷</button>
               <button onClick={() => setStatusFor(selected.id, '误报')} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600">标记误报</button>
-              <button onClick={() => setStatusFor(selected.id, '待回归')} className="rounded-lg border border-violet-200 px-3 py-1.5 text-xs text-violet-700">标记已修复，待回归</button>
+              <button onClick={() => setStatusFor(selected.id, '待回归')} className="rounded-lg border border-amber-200 px-3 py-1.5 text-xs text-slate-600">标记已修复，待回归</button>
               <button onClick={() => toast.success('已模拟创建工单', { description: '可对接 Jira / 飞书；不会修改源码。' })} className="rounded-lg border border-emerald-200 px-3 py-1.5 text-xs text-emerald-700">创建工单</button>
               <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-slate-400"><ShieldCheck className="h-3.5 w-3.5" />只读源码 · 不提交 PR</span>
             </div>
@@ -441,9 +441,9 @@ export default function FindingsPage() {
 
             <section>
               <div className="mb-2 flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700"><Camera className="h-3.5 w-3.5 text-sky-500" />多媒体证据</div>
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700"><Camera className="h-3.5 w-3.5 text-emerald-500" />多媒体证据</div>
                 <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700">截图必需</span>
-                <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] text-violet-700">视频建议</span>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">视频建议</span>
                 <button onClick={() => toast.success('原型：已预留截图/视频上传入口', { description: '接入后按 MIME、尺寸、时长、SHA-256 入库，证据只读。' })} className="ml-auto inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[10px] text-slate-600"><Upload className="h-3 w-3" />补充证据</button>
               </div>
               <div className="grid gap-2 md:grid-cols-2">
@@ -468,7 +468,7 @@ export default function FindingsPage() {
             </section>
 
             <section>
-              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700"><FileWarning className="h-3.5 w-3.5 text-sky-500" />证据链</div>
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700"><FileWarning className="h-3.5 w-3.5 text-emerald-500" />证据链</div>
               <div className="grid gap-2 md:grid-cols-2">
                 {([
                   ['请求', selected.evidence.request],
@@ -480,7 +480,7 @@ export default function FindingsPage() {
             </section>
 
             <section>
-              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700"><GitBranch className="h-3.5 w-3.5 text-violet-500" />根因分析</div>
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700"><GitBranch className="h-3.5 w-3.5 text-emerald-500" />根因分析</div>
               <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-700">{selected.rootCause}</div>
             </section>
 

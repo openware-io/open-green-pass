@@ -25,6 +25,32 @@
 | Fixtures | 每 run 独立命名空间；API 优先；破坏性用例独立 lane；TTL/GC |
 | 失败归因 | 确定性规则优先；AI 只建议；产品缺陷不改 oracle；P0/P1 人工确认 |
 
+### 0.3 工程合规约束（实施前必须完成）
+
+完整审查见 [`../status/ENGINEERING-COMPLIANCE-REVIEW-2026-10-22.md`](../status/ENGINEERING-COMPLIANCE-REVIEW-2026-10-22.md)。
+
+| 逻辑名 | 物理表 | 归属 | 前缀状态 |
+|---|---|---|---|
+| finding | `def_finding` | Governance Defect | 新 `def_`，待登记 |
+| finding_event | `def_event` | Governance Defect | 新 `def_`，待登记 |
+| finding_suggestion | `def_suggestion` | Governance Defect | 新 `def_`，待登记 |
+| finding_evidence | `evd_evidence` | Trusted | 已登记 `evd_` |
+| coverage_cell | `cov_cell` | Governance Coverage | 新 `cov_`，待登记 |
+| coverage_waiver | `cov_waiver` | Governance Coverage | 新 `cov_`，待登记 |
+| generation_job | `gen_job` | AI | 已登记 `gen_` |
+| contract_endpoint | `ctr_endpoint` | Governance Contract | 已登记 `ctr_` |
+
+实施前必须：
+
+1. 在 `ENGINEERING-SPEC §8.2` 登记 `def_`、`cov_`；
+2. 明确 Governance/Trusted/AI 数据所有权、RLS、`gp_trusted_writer`；
+3. 写迁移编号与 up/down、migcheck/testcontainers；
+4. 补 `api/openapi.yaml`、生成类型、契约测试；
+5. 登记 `open-green-pass-dsh-gateway` 镜像与部署入口；
+6. 补测试分层与沙箱/egress 基线。
+
+未完成前不得创建迁移或写业务代码。
+
 ## 1. 边界与原则
 
 1. 产品源码只读：GP 不写仓库、不建 PR、不提交 commit、不修改源码。

@@ -6,6 +6,13 @@
 | 范围 | 端点盘点、Coverage Cell、枚举/去重、覆盖门禁 |
 | 关联方案 | `docs/plans/GP-AI-TEST-ENGINE-EXECUTION-PLAN.md` |
 
+## 0. 工程合规
+
+- 物理表名使用 `cov_cell`、`cov_waiver`；`cov_` 为待登记前缀，登记前不得创建迁移。
+- 归属 Governance Coverage；所有表带 `team_id` + RLS；waiver 审批写 `aud_event`。
+- 迁移编号、up/down、migcheck/testcontainers 按 ENGINEERING-SPEC §8.4。
+- DDL 草案中的表名在实施时按上表替换；不得使用未登记的 `ai_` 前缀。
+
 ## 1. 目标
 
 把“覆盖全面”变成可计算、可审计的模型：
@@ -192,7 +199,7 @@ blocked = required where status = blocked
 ## 10. 数据模型
 
 ```sql
-CREATE TABLE ai_coverage_cell (
+CREATE TABLE cov_cell (
   id BIGINT PRIMARY KEY,
   team_id BIGINT NOT NULL,
   project_id BIGINT NOT NULL,
@@ -216,7 +223,7 @@ CREATE TABLE ai_coverage_cell (
   UNIQUE (team_id, endpoint_hash, dimension, equivalence_class, role, state)
 );
 
-CREATE TABLE ai_coverage_waiver (
+CREATE TABLE cov_waiver (
   id BIGINT PRIMARY KEY,
   team_id BIGINT NOT NULL,
   cell_id BIGINT NOT NULL,
