@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Cpu, Eye, KeyRound, Pencil, ShieldCheck, X } from "lucide-react";
+import { Cpu, KeyRound, Pencil, ShieldCheck, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared";
 import { configuredGreenPassClient } from "@/api/runtime";
@@ -58,6 +58,15 @@ export default function ModelPage() {
     }
     return [...groups.values()];
   }, [connections]);
+  const providerRows = useMemo(() => {
+    const rows: Provider[] = [...providers];
+    for (const group of connectionGroups) {
+      if (!rows.some((item) => item.Provider === group.provider && item.Protocol === group.protocol)) {
+        rows.push({ Provider: group.provider, Name: group.provider, Protocol: group.protocol, BaseURL: group.baseURL });
+      }
+    }
+    return rows;
+  }, [providers, connectionGroups]);
   const modelOptions = useMemo(() => {
     const options = [...discovered];
     for (const key of keys) if (!options.some((item) => item.id === key)) options.push({ id: key });
@@ -134,6 +143,19 @@ export default function ModelPage() {
     if (connection.protocol === "api") void discoverModels(connection.provider, connection.protocol, "", connection.base_url);
   };
 
+  const openProviderForm = (item: Provider) => {
+    setEditingGroup(null);
+    setProvider(item.Provider);
+    setProtocol(item.Protocol);
+    setURL(item.BaseURL);
+    setKeys([]);
+    setCustomModel("");
+    setDiscovered([]);
+    setDiscoverError("");
+    setToken("");
+    setOpen(true);
+  };
+
   const save = async () => {
     if (!c) return;
     if (!editingGroup && !token.trim()) {
@@ -194,73 +216,50 @@ export default function ModelPage() {
         </button>
       </PageHeader>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 mb-5">
-        {providers.map((item) => {
-          const count = models.filter((model) => model.provider === item.Provider && model.status === "approved").length;
-          return <div className="rounded-xl border bg-white p-5" key={`${item.Provider}-${item.Protocol}`}>
-            <div className="flex gap-2 font-semibold">
-              <Cpu className="h-4 w-4 text-emerald-500" />
-              {providerLabel(item.Provider)}
-            </div>
-            <div className="mt-2 text-xs text-slate-400">{count} 个已配置模型</div>
-          </div>;
-        })}
-      </div>
-
-      <section className="mb-5 overflow-hidden rounded-xl border bg-white">
-        <div className="flex items-center justify-between border-b px-5 py-4">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-900">已配置供应商</h2>
-            <p className="mt-1 text-xs text-slate-500">一个供应商配置一次 Token，可承载多个模型；Token 仅显示保存状态，不可读取或回显。</p>
-          </div>
-          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">{connectionGroups.length} 个供应商</span>
-        </div>
-        {connectionGroups.length ? <div className="divide-y">
-          {connectionGroups.map((group) => <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-5 py-4" key={`${group.provider}-${group.protocol}-${group.baseURL}`}>
-            <div className="min-w-48 flex-1">
-              <div className="font-medium text-slate-900">{providerLabel(group.provider)} <span className="ml-1 text-xs font-normal text-slate-400">{group.models.length} 个模型</span></div>
-              <div className="mt-1 text-xs text-slate-500">{group.protocol === "cc" ? "CC / Anthropic Messages" : "API / OpenAI-compatible"} · <span className="font-mono">{group.baseURL || "厂商默认地址"}</span></div>
-              <div className="mt-2 flex flex-wrap gap-1.5">{group.models.map((model) => <span key={model.id} className="rounded-full bg-emerald-50 px-2 py-0.5 font-mono text-[10px] text-emerald-700">{model.model_key}</span>)}</div>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-emerald-700"><ShieldCheck className="h-4 w-4" />已验证</div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-500"><KeyRound className="h-3.5 w-3.5" />Token 已保存</div>
-            <div className="ml-auto flex gap-2">
-              <button onClick={() => setSelectedConnection(group.models[0])} className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50"><Eye className="h-3.5 w-3.5" />查看配置</button>
-              <button onClick={() => openConnectionForm(group.models[0])} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50"><Pencil className="h-3.5 w-3.5" />管理模型</button>
-            </div>
-          </div>)}
-        </div> : <div className="px-5 py-8 text-center text-sm text-slate-500">暂无已验证供应商。配置成功后会在这里显示。</div>}
-      </section>
-
       <section className="overflow-hidden rounded-xl border bg-white">
         <div className="flex items-center justify-between border-b px-5 py-4">
           <div>
-            <h2 className="text-sm font-semibold text-slate-900">已配置模型</h2>
-            <p className="mt-1 text-xs text-slate-500">模型 ID 来自供应商官方 `/models`，不再使用系统内置的模型版本列表。</p>
+            <h2 className="text-sm font-semibold text-slate-900">供应商</h2>
+            <p className="mt-1 text-xs text-slate-500">一个供应商配置一次 Token；模型从供应商官方 <span className="font-mono">/models</span> 动态发现。</p>
           </div>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{models.length} 个模型</span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{connectionGroups.length} 个已连接 · {models.filter((model) => model.status === "approved").length} 个模型</span>
         </div>
-        <table className="w-full text-xs">
-          <thead className="bg-slate-50 text-left">
-            <tr>
-              <th className="p-4">厂商</th>
-              <th>模型 ID</th>
-              <th>规范</th>
-              <th>状态</th>
-            </tr>
-          </thead>
-          <tbody>
-            {models.length ? models.map((model) => {
-              const connection = connectionFor(model.provider, model.model_key);
-              return <tr className="border-t" key={model.id}>
-                <td className="p-4">{providerLabel(model.provider)}</td>
-                <td className="font-mono">{model.model_key}</td>
-                <td>{connection?.protocol === "cc" ? "CC / Anthropic Messages" : "API / OpenAI-compatible"}</td>
-                <td>{connection ? <button onClick={() => setSelectedConnection(connection)} className="inline-flex items-center gap-1 text-emerald-600 hover:underline"><ShieldCheck className="h-4 w-4" />已配置</button> : <span className="text-slate-400">{model.status}</span>}</td>
-              </tr>;
-            }) : <tr><td colSpan={4} className="p-8 text-center text-sm text-slate-500">暂无已配置模型。配置供应商后从官方模型列表中选择。</td></tr>}
-          </tbody>
-        </table>
+        <div className="divide-y">
+          {providerRows.map((item) => {
+            const group = connectionGroups.find((candidate) => candidate.provider === item.Provider && candidate.protocol === item.Protocol);
+            const connected = Boolean(group);
+            const providerModels = models.filter((model) => model.provider === item.Provider && model.status === "approved");
+            return <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4" key={`${item.Provider}-${item.Protocol}`}>
+              <div className="flex min-w-[150px] items-center gap-2">
+                <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-50"><Cpu className="h-4 w-4 text-emerald-500" /></div>
+                <div>
+                  <div className="font-medium text-slate-900">{providerLabel(item.Provider)}</div>
+                  <div className="text-[10px] text-slate-400">{item.Protocol === "cc" ? "CC / Anthropic Messages" : "API / OpenAI-compatible"}</div>
+                </div>
+              </div>
+              <div className="min-w-[100px]">
+                {connected ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700"><ShieldCheck className="h-3 w-3" />已连接</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">未配置</span>}
+                <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-400"><KeyRound className="h-3 w-3" />{connected ? "Token 已保存" : "尚未保存 Token"}</div>
+              </div>
+              <div className="min-w-[180px] flex-1">
+                <div className="text-[10px] text-slate-400">Base URL</div>
+                <div className="mt-0.5 truncate font-mono text-[11px] text-slate-600">{group?.baseURL || item.BaseURL || "—"}</div>
+              </div>
+              <div className="min-w-[200px] flex-1">
+                <div className="text-[10px] text-slate-400">{providerModels.length} 个模型</div>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {providerModels.length ? providerModels.map((model) => {
+                    const connection = connectionFor(item.Provider, model.model_key);
+                    return <button key={model.id} type="button" onClick={() => connection && setSelectedConnection(connection)} className="rounded-full bg-emerald-50 px-2 py-0.5 font-mono text-[10px] text-emerald-700 hover:bg-emerald-100">{model.model_key}</button>;
+                  }) : <span className="text-[11px] text-slate-400">未配置模型</span>}
+                </div>
+              </div>
+              <div className="ml-auto">
+                {connected && group ? <button onClick={() => openConnectionForm(group.models[0])} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50"><Pencil className="h-3.5 w-3.5" />管理模型</button> : <button onClick={() => openProviderForm(item)} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs text-white">配置</button>}
+              </div>
+            </div>;
+          })}
+        </div>
       </section>
 
       {selectedConnection && <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/45" onMouseDown={() => setSelectedConnection(null)}>
