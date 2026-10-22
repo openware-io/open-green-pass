@@ -18,6 +18,43 @@ function sourceDirectoryLabel(sourcePath: string) {
   return !sourcePath || sourcePath === '.' ? '仓库根目录' : sourcePath;
 }
 
+function CodeRefSelect({ refs, value, disabled, onChange, label = '代码引用' }: {
+  refs: RepositoryRef[];
+  value?: { type: 'branch' | 'tag'; name: string };
+  disabled?: boolean;
+  onChange: (next: { type: 'branch' | 'tag'; name: string }) => void;
+  label?: string;
+}) {
+  const type = value?.type ?? 'branch';
+  const options = refs.filter((ref) => ref.ref_type === type);
+  return <div className="flex min-w-0 gap-2">
+    <select
+      aria-label={`${label}类型`}
+      value={type}
+      disabled={disabled || !refs.length}
+      onChange={(event) => {
+        const nextType = event.target.value as 'branch' | 'tag';
+        const first = refs.find((ref) => ref.ref_type === nextType);
+        onChange({ type: nextType, name: first?.name ?? '' });
+      }}
+      className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 disabled:opacity-50"
+    >
+      <option value="branch">分支</option>
+      <option value="tag">Tag</option>
+    </select>
+    <select
+      aria-label={label}
+      value={value?.name ?? ''}
+      disabled={disabled || !options.length}
+      onChange={(event) => onChange({ type, name: event.target.value })}
+      className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 font-mono text-xs text-slate-700 disabled:opacity-50"
+    >
+      <option value="">{refs.length ? '请选择代码引用' : '尚未同步，请刷新'}</option>
+      {options.map((ref) => <option key={`${ref.ref_type}:${ref.name}`} value={ref.name}>{ref.name}</option>)}
+    </select>
+  </div>;
+}
+
 const SEED_QUALITY_LABEL: Record<string, string> = {
   pending: '待校验',
   passed: '通过',
@@ -224,6 +261,7 @@ function GenerationPageContent() {
   const [selectedServiceIds, setSelectedServiceIds] = useState<number[]>([]);
   const [serviceSearch, setServiceSearch] = useState('');
   const [batchConfirmOpen, setBatchConfirmOpen] = useState(false);
+  const [batchPreparing, setBatchPreparing] = useState(false);
   const [batchResults, setBatchResults] = useState<Array<{ serviceId: number; name: string; ok: boolean; error?: string }>>([]);
   const [realBusy, setRealBusy] = useState(false);
   const [seedResponse, setSeedResponse] = useState<{ batchId: number; stateVersion: number; items: GenerationSeed[]; error?: string } | null>(null);
@@ -323,17 +361,27 @@ function GenerationPageContent() {
   // context. Selecting several services must not make the header jump to the
   // last checkbox the user touched.
   const toggleService = (id: number) => setSelectedServiceIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
-  const openBatchConfirmation = () => {
+  const openBatchConfirmation = async () => {
     if (!realClient) { setStep(1); return; }
     if (!confirmedServices.length) { setRealError('请先在被测对象页完成服务技术画像确认，并启用生成测试用例。'); return; }
-    if (!selectedServices.length) {
-      const fallback = confirmedServices.find((service) => service.id === activeServiceId);
-      if (!fallback) { setRealError('请先选择至少一个技术画像已确认且允许生成的服务。'); return; }
-      setSelectedServiceIds([fallback.id]);
-    } else setSelectedServiceIds(selectedServices.map((service) => service.id));
+    const fallback = confirmedServices.find((service) => service.id === activeServiceId);
+    const serviceList = selectedServices.length ? selectedServices : fallback ? [fallback] : [];
+    if (!serviceList.length) { setRealError('请先选择至少一个技术画像已确认且允许生成的服务。'); return; }
     if (!modelBinding) { setRealError('请先在 AI 模型配置中配置并绑定一个已验证模型，再生成用例'); return; }
-    setBatchConfirmOpen(true);
     setRealError('');
+    setBatchPreparing(true);
+    try {
+      setSelectedServiceIds(serviceList.map((service) => service.id));
+      for (const service of serviceList) {
+        const repo = realProjectRepos.find((item) => item.id === service.repo_id);
+        if (repo && !repositoryRefs[repo.id]?.length) await loadRepositoryRefs(repo.id);
+      }
+      setBatchConfirmOpen(true);
+    } catch (error) {
+      setRealError(error instanceof Error ? error.message : '准备生成参数失败');
+    } finally {
+      setBatchPreparing(false);
+    }
   };
   const startRealBatch = async () => {
     if (!realClient) { setStep(1); return; }
@@ -351,9 +399,10 @@ function GenerationPageContent() {
         try {
           const repo = repos.find((item) => item.id === service.repo_id);
           if (!repo) throw new Error('未关联代码仓库');
-          const refs = repositoryRefs[repo.id] ?? await loadRepositoryRefs(repo.id);
-          const selection = selectedRefs[repo.id] ?? (() => { const fallback = refs.find((ref) => ref.ref_type === 'branch' && ref.name === repo.default_branch) ?? refs[0]; return fallback ? { type: fallback.ref_type, name: fallback.name } : undefined; })();
-          if (!selection) throw new Error('该仓库尚未同步可用分支或 Tag，请先刷新代码引用');
+          const refs = repositoryRefs[repo.id]?.length ? repositoryRefs[repo.id] : await loadRepositoryRefs(repo.id);
+          const selection = selectedRefs[repo.id];
+          if (!selection?.name) throw new Error(`请先为 ${service.name} 选择分支或 Tag`);
+          if (!refs.some((ref) => ref.ref_type === selection.type && ref.name === selection.name)) throw new Error(`${service.name} 的代码引用未同步，请先刷新分支 / Tag`);
           const batch = await realClient.createGenerationBatch({ target_id: projectID, repo_id: repo.id, service_id: service.id, source_path: service.source_path, ref_type: selection.type, branch: selection.name, idempotency_key: `ui-batch-${projectID}-${service.id}-${crypto.randomUUID()}` });
           created.push(batch); results.push({ serviceId: service.id, name: service.name, ok: true });
         } catch (error) { results.push({ serviceId: service.id, name: service.name, ok: false, error: error instanceof Error ? error.message : '创建失败' }); }
@@ -432,7 +481,7 @@ function GenerationPageContent() {
       </div>
       <PageHeader title="生成用例" desc={realClient ? `选择已确认的目录服务，为所选服务创建生成批次 · 当前可生成 ${confirmedServices.length} 个服务` : '针对当前被测对象的用例生成流程 · 适配解析 → AI 生成 → 质量验证 → 审核入库'}>
         <GhostButton onClick={() => navigate('/target')}>管理被测对象</GhostButton>
-        <PrimaryButton disabled={realBusy || !realClient} onClick={openBatchConfirmation}>{realBusy ? '创建批次…' : `生成用例${selectedServices.length ? `（${selectedServices.length}）` : ''}`}</PrimaryButton>
+        <PrimaryButton disabled={realBusy || batchPreparing || !realClient} onClick={() => void openBatchConfirmation()}>{realBusy ? '创建批次…' : batchPreparing ? '准备中…' : `生成用例${selectedServices.length ? `（${selectedServices.length}）` : ''}`}</PrimaryButton>
       </PageHeader>
       {realClient && <div className={'mb-5 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 text-xs ' + (modelBinding ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800')}><span className="font-semibold">模型生成</span>{modelBinding ? <span>当前绑定：{modelBinding.provider} / {modelBinding.model} · 已配置模型 {configuredModels.length} 个</span> : <><span>当前项目未绑定已验证模型，暂不能生成真实用例。</span><button type="button" onClick={() => navigate('/models')} className="font-medium underline">去配置模型</button></>}</div>}
 
@@ -460,7 +509,30 @@ function GenerationPageContent() {
 
       {batchConfirmOpen && <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm">
         <div className="flex items-start justify-between gap-3"><div><div className="text-sm font-semibold text-slate-800">确认创建</div><div className="mt-1 text-xs text-slate-500">将为以下 {selectedServices.length} 个服务分别创建生成批次，创建后可逐个审核。</div></div><button type="button" onClick={() => setBatchConfirmOpen(false)} className="text-xs text-slate-500 hover:text-slate-700">取消</button></div>
-        <div className="mt-4 grid gap-2 md:grid-cols-2">{selectedServices.map((service) => { const serviceRepo = realProjectRepos.find((item) => item.id === service.repo_id); const profile = profileFor(service); return <div key={service.id} className="rounded-lg border border-emerald-100 bg-white px-3 py-2.5 text-xs"><div className="flex items-center justify-between gap-2"><div className="font-semibold text-slate-700">{service.name}</div><span className={'rounded-full px-2 py-0.5 text-[10px] ' + (profile.complete ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>{profile.complete ? '条件完整' : '条件不完整'}</span></div><div className="mt-1 truncate text-[11px] text-slate-500">目录：{sourceDirectoryLabel(service.source_path)}</div><div className="mt-1 text-[10px] text-slate-500">类型：{service.kind}</div><div className="mt-1 text-[10px] text-slate-500">语言：{profile.language} · 框架：{profile.framework}</div><div className="mt-1 text-[10px] text-slate-400">工具：{profile.tool} · 命令：{profile.command} · 登记分支：{serviceRepo?.default_branch ?? '未配置'}</div></div>; })}</div>
+        <div className="mt-4 grid gap-2 md:grid-cols-2">
+          {selectedServices.map((service) => {
+            const serviceRepo = realProjectRepos.find((item) => item.id === service.repo_id);
+            const profile = profileFor(service);
+            const refs = serviceRepo ? repositoryRefs[serviceRepo.id] ?? [] : [];
+            const selection = serviceRepo ? selectedRefs[serviceRepo.id] : undefined;
+            const detail = selection ? refs.find((ref) => ref.ref_type === selection.type && ref.name === selection.name) : undefined;
+            return <div key={service.id} className="rounded-lg border border-emerald-100 bg-white px-3 py-2.5 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-semibold text-slate-700">{service.name}</div>
+                <span className={'rounded-full px-2 py-0.5 text-[10px] ' + (profile.complete ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>{profile.complete ? '条件完整' : '条件不完整'}</span>
+              </div>
+              <div className="mt-1 truncate text-[11px] text-slate-500">目录：{sourceDirectoryLabel(service.source_path)}</div>
+              <div className="mt-1 text-[10px] text-slate-500">类型：{service.kind} · 语言：{profile.language} · 框架：{profile.framework}</div>
+              <div className="mt-1 text-[10px] text-slate-400">工具：{profile.tool} · 默认分支：{serviceRepo?.default_branch ?? '未配置'}</div>
+              <div className="mt-2 rounded-md border border-slate-100 bg-slate-50 p-2">
+                <div className="mb-1 text-[10px] font-medium text-slate-500">本次代码引用</div>
+                {serviceRepo ? <CodeRefSelect label="生成代码引用" refs={refs} value={selection} onChange={(next) => { if (serviceRepo) setSelectedRefs((current) => ({ ...current, [serviceRepo.id]: next })); }} /> : <div className="text-[10px] text-red-600">未关联代码仓库</div>}
+                <div className="mt-1 text-[10px] text-slate-500">提交 SHA：{detail?.commit_sha ? detail.commit_sha.slice(0, 12) : '待刷新'}</div>
+                {!selection?.name && <div className="mt-1 text-[10px] text-red-600">请选择代码引用后再创建</div>}
+              </div>
+            </div>;
+          })}
+        </div>
         <div className="mt-4 flex items-center justify-between gap-3"><span className="text-[11px] text-slate-500">每个批次按所选分支或 Tag 创建；服务端随后冻结实际提交 SHA 与服务目录。本期仅支持 HTTP/API 结构化候选。</span><button type="button" disabled={realBusy || !selectedServices.length} onClick={() => void startRealBatch()} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{realBusy ? '正在创建…' : `确认创建 ${selectedServices.length} 个批次`}</button></div>
       </div>}
 
@@ -485,14 +557,15 @@ function GenerationPageContent() {
 
           {repo ? realClient ? (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 min-w-0">
-              <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-600"><span className="flex items-center gap-1.5"><GitBranch className="w-3.5 h-3.5 text-emerald-500" />代码生成来源</span>{realRepo?.scm_connection_status==='verified'?<button type="button" disabled={refsLoading} onClick={() => void refreshRepositoryRefs()} className="rounded border border-emerald-200 bg-white px-2 py-1 text-[10px] text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">{refsLoading ? '刷新中…' : '刷新分支 / Tag'}</button>:<button type="button" onClick={()=>navigate('/target')} className="rounded border border-amber-200 bg-white px-2 py-1 text-[10px] text-amber-700 hover:bg-amber-50">配置读取连接</button>}</div>
+              <div className="flex items-center justify-between gap-2 text-xs font-medium text-slate-600"><span className="flex items-center gap-1.5"><GitBranch className="w-3.5 h-3.5 text-emerald-500" />当前查看服务的代码来源</span>{realRepo?.scm_connection_status==='verified'?<button type="button" disabled={refsLoading} onClick={() => void refreshRepositoryRefs()} className="rounded border border-emerald-200 bg-white px-2 py-1 text-[10px] text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">{refsLoading ? '刷新中…' : '刷新分支 / Tag'}</button>:<button type="button" onClick={()=>navigate('/target')} className="rounded border border-amber-200 bg-white px-2 py-1 text-[10px] text-amber-700 hover:bg-amber-50">配置读取连接</button>}</div>
               <div className="mt-2 truncate text-xs text-slate-700" title={realRepo?.url}>{realRepo?.url}</div>
               {realRepo?.scm_connection_status!=='verified'&&<div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-800">该仓库尚未绑定已验证的 GitHub 只读连接，无法安全读取分支、技术画像或冻结源码。请前往「被测对象」配置连接并绑定仓库。</div>}
               {realRepo?.scm_connection_status==='verified'&&<div className="mt-2 text-[10px] text-emerald-700">源码读取连接已验证{scmConnections.find(item=>item.id===realRepo.scm_connection_id)?.name?` · ${scmConnections.find(item=>item.id===realRepo.scm_connection_id)?.name}`:''}</div>}
-              <div className="mt-3 grid gap-2 sm:grid-cols-[110px_minmax(0,1fr)]"><select aria-label="代码引用类型" value={selectedRef?.type ?? 'branch'} onChange={(event) => { const type = event.target.value as 'branch' | 'tag'; const candidate = activeRepoRefs.find((ref) => ref.ref_type === type); if (realRepo && candidate) setSelectedRefs((current) => ({ ...current, [realRepo.id]: { type, name: candidate.name } })); }} disabled={realRepo?.scm_connection_status!=='verified'} className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 disabled:opacity-50"><option value="branch">分支</option><option value="tag">Tag</option></select><select aria-label="代码引用" value={selectedRef?.name ?? ''} onChange={(event) => { if (realRepo && selectedRef) setSelectedRefs((current) => ({ ...current, [realRepo.id]: { ...selectedRef, name: event.target.value } })); }} disabled={!activeRepoRefs.length||realRepo?.scm_connection_status!=='verified'} className="min-w-0 rounded-md border border-slate-200 bg-white px-2 py-1.5 font-mono text-xs text-slate-700 disabled:opacity-50"><option value="">{realRepo?.scm_connection_status!=='verified'?'请先配置读取连接':activeRepoRefs.length ? '请选择代码引用' : '尚未同步，请刷新'}</option>{activeRepoRefs.filter((ref) => ref.ref_type === selectedRef?.type).map((ref) => <option key={`${ref.ref_type}:${ref.name}`} value={ref.name}>{ref.name}</option>)}</select></div>
+              <div className="mt-3"><CodeRefSelect refs={activeRepoRefs} value={selectedRef} disabled={realRepo?.scm_connection_status!=='verified'} onChange={(next) => { if (realRepo) setSelectedRefs((current) => ({ ...current, [realRepo.id]: next })); }} /></div>
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500"><span>提交 SHA <b className="font-mono text-slate-700">{selectedRefDetails?.commit_sha ? selectedRefDetails.commit_sha.slice(0, 12) : '刷新后可见'}</b></span><span>服务目录 <b className="font-mono text-slate-700">{selectedService?.source_path || '未配置'}</b></span></div>
               <div className="mt-2 rounded-md border border-slate-200 bg-white px-2.5 py-2 text-[10px] leading-4 text-slate-500"><b className="text-slate-700">系统基线</b>：自动采用该项目、仓库和服务最近一次已生效的生成批次；没有已生效批次时作为首次生成。基线不能人工指定。</div>
               <p className="mt-2 text-[10px] leading-4 text-slate-400">本次只选择分支或 Tag；创建后服务端重新解析并冻结最终 SHA，历史记录不会被后续分支更新改写。</p>
+              <p className="mt-1 text-[10px] leading-4 text-slate-400">此选择作用于当前查看服务所在的仓库；选择多个服务时，请在“生成用例”确认面板逐个服务复核代码引用。</p>
             </div>
           ) : (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 min-w-0">
