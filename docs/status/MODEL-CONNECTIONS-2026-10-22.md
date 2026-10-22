@@ -6,7 +6,7 @@
 |---|---|
 | 团队 | `1001` |
 | 项目 | `im-saas`（`2876690473259008`） |
-| 运行版本 | `0.1.85-SNAPSHOT`（本次仅运行时配置，无镜像变更） |
+| 运行版本 | `0.1.86-SNAPSHOT`（模型配置 + 供应商级模型选择 UI） |
 | 操作人 | `zhangli` |
 
 ## DeepSeek 接入
@@ -25,6 +25,17 @@
 
 接入方式：通过平台 `POST /model-connections` 写入连接，服务端探测 `GET /v1/models` 成功；随后 `PUT /targets/2876690473259008/model-binding` 绑定到 im-saas。
 
+### 同供应商多模型
+
+同一供应商连接下已启用两个模型，共享同一个 Secret：
+
+| 连接 ID | Model Key | 状态 |
+|---|---|---|
+| `2902559098867712` | `deepseek-v4-pro` | `approved` / `configured` |
+| `2902611112300544` | `deepseek-flash` | `approved` / `configured` |
+
+`deepseek-flash` 通过 0.1.86 的“启用”动作添加，请求携带空 Token，服务端复用 `gp-model-1001-deepseek-api`，无需重复录入凭据。项目仍绑定 `deepseek-v4-pro`。
+
 ## GPT 下线
 
 | 项目 | 值 |
@@ -32,7 +43,7 @@
 | 原连接 ID | `2880382758227968` |
 | 原 Provider / Model | `openai` / `gpt-5.6-terra` |
 | 处理 | 删除 `mdl_model` 记录；删除 K8s Secret `gp-model-1001-openai-api`；解除项目绑定并切换到 DeepSeek |
-| 影响 | 模型目录和“已配置连接”中不再出现 GPT；生成页只显示 DeepSeek |
+| 影响 | 模型目录和“已配置供应商”中不再出现 GPT；生成页只显示 DeepSeek |
 
 OpenAI 的预置模型仍保留在平台目录中（显示“未配置”），仅作为可选厂商目录，不代表已接入。
 
