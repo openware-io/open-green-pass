@@ -3,6 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
+- **M4 安全基线（0.1.118-SNAPSHOT）**：API 安全响应头、2MiB 请求体上限、安全中间件单测；租户隔离验证 403；`go test ./...`/typecheck/api:check 通过。M2/M3/M4 仍未完全关闭。
 - **执行结果回写覆盖（0.1.116-SNAPSHOT）**：新增 `POST /runs/{id}/coverage-sync`，按 case_id 回写 cov_cell 状态；failed/blocked 计入 executed；run 9001 验证 execution_coverage 0.083。
 - **M3 覆盖/缺陷门禁（0.1.114-SNAPSHOT）**：新增 `GET /gates/coverage`，按 design=100%、execution≥90%、未关闭 P0/P1=0 计算并返回 blockers；user 模块验证 design=1.0、execution=0、open_p1=2、gate 失败。
 - **M2 证据元数据（0.1.113-SNAPSHOT）**：新增 `POST/GET /findings/{id}/evidence`，Trusted `evd_evidence` 登记 kind/MIME/大小/SHA-256/尺寸；截图≤10MB、视频≤100MB；预签名上传/下载仍待补。
