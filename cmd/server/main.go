@@ -90,6 +90,7 @@ func main() {
 	// approval/whitelist store is configured; it can be injected here later.
 	caseStore := infra.NewCaseStore(db, gen)
 	caseSvc := application.NewCaseService(caseStore, gen)
+	findingSvc := application.NewFindingService(infra.NewFindingStore(db), gen)
 
 	// 执行域依赖组装（版本校验 + 运行编排）
 	envStore := einfra.NewEnvStore(db, gen)
@@ -182,6 +183,7 @@ func main() {
 	gateStore := tinfra.NewGateStore(trustedDB, gen)
 	auditStore := tinfra.NewAuditStore(trustedDB, gen)
 	auditSvc := tapp.NewAuditService(auditStore, gen)
+	findingSvc.SetAuditPort(infra.NewTrustedAuditPort(auditSvc))
 	generationSvc.SetReviewPorts(generationController, aiaudit.New(auditSvc))
 	assistantStore := assistantinfra.NewStore(db)
 	assistantSvc := assistantapp.NewService(assistantStore, assistantapp.AuditFunc(func(ctx context.Context, actor int64, op, asset string, assetID int64, payload map[string]any) error {
@@ -248,6 +250,7 @@ func main() {
 			gapi.RegisterModels(mux, modelStore, gen, os.Getenv("GP_MODEL_SECRET_NAMESPACE"))
 		},
 		func(mux *http.ServeMux) { gapi.RegisterCasesAuthorized(mux, caseSvc, iamAuthorizer) },
+		func(mux *http.ServeMux) { gapi.RegisterFindings(mux, findingSvc) },
 		func(mux *http.ServeMux) { eapi.RegisterAuthorized(mux, envSvc, runSvc, policySvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc, costSvc, reportSvc) },
 		func(mux *http.ServeMux) { assistantapi.Register(mux, assistantSvc) },

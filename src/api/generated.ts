@@ -1893,10 +1893,180 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 缺陷列表（按租户/严重级别/状态/关键字筛选） */
+        get: operations["listFindings"];
+        put?: never;
+        /** 创建缺陷（仓库+冻结提交必填；相同 dedupe_hash 幂等返回已有） */
+        post: operations["createFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 缺陷详情（含流转时间线） */
+        get: operations["getFinding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings/{id}/transition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 缺陷状态流转 */
+        post: operations["transitionFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        FindingRepository: {
+            /** Format: int64 */
+            id?: number | null;
+            name: string;
+            url: string;
+            branch: string;
+            commit_sha: string;
+        };
+        FindingEvidence: {
+            request?: string;
+            response?: string;
+            log?: string;
+            trace?: string;
+        };
+        FindingEvent: {
+            time: string;
+            text: string;
+            actor: string;
+            action: string;
+            from?: string;
+            to?: string;
+        };
+        Finding: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            team_id: number;
+            /** Format: int64 */
+            project_id: number;
+            /** Format: int64 */
+            service_id?: number | null;
+            /** Format: int64 */
+            endpoint_id?: number | null;
+            /** Format: int64 */
+            target_id?: number | null;
+            repository: components["schemas"]["FindingRepository"];
+            module: string;
+            endpoint: string;
+            title: string;
+            description?: string;
+            /** @enum {string} */
+            severity: "P0" | "P1" | "P2" | "P3";
+            /** @enum {string} */
+            category: "product" | "case" | "environment" | "data" | "expected_change" | "flaky";
+            /** @enum {string} */
+            status: "candidate" | "triaged" | "confirmed" | "fixing" | "pending_regression" | "closed" | "false_positive";
+            expected: string;
+            actual: string;
+            root_cause: string;
+            impact: string;
+            /** @enum {string} */
+            confidence: "high" | "medium" | "low";
+            source_file?: string;
+            source_line?: number;
+            evidence: components["schemas"]["FindingEvidence"];
+            coverage_cells: string[];
+            /** Format: int64 */
+            owner_id?: number | null;
+            owner: string;
+            /** Format: int64 */
+            linked_run_id?: number | null;
+            /** Format: int64 */
+            linked_case_id?: number | null;
+            dedupe_hash: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            timeline?: components["schemas"]["FindingEvent"][];
+        };
+        FindingCreate: {
+            /**
+             * Format: int64
+             * @default 0
+             */
+            project_id: number;
+            /** Format: int64 */
+            service_id?: number;
+            /** Format: int64 */
+            endpoint_id?: number;
+            /** Format: int64 */
+            target_id?: number;
+            /** Format: int64 */
+            repository_id?: number;
+            repo_name?: string;
+            repo_url: string;
+            branch?: string;
+            commit_sha: string;
+            module?: string;
+            endpoint?: string;
+            title: string;
+            description?: string;
+            /** @enum {string} */
+            severity: "P0" | "P1" | "P2" | "P3";
+            /** @enum {string} */
+            category?: "product" | "case" | "environment" | "data" | "expected_change" | "flaky";
+            expected?: string;
+            actual?: string;
+            root_cause?: string;
+            impact?: string;
+            /** @enum {string} */
+            confidence?: "high" | "medium" | "low";
+            source_file?: string;
+            source_line?: number;
+            evidence?: components["schemas"]["FindingEvidence"];
+            coverage_cells?: string[];
+            /** Format: int64 */
+            owner_id?: number;
+            /** Format: int64 */
+            linked_run_id?: number;
+            /** Format: int64 */
+            linked_case_id?: number;
+        };
+        FindingTransition: {
+            /** @enum {string} */
+            action: "triage" | "confirm" | "false_positive" | "pending_regression" | "close" | "reopen";
+            reason?: string;
+        };
         AssistantSessionCreate: {
             /** @enum {string} */
             page: "/gate" | "/cases" | "/exec" | "/history" | "/generation" | "/trace" | "/target" | "/scenarios" | "/assistant";
@@ -3950,6 +4120,144 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AssistantArtifact"][];
                 };
+            };
+        };
+    };
+    listFindings: {
+        parameters: {
+            query?: {
+                severity?: "P0" | "P1" | "P2" | "P3";
+                status?: "candidate" | "triaged" | "confirmed" | "fixing" | "pending_regression" | "closed" | "false_positive";
+                module?: string;
+                q?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header: {
+                "x-gp-team-id": number;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 缺陷列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"][];
+                };
+            };
+            /** @description 缺少租户/认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingCreate"];
+            };
+        };
+        responses: {
+            /** @description 去重命中，返回已有缺陷 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"];
+                };
+            };
+            /** @description 已创建 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"];
+                };
+            };
+            /** @description 参数校验失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 缺陷详情 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"];
+                };
+            };
+            /** @description 缺陷不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    transitionFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingTransition"];
+            };
+        };
+        responses: {
+            /** @description 流转后的缺陷 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Finding"];
+                };
+            };
+            /** @description 非法状态流转 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -32,6 +32,9 @@ export type AssistantUIAction = components['schemas']['AssistantUIAction'];
 export type AssistantActionRecord = components['schemas']['AssistantActionRecord'];
 export type AssistantTurnResponse = components['schemas']['AssistantTurnResponse'];
 export type AuditEvent = components['schemas']['AuditEvent'];
+export type Finding = components['schemas']['Finding'];
+export type FindingCreateInput = components['schemas']['FindingCreate'];
+export type FindingTransitionInput = components['schemas']['FindingTransition'];
 
 export type CreateTargetInput = paths['/targets']['post']['requestBody']['content']['application/json'];
 export type CreateCaseInput = paths['/cases']['post']['requestBody']['content']['application/json'];
@@ -122,6 +125,14 @@ export class GreenPassClient {
   }
   assistantArtifacts(): JsonResponse<AssistantArtifact[]> { return this.request('/assistant/artifacts'); }
   auditEvents(limit = 100): JsonResponse<AuditEvent[]> { return this.request(`/audit/events?limit=${limit}`); }
+  listFindings(params: { severity?: string; status?: string; module?: string; q?: string; limit?: number; offset?: number } = {}): JsonResponse<Finding[]> {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => { if (value !== undefined) query.set(key, String(value)); });
+    return this.request(`/findings${query.size ? `?${query}` : ''}`);
+  }
+  getFinding(id: number): JsonResponse<Finding> { return this.request(`/findings/${id}`); }
+  createFinding(input: FindingCreateInput): JsonResponse<Finding> { return this.request('/findings', { method: 'POST', body: JSON.stringify(input) }); }
+  transitionFinding(id: number, input: FindingTransitionInput): JsonResponse<Finding> { return this.request(`/findings/${id}/transition`, { method: 'POST', body: JSON.stringify(input) }); }
   ready(): JsonResponse<ReadinessResponse> { return this.request('/readyz'); }
   version(): JsonResponse<VersionResponse> { return this.request('/version'); }
   getModelBinding(targetId: number): JsonResponse<ModelBinding | null> { return this.request(`/targets/${targetId}/model-binding`); }

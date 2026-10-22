@@ -842,8 +842,151 @@ paths:
       operationId: listAssistantArtifacts
       responses:
         '200': { description: 协作事项, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/AssistantArtifact' } } } } }
+  # ---------- 缺陷中心（governance defect） ----------
+  /findings:
+    get:
+      summary: 缺陷列表（按租户/严重级别/状态/关键字筛选）
+      operationId: listFindings
+      parameters:
+        - { name: x-gp-team-id, in: header, required: true, schema: { type: integer } }
+        - { name: severity, in: query, schema: { type: string, enum: [P0, P1, P2, P3] } }
+        - { name: status, in: query, schema: { type: string, enum: [candidate, triaged, confirmed, fixing, pending_regression, closed, false_positive] } }
+        - { name: module, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200': { description: 缺陷列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Finding' } } } } }
+        '401': { description: 缺少租户/认证 }
+    post:
+      summary: 创建缺陷（仓库+冻结提交必填；相同 dedupe_hash 幂等返回已有）
+      operationId: createFinding
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/FindingCreate' } } }
+      responses:
+        '201': { description: 已创建, content: { application/json: { schema: { $ref: '#/components/schemas/Finding' } } } }
+        '200': { description: 去重命中，返回已有缺陷, content: { application/json: { schema: { $ref: '#/components/schemas/Finding' } } } }
+        '400': { description: 参数校验失败 }
+  /findings/{id}:
+    get:
+      summary: 缺陷详情（含流转时间线）
+      operationId: getFinding
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      responses:
+        '200': { description: 缺陷详情, content: { application/json: { schema: { $ref: '#/components/schemas/Finding' } } } }
+        '404': { description: 缺陷不存在 }
+  /findings/{id}/transition:
+    post:
+      summary: 缺陷状态流转
+      operationId: transitionFinding
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/FindingTransition' } } }
+      responses:
+        '200': { description: 流转后的缺陷, content: { application/json: { schema: { $ref: '#/components/schemas/Finding' } } } }
+        '409': { description: 非法状态流转 }
 components:
   schemas:
+    FindingRepository:
+      type: object
+      required: [ name, url, branch, commit_sha ]
+      properties:
+        id: { type: integer, format: int64, nullable: true }
+        name: { type: string }
+        url: { type: string }
+        branch: { type: string }
+        commit_sha: { type: string }
+    FindingEvidence:
+      type: object
+      properties:
+        request: { type: string }
+        response: { type: string }
+        log: { type: string }
+        trace: { type: string }
+    FindingEvent:
+      type: object
+      required: [ time, text, actor, action ]
+      properties:
+        time: { type: string }
+        text: { type: string }
+        actor: { type: string }
+        action: { type: string }
+        from: { type: string }
+        to: { type: string }
+    Finding:
+      type: object
+      required: [ id, team_id, project_id, repository, module, endpoint, title, severity, category, status, expected, actual, root_cause, impact, confidence, evidence, coverage_cells, owner, dedupe_hash, created_at, updated_at ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        project_id: { type: integer, format: int64 }
+        service_id: { type: integer, format: int64, nullable: true }
+        endpoint_id: { type: integer, format: int64, nullable: true }
+        target_id: { type: integer, format: int64, nullable: true }
+        repository: { $ref: '#/components/schemas/FindingRepository' }
+        module: { type: string }
+        endpoint: { type: string }
+        title: { type: string }
+        description: { type: string }
+        severity: { type: string, enum: [P0, P1, P2, P3] }
+        category: { type: string, enum: [product, case, environment, data, expected_change, flaky] }
+        status: { type: string, enum: [candidate, triaged, confirmed, fixing, pending_regression, closed, false_positive] }
+        expected: { type: string }
+        actual: { type: string }
+        root_cause: { type: string }
+        impact: { type: string }
+        confidence: { type: string, enum: [high, medium, low] }
+        source_file: { type: string }
+        source_line: { type: integer }
+        evidence: { $ref: '#/components/schemas/FindingEvidence' }
+        coverage_cells: { type: array, items: { type: string } }
+        owner_id: { type: integer, format: int64, nullable: true }
+        owner: { type: string }
+        linked_run_id: { type: integer, format: int64, nullable: true }
+        linked_case_id: { type: integer, format: int64, nullable: true }
+        dedupe_hash: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        timeline: { type: array, items: { $ref: '#/components/schemas/FindingEvent' } }
+    FindingCreate:
+      type: object
+      required: [ title, severity, repo_url, commit_sha ]
+      properties:
+        project_id: { type: integer, format: int64, default: 0 }
+        service_id: { type: integer, format: int64 }
+        endpoint_id: { type: integer, format: int64 }
+        target_id: { type: integer, format: int64 }
+        repository_id: { type: integer, format: int64 }
+        repo_name: { type: string }
+        repo_url: { type: string }
+        branch: { type: string }
+        commit_sha: { type: string }
+        module: { type: string }
+        endpoint: { type: string }
+        title: { type: string }
+        description: { type: string }
+        severity: { type: string, enum: [P0, P1, P2, P3] }
+        category: { type: string, enum: [product, case, environment, data, expected_change, flaky] }
+        expected: { type: string }
+        actual: { type: string }
+        root_cause: { type: string }
+        impact: { type: string }
+        confidence: { type: string, enum: [high, medium, low] }
+        source_file: { type: string }
+        source_line: { type: integer }
+        evidence: { $ref: '#/components/schemas/FindingEvidence' }
+        coverage_cells: { type: array, items: { type: string } }
+        owner_id: { type: integer, format: int64 }
+        linked_run_id: { type: integer, format: int64 }
+        linked_case_id: { type: integer, format: int64 }
+    FindingTransition:
+      type: object
+      required: [ action ]
+      properties:
+        action: { type: string, enum: [triage, confirm, false_positive, pending_regression, close, reopen] }
+        reason: { type: string }
     AssistantSessionCreate:
       type: object
       required: [ page ]

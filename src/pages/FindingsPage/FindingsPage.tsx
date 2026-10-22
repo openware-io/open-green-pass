@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/shared';
+import { configuredGreenPassClient } from '@/api/runtime';
+import type { Finding as ApiFinding } from '@/api/client';
 import { toast } from 'sonner';
 import { AlertTriangle, Bug, Camera, CheckCircle2, ChevronRight, Clipboard, FileWarning, GitBranch, Image as ImageIcon, Maximize2, Play, Search, ShieldAlert, ShieldCheck, Upload, UserRound, Video, X } from 'lucide-react';
 
@@ -60,6 +62,51 @@ function screenshot(label: string, detail: string, tone: 'red' | 'amber' = 'red'
 }
 
 const DEFAULT_MEDIA = { screenshot: screenshot('截图证据', '断言失败：实际响应与契约不一致') };
+const FINDINGS_API = configuredGreenPassClient();
+
+const API_STATUS: Record<string, FindingStatus> = {
+  candidate: '待确认', triaged: '待确认', confirmed: '已确认', fixing: '修复中',
+  pending_regression: '待回归', closed: '已关闭', false_positive: '误报',
+};
+const API_CONFIDENCE: Record<string, Finding['confidence']> = { high: '高', medium: '中', low: '低' };
+
+function fromApiFinding(row: ApiFinding, media: Finding['media'] = { screenshot: '' }): Finding {
+  const source = row.source_file ? `${row.source_file}${row.source_line ? `:${row.source_line}` : ''}` : '—';
+  const updated = row.updated_at ? new Date(row.updated_at).toLocaleString('zh-CN', { hour12: false }) : '—';
+  return {
+    id: String(row.id),
+    title: row.title,
+    severity: row.severity as Severity,
+    status: API_STATUS[row.status] ?? '待确认',
+    module: row.module || '—',
+    endpoint: row.endpoint || '—',
+    owner: row.owner || '未分配',
+    updated,
+    run: row.linked_run_id ? `#${row.linked_run_id}` : '—',
+    caseId: row.linked_case_id ? `TC-${row.linked_case_id}` : '—',
+    confidence: API_CONFIDENCE[row.confidence] ?? '中',
+    source,
+    expected: row.expected,
+    actual: row.actual,
+    rootCause: row.root_cause,
+    suggestion: '请结合根因与证据链评审修复方案；平台只读源码，不提交修改。',
+    evidence: {
+      request: row.evidence?.request ?? '',
+      response: row.evidence?.response ?? '',
+      log: row.evidence?.log ?? '',
+      trace: row.evidence?.trace ?? '',
+    },
+    repo: {
+      name: row.repository.name,
+      url: row.repository.url,
+      branch: row.repository.branch,
+      commit: row.repository.commit_sha,
+    },
+    media,
+    coverage: row.coverage_cells ?? [],
+    timeline: (row.timeline ?? []).map((event) => ({ time: event.time, text: event.text, actor: event.actor })),
+  };
+}
 
 const SEED: Finding[] = [
   {
@@ -288,7 +335,21 @@ export default function FindingsPage() {
   const [severity, setSeverity] = useState('全部');
   const [status, setStatus] = useState('全部');
   const [lightbox, setLightbox] = useState('');
+  const [apiBacked, setApiBacked] = useState(false);
   const selected = items.find((item) => item.id === selectedID) ?? null;
+
+  useEffect(() => {
+    if (!FINDINGS_API) return;
+    let cancelled = false;
+    FINDINGS_API.listFindings({ limit: 100 })
+      .then((rows) => {
+        if (cancelled || rows.length === 0) return;
+        setItems(rows.map((row) => fromApiFinding(row)));
+        setApiBacked(true);
+      })
+      .catch(() => { /* keep prototype data when the API is unavailable */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -300,9 +361,28 @@ export default function FindingsPage() {
     });
   }, [items, query, severity, status]);
 
-  const setStatusFor = (id: string, next: FindingStatus) => {
-    setItems((current) => current.map((item) => item.id === id ? { ...item, status: next, updated: '刚刚', timeline: [...item.timeline, { time: '刚刚', text: `状态更新为 ${next}`, actor: '张立' }] } : item));
-    toast.success(`已更新为「${next}」`);
+  const openFinding = (item: Finding) => {
+    setSelectedID(item.id);
+    if (!FINDINGS_API || !/^\d+$/.test(item.id)) return;
+    FINDINGS_API.getFinding(Number(item.id))
+      .then((row) => setItems((current) => current.map((entry) => entry.id === item.id ? fromApiFinding(row, entry.media) : entry)))
+      .catch(() => { /* keep the list representation when detail is unavailable */ });
+  };
+
+  const applyAction = async (item: Finding, action: 'confirm' | 'false_positive' | 'pending_regression') => {
+    if (!FINDINGS_API || !/^\d+$/.test(item.id)) {
+      const next: FindingStatus = action === 'confirm' ? '已确认' : action === 'false_positive' ? '误报' : '待回归';
+      setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, status: next, updated: '刚刚', timeline: [...entry.timeline, { time: '刚刚', text: `状态更新为 ${next}`, actor: '张立' }] } : entry));
+      toast.success(`已更新为「${next}」`);
+      return;
+    }
+    try {
+      const updated = await FINDINGS_API.transitionFinding(Number(item.id), { action });
+      setItems((current) => current.map((entry) => entry.id === item.id ? fromApiFinding(updated, entry.media) : entry));
+      toast.success('缺陷状态已更新');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '状态更新失败');
+    }
   };
 
   const copySuggestion = async (text: string) => {
@@ -322,6 +402,9 @@ export default function FindingsPage() {
         </span>
         <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600">
           <Bug className="h-3.5 w-3.5" />缺陷建议不写回仓库
+        </span>
+        <span className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs ${apiBacked ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
+          {apiBacked ? 'API 数据' : '原型数据'}
         </span>
       </PageHeader>
 
@@ -370,7 +453,7 @@ export default function FindingsPage() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map((item) => (
-              <tr key={item.id} onClick={() => setSelectedID(item.id)} className={`cursor-pointer transition hover:bg-slate-50 ${selectedID === item.id ? 'bg-emerald-50/40' : ''}`}>
+              <tr key={item.id} onClick={() => openFinding(item)} className={`cursor-pointer transition hover:bg-slate-50 ${selectedID === item.id ? 'bg-emerald-50/40' : ''}`}>
                 <td className="px-4 py-3"><span className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold ${SEV_STYLE[item.severity]}`}>{item.severity}</span></td>
                 <td className="max-w-[460px] px-4 py-3">
                   <div className="truncate font-medium text-slate-800">{item.title}</div>
@@ -381,7 +464,7 @@ export default function FindingsPage() {
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-600">
                     <span className="inline-flex items-center gap-1"><FileWarning className="h-3.5 w-3.5 text-amber-500" />{evidenceCount(item)}/4</span>
-                    <span className="inline-flex items-center gap-1 text-emerald-700"><ImageIcon className="h-3.5 w-3.5" />截图</span>
+                    {hasScreenshot(item) && <span className="inline-flex items-center gap-1 text-emerald-700"><ImageIcon className="h-3.5 w-3.5" />截图</span>}
                     {hasVideo(item) && <span className="inline-flex items-center gap-1 text-slate-600"><Video className="h-3.5 w-3.5" />视频</span>}
                   </div>
                 </td>
@@ -411,9 +494,9 @@ export default function FindingsPage() {
               <button onClick={() => setSelectedID('')} aria-label="关闭" className="rounded-md p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button onClick={() => setStatusFor(selected.id, '已确认')} className="rounded-lg bg-red-600 px-3 py-1.5 text-xs text-white">确认缺陷</button>
-              <button onClick={() => setStatusFor(selected.id, '误报')} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600">标记误报</button>
-              <button onClick={() => setStatusFor(selected.id, '待回归')} className="rounded-lg border border-amber-200 px-3 py-1.5 text-xs text-slate-600">标记已修复，待回归</button>
+              <button onClick={() => void applyAction(selected, 'confirm')} className="rounded-lg bg-red-600 px-3 py-1.5 text-xs text-white">确认缺陷</button>
+              <button onClick={() => void applyAction(selected, 'false_positive')} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600">标记误报</button>
+              <button onClick={() => void applyAction(selected, 'pending_regression')} className="rounded-lg border border-amber-200 px-3 py-1.5 text-xs text-slate-600">标记已修复，待回归</button>
               <button onClick={() => toast.success('已模拟创建工单', { description: '可对接 Jira / 飞书；不会修改源码。' })} className="rounded-lg border border-emerald-200 px-3 py-1.5 text-xs text-emerald-700">创建工单</button>
               <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-slate-400"><ShieldCheck className="h-3.5 w-3.5" />只读源码 · 不提交 PR</span>
             </div>
@@ -447,14 +530,14 @@ export default function FindingsPage() {
                 <button onClick={() => toast.success('原型：已预留截图/视频上传入口', { description: '接入后按 MIME、尺寸、时长、SHA-256 入库，证据只读。' })} className="ml-auto inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[10px] text-slate-600"><Upload className="h-3 w-3" />补充证据</button>
               </div>
               <div className="grid gap-2 md:grid-cols-2">
-                <button type="button" onClick={() => setLightbox(selected.media.screenshot)} className="group overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-left">
+                {selected.media.screenshot ? <button type="button" onClick={() => setLightbox(selected.media.screenshot)} className="group overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-left">
                   <div className="relative">
                     <img src={selected.media.screenshot} alt="缺陷截图证据" className="aspect-video w-full object-cover" />
                     <span className="absolute left-2 top-2 rounded bg-slate-900/80 px-1.5 py-0.5 text-[9px] text-white">截图 · 关键断言失败</span>
                     <span className="absolute right-2 top-2 rounded bg-white/90 p-1 text-slate-600 opacity-0 transition group-hover:opacity-100"><Maximize2 className="h-3.5 w-3.5" /></span>
                   </div>
                   <div className="flex items-center justify-between px-3 py-2 text-[10px] text-slate-500"><span>点击查看大图 · 只读证据</span><ImageIcon className="h-3.5 w-3.5" /></div>
-                </button>
+                </button> : <div className="grid min-h-[150px] place-items-center rounded-lg border border-dashed border-amber-200 bg-amber-50/40 p-4 text-center text-[11px] text-amber-700">未提供截图证据<br />P0/P1 需补充截图后再关闭</div>}
                 {selected.media.video ? <button type="button" onClick={() => toast.success('原型视频证据', { description: `${selected.media.video?.caption} · ${selected.media.video?.duration}` })} className="group overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-left">
                   <div className="relative">
                     <img src={selected.media.video.poster} alt="缺陷视频证据" className="aspect-video w-full object-cover" />
