@@ -6,7 +6,7 @@
 |---|---|
 | 团队 | `1001` |
 | 项目 | `im-saas`（`2876690473259008`） |
-| 运行版本 | `0.1.86-SNAPSHOT`（模型配置 + 供应商级模型选择 UI） |
+| 运行版本 | `0.1.88-SNAPSHOT`（供应商级模型选择 + 官方 `/models` 动态发现） |
 | 操作人 | `zhangli` |
 
 ## DeepSeek 接入
@@ -35,6 +35,16 @@
 | `2902611112300544` | `deepseek-flash` | `approved` / `configured` |
 
 `deepseek-flash` 通过 0.1.86 的“启用”动作添加，请求携带空 Token，服务端复用 `gp-model-1001-deepseek-api`，无需重复录入凭据。项目仍绑定 `deepseek-v4-pro`。
+
+## 官方模型发现（0.1.88）
+
+系统不再内置模型版本列表，只保留供应商默认配置。配置对话框通过 `POST /model-provider-models` 调用供应商官方 `GET /models`，返回：
+
+| 供应商 | 官方模型 |
+|---|---|
+| DeepSeek | `deepseek-flash`、`deepseek-v4-pro` |
+
+保存 `POST /model-connections` 时会再次校验模型 ID 必须在该供应商官方列表中，非官方 ID 返回 `invalid_model_selection`。GPT-6、Claude Opus、Qwen3.8 等内置假版本已从代码和页面移除。
 
 ## GPT 下线
 
