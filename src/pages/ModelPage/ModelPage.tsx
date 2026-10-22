@@ -224,42 +224,53 @@ export default function ModelPage() {
           </div>
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{connectionGroups.length} 个已连接 · {models.filter((model) => model.status === "approved").length} 个模型</span>
         </div>
-        <div className="divide-y">
-          {providerRows.map((item) => {
-            const group = connectionGroups.find((candidate) => candidate.provider === item.Provider && candidate.protocol === item.Protocol);
-            const connected = Boolean(group);
-            const providerModels = models.filter((model) => model.provider === item.Provider && model.status === "approved");
-            return <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4" key={`${item.Provider}-${item.Protocol}`}>
-              <div className="flex min-w-[150px] items-center gap-2">
-                <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-50"><Cpu className="h-4 w-4 text-emerald-500" /></div>
-                <div>
-                  <div className="font-medium text-slate-900">{providerLabel(item.Provider)}</div>
-                  <div className="text-[10px] text-slate-400">{item.Protocol === "cc" ? "CC / Anthropic Messages" : "API / OpenAI-compatible"}</div>
-                </div>
-              </div>
-              <div className="min-w-[100px]">
-                {connected ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700"><ShieldCheck className="h-3 w-3" />已连接</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">未配置</span>}
-                <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-400"><KeyRound className="h-3 w-3" />{connected ? "Token 已保存" : "尚未保存 Token"}</div>
-              </div>
-              <div className="min-w-[180px] flex-1">
-                <div className="text-[10px] text-slate-400">Base URL</div>
-                <div className="mt-0.5 truncate font-mono text-[11px] text-slate-600">{group?.baseURL || item.BaseURL || "—"}</div>
-              </div>
-              <div className="min-w-[200px] flex-1">
-                <div className="text-[10px] text-slate-400">{providerModels.length} 个模型</div>
-                <div className="mt-1 flex flex-wrap gap-1.5">
-                  {providerModels.length ? providerModels.map((model) => {
-                    const connection = connectionFor(item.Provider, model.model_key);
-                    return <button key={model.id} type="button" onClick={() => connection && setSelectedConnection(connection)} className="rounded-full bg-emerald-50 px-2 py-0.5 font-mono text-[10px] text-emerald-700 hover:bg-emerald-100">{model.model_key}</button>;
-                  }) : <span className="text-[11px] text-slate-400">未配置模型</span>}
-                </div>
-              </div>
-              <div className="ml-auto">
-                {connected && group ? <button onClick={() => openConnectionForm(group.models[0])} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50"><Pencil className="h-3.5 w-3.5" />管理模型</button> : <button onClick={() => openProviderForm(item)} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs text-white">配置</button>}
-              </div>
-            </div>;
-          })}
-        </div>
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50 text-left text-[10px] text-slate-400">
+            <tr>
+              <th className="px-5 py-2.5 font-medium">供应商</th>
+              <th className="py-2.5 font-medium">状态</th>
+              <th className="py-2.5 font-medium">Base URL</th>
+              <th className="py-2.5 font-medium">模型</th>
+              <th className="py-2.5 pr-5 text-right font-medium">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {providerRows.map((item) => {
+              const group = connectionGroups.find((candidate) => candidate.provider === item.Provider && candidate.protocol === item.Protocol);
+              const connected = Boolean(group);
+              const providerModels = models.filter((model) => model.provider === item.Provider && model.status === "approved");
+              return <tr className="border-t" key={`${item.Provider}-${item.Protocol}`}>
+                <td className="px-5 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-50"><Cpu className="h-4 w-4 text-emerald-500" /></div>
+                    <div>
+                      <div className="font-medium text-slate-900">{providerLabel(item.Provider)}</div>
+                      <div className="text-[10px] text-slate-400">{item.Protocol === "cc" ? "CC / Anthropic Messages" : "API / OpenAI-compatible"}</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="py-3">
+                  {connected ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700"><ShieldCheck className="h-3 w-3" />已连接</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">未配置</span>}
+                  <div className="mt-1 flex items-center gap-1 text-[10px] text-slate-400"><KeyRound className="h-3 w-3" />{connected ? "Token 已保存" : "尚未保存 Token"}</div>
+                </td>
+                <td className="max-w-[260px] py-3">
+                  <div className="truncate font-mono text-[11px] text-slate-600">{group?.baseURL || item.BaseURL || "—"}</div>
+                </td>
+                <td className="py-3">
+                  <div className="flex flex-wrap gap-1.5">
+                    {providerModels.length ? providerModels.map((model) => {
+                      const connection = connectionFor(item.Provider, model.model_key);
+                      return <button key={model.id} type="button" onClick={() => connection && setSelectedConnection(connection)} className="rounded-full bg-emerald-50 px-2 py-0.5 font-mono text-[10px] text-emerald-700 hover:bg-emerald-100">{model.model_key}</button>;
+                    }) : <span className="text-[11px] text-slate-400">未配置模型</span>}
+                  </div>
+                </td>
+                <td className="py-3 pr-5 text-right">
+                  {connected && group ? <button onClick={() => openConnectionForm(group.models[0])} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50"><Pencil className="h-3.5 w-3.5" />管理模型</button> : <button onClick={() => openProviderForm(item)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">配置</button>}
+                </td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
       </section>
 
       {selectedConnection && <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/45" onMouseDown={() => setSelectedConnection(null)}>
