@@ -919,8 +919,60 @@ paths:
         - { name: module, in: query, schema: { type: string } }
       responses:
         '200': { description: 汇总, content: { application/json: { schema: { $ref: '#/components/schemas/CoverageSummary' } } } }
+  # ---------- DSH generation jobs (AI) ----------
+  /ai/generation-jobs:
+    post:
+      summary: 创建并提交 DSH 生成 Job
+      operationId: createGenerationJob
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/GenerationJobCreate' } } }
+      responses:
+        '202': { description: 已提交, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationJob' } } } }
+        '200': { description: 幂等命中已有 Job, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationJob' } } } }
+        '400': { description: 参数校验失败或 gateway 未配置 }
+  /ai/generation-jobs/{id}:
+    get:
+      summary: 查询 DSH 生成 Job
+      operationId: getGenerationJob
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      responses:
+        '200': { description: Job 状态, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationJob' } } } }
+        '404': { description: Job 不存在 }
+    delete:
+      summary: 取消 DSH 生成 Job
+      operationId: cancelGenerationJob
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      responses:
+        '202': { description: 已取消 }
+        '409': { description: Job 已终态 }
 components:
   schemas:
+    GenerationJobCreate:
+      type: object
+      required: [ project_id, prompt, idempotency_key ]
+      properties:
+        project_id: { type: integer, format: int64 }
+        service_id: { type: integer, format: int64 }
+        module: { type: string }
+        prompt: { type: string }
+        timeout_ms: { type: integer, format: int64, default: 900000 }
+        idempotency_key: { type: string }
+    GenerationJob:
+      type: object
+      required: [ id, team_id, project_id, module, state, created_at, updated_at ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        project_id: { type: integer, format: int64 }
+        service_id: { type: integer, format: int64, nullable: true }
+        module: { type: string }
+        state: { type: string, enum: [queued, running, succeeded, failed, timeout, cancelled] }
+        external_job_id: { type: string }
+        output: { type: string }
+        error: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
     CoverageEndpointInput:
       type: object
       required: [ method, path ]

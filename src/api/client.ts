@@ -38,6 +38,8 @@ export type FindingTransitionInput = components['schemas']['FindingTransition'];
 export type CoverageCell = components['schemas']['CoverageCell'];
 export type CoverageSummary = components['schemas']['CoverageSummary'];
 export type CoveragePlanInput = components['schemas']['CoveragePlanRequest'];
+export type GenerationJob = components['schemas']['GenerationJob'];
+export type GenerationJobCreateInput = components['schemas']['GenerationJobCreate'];
 
 export type CreateTargetInput = paths['/targets']['post']['requestBody']['content']['application/json'];
 export type CreateCaseInput = paths['/cases']['post']['requestBody']['content']['application/json'];
@@ -149,6 +151,11 @@ export class GreenPassClient {
     Object.entries(params).forEach(([key, value]) => { if (value !== undefined) query.set(key, String(value)); });
     return this.request(`/coverage/summary${query.size ? `?${query}` : ''}`);
   }
+  createGenerationJob(input: GenerationJobCreateInput): JsonResponse<GenerationJob> {
+    return this.request('/ai/generation-jobs', { method: 'POST', body: JSON.stringify(input) });
+  }
+  getGenerationJob(id: number): JsonResponse<GenerationJob> { return this.request(`/ai/generation-jobs/${id}`); }
+  cancelGenerationJob(id: number): JsonResponse<{ status: string }> { return this.request(`/ai/generation-jobs/${id}`, { method: 'DELETE' }); }
   ready(): JsonResponse<ReadinessResponse> { return this.request('/readyz'); }
   version(): JsonResponse<VersionResponse> { return this.request('/version'); }
   getModelBinding(targetId: number): JsonResponse<ModelBinding | null> { return this.request(`/targets/${targetId}/model-binding`); }

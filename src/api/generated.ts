@@ -1996,10 +1996,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ai/generation-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 创建并提交 DSH 生成 Job */
+        post: operations["createGenerationJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ai/generation-jobs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询 DSH 生成 Job */
+        get: operations["getGenerationJob"];
+        put?: never;
+        post?: never;
+        /** 取消 DSH 生成 Job */
+        delete: operations["cancelGenerationJob"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        GenerationJobCreate: {
+            /** Format: int64 */
+            project_id: number;
+            /** Format: int64 */
+            service_id?: number;
+            module?: string;
+            prompt: string;
+            /**
+             * Format: int64
+             * @default 900000
+             */
+            timeout_ms: number;
+            idempotency_key: string;
+        };
+        GenerationJob: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            team_id: number;
+            /** Format: int64 */
+            project_id: number;
+            /** Format: int64 */
+            service_id?: number | null;
+            module: string;
+            /** @enum {string} */
+            state: "queued" | "running" | "succeeded" | "failed" | "timeout" | "cancelled";
+            external_job_id?: string;
+            output?: string;
+            error?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
         CoverageEndpointInput: {
             /** @enum {string} */
             method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
@@ -4447,6 +4516,102 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CoverageSummary"];
                 };
+            };
+        };
+    };
+    createGenerationJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerationJobCreate"];
+            };
+        };
+        responses: {
+            /** @description 幂等命中已有 Job */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationJob"];
+                };
+            };
+            /** @description 已提交 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationJob"];
+                };
+            };
+            /** @description 参数校验失败或 gateway 未配置 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getGenerationJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Job 状态 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationJob"];
+                };
+            };
+            /** @description Job 不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cancelGenerationJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已取消 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Job 已终态 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

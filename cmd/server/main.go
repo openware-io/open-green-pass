@@ -12,6 +12,7 @@ import (
 
 	aiapi "github.com/openware-io/open-green-pass/internal/ai/api"
 	aiapp "github.com/openware-io/open-green-pass/internal/ai/application"
+	aidomain "github.com/openware-io/open-green-pass/internal/ai/domain"
 	aiinfra "github.com/openware-io/open-green-pass/internal/ai/infra"
 	aiaudit "github.com/openware-io/open-green-pass/internal/ai/trusted_audit"
 	aiworkflow "github.com/openware-io/open-green-pass/internal/ai/workflow"
@@ -92,6 +93,11 @@ func main() {
 	caseSvc := application.NewCaseService(caseStore, gen)
 	findingSvc := application.NewFindingService(infra.NewFindingStore(db), gen)
 	coverageSvc := application.NewCoverageService(infra.NewCoverageStore(db, gen))
+	var dshClient aidomain.DSHJobClient
+	if gatewayURL := os.Getenv("GP_DSH_GATEWAY_URL"); gatewayURL != "" {
+		dshClient = aiinfra.NewDSHGatewayClient(gatewayURL, os.Getenv("GP_DSH_INTERNAL_TOKEN"))
+	}
+	generationJobSvc := aiapp.NewGenerationJobService(aiinfra.NewGenerationJobStore(db, gen), dshClient, gen)
 
 	// 执行域依赖组装（版本校验 + 运行编排）
 	envStore := einfra.NewEnvStore(db, gen)
@@ -247,6 +253,7 @@ func main() {
 			gapi.RegisterSCMConnections(mux, scmConnectionStore, os.Getenv("GP_SCM_SECRET_NAMESPACE"), gapi.GitHubAppConfigFromEnv(), scmAudit)
 		},
 		func(mux *http.ServeMux) { aiapi.RegisterGeneration(mux, generationSvc, gen, generationStore) },
+		func(mux *http.ServeMux) { aiapi.RegisterGenerationJobs(mux, generationJobSvc) },
 		func(mux *http.ServeMux) {
 			gapi.RegisterModels(mux, modelStore, gen, os.Getenv("GP_MODEL_SECRET_NAMESPACE"))
 		},
