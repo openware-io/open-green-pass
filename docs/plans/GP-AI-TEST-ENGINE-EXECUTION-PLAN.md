@@ -14,6 +14,9 @@
 - [`../architecture/COVERAGE-MODEL-SPEC.md`](../architecture/COVERAGE-MODEL-SPEC.md)
 - [`../architecture/FINDING-EVIDENCE-SPEC.md`](../architecture/FINDING-EVIDENCE-SPEC.md)
 - [`../architecture/ADR-001-DSH-EXTERNAL-RUNTIME.md`](../architecture/ADR-001-DSH-EXTERNAL-RUNTIME.md)
+- [`../architecture/EXECUTION-FIXTURE-SPEC.md`](../architecture/EXECUTION-FIXTURE-SPEC.md)
+- [`../plans/GP-VERTICAL-SLICE-1.md`](../plans/GP-VERTICAL-SLICE-1.md)
+- [`../engineering/SEC-EX-001-DSH-MODEL-KEY.md`](../engineering/SEC-EX-001-DSH-MODEL-KEY.md)
 
 ### 0.2 已确认决策（2026-10-22）
 
@@ -45,7 +48,7 @@
 
 1. `ENGINEERING-SPEC §8.2` 已登记 `def_`、`cov_`；
 2. 数据所有权、RLS、`gp_trusted_writer` 已写入 §2.3/§8.1；
-3. 迁移编号：`000034_defect_finding`、`000035_coverage_cell`、`000036_evidence`；
+3. 迁移编号：`000034_defect_finding`、`000035_coverage_cell`、`000036_evidence`、`000037_execution_fixture`；
 4. `open-green-pass-dsh-gateway` 镜像已登记 §12；
 5. `cmd/dsh-gateway` 已登记 §2.1/服务目录；
 6. 测试分层、沙箱/egress、OpenAPI 约束已写入规格。
@@ -553,7 +556,7 @@ DSH Analyst 输出：
 ### M0（1 周）：只读护栏 + 缺陷模型 + 工程门禁
 
 - SCM scope 校验和只读标识；
-- 迁移 `000034_defect_finding`（`def_finding`/`def_event`/`def_suggestion`）、`000035_coverage_cell`（`cov_cell`/`cov_waiver`）、`000036_evidence`（`evd_evidence`）；
+- 迁移 `000034_defect_finding`（`def_finding`/`def_event`/`def_suggestion`）、`000035_coverage_cell`（`cov_cell`/`cov_waiver`）、`000036_evidence`（`evd_evidence`）、`000037_execution_fixture`（`run_fixture`/`env_lease`）；
 - RLS 策略、`gp_trusted_writer` 对 `evd_evidence` 的授权、`aud_event` 事件；
 - 执行结果增加 `failure_class`/`finding_id`；
 - `api/openapi.yaml` 补 `/findings`、`/coverage`，生成类型 + 契约测试；

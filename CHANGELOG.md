@@ -3,6 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
+- **执行/Fixtures/垂直切片规格（2026-10-22）**：新增 `EXECUTION-FIXTURE-SPEC`（环境模型、run_fixture/env_lease、状态机、Runner、失败分类、证据采集）与 `GP-VERTICAL-SLICE-1`（user 模块 4 端点/22 Cell/12-16 用例/5-7 天闭环）；新增 SEC-EX-001 模型密钥环境变量注入例外（待安全签署）。
 - **工程规范合规审查与修正（2026-10-22）**：审查 AI 测试引擎方案与原型，发现表前缀、领域归属/RLS/可信写、迁移编号、OpenAPI、测试分层、gateway 镜像/部署入口、沙箱 egress 等缺口；已登记 `def_`/`cov_`、`cmd/dsh-gateway`、gateway 镜像与 ADR-001，补充迁移编号/RLS/可信写/OpenAPI/测试/沙箱约束；原型 sky/violet 已按 DESIGN-SPEC 改为 emerald/amber/red/slate，并发布 `0.1.95-SNAPSHOT`。
 - **AI 测试引擎实施规格（2026-10-22）**：新增 `DSH-SDK-GATEWAY-SPEC`（一 job 一进程/warm pool、取消/超时/崩溃恢复、队列/事件/错误码）、`COVERAGE-MODEL-SPEC`（端点 archetype、Cell 模型、pairwise、覆盖门禁与 DDL）、`FINDING-EVIDENCE-SPEC`（缺陷状态机、仓库/提交、截图/视频证据、上传/保留/归因规则）。
 - **缺陷仓库与多媒体证据（0.1.94-SNAPSHOT）**：缺陷列表/详情增加归属仓库、分支与冻结提交；新增“多媒体证据”区块，截图必需、视频建议，支持缩略图/大图/播放占位、证据策略与 SHA-256/MIME/时长说明；同步更新 AI 测试引擎方案的 finding 仓库字段与 evidence API。
