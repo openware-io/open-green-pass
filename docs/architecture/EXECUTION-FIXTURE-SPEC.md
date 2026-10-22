@@ -176,7 +176,7 @@ CREATE TABLE env_lease (
 );
 ```
 
-- `run_`/`env_` 前缀已登记。
+- `run_`/`env_` 前缀已登记；`run_fixture`/`env_lease` 为 Greenfield 新表，无历史数据迁移。
 - RLS + `team_id`；清理任务独立 worker。
 - 迁移编号在 M0 中追加（`000037_execution_fixture`）。
 

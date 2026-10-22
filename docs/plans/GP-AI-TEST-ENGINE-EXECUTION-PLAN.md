@@ -36,9 +36,9 @@
 | 逻辑名 | 物理表 | 归属 | 前缀状态 |
 |---|---|---|---|
 | finding | `def_finding` | Governance Defect | 已登记 `def_` |
-| def_event | `def_event` | Governance Defect | 已登记 `def_` |
-| def_suggestion | `def_suggestion` | Governance Defect | 已登记 `def_` |
-| evd_evidence | `evd_evidence` | Trusted | 已登记 `evd_` |
+| finding_event | `def_event` | Governance Defect | 已登记 `def_` |
+| finding_suggestion | `def_suggestion` | Governance Defect | 已登记 `def_` |
+| finding_evidence | `evd_evidence` | Trusted | 已登记 `evd_` |
 | coverage_cell | `cov_cell` | Governance Coverage | 已登记 `cov_` |
 | coverage_waiver | `cov_waiver` | Governance Coverage | 已登记 `cov_` |
 | generation_job | `gen_job` | AI | 已登记 `gen_` |
@@ -62,6 +62,15 @@
 - 完成 egress staging 验证后启用 default-deny。
 
 未完成上述实施项前不得发布 gateway 或写业务数据。
+
+### 0.4 数据策略：Greenfield，无历史数据包袱
+
+- `def_*`、`cov_*`、`evd_evidence`、`gen_job`、`ctr_*`、`run_fixture`、`env_lease` 均为**新表**；
+- 不做数据回填、不双写、不做兼容视图、不做旧表改造；
+- 迁移仅 DDL：`CREATE TABLE`/索引/RLS/授权；`down` 只删除新表；
+- 现有平台表（target/case/run/model/scm 等）不动；
+- 测试数据由 fixture/seed 生成，不迁移历史用例/缺陷；
+- 因此 M0 不含数据搬迁/回填验证，仅做 schema、RLS、契约和测试。
 
 ## 1. 边界与原则
 
@@ -553,10 +562,10 @@ DSH Analyst 输出：
 
 ## 12. 交付计划
 
-### M0（1 周）：只读护栏 + 缺陷模型 + 工程门禁
+### M0（1 周，Greenfield）：只读护栏 + 缺陷模型 + 工程门禁
 
 - SCM scope 校验和只读标识；
-- 迁移 `000034_defect_finding`（`def_finding`/`def_event`/`def_suggestion`）、`000035_coverage_cell`（`cov_cell`/`cov_waiver`）、`000036_evidence`（`evd_evidence`）、`000037_execution_fixture`（`run_fixture`/`env_lease`）；
+- 迁移 `000034_defect_finding`（`def_finding`/`def_event`/`def_suggestion`）、`000035_coverage_cell`（`cov_cell`/`cov_waiver`）、`000036_evidence`（`evd_evidence`）、`000037_execution_fixture`（`run_fixture`/`env_lease`）；**仅 DDL，无数据回填/双写/兼容视图**；
 - RLS 策略、`gp_trusted_writer` 对 `evd_evidence` 的授权、`aud_event` 事件；
 - 执行结果增加 `failure_class`/`finding_id`；
 - `api/openapi.yaml` 补 `/findings`、`/coverage`，生成类型 + 契约测试；

@@ -11,7 +11,7 @@
 - 物理表名使用 `cov_cell`、`cov_waiver`；`cov_` 已在 ENGINEERING-SPEC §8.2 登记。
 - 归属 Governance Coverage；所有表带 `team_id` + RLS；waiver 审批写 `aud_event`。
 - 迁移 `000035_coverage_cell`（up/down），migcheck/testcontainers 按 ENGINEERING-SPEC §8.4。
-- DDL 已使用 `cov_` 物理表名；不得使用未登记的 `ai_` 前缀。
+- DDL 已使用 `cov_` 物理表名；不得使用未登记的 `ai_` 前缀。`cov_*` 为 Greenfield 新表，无回填/双写。
 
 ## 1. 目标
 

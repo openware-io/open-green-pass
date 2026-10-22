@@ -18,7 +18,7 @@
 - Governance 通过 Trusted 端口创建/读取证据，不直接写 `evd_evidence`。
 - `evd_evidence` 由 `gp_trusted_writer` 写，server/worker 只读。
 - 所有表带 `team_id` + RLS；finding 状态流转/证据上传/读取写 `aud_event`。
-- 证据元数据不可变；不提供 UPDATE/DELETE。
+- 证据元数据不可变；不提供 UPDATE/DELETE。`def_*`/`evd_evidence` 为 Greenfield 新表，无历史数据搬迁。
 - 迁移：`000034_defect_finding`、`000036_evidence`（up/down）；migcheck/testcontainers 按 ENGINEERING-SPEC §8.4。
 
 ## 1. 目标
