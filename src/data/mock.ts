@@ -629,6 +629,7 @@ export const NAV_GROUPS: { title: string; items: INavItem[]; adminOnly?: boolean
       { path: '/resources', label: '测试资源' },
       { path: '/exec', label: '测试执行' },
       { path: '/gate', label: '质量门禁' },
+      { path: '/findings', label: '缺陷中心' },
       { path: '/history', label: '测试历史' },
       { path: '/report', label: '测试报告' },
     ],

@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { PageHeader, Card, ListFilter, PrimaryButton } from '@/components/shared';
 import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
 import type { Report } from '@/api/client';
-import { Cpu, Globe, Smartphone, Sparkles, Download, ShieldCheck, TrendingUp, CornerDownRight, FileText, Server, WifiOff } from 'lucide-react';
+import { Cpu, Globe, Smartphone, Sparkles, Download, ShieldCheck, TrendingUp, CornerDownRight, FileText, Server, WifiOff, ShieldAlert, ArrowRight } from 'lucide-react';
 
 const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles };
 const EXPORT_FORMATS = [
@@ -81,6 +81,21 @@ export default function ReportPage() {
       <PageHeader title="测试报告" desc="测试闭环最后一环 · 跨场景汇总合编 · 工程报告 = 多场景报告合编（可逐场景分块 / 整份合编导出）">
         <span className="text-[11px] text-slate-400">按工程筛选：sys-payment-platform · {run.gate === '通过' ? '门禁通过' : '门禁阻断'}</span>
       </PageHeader>
+
+      <Card title="缺陷与建议摘要" className="mb-5" extra={<span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400"><ShieldAlert className="h-3.5 w-3.5 text-red-500" />报告包含缺陷证据与只读修复建议</span>}>
+        <div className="p-5">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div className="rounded-lg border border-red-200 bg-red-50/50 p-3"><div className="text-[10px] text-red-600">确认缺陷</div><div className="mt-1 text-xl font-semibold text-red-700">2</div><div className="mt-1 text-[10px] text-red-500">P0 1 · P1 1</div></div>
+            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3"><div className="text-[10px] text-amber-600">待确认</div><div className="mt-1 text-xl font-semibold text-amber-700">1</div><div className="mt-1 text-[10px] text-amber-500">需人工归因</div></div>
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3"><div className="text-[10px] text-emerald-600">有修复建议</div><div className="mt-1 text-xl font-semibold text-emerald-700">3</div><div className="mt-1 text-[10px] text-emerald-500">只读建议，不写源码</div></div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="text-[10px] text-slate-500">覆盖缺口</div><div className="mt-1 text-xl font-semibold text-slate-700">16</div><div className="mt-1 text-[10px] text-slate-400">必需 Cell 未覆盖</div></div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] text-slate-500">报告结构：覆盖范围 → 执行结果 → 缺陷清单 → 根因/影响 → 修复建议 → 回归与风险。</span>
+            <button onClick={() => navigate('/findings')} className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs text-red-700 hover:bg-red-50">打开缺陷中心<ArrowRight className="h-3.5 w-3.5" /></button>
+          </div>
+        </div>
+      </Card>
 
       <Card title="真实报告控制" className="mb-5" extra={
         <span className={'inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md ' + (client ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500')}>

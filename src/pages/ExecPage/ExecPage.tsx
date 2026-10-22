@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FLOW_ITEMS, EXEC_RUN, TEST_SCENARIOS, ENV_RUNTIME_VERSIONS, type IEnvVersionCheck } from '@/data/mock';
 import { PageHeader, Card, ListFilter } from '@/components/shared';
 import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
 import { useObjectCatalog } from '@/context/objectCatalog';
 import type { CaseResult, Run, Target, TestCase, EnvRuntime } from '@/api/client';
-import { Cpu, Globe, Smartphone, Sparkles, Play, Pause, ShieldCheck, ShieldAlert, RefreshCw, Server, WifiOff } from 'lucide-react';
+import { Cpu, Globe, Smartphone, Sparkles, Play, Pause, ShieldCheck, ShieldAlert, RefreshCw, Server, WifiOff, Bug, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 const STATUS_STYLE: Record<string, { dot: string; badge: string; text: string }> = {
@@ -27,6 +27,12 @@ const REAL_STATE_STYLE: Record<Run['state'], { label: string; className: string 
   done: { label: '已完成', className: 'bg-emerald-50 text-emerald-700' },
   failed: { label: '已失败/阻断', className: 'bg-red-50 text-red-700' },
 };
+const TRIAGE_CANDIDATES = [
+  { id: 'F-1042', severity: 'P0', kind: '产品缺陷', title: '支付回调验签失败仍返回 500', module: 'payment', evidence: '4/4', status: '待确认' },
+  { id: 'F-1041', severity: 'P1', kind: '产品缺陷', title: 'confirmUsername 不一致仍删除用户', module: 'user', evidence: '4/4', status: '已确认' },
+  { id: 'F-1036', severity: 'P2', kind: '环境问题', title: '预签名 403，分片上传无法开始', module: 'media', evidence: '4/4', status: '待回归' },
+  { id: 'F-1034', severity: 'P3', kind: '用例缺陷', title: '分页越界用例数据非法（误报）', module: 'message', evidence: '4/4', status: '误报' },
+];
 
 function caseResultStyle(status: CaseResult['status']): string {
   if (status === 'pass') return 'bg-emerald-50 text-emerald-700';
@@ -121,6 +127,7 @@ function ExecPageContent({ targets, targetID, requestedCaseIDs, onTargetChange }
   onTargetChange: (targetID: string) => void;
 }) {
   const catalog = useObjectCatalog();
+  const navigate = useNavigate();
   const client = useMemo(() => configuredGreenPassClient(), []);
   const [paused, setPaused] = useState(false);
   const [q, setQ] = useState('');
@@ -297,6 +304,26 @@ function ExecPageContent({ targets, targetID, requestedCaseIDs, onTargetChange }
           </button>
         </div>}
       </PageHeader>
+
+      <Card title="缺陷候选与归因" className="mb-5" extra={<span className="inline-flex items-center gap-1.5 text-[11px] text-emerald-700"><ShieldCheck className="h-3.5 w-3.5" />源码只读 · 失败先归因，不自动改源码</span>}>
+        <div className="p-5">
+          <div className="space-y-2">
+            {TRIAGE_CANDIDATES.map((item) => <div key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5">
+              <span className={'rounded-md border px-2 py-0.5 text-[10px] font-semibold ' + (item.severity === 'P0' ? 'border-red-200 bg-red-50 text-red-700' : item.severity === 'P1' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-600')}>{item.severity}</span>
+              <span className="font-mono text-[10px] text-slate-400">{item.id}</span>
+              <span className="text-xs font-medium text-slate-700">{item.title}</span>
+              <span className="font-mono text-[10px] text-slate-400">{item.module}</span>
+              <span className={'rounded-full px-2 py-0.5 text-[10px] ' + (item.kind === '产品缺陷' ? 'bg-red-50 text-red-700' : item.kind === '环境问题' ? 'bg-sky-50 text-sky-700' : 'bg-slate-100 text-slate-600')}>{item.kind}</span>
+              <span className="text-[10px] text-slate-400">证据 {item.evidence}</span>
+              <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">{item.status}</span>
+            </div>)}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-[11px] text-slate-400">失败 5 条 · 已归因 5/5 · 确认缺陷 2 · 待确认 1</span>
+            <button onClick={() => navigate('/findings')} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50"><Bug className="h-3.5 w-3.5" />进入缺陷中心<ArrowRight className="h-3.5 w-3.5" /></button>
+          </div>
+        </div>
+      </Card>
 
       <Card title="真实运行控制" className="mb-5" extra={
         <span className={'inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md ' + (client ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500')}>

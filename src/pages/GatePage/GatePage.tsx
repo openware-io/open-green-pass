@@ -4,7 +4,7 @@ import { scenarioNav } from '@/context/scenarioNav';
 import { toast } from 'sonner';
 import { assetToProfile, TEST_SCENARIOS, type IAsset } from '@/data/mock';
 import { PageHeader, GhostButton, PrimaryButton, Card, ListFilter } from '@/components/shared';
-import { BrainCircuit, Cpu, Globe, Smartphone, Sparkles, Loader2, BotMessageSquare } from 'lucide-react';
+import { BrainCircuit, Cpu, Globe, Smartphone, Sparkles, Loader2, BotMessageSquare, ShieldAlert, ArrowRight } from 'lucide-react';
 import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
 import type { GateResult } from '@/api/client';
 
@@ -89,6 +89,20 @@ export default function GatePage() {
           {running ? <span className="inline-flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />判定中…</span> : phase === 'done' ? '重新判定 ✓' : '重新判定'}
         </PrimaryButton>
       </PageHeader>
+
+      <Card title="缺陷与覆盖门禁" className="mb-5" extra={<span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400"><ShieldAlert className="h-3.5 w-3.5 text-red-500" />源码只读 · 缺陷未闭环则阻断</span>}>
+        <div className="p-5">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-lg border border-red-200 bg-red-50/50 p-3"><div className="text-[10px] text-red-600">P0/P1 未关闭</div><div className="mt-1 text-lg font-semibold text-red-700">2</div><div className="mt-1 text-[10px] text-red-500">P0 1 · P1 1 · 阻断</div></div>
+            <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3"><div className="text-[10px] text-amber-600">必需 Cell 覆盖</div><div className="mt-1 text-lg font-semibold text-amber-700">96.3%</div><div className="mt-1 text-[10px] text-amber-500">412 / 428 · 16 个未覆盖</div></div>
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3"><div className="text-[10px] text-emerald-600">误报率</div><div className="mt-1 text-lg font-semibold text-emerald-700">2.1%</div><div className="mt-1 text-[10px] text-emerald-500">阈值 ≤ 5% · 通过</div></div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] text-slate-500">门禁阻断原因：存在未关闭 P0/P1 缺陷，且 16 个必需 Cell 未覆盖。缺陷中心与覆盖账本联动。</span>
+            <button onClick={() => navigate('/findings')} className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs text-red-700 hover:bg-red-50">查看未闭环缺陷<ArrowRight className="h-3.5 w-3.5" /></button>
+          </div>
+        </div>
+      </Card>
 
       <RealGatePanel client={realClient} />
 

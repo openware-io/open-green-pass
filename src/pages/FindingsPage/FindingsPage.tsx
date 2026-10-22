@@ -1,0 +1,410 @@
+import { useMemo, useState } from 'react';
+import { PageHeader } from '@/components/shared';
+import { toast } from 'sonner';
+import { AlertTriangle, Bug, CheckCircle2, ChevronRight, Clipboard, FileWarning, GitBranch, Search, ShieldAlert, ShieldCheck, UserRound, X } from 'lucide-react';
+
+type Severity = 'P0' | 'P1' | 'P2' | 'P3';
+type FindingStatus = '待确认' | '已确认' | '修复中' | '待回归' | '已关闭' | '误报';
+
+type Finding = {
+  id: string;
+  title: string;
+  severity: Severity;
+  status: FindingStatus;
+  module: string;
+  endpoint: string;
+  owner: string;
+  updated: string;
+  run: string;
+  caseId: string;
+  confidence: '高' | '中' | '低';
+  source: string;
+  expected: string;
+  actual: string;
+  rootCause: string;
+  suggestion: string;
+  evidence: { request: string; response: string; log: string; trace: string };
+  coverage: string[];
+  timeline: Array<{ time: string; text: string; actor: string }>;
+};
+
+const SEED: Finding[] = [
+  {
+    id: 'F-1042',
+    title: '支付回调验签失败仍返回 500，重复回调可能造成订单状态不一致',
+    severity: 'P0',
+    status: '待确认',
+    module: 'payment',
+    endpoint: 'POST /api/v1/payments/callback',
+    owner: '未分配',
+    updated: '10 分钟前',
+    run: '#4821',
+    caseId: 'TC-018',
+    confidence: '高',
+    source: 'src/api/payment.js:42',
+    expected: '回调验签失败返回 401 + code=SIGNATURE_INVALID；订单状态保持不变',
+    actual: '返回 500 INTERNAL_ERROR；订单状态被写成 paid',
+    rootCause: '验签异常未映射为业务错误，异常路径仍执行了订单状态更新；签名串拼接顺序与网关不一致。',
+    suggestion: '建议在验签失败分支提前返回 401，并将订单状态更新移出异常路径；补充重复回调/错误签名回归用例。建议修改点：src/api/payment.js:42 附近，仅建议，不写入仓库。',
+    evidence: {
+      request: 'POST /api/v1/payments/callback\nX-Client-Platform: pc-admin\n\n{"orderId":"ORD-20261022-001","signature":"bad"}',
+      response: 'HTTP/1.1 500\n{"code":"INTERNAL_ERROR","message":"signature verify failed"}',
+      log: '2026-10-22T15:42:11Z ERROR payment.callback order=ORD-20261022-001 err=invalid signature\n2026-10-22T15:42:11Z INFO order.update order=ORD-20261022-001 status=paid',
+      trace: 'trace 8f2c… span payment.callback 312ms\n  └ signature.verify 4ms error\n  └ order.update 8ms status=paid',
+    },
+    coverage: ['payment.callback · error', 'payment.callback · idempotency', 'order.state · data'],
+    timeline: [
+      { time: '15:42', text: '执行失败，归因为产品缺陷', actor: 'triage-bot' },
+      { time: '15:43', text: '创建缺陷候选，等待确认', actor: 'triage-bot' },
+    ],
+  },
+  {
+    id: 'F-1041',
+    title: '删除用户时 confirmUsername 不一致仍执行删除',
+    severity: 'P1',
+    status: '已确认',
+    module: 'user',
+    endpoint: 'DELETE /api/v1/admin/users/{id}',
+    owner: '张立',
+    updated: '32 分钟前',
+    run: '#4820',
+    caseId: 'TC-006',
+    confidence: '高',
+    source: 'src/api/user.js:17',
+    expected: 'confirmUsername 不匹配返回 400 USERNAME_CONFIRM_MISMATCH，用户仍存在',
+    actual: '返回 200，用户被删除',
+    rootCause: '后端只校验了用户存在性，未比较 confirmUsername 与目标用户名；前端只做必填校验。',
+    suggestion: '建议服务端在删除事务内比较 confirmUsername 与目标用户名，不一致返回 400 并回滚；补充“错误确认名”回归用例。',
+    evidence: {
+      request: 'DELETE /api/v1/admin/users/10086\n{"confirmUsername":"wrong-name"}',
+      response: 'HTTP/1.1 200\n{"code":"OK"}',
+      log: '2026-10-22T15:20:04Z INFO user.delete id=10086 operator=admin',
+      trace: 'trace 11ab… span user.delete 44ms\n  └ user.lookup 2ms\n  └ user.delete 12ms',
+    },
+    coverage: ['user.delete · error', 'user.delete · authz'],
+    timeline: [
+      { time: '15:20', text: '执行失败，归因为产品缺陷', actor: 'triage-bot' },
+      { time: '15:24', text: '人工确认缺陷，指派给张立', actor: '张立' },
+    ],
+  },
+  {
+    id: 'F-1039',
+    title: '客户端发布提交使用过期 rowVersion 返回 500 而非 409',
+    severity: 'P1',
+    status: '修复中',
+    module: 'clientRelease',
+    endpoint: 'POST /api/v1/admin/client-releases/{id}/submit',
+    owner: '李航',
+    updated: '1 小时前',
+    run: '#4818',
+    caseId: 'TC-036',
+    confidence: '中',
+    source: 'src/api/clientRelease.js:52',
+    expected: '过期 rowVersion 返回 409 CLIENT_RELEASE_INVALID_STATE 或 VERSION_CONFLICT',
+    actual: '返回 500，无稳定错误码',
+    rootCause: '乐观锁冲突未映射为 409；提交路径对 rowVersion 缺失/过期没有统一错误处理。',
+    suggestion: '建议把 rowVersion 冲突映射为 409，并返回稳定 code；回归覆盖“先提交成功、再用旧版本提交”的并发场景。',
+    evidence: {
+      request: 'POST /api/v1/admin/client-releases/778/submit\n{"expectedRowVersion":3,"reason":"e2e stale"}',
+      response: 'HTTP/1.1 500\n{"code":"INTERNAL_ERROR"}',
+      log: '2026-10-22T14:51:22Z ERROR release.submit id=778 expected=3 current=5',
+      trace: 'trace 9d31… span release.submit 81ms\n  └ release.version.check 3ms conflict',
+    },
+    coverage: ['clientRelease.submit · concurrency', 'clientRelease.submit · error'],
+    timeline: [
+      { time: '14:51', text: '执行失败，归因为产品缺陷', actor: 'triage-bot' },
+      { time: '14:58', text: '确认缺陷并进入修复中', actor: '李航' },
+    ],
+  },
+  {
+    id: 'F-1037',
+    title: '审计日志时间区间倒置返回 200 空列表',
+    severity: 'P2',
+    status: '待确认',
+    module: 'audit',
+    endpoint: 'GET /api/v1/admin/audit-logs',
+    owner: '未分配',
+    updated: '2 小时前',
+    run: '#4815',
+    caseId: 'TC-013',
+    confidence: '中',
+    source: 'src/api/audit.js:5',
+    expected: 'from > to 返回 400 TIME_RANGE_INVALID',
+    actual: '返回 200，items=[]',
+    rootCause: '后端未校验时间区间顺序，空结果被当作合法查询。',
+    suggestion: '建议增加 from <= to 校验，返回 400 TIME_RANGE_INVALID；补充倒置区间和缺失边界用例。',
+    evidence: {
+      request: 'GET /api/v1/admin/audit-logs?from=2026-02-01&to=2026-01-01',
+      response: 'HTTP/1.1 200\n{"items":[],"total":0,"retentionFloor":null}',
+      log: '2026-10-22T13:55:10Z INFO audit.list from=2026-02-01 to=2026-01-01 items=0',
+      trace: 'trace 41cc… span audit.list 17ms\n  └ audit.query 9ms rows=0',
+    },
+    coverage: ['audit.list · boundary', 'audit.list · error'],
+    timeline: [{ time: '13:55', text: '执行失败，归因为产品缺陷', actor: 'triage-bot' }],
+  },
+  {
+    id: 'F-1036',
+    title: '媒体上传预签名返回 403，分片上传无法开始',
+    severity: 'P2',
+    status: '待回归',
+    module: 'media',
+    endpoint: 'POST /api/v1/media/multipart-upload-sessions',
+    owner: '王珂',
+    updated: '昨天',
+    run: '#4809',
+    caseId: 'TC-027',
+    confidence: '中',
+    source: 'src/api/media.js:89',
+    expected: '返回 200 + partUrls，预签名 URL 可直接 PUT',
+    actual: '返回 403 AccessDenied，bucket CORS 未允许 PUT',
+    rootCause: '测试 bucket 的 CORS/预签名策略未包含 PUT 与 ETag 暴露；属于环境配置而非产品代码。',
+    suggestion: '建议补齐测试 bucket CORS、ETag 暴露和清理策略；该缺陷归因为环境问题，修复后重跑分片上传用例。',
+    evidence: {
+      request: 'POST /api/v1/media/multipart-upload-sessions\n{"objectId":"avatar-778","size":1048576}',
+      response: 'HTTP/1.1 403\n{"code":"AccessDenied"}',
+      log: '2026-10-22T11:20:00Z ERROR media.presign bucket=gp-test AccessDenied',
+      trace: 'trace 7b2e… span media.presign 120ms\n  └ s3.presign 18ms access-denied',
+    },
+    coverage: ['media.upload · boundary', 'media.upload · error'],
+    timeline: [
+      { time: '11:20', text: '执行失败，归因为环境问题', actor: 'triage-bot' },
+      { time: '11:35', text: '环境修复完成，等待回归', actor: '王珂' },
+    ],
+  },
+  {
+    id: 'F-1034',
+    title: '消息列表分页越界返回 500（疑似误报）',
+    severity: 'P3',
+    status: '误报',
+    module: 'message',
+    endpoint: 'GET /api/v1/admin/messages',
+    owner: '张立',
+    updated: '昨天',
+    run: '#4802',
+    caseId: 'TC-010',
+    confidence: '低',
+    source: 'src/api/message.js:3',
+    expected: 'pageSize 超过上限返回 400 或截断到上限',
+    actual: '返回 500',
+    rootCause: '测试数据 pageSize 传入了非数值字符串，axios 序列化为空参数；用例数据缺陷，不是产品缺陷。',
+    suggestion: '建议修正用例：pageSize 使用整数边界值，并补充 pageSize=0/负数/超上限用例；无需修改产品源码。',
+    evidence: {
+      request: 'GET /api/v1/admin/messages?page=1&pageSize=abc',
+      response: 'HTTP/1.1 500\n{"code":"INTERNAL_ERROR"}',
+      log: '2026-10-22T10:12:00Z WARN http.query pageSize=abc parse failed',
+      trace: 'trace 2d90… span http.query 1ms parse-error',
+    },
+    coverage: ['message.list · boundary'],
+    timeline: [
+      { time: '10:12', text: '执行失败，归因为用例缺陷', actor: 'triage-bot' },
+      { time: '10:20', text: '人工标记误报', actor: '张立' },
+    ],
+  },
+];
+
+const SEV_STYLE: Record<Severity, string> = {
+  P0: 'bg-red-50 text-red-700 border-red-200',
+  P1: 'bg-amber-50 text-amber-700 border-amber-200',
+  P2: 'bg-sky-50 text-sky-700 border-sky-200',
+  P3: 'bg-slate-100 text-slate-600 border-slate-200',
+};
+const STATUS_STYLE: Record<FindingStatus, string> = {
+  待确认: 'bg-amber-50 text-amber-700',
+  已确认: 'bg-red-50 text-red-700',
+  修复中: 'bg-sky-50 text-sky-700',
+  待回归: 'bg-violet-50 text-violet-700',
+  已关闭: 'bg-emerald-50 text-emerald-700',
+  误报: 'bg-slate-100 text-slate-500',
+};
+
+function evidenceCount(finding: Finding) {
+  return Object.values(finding.evidence).filter(Boolean).length;
+}
+
+export default function FindingsPage() {
+  const [items, setItems] = useState<Finding[]>(SEED);
+  const [selectedID, setSelectedID] = useState<string>(SEED[0]?.id ?? '');
+  const [query, setQuery] = useState('');
+  const [severity, setSeverity] = useState('全部');
+  const [status, setStatus] = useState('全部');
+  const selected = items.find((item) => item.id === selectedID) ?? null;
+
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return items.filter((item) => {
+      if (severity !== '全部' && item.severity !== severity) return false;
+      if (status !== '全部' && item.status !== status) return false;
+      if (term && !`${item.id} ${item.title} ${item.module} ${item.endpoint}`.toLowerCase().includes(term)) return false;
+      return true;
+    });
+  }, [items, query, severity, status]);
+
+  const setStatusFor = (id: string, next: FindingStatus) => {
+    setItems((current) => current.map((item) => item.id === id ? { ...item, status: next, updated: '刚刚', timeline: [...item.timeline, { time: '刚刚', text: `状态更新为 ${next}`, actor: '张立' }] } : item));
+    toast.success(`已更新为「${next}」`);
+  };
+
+  const copySuggestion = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('修复建议已复制', { description: '仅复制建议，不会修改源码。' });
+    } catch {
+      toast.error('复制失败，请手动选择文本');
+    }
+  };
+
+  return (
+    <div>
+      <PageHeader title="缺陷中心" desc="发现 → 证据 → 归因 → 建议 → 回归 · 源码只读，不修改仓库">
+        <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">
+          <ShieldCheck className="h-3.5 w-3.5" />源码只读
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600">
+          <Bug className="h-3.5 w-3.5" />缺陷建议不写回仓库
+        </span>
+      </PageHeader>
+
+      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-5">
+        {[
+          { label: '待确认', value: items.filter((item) => item.status === '待确认').length, tone: 'text-amber-700 bg-amber-50' },
+          { label: '已确认', value: items.filter((item) => item.status === '已确认').length, tone: 'text-red-700 bg-red-50' },
+          { label: 'P0 未关闭', value: items.filter((item) => item.severity === 'P0' && !['已关闭', '误报'].includes(item.status)).length, tone: 'text-red-700 bg-red-50' },
+          { label: '待回归', value: items.filter((item) => item.status === '待回归').length, tone: 'text-violet-700 bg-violet-50' },
+          { label: '误报', value: items.filter((item) => item.status === '误报').length, tone: 'text-slate-600 bg-slate-100' },
+        ].map((stat) => (
+          <div key={stat.label} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <div className="text-[11px] text-slate-500">{stat.label}</div>
+            <div className={`mt-1 inline-flex rounded-md px-2 py-0.5 text-xl font-semibold ${stat.tone}`}>{stat.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <div className="relative min-w-[240px] flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索缺陷、模块、端点" className="w-full rounded-lg border border-slate-200 py-2 pl-8 pr-3 text-xs outline-none focus:border-emerald-400" />
+        </div>
+        <select aria-label="严重级别" value={severity} onChange={(event) => setSeverity(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-600">
+          {['全部', 'P0', 'P1', 'P2', 'P3'].map((value) => <option key={value}>{value}</option>)}
+        </select>
+        <select aria-label="缺陷状态" value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-600">
+          {['全部', '待确认', '已确认', '修复中', '待回归', '已关闭', '误报'].map((value) => <option key={value}>{value}</option>)}
+        </select>
+        <span className="ml-auto text-[11px] text-slate-400">{filtered.length} 条 · 证据链完整 {items.filter((item) => evidenceCount(item) === 4).length} 条</span>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50 text-left text-[10px] text-slate-500">
+            <tr>
+              <th className="px-4 py-3 font-medium">级别</th>
+              <th className="px-4 py-3 font-medium">缺陷</th>
+              <th className="px-4 py-3 font-medium">状态</th>
+              <th className="px-4 py-3 font-medium">负责人</th>
+              <th className="px-4 py-3 font-medium">证据</th>
+              <th className="px-4 py-3 font-medium">关联运行</th>
+              <th className="px-4 py-3 font-medium">更新</th>
+              <th className="px-3 py-3" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {filtered.map((item) => (
+              <tr key={item.id} onClick={() => setSelectedID(item.id)} className={`cursor-pointer transition hover:bg-slate-50 ${selectedID === item.id ? 'bg-emerald-50/40' : ''}`}>
+                <td className="px-4 py-3"><span className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold ${SEV_STYLE[item.severity]}`}>{item.severity}</span></td>
+                <td className="max-w-[460px] px-4 py-3">
+                  <div className="truncate font-medium text-slate-800">{item.title}</div>
+                  <div className="mt-0.5 flex items-center gap-2 text-[10px] text-slate-400"><span className="font-mono">{item.id}</span><span>{item.module}</span><span className="font-mono">{item.endpoint}</span></div>
+                </td>
+                <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-[10px] ${STATUS_STYLE[item.status]}`}>{item.status}</span></td>
+                <td className="px-4 py-3 text-slate-600"><span className="inline-flex items-center gap-1"><UserRound className="h-3 w-3 text-slate-400" />{item.owner}</span></td>
+                <td className="px-4 py-3 text-slate-600"><span className="inline-flex items-center gap-1"><FileWarning className="h-3.5 w-3.5 text-amber-500" />{evidenceCount(item)}/4</span></td>
+                <td className="px-4 py-3 font-mono text-emerald-700">{item.run}</td>
+                <td className="px-4 py-3 text-slate-400">{item.updated}</td>
+                <td className="px-3 py-3 text-slate-300"><ChevronRight className="h-4 w-4" /></td>
+              </tr>
+            ))}
+            {!filtered.length && <tr><td colSpan={8} className="p-10 text-center text-sm text-slate-400">没有匹配的缺陷</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      {selected && <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/45" onMouseDown={() => setSelectedID('')}>
+        <aside className="h-full w-full max-w-3xl overflow-y-auto bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-6 py-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold ${SEV_STYLE[selected.severity]}`}>{selected.severity}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] ${STATUS_STYLE[selected.status]}`}>{selected.status}</span>
+                  <span className="font-mono text-[10px] text-slate-400">{selected.id}</span>
+                </div>
+                <h2 className="mt-2 text-base font-semibold text-slate-900">{selected.title}</h2>
+                <div className="mt-1 text-[11px] text-slate-500">{selected.module} · <span className="font-mono">{selected.endpoint}</span> · 来源 <span className="font-mono">{selected.source}</span></div>
+              </div>
+              <button onClick={() => setSelectedID('')} aria-label="关闭" className="rounded-md p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button onClick={() => setStatusFor(selected.id, '已确认')} className="rounded-lg bg-red-600 px-3 py-1.5 text-xs text-white">确认缺陷</button>
+              <button onClick={() => setStatusFor(selected.id, '误报')} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600">标记误报</button>
+              <button onClick={() => setStatusFor(selected.id, '待回归')} className="rounded-lg border border-violet-200 px-3 py-1.5 text-xs text-violet-700">标记已修复，待回归</button>
+              <button onClick={() => toast.success('已模拟创建工单', { description: '可对接 Jira / 飞书；不会修改源码。' })} className="rounded-lg border border-emerald-200 px-3 py-1.5 text-xs text-emerald-700">创建工单</button>
+              <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-slate-400"><ShieldCheck className="h-3.5 w-3.5" />只读源码 · 不提交 PR</span>
+            </div>
+          </div>
+
+          <div className="space-y-5 p-6">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-lg border border-slate-200 p-3"><div className="text-[10px] text-slate-400">负责人</div><div className="mt-1 text-sm font-medium text-slate-700">{selected.owner}</div></div>
+              <div className="rounded-lg border border-slate-200 p-3"><div className="text-[10px] text-slate-400">关联运行 / 用例</div><div className="mt-1 font-mono text-sm text-slate-700">{selected.run} / {selected.caseId}</div></div>
+              <div className="rounded-lg border border-slate-200 p-3"><div className="text-[10px] text-slate-400">根因置信度</div><div className="mt-1 text-sm font-medium text-slate-700">{selected.confidence}</div></div>
+            </div>
+
+            <section>
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700"><AlertTriangle className="h-3.5 w-3.5 text-amber-500" />期望 vs 实际</div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3"><div className="text-[10px] font-medium text-emerald-700">契约期望</div><div className="mt-1 text-xs leading-5 text-slate-700">{selected.expected}</div></div>
+                <div className="rounded-lg border border-red-200 bg-red-50/50 p-3"><div className="text-[10px] font-medium text-red-700">实际结果</div><div className="mt-1 text-xs leading-5 text-slate-700">{selected.actual}</div></div>
+              </div>
+            </section>
+
+            <section>
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700"><FileWarning className="h-3.5 w-3.5 text-sky-500" />证据链</div>
+              <div className="grid gap-2 md:grid-cols-2">
+                {([
+                  ['请求', selected.evidence.request],
+                  ['响应', selected.evidence.response],
+                  ['日志', selected.evidence.log],
+                  ['Trace', selected.evidence.trace],
+                ] as const).map(([label, value]) => <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="text-[10px] font-medium text-slate-500">{label}</div><pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[10px] leading-4 text-slate-600">{value}</pre></div>)}
+              </div>
+            </section>
+
+            <section>
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700"><GitBranch className="h-3.5 w-3.5 text-violet-500" />根因分析</div>
+              <div className="rounded-lg border border-slate-200 p-3 text-xs leading-5 text-slate-700">{selected.rootCause}</div>
+            </section>
+
+            <section>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />修复建议（只读）</div>
+                <button onClick={() => void copySuggestion(selected.suggestion)} className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[10px] text-slate-600"><Clipboard className="h-3 w-3" />复制建议</button>
+              </div>
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 text-xs leading-5 text-slate-700">{selected.suggestion}</div>
+              <div className="mt-1 text-[10px] text-slate-400">建议仅供研发参考，平台不修改源码、不创建 PR、不提交 commit。</div>
+            </section>
+
+            <section>
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-700"><ShieldAlert className="h-3.5 w-3.5 text-amber-500" />关联覆盖 Cell</div>
+              <div className="flex flex-wrap gap-1.5">{selected.coverage.map((cell) => <span key={cell} className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[10px] text-slate-600">{cell}</span>)}</div>
+            </section>
+
+            <section>
+              <div className="mb-2 text-xs font-semibold text-slate-700">流转记录</div>
+              <div className="space-y-2">{selected.timeline.map((event, index) => <div key={`${event.time}-${index}`} className="flex gap-2 text-[11px]"><span className="w-12 shrink-0 font-mono text-slate-400">{event.time}</span><span className="text-slate-600">{event.text}</span><span className="ml-auto text-slate-400">{event.actor}</span></div>)}</div>
+            </section>
+          </div>
+        </aside>
+      </div>}
+    </div>
+  );
+}

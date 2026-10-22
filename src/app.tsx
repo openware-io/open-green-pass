@@ -10,6 +10,7 @@ import ExecPage from '@/pages/ExecPage/ExecPage';
 import GatePage from '@/pages/GatePage/GatePage';
 import HistoryPage from '@/pages/HistoryPage/HistoryPage';
 import ReportPage from '@/pages/ReportPage/ReportPage';
+import FindingsPage from '@/pages/FindingsPage/FindingsPage';
 import AuditPage from '@/pages/AuditPage/AuditPage';
 import AuditCostPage from '@/pages/AuditCostPage/AuditCostPage';
 import AuditExecPage from '@/pages/AuditExecPage/AuditExecPage';
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="gate" element={<GatePage />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="report" element={<ReportPage />} />
+        <Route path="findings" element={<FindingsPage />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="audit-cost" element={<AuditCostPage />} />
         <Route path="audit-exec" element={<AuditExecPage />} />

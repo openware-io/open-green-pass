@@ -12,7 +12,7 @@ const LOGIN_LABEL: Record<string, string> = { password: '账号密码', phone: '
 import { AssetLevelContext, LEVEL_ORDER, LEVEL_LABEL, type AssetLevel } from '@/context';
 import { AssistantDialog } from '@/components/AssistantDialog';
 import type { AssistantUIAction } from '@/api/client';
-import { Target, Settings2, Files, Play, ShieldCheck, ScrollText, GitBranch, ChevronDown, ChevronRight, Search, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes, UserCircle, LogOut, Smartphone, MessageCircle, Workflow, Zap, Plug, Settings, BotMessageSquare } from 'lucide-react';
+import { Target, Settings2, Files, Play, ShieldCheck, ShieldAlert, ScrollText, GitBranch, ChevronDown, ChevronRight, Search, Check, CornerDownLeft, Users, Wallet, UserCog, History, FileText, Landmark, ListChecks, Server, Brain, LayoutGrid, Boxes, UserCircle, LogOut, Smartphone, MessageCircle, Workflow, Zap, Plug, Settings, BotMessageSquare } from 'lucide-react';
 
 const ICONS: Record<string, typeof Target> = {
   '/target': Target,
@@ -20,6 +20,7 @@ const ICONS: Record<string, typeof Target> = {
   '/cases': Files,
   '/exec': Play,
   '/gate': ShieldCheck,
+  '/findings': ShieldAlert,
   '/history': History,
   '/report': FileText,
   '/scenarios': Boxes,
@@ -131,6 +132,7 @@ const STAGE_BAR = [
   { path: '/cases', label: '用例管理', icon: Files, status: 'done', value: '32' },
   { path: '/exec', label: '测试执行', icon: Play, status: 'partial', value: '5/12' },
   { path: '/gate', label: '质量门禁', icon: ShieldCheck, status: 'block', value: '3 阻断' },
+  { path: '/findings', label: '缺陷中心', icon: ShieldAlert, status: 'block', value: '5 未闭环' },
   { path: '/history', label: '测试历史', icon: History, status: 'done', value: '18' },
   { path: '/report', label: '测试报告', icon: FileText, status: 'todo', value: '待生成' },
   { path: '/audit-cost', label: '成本审计', icon: Wallet, status: 'done', value: '¥2.4k' },

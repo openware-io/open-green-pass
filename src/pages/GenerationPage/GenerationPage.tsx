@@ -500,6 +500,24 @@ function GenerationPageContent() {
         <GhostButton onClick={() => navigate('/target')}>管理被测对象</GhostButton>
         <PrimaryButton disabled={realBusy || batchPreparing || !realClient} onClick={() => void openBatchConfirmation()}>{realBusy ? '创建批次…' : batchPreparing ? '准备中…' : `生成用例${selectedServices.length ? `（${selectedServices.length}）` : ''}`}</PrimaryButton>
       </PageHeader>
+
+      <div className="mb-5 rounded-xl border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800"><Layers className="h-4 w-4 text-emerald-600" />覆盖计划</div>
+            <div className="mt-1 text-[11px] text-slate-500">生成前按端点 × 场景 × 等价类规划 Cell；生成后按账本校验覆盖，缺口不静默通过。</div>
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-medium text-emerald-700"><ShieldCheck className="h-3.5 w-3.5" />源码只读 · 原型数据</span>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+          {[{ label: '端点', value: '87' }, { label: '模块', value: '18' }, { label: '覆盖 Cell', value: '412 / 428' }, { label: '规划覆盖', value: '96.3%' }].map((stat) => <div key={stat.label} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2"><div className="text-[10px] text-slate-400">{stat.label}</div><div className="mt-0.5 text-lg font-semibold text-slate-800">{stat.value}</div></div>)}
+        </div>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full w-[96.3%] rounded-full bg-emerald-500" /></div>
+        <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
+          {['normal 22', 'boundary 3', 'error 7', 'auth 1', 'idempotency 3', 'data 3', '未覆盖 16'].map((item, index) => <span key={item} className={'rounded-full px-2 py-0.5 ' + (index === 6 ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500')}>{item}</span>)}
+        </div>
+      </div>
+
       {realClient && <div className={'mb-5 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 text-xs ' + (modelBinding ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800')}>
         <span className="font-semibold">模型生成</span>
         {modelBinding ? <>
