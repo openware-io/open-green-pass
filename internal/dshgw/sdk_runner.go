@@ -168,7 +168,11 @@ func (r SDKRunner) Run(ctx context.Context, job Job) (Result, error) {
 		return Result{}, err
 	}
 	_, _ = call("shutdown", nil)
-	return Result{Output: assistantText(notifications)}, nil
+	text := assistantText(notifications)
+	if text == "" {
+		text = rawNotifications(notifications)
+	}
+	return Result{Output: text}, nil
 }
 
 func assistantText(notifications []rpcMessage) string {
@@ -203,4 +207,17 @@ func assistantText(notifications []rpcMessage) string {
 		}
 	}
 	return strings.Join(texts, "\n")
+}
+
+func rawNotifications(notifications []rpcMessage) string {
+	buf := make([]byte, 0, 4096)
+	for _, msg := range notifications {
+		encoded, err := json.Marshal(msg)
+		if err != nil {
+			continue
+		}
+		buf = append(buf, encoded...)
+		buf = append(buf, '\n')
+	}
+	return string(buf)
 }

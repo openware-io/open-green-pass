@@ -147,6 +147,20 @@ func (s *CoverageStore) ListCells(ctx context.Context, teamID int64, f domain.Co
 	return out, nil
 }
 
+// AssignCase 把用例绑定到 Coverage Cell（generated 状态）。
+func (s *CoverageStore) AssignCase(ctx context.Context, teamID int64, cellIDs []int64, caseID int64) error {
+	if len(cellIDs) == 0 {
+		return nil
+	}
+	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `
+			UPDATE cov_cell SET case_id=$1, status='generated', updated_at=now()
+			WHERE team_id=$2 AND id = ANY($3::bigint[])`,
+			caseID, teamID, cellIDs)
+		return err
+	})
+}
+
 // Summary 计算覆盖汇总（Design/Execution/Pass 分开）。
 func (s *CoverageStore) Summary(ctx context.Context, teamID int64, f domain.CoverageFilter) (domain.CoverageSummary, error) {
 	cells, err := s.ListCells(ctx, teamID, f)

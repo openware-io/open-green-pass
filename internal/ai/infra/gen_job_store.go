@@ -122,6 +122,15 @@ func (s *GenerationJobStore) Update(ctx context.Context, job *domain.GenerationJ
 	})
 }
 
+// ReadOutput returns the terminal state/output for the governance import port.
+func (s *GenerationJobStore) ReadOutput(ctx context.Context, teamID, jobID int64) (string, string, error) {
+	job, err := s.Find(ctx, teamID, jobID)
+	if err != nil {
+		return "", "", err
+	}
+	return string(job.State), job.Output, nil
+}
+
 // Events 查询事件。
 func (s *GenerationJobStore) Events(ctx context.Context, teamID, jobID int64) ([]domain.GenerationJobEvent, error) {
 	var out []domain.GenerationJobEvent

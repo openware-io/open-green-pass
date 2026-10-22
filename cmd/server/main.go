@@ -97,7 +97,9 @@ func main() {
 	if gatewayURL := os.Getenv("GP_DSH_GATEWAY_URL"); gatewayURL != "" {
 		dshClient = aiinfra.NewDSHGatewayClient(gatewayURL, os.Getenv("GP_DSH_INTERNAL_TOKEN"))
 	}
-	generationJobSvc := aiapp.NewGenerationJobService(aiinfra.NewGenerationJobStore(db, gen), dshClient, gen)
+	generationJobStore := aiinfra.NewGenerationJobStore(db, gen)
+	generationJobSvc := aiapp.NewGenerationJobService(generationJobStore, dshClient, gen)
+	caseImportSvc := application.NewCaseImportService(caseSvc, infra.NewCoverageStore(db, gen), generationJobStore)
 
 	// 执行域依赖组装（版本校验 + 运行编排）
 	envStore := einfra.NewEnvStore(db, gen)
@@ -260,6 +262,7 @@ func main() {
 		func(mux *http.ServeMux) { gapi.RegisterCasesAuthorized(mux, caseSvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { gapi.RegisterFindings(mux, findingSvc) },
 		func(mux *http.ServeMux) { gapi.RegisterCoverage(mux, coverageSvc) },
+		func(mux *http.ServeMux) { gapi.RegisterCaseImport(mux, caseImportSvc) },
 		func(mux *http.ServeMux) { eapi.RegisterAuthorized(mux, envSvc, runSvc, policySvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc, costSvc, reportSvc) },
 		func(mux *http.ServeMux) { assistantapi.Register(mux, assistantSvc) },

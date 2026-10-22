@@ -2031,6 +2031,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/generation/jobs/{id}/cases:import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 导入 DSH 生成 Job 的结构化用例并回填 Coverage Cell */
+        post: operations["importGenerationCases"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4607,6 +4624,49 @@ export interface operations {
                 content?: never;
             };
             /** @description Job 已终态 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    importGenerationCases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    target_id: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 已导入用例 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestCase"][];
+                };
+            };
+            /** @description 输出不是合法用例数组 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Job 未成功 */
             409: {
                 headers: {
                     [name: string]: unknown;

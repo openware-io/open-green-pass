@@ -85,6 +85,7 @@ type CoverageRepository interface {
 	SaveCells(ctx context.Context, teamID int64, cells []CoverageCell) ([]CoverageCell, error)
 	ListCells(ctx context.Context, teamID int64, f CoverageFilter) ([]CoverageCell, error)
 	Summary(ctx context.Context, teamID int64, f CoverageFilter) (CoverageSummary, error)
+	AssignCase(ctx context.Context, teamID int64, cellIDs []int64, caseID int64) error
 }
 
 // BuildCoveragePlan 根据端点 archetype 枚举必需 Cell。

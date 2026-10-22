@@ -156,6 +156,9 @@ export class GreenPassClient {
   }
   getGenerationJob(id: number): JsonResponse<GenerationJob> { return this.request(`/ai/generation-jobs/${id}`); }
   cancelGenerationJob(id: number): JsonResponse<{ status: string }> { return this.request(`/ai/generation-jobs/${id}`, { method: 'DELETE' }); }
+  importGenerationCases(jobId: number, targetId: number): JsonResponse<TestCase[]> {
+    return this.request(`/generation/jobs/${jobId}/cases:import`, { method: 'POST', body: JSON.stringify({ target_id: targetId }) });
+  }
   ready(): JsonResponse<ReadinessResponse> { return this.request('/readyz'); }
   version(): JsonResponse<VersionResponse> { return this.request('/version'); }
   getModelBinding(targetId: number): JsonResponse<ModelBinding | null> { return this.request(`/targets/${targetId}/model-binding`); }

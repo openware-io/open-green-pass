@@ -946,6 +946,23 @@ paths:
       responses:
         '202': { description: 已取消 }
         '409': { description: Job 已终态 }
+  /generation/jobs/{id}/cases:import:
+    post:
+      summary: 导入 DSH 生成 Job 的结构化用例并回填 Coverage Cell
+      operationId: importGenerationCases
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ target_id ]
+              properties: { target_id: { type: integer, format: int64 } }
+      responses:
+        '201': { description: 已导入用例, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TestCase' } } } } }
+        '400': { description: 输出不是合法用例数组 }
+        '409': { description: Job 未成功 }
 components:
   schemas:
     GenerationJobCreate:
