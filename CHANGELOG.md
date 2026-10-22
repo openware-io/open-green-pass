@@ -3,6 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
+- **AI 模型连接（2026-10-22）**：接入 DeepSeek `deepseek-v4-pro`（API / OpenAI-compatible，Secret 托管），im-saas 项目绑定切换为 DeepSeek；下线原 GPT `gpt-5.6-terra` 连接并删除其 Secret。实测生成批次 `2902560158584832` 完成 5 条候选（均通过质量校验，进入 review）。
 - **生成用例代码引用确认（0.1.85-SNAPSHOT）**：确认面板逐服务显示并可直接修改“本次代码引用”（分支/Tag + SHA）；打开确认前为所有已选服务加载引用；创建时不再静默回退默认分支，缺少引用明确阻断；区分“当前查看服务的代码来源”和批量确认范围。
 - **生成页操作文案（0.1.84-SNAPSHOT）**：主操作由“批量生成用例”改为“生成用例”，仅在选中服务时显示数量后缀（如“生成用例（1）”），避免单选场景的批量语义歧义；同步调整“确认创建”“为所选服务创建生成批次”等辅助文案。
 - **SCM 源码连接加固（0.1.83-SNAPSHOT）**：PAT 创建显式写入 `auth_type`；错误映射、失败 Secret 清理、删除/轮换 API 与 UI、trusted audit、classic scope 拒绝、绑定前仓库 Contents 探测、GitHub App `installation_account_login`/FrontendURL 校验、非数值 actor 稳定哈希、分支/Tag 分页与 GitHub 限流退避；新增后端单元测试和 SCM 弹窗组件；修正 Web 静态资源缓存策略，避免发布后浏览器继续使用旧 shell。
