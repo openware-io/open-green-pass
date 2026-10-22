@@ -565,6 +565,8 @@ DSH Analyst 输出：
 
 ### M0-Dev（3 天）：finding 最小闭环（开发优先）
 
+> 状态：已完成（0.1.98-SNAPSHOT，2026-10-22）。详见 [`../status/M0-FINDINGS-2026-10-22.md`](../status/M0-FINDINGS-2026-10-22.md)。
+
 只做可运行闭环，验证后置：
 
 - D1：迁移 `000034`–`000038`（全部 schema + RLS）；Finding 状态机/severity/dedupe/repo；Store。

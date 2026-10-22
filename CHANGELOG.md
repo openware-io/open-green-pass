@@ -3,6 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
+- **M0-Dev 完成：Finding 最小闭环（0.1.98-SNAPSHOT）**：迁移 34-38（def/cov/evd/fixture + cas_case/run_case_result 加列）；Finding 领域状态机/去重/仓储/API（列表/详情/创建/流转）；缺陷中心接真实 API；创建/去重/流转/审计验证通过；无截图时明确提示，不再伪造证据。
 - **Schema 变更策略放宽（2026-10-22）**：开发/本地允许直接 DDL、drop/recreate、启动建表；现有表可直接 ALTER/DROP/类型变更；无历史数据回填/双写/兼容视图。测试/CI 合入前固化为迁移；生产仍走版本化迁移 + 快照/回滚/审批；新增 `SCHEMA-CHANGE-CHECKLIST` 做范围控制。
 - **执行/Fixtures/垂直切片规格（2026-10-22）**：新增 `EXECUTION-FIXTURE-SPEC`（环境模型、run_fixture/env_lease、状态机、Runner、失败分类、证据采集）与 `GP-VERTICAL-SLICE-1`（user 模块 4 端点/22 Cell/12-16 用例/5-7 天闭环）；新增 SEC-EX-001 模型密钥环境变量注入例外（待安全签署）。
 - **工程规范合规审查与修正（2026-10-22）**：审查 AI 测试引擎方案与原型，发现表前缀、领域归属/RLS/可信写、迁移编号、OpenAPI、测试分层、gateway 镜像/部署入口、沙箱 egress 等缺口；已登记 `def_`/`cov_`、`cmd/dsh-gateway`、gateway 镜像与 ADR-001，补充迁移编号/RLS/可信写/OpenAPI/测试/沙箱约束；原型 sky/violet 已按 DESIGN-SPEC 改为 emerald/amber/red/slate，并发布 `0.1.95-SNAPSHOT`。
