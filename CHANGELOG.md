@@ -3,6 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
+- **M1 完成：真实 DSH 生成 12 条 user 用例（0.1.106-SNAPSHOT）**：迁移 43 修复审计列；新增 `POST /generation/jobs/{id}/cases:import`，解析 DSH JSON、创建 cas_case/version、回填 cov_cell.case_id；user 模块 24/24 Cell 覆盖、uncovered=0；真实 SDK runner 本地验证，集群 gateway 仍为 stub。
 - **M1 gateway 部署（0.1.103-SNAPSHOT）**：新增 `gp-dsh-gateway` Deployment/Service/SA、`gp-dsh-auth` token、server 注入 `GP_DSH_GATEWAY_URL`、迁移 42 修复 `gen_job.updated_by`；生成 Job 端到端成功（stub runner），真实 SDK runner 仍待镜像/启用。
 - **M1 生成 Job 控制面（0.1.100-SNAPSHOT）**：新增 `gen_job/gen_job_event`、`GenerationJobService`、`POST/GET/DELETE /ai/generation-jobs`、`DSHGatewayClient`；当前 gateway URL 未配置，提交返回 400，真实 SDK runner 待接入。
 - **M1 覆盖账本（0.1.99-SNAPSHOT）**：新增 `ctr_endpoint/ctr_parameter/ctr_error`、`cov_cell.module`；覆盖领域 archetype→Cell 枚举/稳定 hash/汇总；API `POST /coverage/plan`、`GET /coverage/cells`、`GET /coverage/summary`；user 模块 4 端点生成 24 个必需 Cell。DSH gateway/生成用例仍未完成。
