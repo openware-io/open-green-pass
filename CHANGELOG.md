@@ -3,6 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
+- **执行结果回写覆盖（0.1.116-SNAPSHOT）**：新增 `POST /runs/{id}/coverage-sync`，按 case_id 回写 cov_cell 状态；failed/blocked 计入 executed；run 9001 验证 execution_coverage 0.083。
 - **M3 覆盖/缺陷门禁（0.1.114-SNAPSHOT）**：新增 `GET /gates/coverage`，按 design=100%、execution≥90%、未关闭 P0/P1=0 计算并返回 blockers；user 模块验证 design=1.0、execution=0、open_p1=2、gate 失败。
 - **M2 证据元数据（0.1.113-SNAPSHOT）**：新增 `POST/GET /findings/{id}/evidence`，Trusted `evd_evidence` 登记 kind/MIME/大小/SHA-256/尺寸；截图≤10MB、视频≤100MB；预签名上传/下载仍待补。
 - **M2 fixtures/环境租约（0.1.112-SNAPSHOT）**：新增 run fixture prepare/list/cleanup 与 env lease/release API；验证 prepare/list/cleanup/lease/release；evidence 上传仍待补。
