@@ -32,7 +32,7 @@ var modelPresets = []modelPreset{
 	{"openai", "GPT-5.6 Luna", "gpt-5.6-luna", "api", "https://api.openai.com/v1", []string{"code", "vision"}},
 	{"anthropic", "Claude Opus 5.5", "claude-opus-5-5", "cc", "https://api.anthropic.com", []string{"reasoning", "code", "vision"}},
 	{"deepseek", "DeepSeek V4 Pro", "deepseek-v4-pro", "api", "https://api.deepseek.com/v1", []string{"reasoning", "code", "vision"}},
-	{"deepseek", "DeepSeek V4.1 Flash", "deepseek-v4.1-flash", "api", "https://api.deepseek.com/v1", []string{"reasoning", "code"}},
+	{"deepseek", "DeepSeek Flash", "deepseek-flash", "api", "https://api.deepseek.com/v1", []string{"reasoning", "code"}},
 	{"qwen", "Qwen3.8 Max", "qwen3.8-max", "api", "https://dashscope.aliyuncs.com/compatible-mode/v1", []string{"reasoning", "code", "vision"}},
 	{"qwen", "Qwen3.8 Flash", "qwen3.8-flash", "api", "https://dashscope.aliyuncs.com/compatible-mode/v1", []string{"code", "vision"}},
 }
@@ -100,8 +100,8 @@ func RegisterModels(mux *http.ServeMux, store *infra.ModelStore, gen *id.Generat
 			return
 		}
 		var in modelConnectRequest
-		if httpx.DecodeJSON(r, &in) != nil || strings.TrimSpace(in.Token) == "" {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "token_required"})
+		if httpx.DecodeJSON(r, &in) != nil {
+			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_request"})
 			return
 		}
 		principal, _ := iam.PrincipalFromContext(r.Context())
@@ -117,14 +117,28 @@ func RegisterModels(mux *http.ServeMux, store *infra.ModelStore, gen *id.Generat
 			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_model_selection"})
 			return
 		}
-		if err := probeModelConnection(r.Context(), in.Protocol, baseURL, in.Token, in.ModelKeys[0]); err != nil {
+		secretName := fmt.Sprintf("gp-model-%d-%s-%s", team, safeName(in.Provider), safeName(in.Protocol))
+		token := strings.TrimSpace(in.Token)
+		if token == "" {
+			// Adding a model to an already configured provider must not require
+			// the operator to paste the same token again. Reuse the existing
+			// Secret for the probe; a missing Secret is a hard error.
+			existing, err := readModelSecret(r.Context(), namespace, secretName)
+			if err != nil || strings.TrimSpace(existing) == "" {
+				httpx.WriteJSON(w, 400, map[string]string{"error": "token_required"})
+				return
+			}
+			token = existing
+		}
+		if err := probeModelConnection(r.Context(), in.Protocol, baseURL, token, in.ModelKeys[0]); err != nil {
 			httpx.WriteJSON(w, http.StatusBadGateway, map[string]string{"error": "provider_connection_failed"})
 			return
 		}
-		secretName := fmt.Sprintf("gp-model-%d-%s-%s", team, safeName(in.Provider), safeName(in.Protocol))
-		if err := writeModelSecret(r.Context(), namespace, secretName, in.Token); err != nil {
-			httpx.WriteJSON(w, 500, map[string]string{"error": "secret_store_failed"})
-			return
+		if strings.TrimSpace(in.Token) != "" {
+			if err := writeModelSecret(r.Context(), namespace, secretName, in.Token); err != nil {
+				httpx.WriteJSON(w, 500, map[string]string{"error": "secret_store_failed"})
+				return
+			}
 		}
 		for _, modelKey := range in.ModelKeys {
 			preset, ok := findPreset(in.Provider, in.Protocol, modelKey)
@@ -251,4 +265,20 @@ func writeModelSecret(ctx context.Context, ns, name, token string) error {
 	}
 	_, err = secrets.Create(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name}, Type: corev1.SecretTypeOpaque, StringData: map[string]string{"token": token}}, metav1.CreateOptions{})
 	return err
+}
+
+func readModelSecret(ctx context.Context, ns, name string) (string, error) {
+	cfg, err := rest.InClusterConfig()
+	if err != nil {
+		return "", err
+	}
+	client, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return "", err
+	}
+	secret, err := client.CoreV1().Secrets(ns).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	return string(secret.Data["token"]), nil
 }
