@@ -10,16 +10,16 @@
 
 | 逻辑 | 物理表 | 域 | 前缀 |
 |---|---|---|---|
-| finding | `def_finding` | Governance Defect | `def_` 待登记 |
-| finding_event | `def_event` | Governance Defect | `def_` 待登记 |
-| finding_suggestion | `def_suggestion` | Governance Defect | `def_` 待登记 |
+| finding | `def_finding` | Governance Defect | 已登记 `def_` |
+| finding_event | `def_event` | Governance Defect | 已登记 `def_` |
+| finding_suggestion | `def_suggestion` | Governance Defect | 已登记 `def_` |
 | finding_evidence | `evd_evidence` | Trusted Evidence | `evd_` 已登记 |
 
 - Governance 通过 Trusted 端口创建/读取证据，不直接写 `evd_evidence`。
 - `evd_evidence` 由 `gp_trusted_writer` 写，server/worker 只读。
 - 所有表带 `team_id` + RLS；finding 状态流转/证据上传/读取写 `aud_event`。
 - 证据元数据不可变；不提供 UPDATE/DELETE。
-- 迁移编号/up/down/migcheck 按 ENGINEERING-SPEC §8.4；前缀登记完成前不得建表。
+- 迁移：`000034_defect_finding`、`000036_evidence`（up/down）；migcheck/testcontainers 按 ENGINEERING-SPEC §8.4。
 
 ## 1. 目标
 
@@ -129,7 +129,7 @@ pending_regression -> reopened -> fixing
    - 计算/比对 SHA-256
    - 图片解码尺寸；视频探测时长
    - 生成缩略图/封面
-6. DB 写 finding_evidence；审计
+6. 通过 Trusted 端口写 `evd_evidence`；写审计
 ```
 
 失败处理：上传未完成/哈希不一致 → 标 `upload_failed`，不进入证据列表；对象清理。

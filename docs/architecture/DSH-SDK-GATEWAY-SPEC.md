@@ -10,7 +10,7 @@
 ## 0. 工程合规
 
 - 部署单元：`cmd/dsh-gateway`（Go）；DSH 是外部 Node 运行时子进程，不承载 GP 业务域、不直接访问 GP DB。
-- 新镜像名 `ghcr.io/openware-io/open-green-pass-dsh-gateway:X.Y.Z-SNAPSHOT` 需登记到 ENGINEERING-SPEC §12；登记前不得发布。
+- 镜像名 `ghcr.io/openware-io/open-green-pass-dsh-gateway:X.Y.Z-SNAPSHOT` 已登记到 ENGINEERING-SPEC §12。
 - 网关只通过 GP API/事件回写，不直连 `gp_` 库；job 状态由 GP AI 域持久化。
 - 必须纳入 `init-kind.ps1`/`deploy-kind.ps1`/`deploy/k8s/`/CI；只内网 Service，不暴露 ingress。
 - Runner 沙箱：专用 SA、`automountServiceAccountToken: false`、非 root、RuntimeDefault seccomp、drop ALL caps、allowPrivilegeEscalation false、只读根。
@@ -259,7 +259,8 @@ GP 事件落 `ai_job_event`，前端只读；工具参数/结果脱敏后保存�
 - 工具白名单：读文件、grep、目录树、读 OpenAPI/日志。
 - 禁用：`write`、`edit`、shell 写、git commit/push、部署、插件市场、Web。
 - 源码 workspace 只读挂载；`DSH_HOME` 临时目录；不挂载用户 home。
-- 网络：仅模型 API + GP 内部 API；默认拒绝其他外联。
+- Pod/容器：专用 SA、`automountServiceAccountToken: false`、非 root、`RuntimeDefault` seccomp、drop ALL caps、`allowPrivilegeEscalation: false`、只读根。
+- 网络：staging 先做 default-deny + 模型 API/对象存储/GP API allowlist 验证；生产不得声称 egress 已隔离，直到验证通过。
 - 凭据：`DEEPSEEK_API_KEY` 来自 Secret；不写日志、不回显。
 - 输出：stdout 只允许 JSON-RPC；日志走 stderr。
 

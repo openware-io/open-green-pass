@@ -25,7 +25,9 @@
 green-pass/
 ├── cmd/                     # 可运行入口 = 部署单元；单体阶段仅 server，按域可拆出独立 cmd
 │   ├── server/              # 聚合服务入口：装配全部域 handler 与中间件
-│   └── worker/              # 异步 worker 入口：AI 生成管道 / 执行调度 / 事件消费
+│   ├── worker/              # 异步 worker 入口：AI 生成管道 / 执行调度 / 事件消费
+│   ├── migrate/             # 数据库迁移受控入口
+│   └── dsh-gateway/         # DSH SDK 网关（Go；DSH 为外部 Node 子进程，无业务域/无 DB 写）
 ├── internal/                # 私有实现，禁止外部导入（Go internal 编译期边界）
 │   ├── gateway/             # 接入域：路由 / 中间件 / 鉴权 / 租户上下文 / 限流
 │   ├── governance/          # 治理域：被测对象 / 用例 / 契约 / 报告 / 团队权限 / 模型配置
@@ -66,10 +68,12 @@ GreenPass 后端按限界上下文组织，单体阶段各自清晰、需要时�
 
 | 限界上下文 | 域 | 核心聚合 | 权威数据 |
 |---|---|---|---|
-| 治理 Governance | `internal/governance` | 被测对象(Target)、用例(Case/版本化)、契约(Contract)、报告(Report)、团队(Tenant/Team)、成员权限(AssetRBAC)、模型配置(Model) | `gp_` 库 RLS |
+| 治理 Governance | `internal/governance` | 被测对象(Target)、用例(Case/版本化)、契约(Contract)、报告(Report)、团队(Tenant/Team)、成员权限(AssetRBAC)、模型配置(Model)、缺陷(Finding) | `gp_` 库 RLS |
+| 治理 Governance（覆盖） | `internal/governance` | 覆盖单元(CoverageCell)、覆盖豁免(CoverageWaiver) | `gp_` 库 RLS |
 | 执行 Execution | `internal/execution` | 测试运行(Run)、资源配额(Quota)、调度任务(Job/Temporal)、环境版本(EnvVersion) | `gp_` + Temporal + Redis |
-| AI 编排 AI | `internal/ai` | 模型网关、Token 计量(CostLineItem 写入 trusted)、生成批次(GenBatch)、决策痕迹 | `gp_` + 模型网关 |
-| 可信 Trusted | `internal/trusted` | 门禁规则(GateRule/OPA)、门禁结果、审计链(AuditEvent)、成本归因 | `gp_`（append-only） |
+| AI 编排 AI | `internal/ai` | 模型网关、Token 计量(CostLineItem 写入 trusted)、生成批次(GenBatch)、生成 Job(GenJob)、决策痕迹 | `gp_` + 模型网关 |
+| 可信 Trusted | `internal/trusted` | 门禁规则(GateRule/OPA)、门禁结果、审计链(AuditEvent)、成本归因、测试证据(Evidence) | `gp_`（append-only） |
+| 智能体运行时（非业务域） | `cmd/dsh-gateway` | DSH SDK 进程池/队列；不拥有业务数据 | 外部 DSH + 内部 API |
 | 接入 Gateway | `internal/gateway` | —（无领域，纯接入） | 无权威数据 |
 
 - **跨域调用**：同步只经 `api/` OpenAPI 契约或内部显式端口；异步只经版本化事件。**禁止跨域直连对方数据库/PO**。
@@ -246,7 +250,7 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 ### 8.1 库与多租户
 
 - 单一权威库 `gp_`（PostgreSQL 15+），TimescaleDB 承担时序（成本趋势/执行历史）为独立时序库或同库 hypertable。
-- **多租户**：默认共享库 + `Row-Level Security` 按 `team_id` 强制行级隔离 + 应用层资产级 RBAC；大客户私有化可整库隔离。RLS 为强制层，非可选。**可信域权威表（`aud_*`/`cost_*`/`gate_result`）除 RLS 外须用独立 PG 角色 `gp_trusted_writer` 独占写权限，`gp_server`/`gp_worker` 仅只读**——应用层端口约定只是第二道防线，DB 层须可独立强制（防同 team 内跨域直写审计/成本）。
+- **多租户**：默认共享库 + `Row-Level Security` 按 `team_id` 强制行级隔离 + 应用层资产级 RBAC；大客户私有化可整库隔离。RLS 为强制层，非可选。**可信域权威表（`aud_*`/`cost_*`/`gate_result`/`evd_evidence`）除 RLS 外须用独立 PG 角色 `gp_trusted_writer` 独占写权限，`gp_server`/`gp_worker` 仅只读**——应用层端口约定只是第二道防线，DB 层须可独立强制（防同 team 内跨域直写审计/成本）。
 - 所有业务表必须带 `team_id`（RLS 依据），审计/时序表按 RLS 或租户列隔离。
 
 ### 8.2 领域表前缀登记（GreenPass）
@@ -257,16 +261,18 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 |---|---|---|---|
 | Governance | 被测对象树 | `tgt_` | `tgt_target`、`tgt_level` |
 | Governance | 用例（版本化） | `cas_` | `cas_case`、`cas_version`、`cas_exec` |
-| Governance | 契约 | `ctr_` | `ctr_contract` |
+| Governance | 契约 | `ctr_` | `ctr_contract`、`ctr_endpoint`、`ctr_parameter`、`ctr_error` |
 | Governance | 报告 | `rpt_` | `rpt_report`、`rpt_block` |
 | Governance | 团队/租户 | `tnt_` | `tnt_team` |
 | Governance | 成员/资产权限 | `iam_` | `iam_member`、`iam_asset_perm` |
 | Governance | 模型配置 | `mdl_` | `mdl_model`、`mdl_binding` |
 | Governance | 被测仓库 | `repo_` | `repo_repo`、`repo_branch` |
+| Governance | 缺陷 | `def_` | `def_finding`、`def_event`、`def_suggestion` |
+| Governance | 覆盖账本 | `cov_` | `cov_cell`、`cov_waiver` |
 | Execution | 测试运行 | `run_` | `run_run`、`run_result`、`run_case_result` |
 | Execution | 资源配额 | `res_` | `res_quota`、`res_occupation` |
 | Execution | 环境版本 | `env_` | `env_runtime`、`env_check` |
-| AI | 生成批次 | `gen_` | `gen_batch`、`gen_seed` |
+| AI | 生成批次/Job | `gen_` | `gen_batch`、`gen_seed`、`gen_job`、`gen_job_event` |
 | Trusted | 门禁 | `gate_` | `gate_rule`、`gate_result` |
 | Trusted | 成本归因 | `cost_` | `cost_line_item`、`cost_price` |
 | Trusted | 审计哈希链 | `aud_` | `aud_event`（append-only） |
@@ -312,6 +318,7 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 | `infra` | PO 映射、仓储实现、迁移、缓存、事件投递 | `testcontainers-go`（PG/Redis/MinIO/Temporal dev） | 可重复隔离环境 |
 | `api` | 参数校验、鉴权、DTO 转换、HTTP 状态/错误 | `net/http/httptest` + OpenAPI 契约校验 | 不以 API 测试代替领域规则测试 |
 | `cmd`/e2e | 装配、跨域闭环 | `test/` + testcontainers 全栈 | 每条发布主线一条冒烟 |
+| `cmd/dsh-gateway` | job 状态机、队列/租约、超时/取消、崩溃恢复、事件映射 | fake stdio JSON-RPC + testcontainers | 不调用真实模型；验证进程组清理/workspace 销毁 |
 
 - 新增/修改聚合行为必须先补领域测试；跨域事件变更必须更新契约测试。
 - 全部 `go test -race`；关键路径表驱动 + 黄金/快照测试（报告渲染）。
@@ -337,10 +344,10 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 ## 12. 发布与 CI（GitHub Actions）
 
 - **语义化版本 + git tag**：`vX.Y.Z`；发布前跑全量 `make check`；正式镜像用 tag，禁 `image@sha256` 运行时依赖。
-- CI 流水线：`lint+test` → `build` → `govulncheck` → `migcheck` → 镜像构建 → 推送；任一门禁失败不合并。
+- CI 流水线：`lint+test` → `build` → `govulncheck` → `migcheck` → 镜像构建（含 dsh-gateway 的 Go/Node/DSH SBOM 与漏洞扫描）→ 推送；任一门禁失败不合并。
 - 镜像：多阶段 `Dockerfile`（builder 用固定 toolchain + `CGO_ENABLED=0` 静态二进制 + `go:embed` 打包配置/迁移/前端产物）；私有化可单二进制交付。
 - 部署：GP 不把 Helm 作为运行或部署前置依赖；生产、私有化、本地 kind 均提供 Kubernetes 清单和脚本入口，使用者可自行选择 kubectl、Kustomize 或其他编排工具。Docker 不得作为应用部署运行时，只能用于镜像构建和 kind 导入；密钥经 Secret/受管环境注入，禁入库。
-- 发布制品命名固定为 `ghcr.io/openware-io/open-green-pass:X.Y.Z`、`ghcr.io/openware-io/open-green-pass-web:X.Y.Z`、`ghcr.io/openware-io/open-green-pass-migrate:X.Y.Z`；镜像 tag 直接使用版本号，不加 `v` 前缀。开发/测试版本必须使用 `X.Y.Z-SNAPSHOT` 后缀（例如 `0.1.7-SNAPSHOT`），除非明确执行正式发布；正式版本才使用纯 `X.Y.Z`。server/worker 必须使用同一后端版本，migration 必须与 schema 版本匹配。
+- 发布制品命名固定为 `ghcr.io/openware-io/open-green-pass:X.Y.Z`、`ghcr.io/openware-io/open-green-pass-web:X.Y.Z`、`ghcr.io/openware-io/open-green-pass-migrate:X.Y.Z`、`ghcr.io/openware-io/open-green-pass-dsh-gateway:X.Y.Z`；镜像 tag 直接使用版本号，不加 `v` 前缀。开发/测试版本必须使用 `X.Y.Z-SNAPSHOT` 后缀（例如 `0.1.7-SNAPSHOT`），除非明确执行正式发布；正式版本才使用纯 `X.Y.Z`。server/worker 必须使用同一后端版本，migration 必须与 schema 版本匹配。
 - kind 发布记录必须包含 Git commit、部署版本、镜像 tag/digest、迁移版本、readiness 结果和 `open-im-local` 不变更核对；缺任一项不得标记发布成功。
 - 发布后验证制品可启动、迁移成功、关键链路可观测；失败制品按策略撤回，不静默覆盖。
 

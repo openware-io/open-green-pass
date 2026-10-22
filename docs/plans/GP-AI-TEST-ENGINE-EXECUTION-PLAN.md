@@ -13,6 +13,7 @@
 - [`../architecture/DSH-SDK-GATEWAY-SPEC.md`](../architecture/DSH-SDK-GATEWAY-SPEC.md)
 - [`../architecture/COVERAGE-MODEL-SPEC.md`](../architecture/COVERAGE-MODEL-SPEC.md)
 - [`../architecture/FINDING-EVIDENCE-SPEC.md`](../architecture/FINDING-EVIDENCE-SPEC.md)
+- [`../architecture/ADR-001-DSH-EXTERNAL-RUNTIME.md`](../architecture/ADR-001-DSH-EXTERNAL-RUNTIME.md)
 
 ### 0.2 已确认决策（2026-10-22）
 
@@ -31,25 +32,33 @@
 
 | 逻辑名 | 物理表 | 归属 | 前缀状态 |
 |---|---|---|---|
-| finding | `def_finding` | Governance Defect | 新 `def_`，待登记 |
-| finding_event | `def_event` | Governance Defect | 新 `def_`，待登记 |
-| finding_suggestion | `def_suggestion` | Governance Defect | 新 `def_`，待登记 |
-| finding_evidence | `evd_evidence` | Trusted | 已登记 `evd_` |
-| coverage_cell | `cov_cell` | Governance Coverage | 新 `cov_`，待登记 |
-| coverage_waiver | `cov_waiver` | Governance Coverage | 新 `cov_`，待登记 |
+| finding | `def_finding` | Governance Defect | 已登记 `def_` |
+| def_event | `def_event` | Governance Defect | 已登记 `def_` |
+| def_suggestion | `def_suggestion` | Governance Defect | 已登记 `def_` |
+| evd_evidence | `evd_evidence` | Trusted | 已登记 `evd_` |
+| coverage_cell | `cov_cell` | Governance Coverage | 已登记 `cov_` |
+| coverage_waiver | `cov_waiver` | Governance Coverage | 已登记 `cov_` |
 | generation_job | `gen_job` | AI | 已登记 `gen_` |
 | contract_endpoint | `ctr_endpoint` | Governance Contract | 已登记 `ctr_` |
 
-实施前必须：
+已登记/已确定：
 
-1. 在 `ENGINEERING-SPEC §8.2` 登记 `def_`、`cov_`；
-2. 明确 Governance/Trusted/AI 数据所有权、RLS、`gp_trusted_writer`；
-3. 写迁移编号与 up/down、migcheck/testcontainers；
-4. 补 `api/openapi.yaml`、生成类型、契约测试；
-5. 登记 `open-green-pass-dsh-gateway` 镜像与部署入口；
-6. 补测试分层与沙箱/egress 基线。
+1. `ENGINEERING-SPEC §8.2` 已登记 `def_`、`cov_`；
+2. 数据所有权、RLS、`gp_trusted_writer` 已写入 §2.3/§8.1；
+3. 迁移编号：`000034_defect_finding`、`000035_coverage_cell`、`000036_evidence`；
+4. `open-green-pass-dsh-gateway` 镜像已登记 §12；
+5. `cmd/dsh-gateway` 已登记 §2.1/服务目录；
+6. 测试分层、沙箱/egress、OpenAPI 约束已写入规格。
 
-未完成前不得创建迁移或写业务代码。
+实施前仍需完成：
+
+- 按编号创建 up/down 迁移，跑 `migcheck` + testcontainers；
+- 补 `api/openapi.yaml`（`/findings`、`/coverage`）并生成类型；
+- 更新 `init-kind.ps1`/`deploy-kind.ps1`/manifest/CI 纳入 gateway；
+- 完成 `def_`/`cov_` RLS 策略和 `evd_evidence` trusted writer 授权；
+- 完成 egress staging 验证后启用 default-deny。
+
+未完成上述实施项前不得发布 gateway 或写业务数据。
 
 ## 1. 边界与原则
 
@@ -131,31 +140,31 @@ PostgreSQL (coverage ledger, cases, findings, results)
 ### 4.1 契约与覆盖
 
 ```text
-ai_contract_endpoint
+ctr_endpoint
   id, team_id, project_id, service_id, method, path,
   operation_id, auth_mode, source_file, source_line,
   request_schema, response_schema, status_codes, version
 
-ai_contract_parameter
+ctr_parameter
   id, endpoint_id, location(path/query/header/body),
   name, type, required, enum_values, min, max, pattern, source
 
-ai_contract_error
+ctr_error
   id, endpoint_id, http_status, code, message, source
 
-ai_contract_role
+ctr_role
   id, endpoint_id, role, tenant_scope, allowed, source
 
-ai_contract_state
+ctr_state
   id, endpoint_id, from_state, to_state, allowed, source
 
-ai_coverage_cell
+cov_cell
   id, team_id, project_id, endpoint_id, dimension,
   equivalence_class, role, state, priority, required,
   status(planned/generated/executed/passed/failed/blocked/waived),
   case_id, evidence, waiver_reason
 
-ai_generation_job
+gen_job
   id, team_id, project_id, service_id, module,
   state(queued/running/succeeded/failed/timeout),
   dsh_run_id, input_ref, output_ref, token_usage,
@@ -179,7 +188,7 @@ run_case_result
 ### 4.3 缺陷与建议
 
 ```text
-finding
+def_finding
   id, team_id, project_id, service_id, endpoint_id,
   repository_id, repo_url, branch, commit_sha,
   title, description, severity(P0/P1/P2/P3), category,
@@ -189,22 +198,22 @@ finding
   owner_id, linked_run_id, linked_case_id, dedupe_hash,
   created_by, created_at, updated_at
 
-finding_evidence
+evd_evidence
   id, finding_id, kind(request/response/log/trace/screenshot/video),
   storage_uri, mime_type, width, height, duration_ms,
   sha256, redacted, created_at
 
-finding_evidence_policy
+evd_evidence_policy
   - 截图：UI/实机用例必需（P0/P1 必须 100%）
   - 视频：关键流程/复杂交互建议提供
   - 服务端保存 MIME、尺寸、时长、SHA-256；证据只读不可篡改
   - 证据与 finding/run/case/commit 绑定，支持大图/视频播放与下载审计
 
-finding_suggestion
+def_suggestion
   id, finding_id, summary, approach, affected_files jsonb,
   confidence, source, status(draft/accepted/rejected)
 
-finding_event
+def_event
   id, finding_id, action, actor_id, payload, created_at
 ```
 
@@ -534,30 +543,37 @@ DSH Analyst 输出：
 - SCM 连接只申请 `Contents: Read`、`Metadata: Read`；拒绝写/管理 scope。
 - GP 后端无仓库写 API；无 commit/push/PR 代码路径。
 - DSH 工具白名单只读；无 shell 写、无 git 写、无部署权限。
-- Job 非 root、只读根文件系统、独立 `DSH_HOME`、网络策略仅模型 API。
+- Job 非 root、只读根文件系统、独立 `DSH_HOME`、`automountServiceAccountToken: false`、RuntimeDefault seccomp、drop ALL caps。
+- egress 先在 staging 做 default-deny + 模型 API/对象存储/GP API allowlist 验证，通过后再启用；不声称已隔离。
 - 所有源码读取、AI 调用、缺陷流转写审计。
 - 缺陷建议可导出到 Jira/飞书，但不回写源码。
 
 ## 12. 交付计划
 
-### M0（1 周）：只读护栏 + 缺陷模型
+### M0（1 周）：只读护栏 + 缺陷模型 + 工程门禁
 
 - SCM scope 校验和只读标识；
-- `finding`/`finding_event`/`finding_evidence` 表（含 repository_id/repo_url/branch/commit_sha）；
-- 执行结果增加 `failure_class`；
-- 缺陷中心列表/详情/流转 UI 骨架；
-- 截图证据优先：上传/预览/大图/哈希；视频列为建议项；
-- 验收：失败用例可创建缺陷，P0/P1 有截图，源码写权限为 0。
+- 迁移 `000034_defect_finding`（`def_finding`/`def_event`/`def_suggestion`）、`000035_coverage_cell`（`cov_cell`/`cov_waiver`）、`000036_evidence`（`evd_evidence`）；
+- RLS 策略、`gp_trusted_writer` 对 `evd_evidence` 的授权、`aud_event` 事件；
+- 执行结果增加 `failure_class`/`finding_id`；
+- `api/openapi.yaml` 补 `/findings`、`/coverage`，生成类型 + 契约测试；
+- 缺陷中心列表/详情/流转 UI 接真实 API；
+- 截图证据优先：预签名上传/预览/大图/哈希；视频列为建议项；
+- 新增 `cmd/dsh-gateway` 的目录/镜像/部署脚本/CI 骨架（feature flag 关闭）；
+- 迁移 `migcheck` + testcontainers；domain/application/infra/api 测试；
+- 验收：失败用例可创建缺陷，P0/P1 有截图，源码写权限为 0，`make check` 通过。
 
 ### M1（2 周）：覆盖账本 + SDK 网关 + 单模块生成
 
-- `ai_contract_*`、`ai_coverage_cell`、`ai_generation_job`；
+- `ctr_endpoint`/`ctr_parameter`/`ctr_error`、`cov_cell`/`cov_waiver`、`gen_job`/`gen_job_event`；
 - OpenAPI/路由盘点；规则枚举 Cell；
 - `gp-dsh-gateway` Deployment + SDK worker pool + 有界队列；
+- 网关 sandbox：专用 SA、no token automount、非 root、seccomp、drop caps、只读根、readiness/liveness；
+- egress staging 验证：default-deny + 模型 API/对象存储/GP API allowlist；
 - `gp-test-engine` profile（只读工具、SDK JSON-RPC）；
 - 选择一个模块（如 `user`）完成“规划 → 生成 → 校验 → 修复”多步 session；
 - 静态校验 + 入库；
-- 验收：该模块 100% 必需 Cell 有生成用例；无源码写操作；同一 session 可连续多轮。
+- 验收：该模块 100% 必需 Cell 有生成用例；无源码写操作；同一 session 可连续多轮；取消/超时后进程/workspace 清理。
 
 ### M2（2 周）：执行闭环 + 失败归因 + 建议
 
@@ -573,6 +589,7 @@ DSH Analyst 输出：
 - 覆盖账本门禁：未覆盖 Cell = 0（含 waiver）；
 - 缺陷门禁：未关闭 P0/P1 = 0；
 - 报告：覆盖/缺陷/建议/回归；
+- 发布记录包含 gateway commit/image digest、迁移版本、readiness、IM 不变更核对；
 - 验收：`open-chat-admin` 18 模块全部纳入；端到端可复跑。
 
 ### M4（后续）：增量生成 + 多租户隔离

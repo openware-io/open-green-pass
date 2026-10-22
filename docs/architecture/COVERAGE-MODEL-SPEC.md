@@ -8,10 +8,10 @@
 
 ## 0. 工程合规
 
-- 物理表名使用 `cov_cell`、`cov_waiver`；`cov_` 为待登记前缀，登记前不得创建迁移。
+- 物理表名使用 `cov_cell`、`cov_waiver`；`cov_` 已在 ENGINEERING-SPEC §8.2 登记。
 - 归属 Governance Coverage；所有表带 `team_id` + RLS；waiver 审批写 `aud_event`。
-- 迁移编号、up/down、migcheck/testcontainers 按 ENGINEERING-SPEC §8.4。
-- DDL 草案中的表名在实施时按上表替换；不得使用未登记的 `ai_` 前缀。
+- 迁移 `000035_coverage_cell`（up/down），migcheck/testcontainers 按 ENGINEERING-SPEC §8.4。
+- DDL 已使用 `cov_` 物理表名；不得使用未登记的 `ai_` 前缀。
 
 ## 1. 目标
 

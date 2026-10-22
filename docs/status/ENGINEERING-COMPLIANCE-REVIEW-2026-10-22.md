@@ -1,8 +1,21 @@
 # 工程规范合规审查（2026-10-22）
 
+## 0. 修订记录（2026-10-22）
+
+审查后已按规范更新方案：
+
+- `def_`/`cov_` 已登记到 `ENGINEERING-SPEC §8.2`；
+- `cmd/dsh-gateway` 已登记到 topology/服务目录；
+- `open-green-pass-dsh-gateway` 镜像已登记 §12；
+- ADR-001 已记录 Go gateway + DSH Node 外部运行时决策；
+- 数据所有权、RLS/`gp_trusted_writer`、迁移编号、OpenAPI/测试/沙箱约束已写入方案与规格；
+- 原型色彩已按 DESIGN-SPEC 修正并发布 `0.1.95-SNAPSHOT`。
+
+结论更新：**设计/登记层面已合规；实施层仍需按迁移、OpenAPI、RLS 授权、部署脚本和 egress 验证逐项落地。**
+
 ## 结论
 
-**方案方向可行，但当前还不严格遵守工程规范。**
+**方案方向可行；审查时实施层不严格，现已完成设计与登记修正。**
 
 主要问题不是架构思路，而是实施层缺少：领域归属、表前缀登记、RLS/可信写权限、迁移编号、OpenAPI 契约、测试分层、部署入口与镜像登记。以下 P0 项必须在 M0 编码前修正。
 
@@ -10,16 +23,16 @@
 
 | # | 规范 | 状态 | 说明 |
 |---|---|---|---|
-| 1 | 新增服务/域先定义限界上下文、聚合、权威表、跨域契约 | ❌ 不合规 | `finding`/`coverage` 未归属限界上下文；`gp-dsh-gateway` 未登记为部署单元 |
-| 2 | 表前缀登记 | ❌ 不合规 | 方案使用 `ai_*`、`finding*`，均未登记；`evd_` 已登记但未使用 |
+| 1 | 新增服务/域先定义限界上下文、聚合、权威表、跨域契约 | ✅ 设计已补 | `def_`/`cov_` 归属、gateway 部署单元已登记；实现待做 |
+| 2 | 表前缀登记 | ✅ 已登记 | `def_`/`cov_` 已登记；`evd_` 复用；映射见方案 0.3 |
 | 3 | 多租户 RLS + 可信域独立写角色 | ⚠️ 部分 | 方案提到 team_id，但未写 RLS 策略、`gp_trusted_writer`、可信表边界 |
 | 4 | 迁移只增不改、编号、migcheck | ⚠️ 部分 | 有 DDL 草案，无迁移编号、up/down、migcheck/testcontainers |
 | 5 | OpenAPI 唯一契约、生成类型 | ⚠️ 部分 | `/findings`、`/coverage` 未写入 `api/openapi.yaml`；原型为本地数据 |
 | 6 | 测试分层（domain/application/infra/api/e2e） | ❌ 不合规 | 未定义 finding 状态机、覆盖算法、网关 stdio、RLS 的测试 |
-| 7 | 发布入口唯一、镜像命名、kind 校验 | ❌ 不合规 | `gp-dsh-gateway` 镜像未登记；`init-kind.ps1`/manifest/CI 未纳入 |
+| 7 | 发布入口唯一、镜像命名、kind 校验 | ⚠️ 镜像已登记，部署待接 | `open-green-pass-dsh-gateway` 已登记 §12；脚本/manifest/CI 待实现 |
 | 8 | Runner 沙箱/网络安全基线 | ⚠️ 部分 | 提到非 root/只读，但缺 token automount、seccomp、cap drop、egress 验证 |
 | 9 | 可观测性/成本单点计量 | ⚠️ 部分 | 有指标草案，缺 OTel 关联、告警、成本归集 |
-| 10 | DESIGN-SPEC 色彩 | ❌ 原型不合规（已修） | 原型使用 sky/violet；已改为 emerald/amber/red/slate |
+| 10 | DESIGN-SPEC 色彩 | ✅ 已修 | sky/violet 已改为 emerald/amber/red/slate，0.1.95 发布 |
 
 ## P0 必须修正
 
