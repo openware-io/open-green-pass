@@ -7,7 +7,7 @@ import { KpiCard, PageHeader, PrimaryButton, GhostButton, ListFilter, Card } fro
 import { configuredGreenPassClient } from '@/api/runtime';
 import { useObjectCatalog, type CatalogService } from '@/context/objectCatalog';
 import SCMConnectionDialog, { type SCMConnection } from './SCMConnectionDialog';
-import { Brain, ShieldAlert, ChevronRight, ChevronDown, Sparkles, GitBranch, CircleDot, FileSearch, History, CheckCircle2, AlertTriangle, XCircle, Layers, Cpu, Globe, Smartphone, X, Plus, ExternalLink, Check, Plug, Files, FileText, Wallet, LoaderCircle, LockKeyhole, CircleCheck, Circle, RefreshCw, ArrowRight, ShieldCheck, ListChecks, Database, FolderTree, Box } from 'lucide-react';
+import { Server, Brain, ShieldAlert, ChevronRight, ChevronDown, Sparkles, GitBranch, CircleDot, FileSearch, History, CheckCircle2, AlertTriangle, XCircle, Layers, Cpu, Globe, Smartphone, X, Plus, ExternalLink, Check, Plug, Files, FileText, Wallet, LoaderCircle, LockKeyhole, CircleCheck, Circle, RefreshCw, ArrowRight, ShieldCheck, ListChecks, Database, FolderTree, Box } from 'lucide-react';
 
 const ADD_STEPS = ['基本信息', '代码源接入', '上游源', '确认'];
 
@@ -901,7 +901,7 @@ function RealTargetsPanel({ client }: { client: ReturnType<typeof configuredGree
   if (!client) return <Card title="真实被测对象控制" className="mb-5" extra={<span className="text-[11px] text-slate-400">原型模式</span>}><p className="p-5 text-sm text-slate-500">配置 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_API_BASE</code> 与数值型 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_TEAM_ID</code> 后启用真实对象树、创建节点和仓库绑定。</p></Card>;
   return <div className="space-y-5">
     <PageHeader title="被测对象" desc="按项目管理代码仓库与目录服务；选择服务后核验技术画像，再授权生成用例。">
-      <button type="button" onClick={() => setDialog('project')} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:border-emerald-300 hover:text-emerald-700"><Plus className="h-3.5 w-3.5" />新建项目</button>
+      <Link to="/target-env" className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 hover:border-emerald-300"><Server className="h-3.5 w-3.5" />测试环境</Link><button type="button" onClick={() => setDialog('project')} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:border-emerald-300 hover:text-emerald-700"><Plus className="h-3.5 w-3.5" />新建项目</button>
     </PageHeader>
     <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-5 lg:flex-row lg:items-center lg:justify-between">

@@ -80,9 +80,8 @@ spec:
             - { name: GP_ENV, value: dev }
             - { name: GP_ALLOW_HEADER_AUTH, value: "true" }
             - { name: GP_BUILD_REVISION, value: "VERSION" }
-            - { name: GP_RUNNER_TYPE, value: k8s }
-            - { name: GP_RUNNER_NS, value: gp-runner }
-            - { name: GP_RUNNER_IMAGE, value: curlimages/curl:8.10.1 }
+            - { name: GP_RUNNER_TYPE, value: http }
+            - { name: GP_EXECUTION_BEARER_TOKEN, valueFrom: { secretKeyRef: { name: gp-im-token, key: token, optional: true } } }
             - { name: GP_MODEL_SECRET_NAMESPACE, value: gp }
             - { name: GP_SCM_SECRET_NAMESPACE, value: gp }
             # GitHub App 的 App ID/Client ID/Client Secret、安装 URL、OAuth 回调、
@@ -130,9 +129,8 @@ spec:
             - { name: GP_ENV, value: dev }
             - { name: GP_ALLOW_HEADER_AUTH, value: "true" }
             - { name: GP_BUILD_REVISION, value: "VERSION" }
-            - { name: GP_RUNNER_TYPE, value: k8s }
-            - { name: GP_RUNNER_NS, value: gp-runner }
-            - { name: GP_RUNNER_IMAGE, value: curlimages/curl:8.10.1 }
+            - { name: GP_RUNNER_TYPE, value: http }
+            - { name: GP_EXECUTION_BEARER_TOKEN, valueFrom: { secretKeyRef: { name: gp-im-token, key: token, optional: true } } }
             - { name: GP_TEMPORAL_ADDR, value: gp-temporal-frontend.gp.svc.cluster.local:7233 }
             - { name: GP_CICD_MAX_ATTEMPTS, value: "5" }
             - { name: GP_CICD_RETRY_BASE_SECONDS, value: "5" }

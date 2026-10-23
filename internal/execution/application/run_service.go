@@ -352,6 +352,7 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 	// worker to continue using capacity after takeover.
 	results, err = s.executeWithLeaseRenewal(ctx, spec, poolLeases)
 	if err != nil {
+		s.log.Error("execute cases failed", "run_id", runID, "error", err)
 		return nil, nil, err
 	}
 
@@ -369,6 +370,7 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 		c.StartedAt = now
 		c.EndedAt = &ended
 		if err := s.repo.SaveCaseResult(ctx, c); err != nil {
+			s.log.Error("save case result failed", "run_id", runID, "case_id", c.CaseID, "error", err)
 			return nil, nil, err
 		}
 		if err := s.cost.Record(ctx, domain.CostRecord{

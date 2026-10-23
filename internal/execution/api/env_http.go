@@ -34,6 +34,7 @@ func register(mux *http.ServeMux, envSvc *application.EnvService, runSvc *applic
 	rh := &runHandler{svc: runSvc, authorizer: authorizer}
 	ph := &policyHandler{svc: policySvc, authorizer: authorizer}
 	mux.HandleFunc("POST /targets/{id}/env/runtime", h.registerRuntime)
+	mux.HandleFunc("GET /targets/{id}/env/runtime", h.getRuntime)
 	mux.HandleFunc("POST /targets/{id}/version-check", h.checkVersion)
 	mux.HandleFunc("GET /targets/{id}/version-checks", h.recentChecks)
 	mux.HandleFunc("PUT /targets/{id}/screenshot-policy", ph.setScreenshotPolicy)
@@ -64,6 +65,28 @@ func (h *envHandler) authorizeTarget(w http.ResponseWriter, r *http.Request, act
 		return false
 	}
 	return true
+}
+
+func (h *envHandler) getRuntime(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		httpx.WriteErr(w, gperr.Validation("invalid target id"))
+		return
+	}
+	if !h.authorizeTarget(w, r, "view", id) {
+		return
+	}
+	env := r.URL.Query().Get("env")
+	if env == "" {
+		httpx.WriteErr(w, gperr.Validation("env required"))
+		return
+	}
+	runtime, err := h.svc.GetRuntime(r.Context(), id, env)
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toEnvRuntimeResponse(runtime))
 }
 
 // registerRuntimeRequest 登记环境运行版本请求。

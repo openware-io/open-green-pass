@@ -466,6 +466,14 @@ paths:
         '200': { description: 已删除, content: { application/json: { schema: { $ref: '#/components/schemas/StatusResponse' } } } }
   # ---------- 版本校验（execution，GP1-03） ----------
   /targets/{id}/env/runtime:
+    get:
+      summary: 查询已登记的测试环境参数
+      operationId: getRuntime
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: env, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: 已登记, content: { application/json: { schema: { $ref: '#/components/schemas/EnvRuntime' } } } }
     post:
       summary: 登记测试环境运行版本（env_runtime）
       operationId: registerRuntime

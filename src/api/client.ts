@@ -237,6 +237,9 @@ export class GreenPassClient {
   deleteCase(caseId: number): JsonResponse<{ status: string }> {
     return this.request(`/cases/${caseId}`, { method: 'DELETE' });
   }
+  getRuntime(targetId: number, env: string): JsonResponse<EnvRuntime> {
+    return this.request(`/targets/${targetId}/env/runtime?env=${encodeURIComponent(env)}`);
+  }
   registerRuntime(targetId: number, input: paths['/targets/{id}/env/runtime']['post']['requestBody']['content']['application/json']) {
     return this.request<EnvRuntime>(`/targets/${targetId}/env/runtime`, { method: 'POST', body: JSON.stringify(input) });
   }

@@ -1384,7 +1384,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** 查询已登记的测试环境参数 */
+        get: operations["getRuntime"];
         put?: never;
         /** 登记测试环境运行版本（env_runtime） */
         post: operations["registerRuntime"];
@@ -3830,6 +3831,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+        };
+    };
+    getRuntime: {
+        parameters: {
+            query: {
+                env: string;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已登记 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvRuntime"];
                 };
             };
         };

@@ -3,12 +3,14 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/openware-io/open-green-pass/internal/execution/domain"
 	"github.com/openware-io/open-green-pass/internal/platform/rls"
+	gperr "github.com/openware-io/open-green-pass/pkg/errors"
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
 
@@ -50,6 +52,23 @@ func errTenantRequired() error { return &TenantErr{} }
 type TenantErr struct{}
 
 func (e *TenantErr) Error() string { return "tenant required: missing x-gp-team-id header" }
+
+// GetRuntime 查询已登记的环境运行版本。
+func (s *EnvService) GetRuntime(ctx context.Context, targetID int64, env string) (*domain.EnvRuntime, error) {
+	teamID, ok := rls.TenantFrom(ctx)
+	if !ok {
+		return nil, ErrTenantRequired
+	}
+	runtime, err := s.repo.FindRuntime(ctx, teamID, targetID, env)
+	if err != nil {
+		var missing *domain.ErrNoEnvRuntime
+		if errors.As(err, &missing) {
+			return nil, gperr.NotFound("env runtime not found")
+		}
+		return nil, err
+	}
+	return runtime, nil
+}
 
 // RegisterRuntime 登记/更新被测对象在指定环境的运行版本（upsert）。
 func (s *EnvService) RegisterRuntime(ctx context.Context, targetID int64, env, version string) (*domain.EnvRuntime, error) {

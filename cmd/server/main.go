@@ -116,6 +116,9 @@ func main() {
 	case "scenario":
 		runner = gpRunner.NewScenarioRunner(gen, gpRunner.DefaultRegistry(), nil)
 		log.Info("runner", "type", "scenario")
+	case "http":
+		runner = einfra.NewHTTPRunner(gen, os.Getenv("GP_EXECUTION_BEARER_TOKEN"))
+		log.Info("runner", "type", "http")
 	case "k8s":
 		k8sRunner, err := einfra.NewK8sRunner(gen, einfra.K8sRunnerConfig{
 			Namespace: os.Getenv("GP_RUNNER_NS"),

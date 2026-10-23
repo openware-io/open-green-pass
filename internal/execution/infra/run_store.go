@@ -123,7 +123,7 @@ func (s *RunStore) SaveCaseResult(ctx context.Context, c *domain.CaseResult) err
 				ai_tokens_in=EXCLUDED.ai_tokens_in, ai_tokens_out=EXCLUDED.ai_tokens_out,
 				cost_amount=EXCLUDED.cost_amount, ended_at=EXCLUDED.ended_at`,
 			c.ID, c.TeamID, c.RunID, c.CaseID, c.CaseVersion, string(c.Status), c.ResultText,
-			ev, c.FailureClass, c.FindingID, c.AITokensIn, c.AITokensOut, c.CostAmount,
+			ev, nullIfEmpty(c.FailureClass), c.FindingID, c.AITokensIn, c.AITokensOut, c.CostAmount,
 			c.AttemptSeq, c.StartedAt, c.EndedAt)
 		return err
 	})
@@ -196,3 +196,10 @@ func (s *RunStore) MaxAttempt(ctx context.Context, teamID, runID, caseID int64) 
 }
 
 var _ domain.RunRepository = (*RunStore)(nil)
+
+func nullIfEmpty(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
+}
