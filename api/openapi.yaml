@@ -9,6 +9,35 @@ info:
 servers:
   - url: http://localhost:8080
 paths:
+  /generation/runs:
+    get:
+      summary: 查询项目的生成任务
+      operationId: listGenerationRuns
+      parameters: [ { name: project_id, in: query, required: true, schema: { type: integer } }, { name: limit, in: query, schema: { type: integer } } ]
+      responses:
+        '200': { description: 生成任务列表, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      summary: 创建一次生成任务
+      operationId: createGenerationRun
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [project_id, scope_type, scope_id, idempotency_key, units], properties: { project_id: { type: integer }, scope_type: { type: string, enum: [project, repo, service] }, scope_id: { type: integer }, idempotency_key: { type: string }, units: { type: array, items: { type: object } } } } } }
+      responses:
+        '202': { description: 已创建, content: { application/json: { schema: { type: object } } } }
+  /generation/runs/{id}:
+    get:
+      summary: 查询生成任务进度
+      operationId: getGenerationRun
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+      responses:
+        '200': { description: 生成任务, content: { application/json: { schema: { type: object } } } }
+  /generation/runs/{id}/cancel:
+    post:
+      summary: 取消整个生成任务
+      operationId: cancelGenerationRun
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+      responses:
+        '200': { description: 已取消, content: { application/json: { schema: { type: object } } } }
   /generation/batches:
     get:
       summary: 查询当前项目最近的用例生成批次

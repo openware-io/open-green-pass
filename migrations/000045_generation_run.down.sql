@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS gen_run_unit;
+DROP TABLE IF EXISTS gen_run;

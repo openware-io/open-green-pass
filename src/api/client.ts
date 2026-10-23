@@ -25,6 +25,9 @@ export type WechatBinding = { bound:boolean; display_name?:string; avatar_url?:s
 export type GenerationBatch = components['schemas']['GenerationBatch'] & { service_id?: number | null; source_path?: string };
 export type CreateGenerationBatchInput = components['schemas']['GenerationBatchCreate'] & { service_id?: number; source_path?: string };
 export type RepositoryRef = components['schemas']['RepositoryRef'];
+export type GenerationRunUnit = { id:number; service_id:number; repo_id:number; batch_id?:number|null; state:'queued'|'running'|'succeeded'|'failed'|'cancelled'; error?:string };
+export type GenerationRun = { id:number; team_id:number; project_id:number; scope_type:'project'|'repo'|'service'; scope_id:number; state:'queued'|'running'|'succeeded'|'partial_failed'|'failed'|'cancelled'; total_units:number; completed_units:number; failed_units:number; tokens_in:number; tokens_out:number; cost_amount:number; units:GenerationRunUnit[]; created_at?:string; updated_at?:string };
+export type CreateGenerationRunInput = { project_id:number; scope_type:'project'|'repo'|'service'; scope_id:number; idempotency_key:string; units:Array<{service_id:number;repo_id:number;source_path?:string;ref_type:'branch'|'tag';ref_name:string}> };
 export type AssistantSession = components['schemas']['AssistantSession'];
 export type AssistantTurn = components['schemas']['AssistantTurn'];
 export type AssistantArtifact = components['schemas']['AssistantArtifact'];
@@ -205,6 +208,10 @@ export class GreenPassClient {
   listGenerationBatches(targetId:number): JsonResponse<GenerationBatch[]> { return this.request(`/generation/batches?target_id=${targetId}`); }
   reviewGenerationBatch(batchId:number,input: paths['/generation/batches/{id}/review']['post']['requestBody']['content']['application/json']): JsonResponse<GenerationBatch> { return this.request(`/generation/batches/${batchId}/review`,{method:'POST',body:JSON.stringify(input)}); }
   cancelGenerationBatch(batchId:number,input:{expected_state_version:number;request_id:string}): JsonResponse<GenerationBatch> { return this.request(`/generation/batches/${batchId}/cancel`,{method:'POST',body:JSON.stringify(input)}); }
+  createGenerationRun(input: CreateGenerationRunInput): JsonResponse<GenerationRun> { return this.request('/generation/runs',{method:'POST',body:JSON.stringify(input)}); }
+  getGenerationRun(runId:number): JsonResponse<GenerationRun> { return this.request(`/generation/runs/${runId}`); }
+  listGenerationRuns(projectId:number): JsonResponse<GenerationRun[]> { return this.request(`/generation/runs?project_id=${projectId}`); }
+  cancelGenerationRun(runId:number): JsonResponse<GenerationRun> { return this.request(`/generation/runs/${runId}/cancel`,{method:'POST'}); }
   listGenerationSeeds(batchId:number): JsonResponse<Array<{id:number;batch_id:number;case_id?:number|null;source_locator:string;normalized_spec:Record<string,unknown>;quality_state:string;approval_state:string;dedupe_hash?:string}>> { return this.request(`/generation/batches/${batchId}/seeds`); }
   modelCatalog():JsonResponse<{providers:Array<{Provider:string;Name:string;Protocol:string;BaseURL:string}>;models:Array<{id:number;provider:string;model_key:string;status:string}>}>{return this.request('/model-catalog');}
   modelConnections():JsonResponse<{connections:Array<{id:number;provider:string;model_key:string;protocol:'api'|'cc';base_url:string;credential_status:string;configured_at?:string;token_configured:boolean}>}>{return this.request('/model-connections');}

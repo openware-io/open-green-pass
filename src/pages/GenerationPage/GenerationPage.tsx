@@ -5,7 +5,7 @@ import { PageHeader, GhostButton, Card, ListFilter } from '@/components/shared';
 import { toast } from 'sonner';
 import { Sparkles, Plug, ShieldCheck, UserCheck, Database, GitBranch, BookOpen, CloudDownload, ChevronLeft, ChevronRight, Check, Crosshair, Layers } from 'lucide-react';
 import { configuredGreenPassClient } from '@/api/runtime';
-import { GreenPassApiError, type GenerationBatch, type RepositoryRef } from '@/api/client';
+import { GreenPassApiError, type GenerationBatch, type GenerationRun, type RepositoryRef } from '@/api/client';
 import { loginStore } from '@/context/login';
 import { useObjectCatalog } from '@/context/objectCatalog';
 type GenerationSeed = { id: number; batch_id: number; case_id?: number | null; source_locator: string; normalized_spec: Record<string, unknown>; quality_state: string; approval_state: string; dedupe_hash?: string };
@@ -237,6 +237,7 @@ function GenerationPageContent() {
   const [audit, setAudit] = useState<Record<string, string>>({});
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
   const [realBatches, setRealBatches] = useState<GenerationBatch[]>([]);
+  const [realRun, setRealRun] = useState<GenerationRun | null>(null);
   const [repositoryRefs, setRepositoryRefs] = useState<Record<number, RepositoryRef[]>>({});
   const [selectedRefs, setSelectedRefs] = useState<Record<number, { type: 'branch' | 'tag'; name: string }>>({});
   const [refsLoading, setRefsLoading] = useState(false);
@@ -398,30 +399,40 @@ function GenerationPageContent() {
       const repos = realProjectRepos.length ? realProjectRepos : await realClient.listProjectRepositories(projectID);
       const services = generationScope === 'custom' ? confirmedServices.filter((service) => selectedServiceIds.includes(service.id)) : scopeServices;
       if (!services.length) throw new Error('请至少选择一个已确认的目录服务');
-      const results: Array<{ serviceId: number; name: string; ok: boolean; error?: string }> = [];
-      const created: GenerationBatch[] = [];
+      const units: Array<{ service_id: number; repo_id: number; source_path: string; ref_type: 'branch' | 'tag'; ref_name: string }> = [];
       for (const service of services) {
-        try {
-          const repo = repos.find((item) => item.id === service.repo_id);
-          if (!repo) throw new Error('未关联代码仓库');
-          const refs = repositoryRefs[repo.id]?.length ? repositoryRefs[repo.id] : await loadRepositoryRefs(repo.id);
-          const selection = fullScope
-            ? { type: 'branch' as const, name: repo.default_branch }
-            : selectedRefs[repo.id];
-          if (!selection?.name) throw new Error(`请先为 ${service.name} 选择分支或 Tag`);
-          if (!refs.some((ref) => ref.ref_type === selection.type && ref.name === selection.name)) throw new Error(`${service.name} 的代码引用未同步，请先刷新分支 / Tag`);
-          const batch = await realClient.createGenerationBatch({ target_id: projectID, repo_id: repo.id, service_id: service.id, source_path: service.source_path, ref_type: selection.type, branch: selection.name, idempotency_key: `ui-batch-${projectID}-${service.id}-${crypto.randomUUID()}` });
-          created.push(batch); results.push({ serviceId: service.id, name: service.name, ok: true });
-        } catch (error) { results.push({ serviceId: service.id, name: service.name, ok: false, error: error instanceof Error ? error.message : '创建失败' }); }
+        const repo = repos.find((item) => item.id === service.repo_id);
+        if (!repo) throw new Error(`${service.name} 未关联代码仓库`);
+        const refs = repositoryRefs[repo.id]?.length ? repositoryRefs[repo.id] : await loadRepositoryRefs(repo.id);
+        const selection = fullScope ? { type: 'branch' as const, name: repo.default_branch } : selectedRefs[repo.id];
+        if (!selection?.name) throw new Error(`请先为 ${service.name} 选择分支或 Tag`);
+        if (!refs.some((ref) => ref.ref_type === selection.type && ref.name === selection.name)) throw new Error(`${service.name} 的代码引用未同步，请先刷新分支 / Tag`);
+        units.push({ service_id: service.id, repo_id: repo.id, source_path: service.source_path, ref_type: selection.type, ref_name: selection.name });
       }
-      setBatchResults(results);
-      setRealBatches((current) => [...created, ...current.filter((batch) => !created.some((item) => item.id === batch.id))]);
-      if (created.length) setSelectedBatchId((created.find((batch) => batch.service_id === activeServiceId) ?? created[0]).id);
+      const run = await realClient.createGenerationRun({
+        project_id: projectID,
+        scope_type: generationScope === 'custom' ? 'service' : generationScope,
+        scope_id: generationScope === 'project' ? projectID : generationScope === 'repo' ? activeRepoScopeId ?? 0 : services[0].id,
+        idempotency_key: `ui-run-${projectID}-${crypto.randomUUID()}`,
+        units,
+      });
+      setRealRun(run);
+      setBatchResults(run.units.map((unit) => ({
+        serviceId: unit.service_id,
+        name: services.find((service) => service.id === unit.service_id)?.name ?? String(unit.service_id),
+        ok: !unit.error,
+        error: unit.error,
+      })));
+      const batches = await realClient.listGenerationBatches(projectID);
+      setRealBatches(batches);
+      const firstBatch = run.units.find((unit) => unit.batch_id)?.batch_id ?? null;
+      if (firstBatch) setSelectedBatchId(firstBatch);
       setSelectedServiceIds([]); setBatchConfirmOpen(false); setStep(1);
-      if (created.length) toast.success(`已创建 ${created.length} 个生成批次`, { description: results.filter((item) => !item.ok).length ? `${results.filter((item) => !item.ok).length} 个服务创建失败，请查看结果` : '服务端将依次生成候选用例' });
-    } catch (error) { setRealError(error instanceof Error ? error.message : '创建生成批次失败'); }
+      toast.success(`已创建生成任务 #${run.id}`, { description: `${run.total_units} 个服务已展开，可在任务卡查看总体进度` });
+    } catch (error) { setRealError(error instanceof Error ? error.message : '创建生成任务失败'); }
     finally { setRealBusy(false); }
   };
+
   useEffect(() => {
     if (!projectId || !realClient || realBusy || reviewBusy) return;
     let cancelled = false;
@@ -440,6 +451,35 @@ function GenerationPageContent() {
     void refresh();
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [projectId, realClient, realBusy, reviewBusy]);
+  useEffect(() => {
+    if (!realClient || !projectId) return;
+    let cancelled = false;
+    void realClient.listGenerationRuns(Number(projectId)).then((runs) => {
+      if (!cancelled && runs.length) setRealRun(runs[0]);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [realClient, projectId]);
+
+  useEffect(() => {
+    if (!realClient || !realRun?.id) return;
+    let cancelled = false;
+    let timer: number | undefined;
+    const refresh = async () => {
+      try {
+        const next = await realClient.getGenerationRun(realRun.id);
+        if (cancelled) return;
+        setRealRun(next);
+        if (next.state === 'queued' || next.state === 'running' || next.state === 'partial_failed') {
+          timer = window.setTimeout(() => void refresh(), 2000);
+        }
+      } catch (error) {
+        if (!cancelled) timer = window.setTimeout(() => void refresh(), 5000);
+      }
+    };
+    void refresh();
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [realClient, realRun?.id]);
+
   useEffect(() => {
     if (!realClient || !activeBatchId || activeBatchStateVersion === undefined) return;
     const batchId = activeBatchId;
@@ -488,6 +528,17 @@ function GenerationPageContent() {
     finally { setReviewBusy(false); }
   };
 
+  const cancelRealRun = async () => {
+    if (!realClient || !realRun) return;
+    setReviewBusy(true); setRealError('');
+    try {
+      const next = await realClient.cancelGenerationRun(realRun.id);
+      setRealRun(next);
+      toast.success('已取消整个生成任务，所属服务批次和临时数据已清理');
+    } catch (error) { setRealError(error instanceof Error ? error.message : '取消生成任务失败'); }
+    finally { setReviewBusy(false); }
+  };
+
   return (
     <div className="pb-24">
       <div className="mb-5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs shadow-sm">
@@ -500,11 +551,11 @@ function GenerationPageContent() {
         <button type="button" onClick={() => navigate('/trace')} className="text-slate-500 hover:text-emerald-600">追溯覆盖</button>
         <span className="ml-auto text-[11px] text-slate-400">{realClient ? '目录服务' : (TYPE_LABEL[selectedAsset.type] ?? selectedAsset.type)}</span>
       </div>
-      <PageHeader title="生成用例" desc={realClient ? `选择已确认的目录服务，为所选服务创建生成批次 · 当前可生成 ${confirmedServices.length} 个服务` : '针对当前被测对象的用例生成流程 · 适配解析 → AI 生成 → 质量验证 → 审核入库'}>
+      <PageHeader title="生成用例" desc={realClient ? `选择已确认的目录服务，为所选服务创建一个生成任务 · 当前可生成 ${confirmedServices.length} 个服务` : '针对当前被测对象的用例生成流程 · 适配解析 → AI 生成 → 质量验证 → 审核入库'}>
         <GhostButton onClick={() => navigate('/target')}>管理被测对象</GhostButton>
       </PageHeader>
 
-      <div className="mb-5 rounded-xl border border-slate-200 bg-white p-5">
+      {!realClient && <div className="mb-5 rounded-xl border border-slate-200 bg-white p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-800"><Layers className="h-4 w-4 text-emerald-600" />覆盖计划</div>
@@ -519,13 +570,30 @@ function GenerationPageContent() {
         <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
           {['normal 22', 'boundary 3', 'error 7', 'auth 1', 'idempotency 3', 'data 3', '未覆盖 16'].map((item, index) => <span key={item} className={'rounded-full px-2 py-0.5 ' + (index === 6 ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500')}>{item}</span>)}
         </div>
-      </div>
+      </div>}
 
       {realClient && <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800">
         <span className="font-semibold">DSH 生成</span>
         <span>当前通过内部 DSH SDK gateway 生成用例；模型由 DSH Profile 配置，不再使用项目级模型绑定。</span>
         <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-emerald-700">DSH SDK</span>
       </div>}
+
+      {realClient && realRun && <Card title={`生成任务 #${realRun.id}`} className="p-5 mb-5" extra={['queued', 'running', 'partial_failed'].includes(realRun.state) ? <button type="button" disabled={reviewBusy} onClick={() => void cancelRealRun()} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] text-red-600 hover:bg-red-50 disabled:opacity-50">取消整个任务</button> : null}>
+        <div className="flex flex-wrap items-center gap-4 text-xs">
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700">{realRun.state === 'queued' ? '排队中' : realRun.state === 'running' ? '运行中' : realRun.state === 'partial_failed' ? '部分失败' : realRun.state === 'succeeded' ? '已完成' : realRun.state === 'failed' ? '失败' : '已取消'}</span>
+          <span className="text-slate-500">{realRun.completed_units} / {realRun.total_units} 个服务完成</span>
+          {realRun.failed_units > 0 && <span className="text-red-600">{realRun.failed_units} 个失败</span>}
+          <span className="text-slate-400">{realRun.scope_type === 'project' ? '项目全量' : realRun.scope_type === 'repo' ? '仓库全量' : '指定服务'}</span>
+        </div>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${realRun.total_units ? Math.round(((realRun.completed_units + realRun.failed_units) / realRun.total_units) * 100) : 0}%` }} /></div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {realRun.units.map((unit) => <button key={unit.id} type="button" disabled={!unit.batch_id} onClick={() => unit.batch_id && setSelectedBatchId(unit.batch_id)} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-left text-[11px] hover:border-emerald-200 disabled:cursor-default">
+            <span className="truncate text-slate-700">{realProjectServices.find((service) => service.id === unit.service_id)?.name ?? `服务 ${unit.service_id}`}</span>
+            <span className={'shrink-0 rounded-full px-2 py-0.5 ' + (unit.state === 'succeeded' ? 'bg-emerald-100 text-emerald-700' : unit.state === 'failed' ? 'bg-red-50 text-red-600' : unit.state === 'cancelled' ? 'bg-slate-200 text-slate-500' : 'bg-amber-50 text-amber-700')}>{unit.state === 'running' ? '生成中' : unit.state === 'succeeded' ? '已完成' : unit.state === 'failed' ? '失败' : unit.state === 'cancelled' ? '已取消' : '排队'}</span>
+          </button>)}
+        </div>
+        <p className="mt-3 text-[11px] text-slate-500">整个任务取消会级联取消所有服务批次，并删除本次任务的候选与源码快照。</p>
+      </Card>}
 
       {realClient && <Card title="生成模式" className="p-5 mb-5">
         <div className="flex flex-wrap items-center gap-3">
@@ -549,7 +617,7 @@ function GenerationPageContent() {
           <span className="rounded bg-slate-50 px-2 py-1">服务：{scopeServices.length}</span>
           <span className="rounded bg-slate-50 px-2 py-1">仓库：{generationScope === 'project' ? repoScopeOptions.length : generationScope === 'repo' ? 1 : new Set(scopeServices.map((service) => service.repo_id)).size}</span>
           <span className="rounded bg-slate-50 px-2 py-1">代码引用：{generationScope === 'custom' ? '逐服务选择' : '仓库默认分支'}</span>
-          <span className="rounded bg-slate-50 px-2 py-1">每次点击创建新批次</span>
+          <span className="rounded bg-slate-50 px-2 py-1">每次点击创建新任务</span>
         </div>
       </Card>}
 
@@ -592,7 +660,7 @@ function GenerationPageContent() {
       </Card>}
 
       {batchConfirmOpen && <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-3"><div><div className="text-sm font-semibold text-slate-800">确认创建</div><div className="mt-1 text-xs text-slate-500">将为以下 {selectedServices.length} 个服务分别创建生成批次，创建后可逐个审核。</div></div><button type="button" onClick={() => setBatchConfirmOpen(false)} className="text-xs text-slate-500 hover:text-slate-700">取消</button></div>
+        <div className="flex items-start justify-between gap-3"><div><div className="text-sm font-semibold text-slate-800">确认创建</div><div className="mt-1 text-xs text-slate-500">将创建一个生成任务，展开以下 {selectedServices.length} 个服务批次，创建后可逐个审核。</div></div><button type="button" onClick={() => setBatchConfirmOpen(false)} className="text-xs text-slate-500 hover:text-slate-700">取消</button></div>
         <div className="mt-4 grid gap-2 md:grid-cols-2">
           {selectedServices.map((service) => {
             const serviceRepo = realProjectRepos.find((item) => item.id === service.repo_id);
@@ -619,7 +687,7 @@ function GenerationPageContent() {
             </div>;
           })}
         </div>
-        <div className="mt-4 flex items-center justify-between gap-3"><span className="text-[11px] text-slate-500">每个批次按所选分支或 Tag 创建；服务端随后冻结实际提交 SHA 与服务目录。本期仅支持 HTTP/API 结构化候选。</span><button type="button" disabled={realBusy || !selectedServices.length} onClick={() => void startRealBatch()} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{realBusy ? '正在创建…' : `确认创建 ${selectedServices.length} 个批次`}</button></div>
+        <div className="mt-4 flex items-center justify-between gap-3"><span className="text-[11px] text-slate-500">每个批次按所选分支或 Tag 创建；服务端随后冻结实际提交 SHA 与服务目录。本期仅支持 HTTP/API 结构化候选。</span><button type="button" disabled={realBusy || !selectedServices.length} onClick={() => void startRealBatch()} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{realBusy ? '正在创建…' : `开始生成 ${selectedServices.length} 个服务`}</button></div>
       </div>}
 
       {/* 被测对象 = 全局轴心：本流程围绕当前被测对象展开（切换用页首被测对象导航） */}
@@ -1035,7 +1103,7 @@ function GenerationPageContent() {
       {realClient && <div className="fixed bottom-4 right-6 z-40 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-xl shadow-slate-900/10">
         <div className="text-[11px] leading-5 text-slate-500">
           <div className="font-semibold text-slate-800">{generationScope === 'project' ? '项目全量' : generationScope === 'repo' ? '仓库全量' : '指定服务'} · {selectedServices.length} 个服务</div>
-          <div>{generationScope === 'custom' ? '逐服务代码引用' : '仓库默认分支'} · 将创建 {selectedServices.length} 个批次 / {selectedServices.length} 个 DSH 任务</div>
+          <div>{generationScope === 'custom' ? '逐服务代码引用' : '仓库默认分支'} · 将创建 1 个生成任务 / {selectedServices.length} 个服务批次</div>
         </div>
         <button type="button" disabled={realBusy || batchPreparing || !selectedServices.length} onClick={() => void openBatchConfirmation()} className="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{realBusy ? '创建中…' : batchPreparing ? '准备中…' : generationScope === 'project' ? `项目全量生成 ${scopeServices.length} 个服务` : generationScope === 'repo' ? `生成该仓库 ${scopeServices.length} 个服务` : `生成 ${selectedServices.length} 个服务`}</button>
       </div>}

@@ -85,6 +85,7 @@ func main() {
 	generationStore := aiinfra.NewGenerationBatchStore(db, gen)
 	generationSvc := aiapp.NewGenerationBatchService(generationStore)
 	generationSvc.SetScopePort(generationStore)
+	generationRunSvc := aiapp.NewGenerationRunService(aiinfra.NewGenerationRunStore(db), generationSvc, gen)
 	modelStore := infra.NewModelStore(db)
 	scmConnectionStore := infra.NewSCMConnectionStore(db, gen)
 	// GP3-05 reference policy is intentionally empty until the persistent
@@ -266,6 +267,7 @@ func main() {
 		},
 		func(mux *http.ServeMux) { aiapi.RegisterGeneration(mux, generationSvc, gen, generationStore) },
 		func(mux *http.ServeMux) { aiapi.RegisterGenerationJobs(mux, generationJobSvc) },
+		func(mux *http.ServeMux) { aiapi.RegisterGenerationRuns(mux, generationRunSvc, gen) },
 		func(mux *http.ServeMux) {
 			gapi.RegisterModels(mux, modelStore, gen, os.Getenv("GP_MODEL_SECRET_NAMESPACE"))
 		},
