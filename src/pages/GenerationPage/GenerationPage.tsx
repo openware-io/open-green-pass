@@ -401,14 +401,16 @@ function GenerationPageContent() {
       const services = generationScope === 'custom' ? confirmedServices.filter((service) => selectedServiceIds.includes(service.id)) : scopeServices;
       if (!services.length) throw new Error('请至少选择一个已确认的目录服务');
       const units: Array<{ service_id: number; repo_id: number; source_path: string; ref_type: 'branch' | 'tag'; ref_name: string }> = [];
-      for (const service of services) {
-        const repo = repos.find((item) => item.id === service.repo_id);
-        if (!repo) throw new Error(`${service.name} 未关联代码仓库`);
-        const refs = repositoryRefs[repo.id]?.length ? repositoryRefs[repo.id] : await loadRepositoryRefs(repo.id);
-        const selection = fullScope ? { type: 'branch' as const, name: repo.default_branch } : selectedRefs[repo.id];
-        if (!selection?.name) throw new Error(`请先为 ${service.name} 选择分支或 Tag`);
-        if (!refs.some((ref) => ref.ref_type === selection.type && ref.name === selection.name)) throw new Error(`${service.name} 的代码引用未同步，请先刷新分支 / Tag`);
-        units.push({ service_id: service.id, repo_id: repo.id, source_path: service.source_path, ref_type: selection.type, ref_name: selection.name });
+      if (generationScope === 'custom') {
+        for (const service of services) {
+          const repo = repos.find((item) => item.id === service.repo_id);
+          if (!repo) throw new Error(`${service.name} 未关联代码仓库`);
+          const refs = repositoryRefs[repo.id]?.length ? repositoryRefs[repo.id] : await loadRepositoryRefs(repo.id);
+          const selection = selectedRefs[repo.id];
+          if (!selection?.name) throw new Error(`请先为 ${service.name} 选择分支或 Tag`);
+          if (!refs.some((ref) => ref.ref_type === selection.type && ref.name === selection.name)) throw new Error(`${service.name} 的代码引用未同步，请先刷新分支 / Tag`);
+          units.push({ service_id: service.id, repo_id: repo.id, source_path: service.source_path, ref_type: selection.type, ref_name: selection.name });
+        }
       }
       const run = await realClient.createGenerationRun({
         project_id: projectID,
