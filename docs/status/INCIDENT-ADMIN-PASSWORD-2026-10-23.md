@@ -11,12 +11,13 @@
 - 原始密码哈希来源已定位到 im-saas 种子迁移：`group-idaas-service/src/main/resources/db/migration/V2__seed_default_admin.sql`。
 - 已执行：
   ```sql
-  UPDATE open_im.user u
-  JOIN open_group.idaas_account a ON a.username = u.username
-  SET u.password = a.password, u.updated_at = NOW(3)
-  WHERE u.username = 'admin';
+  UPDATE open_im.user
+  SET password = '$2b$10$uj5EtFLiaUGBRWv5gbSFfeC85AT5OTIJuTzYUZ7PUD/StOSsCeXtS',
+      updated_at = NOW(3)
+  WHERE username = 'admin';
   ```
-- 校验：`password` 与种子哈希完全一致（`exact_restored=1`）。`n- 用种子默认密码登录 im-saas，返回 200，确认 admin 已恢复。
+- 校验：`password` 与种子哈希完全一致（`exact_restored=1`）。
+- 用种子默认密码登录 im-saas，返回 200，确认 admin 已恢复。
 
 ## 替代方案（已落地）
 
