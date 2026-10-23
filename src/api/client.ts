@@ -146,6 +146,9 @@ export class GreenPassClient {
   }
   getFinding(id: number): JsonResponse<Finding> { return this.request(`/findings/${id}`); }
   listFindingEvidence(findingId: number): JsonResponse<Evidence[]> { return this.request(`/findings/${findingId}/evidence`); }
+  uploadFindingEvidence(findingId: number, file: File): JsonResponse<Evidence> {
+    return this.request(`/findings/${findingId}/evidence/upload?kind=${file.type.startsWith('video/') ? 'video' : 'screenshot'}`, { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file });
+  }
   createFindingEvidence(findingId: number, input: EvidenceCreateInput): JsonResponse<Evidence> {
     return this.request(`/findings/${findingId}/evidence`, { method: 'POST', body: JSON.stringify(input) });
   }
