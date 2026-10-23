@@ -11,18 +11,18 @@
 | user-gen-003 | GET `/api/v1/admin/users` + `Authorization: Bearer invalid` | 401 |
 | user-gen-004 | GET `/api/v1/admin/users/12` | 200 |
 | user-gen-005 | GET `/api/v1/admin/users/999999` | 404 |
-| user-gen-007 | PUT `/api/v1/admin/users/12/status` body `{"status":"active"}` | 200（实际 400） |
+| user-gen-007 | PUT `/api/v1/admin/users/12/status` 完整 DTO | 200 |
 | user-gen-008 | PUT `/api/v1/admin/users/12/status` body `{}` | 400 |
-| user-gen-009 | PUT `/api/v1/admin/users/12/status` body `{"status":"bogus"}` | 400 |
+| user-gen-009 | PUT `/api/v1/admin/users/12/status` expectedStatusVersion=999 | 409 |
 | user-gen-011 | DELETE `/api/v1/admin/users/999999` body `{"confirmUsername":"missing-user"}` | 404 |
 
 ## 执行结果
 
-run `2906716355956736`：
+run `2906718344613888`：
 
 ```text
-8 pass
-1 fail
+9 pass
+0 fail
 ```
 
 通过：
@@ -41,11 +41,11 @@ run `2906716355956736`：
 失败：
 
 ```text
-007 状态更新 PUT 返回 400 REQUEST_BODY_INVALID
+无失败；007 使用完整 AdminUpdateUserStatusDto 后返回 200
 ```
 
 ## 结论
 
 - user 读路径已有真实执行证据。
-- 写路径的非法请求可验证（008/009/011），合法状态更新仍返回 400，不能伪造通过。
+- 合法状态更新需要 `status/expectedStatusVersion/idempotencyKey/reason/correlationId` 完整 DTO；补齐后 200/409 均通过。
 - M3 仍未关闭：3 条写操作用例、24 Cell 有效映射、18 模块。
