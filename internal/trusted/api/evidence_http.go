@@ -2,6 +2,7 @@
 package api
 
 import (
+	"io"
 	"net/http"
 	"strconv"
 
@@ -21,6 +22,8 @@ func RegisterEvidence(mux *http.ServeMux, svc *application.EvidenceService) {
 	mux.HandleFunc("GET /findings/{id}/evidence/{eid}", h.get)
 	mux.HandleFunc("POST /findings/{id}/evidence/presign", h.presign)
 	mux.HandleFunc("GET /findings/{id}/evidence/{eid}/download-url", h.downloadURL)
+	mux.HandleFunc("POST /findings/{id}/evidence/upload", h.upload)
+	mux.HandleFunc("GET /findings/{id}/evidence/{eid}/content", h.content)
 }
 
 type evidenceRequest struct {
@@ -117,6 +120,55 @@ func (h *evidenceHandler) presign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, result)
+}
+
+func (h *evidenceHandler) upload(w http.ResponseWriter, r *http.Request) {
+	findingID, ok := findingID(w, r)
+	if !ok {
+		return
+	}
+	kind := r.URL.Query().Get("kind")
+	sha := r.URL.Query().Get("sha256")
+	mimeType := r.Header.Get("Content-Type")
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	limit := int64(10 << 20)
+	if len(mimeType) >= 6 && mimeType[:6] == "video/" {
+		limit = 100 << 20
+	}
+	if r.ContentLength <= 0 || r.ContentLength > limit {
+		httpx.WriteErr(w, gperr.Validation("content-length is required and must be within the evidence limit"))
+		return
+	}
+	e, err := h.svc.Upload(r.Context(), findingID, kind, mimeType, r.ContentLength, sha, http.MaxBytesReader(w, r.Body, limit))
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, toEvidenceResponse(e))
+}
+
+func (h *evidenceHandler) content(w http.ResponseWriter, r *http.Request) {
+	findingID, ok := findingID(w, r)
+	if !ok {
+		return
+	}
+	evidenceID, err := strconv.ParseInt(r.PathValue("eid"), 10, 64)
+	if err != nil || evidenceID <= 0 {
+		httpx.WriteErr(w, gperr.Validation("invalid evidence id"))
+		return
+	}
+	reader, mimeType, err := h.svc.Download(r.Context(), findingID, evidenceID)
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	defer reader.Close()
+	w.Header().Set("Content-Type", mimeType)
+	w.Header().Set("Content-Disposition", "inline")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, reader)
 }
 
 func (h *evidenceHandler) downloadURL(w http.ResponseWriter, r *http.Request) {

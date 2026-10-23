@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 	"time"
@@ -72,6 +73,15 @@ func (s *EvidenceObjectStore) PresignGet(ctx context.Context, key string, expiry
 		return "", err
 	}
 	return u.String(), nil
+}
+
+func (s *EvidenceObjectStore) Put(ctx context.Context, key string, reader io.Reader, size int64, contentType string) error {
+	_, err := s.client.PutObject(ctx, s.bucket, key, reader, size, minio.PutObjectOptions{ContentType: contentType})
+	return err
+}
+
+func (s *EvidenceObjectStore) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	return s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
 }
 
 func (s *EvidenceObjectStore) URI(key string) string {

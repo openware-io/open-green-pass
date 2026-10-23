@@ -1,7 +1,10 @@
 // Package middleware 生产安全基线：响应头与请求体上限。
 package middleware
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
+)
 
 // SecurityHeaders applies conservative API security headers. HSTS is
 // intentionally omitted because TLS terminates at the ingress; the edge must
@@ -25,6 +28,12 @@ func SecurityHeaders(next http.Handler) http.Handler {
 func BodyLimit(maxBytes int64) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Evidence binaries are streamed to object storage and enforce their
+			// own 10/100 MiB limit in the handler; JSON remains capped at 2 MiB.
+			if strings.HasSuffix(r.URL.Path, "/evidence/upload") {
+				next.ServeHTTP(w, r)
+				return
+			}
 			if r.Body != nil {
 				r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 			}

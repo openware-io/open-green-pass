@@ -3,9 +3,11 @@ package application
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -25,6 +27,8 @@ var allowedEvidenceMIME = map[string]bool{
 type EvidenceObjectStore interface {
 	PresignPut(ctx context.Context, key string, expiry time.Duration) (string, error)
 	PresignGet(ctx context.Context, key string, expiry time.Duration) (string, error)
+	Put(ctx context.Context, key string, reader io.Reader, size int64, contentType string) error
+	Get(ctx context.Context, key string) (io.ReadCloser, error)
 	URI(key string) string
 }
 
@@ -111,6 +115,56 @@ func (s *EvidenceService) DownloadURL(ctx context.Context, findingID, evidenceID
 		return "", gperr.Validation("invalid evidence storage uri")
 	}
 	return s.store.PresignGet(ctx, rest[slash+1:], 15*time.Minute)
+}
+
+// Upload stores a binary object through the API and registers its metadata.
+func (s *EvidenceService) Upload(ctx context.Context, findingID int64, kind, mimeType string, size int64, expectedSHA string, body io.Reader) (*domain.Evidence, error) {
+	teamID, ok := rls.TenantFrom(ctx)
+	if !ok {
+		return nil, gperr.Unauthorized("tenant required")
+	}
+	if s.store == nil {
+		return nil, errors.New("evidence object store is not configured")
+	}
+	if findingID <= 0 || !validEvidenceKind(strings.TrimSpace(kind)) || !allowedEvidenceMIME[mimeType] {
+		return nil, gperr.Validation("invalid evidence metadata")
+	}
+	limit := int64(10 << 20)
+	if strings.HasPrefix(mimeType, "video/") {
+		limit = 100 << 20
+	}
+	if size <= 0 || size > limit {
+		return nil, gperr.Validation("evidence size is invalid")
+	}
+	key := fmt.Sprintf("%d/%d/%d-upload", teamID, findingID, s.gen.Next())
+	hash := sha256.New()
+	if err := s.store.Put(ctx, key, io.TeeReader(body, hash), size, mimeType); err != nil {
+		return nil, err
+	}
+	sum := hex.EncodeToString(hash.Sum(nil))
+	if expectedSHA != "" && !strings.EqualFold(expectedSHA, sum) {
+		return nil, gperr.Validation("sha256 does not match uploaded bytes")
+	}
+	return s.Create(ctx, findingID, CreateEvidenceInput{
+		Kind: kind, StorageURI: s.store.URI(key), MimeType: mimeType, SizeBytes: size, SHA256: sum,
+	})
+}
+
+func (s *EvidenceService) Download(ctx context.Context, findingID, evidenceID int64) (io.ReadCloser, string, error) {
+	if s.store == nil {
+		return nil, "", errors.New("evidence object store is not configured")
+	}
+	e, err := s.Get(ctx, findingID, evidenceID)
+	if err != nil {
+		return nil, "", err
+	}
+	rest := strings.TrimPrefix(e.StorageURI, "s3://")
+	slash := strings.IndexByte(rest, '/')
+	if slash <= 0 || slash == len(rest)-1 {
+		return nil, "", gperr.Validation("invalid evidence storage uri")
+	}
+	reader, err := s.store.Get(ctx, rest[slash+1:])
+	return reader, e.MimeType, err
 }
 
 // CreateEvidenceInput 证据登记输入（文件已由调用方上传到对象存储）。
