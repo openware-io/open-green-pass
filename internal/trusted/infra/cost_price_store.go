@@ -23,8 +23,8 @@ var _ domain.CostPriceRepository = (*CostPriceStore)(nil)
 func (s *CostPriceStore) Create(ctx context.Context, price *domain.CostPrice) error {
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO cost_price(id,team_id,model,input_unit_price,output_unit_price,
-				cache_read_unit_price,currency,effective_from,created_by)
+			INSERT INTO cost_price(id,team_id,model_key,input_per_1k,output_per_1k,
+				cache_read_per_1k,currency,effective_from,created_by)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
 			price.ID, price.TeamID, price.Model, price.InputUnitPrice, price.OutputUnitPrice,
 			price.CacheReadUnitPrice, price.Currency, price.EffectiveFrom, price.CreatedBy)
@@ -36,9 +36,9 @@ func (s *CostPriceStore) List(ctx context.Context, teamID int64) ([]*domain.Cost
 	var out []*domain.CostPrice
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
-			SELECT id,team_id,model,input_unit_price,output_unit_price,cache_read_unit_price,
+			SELECT id,team_id,model_key,input_per_1k,output_per_1k,cache_read_per_1k,
 				currency,effective_from,created_by,created_at
-			FROM cost_price WHERE team_id=$1 ORDER BY model,effective_from DESC`, teamID)
+			FROM cost_price WHERE team_id=$1 ORDER BY model_key,effective_from DESC`, teamID)
 		if err != nil {
 			return err
 		}
@@ -60,10 +60,10 @@ func (s *CostPriceStore) Effective(ctx context.Context, teamID int64, model stri
 	var p domain.CostPrice
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `
-			SELECT id,team_id,model,input_unit_price,output_unit_price,cache_read_unit_price,
+			SELECT id,team_id,model_key,input_per_1k,output_per_1k,cache_read_per_1k,
 				currency,effective_from,created_by,created_at
 			FROM cost_price
-			WHERE team_id=$1 AND model=$2 AND effective_from <= $3
+			WHERE team_id=$1 AND model_key=$2 AND effective_from <= $3
 			ORDER BY effective_from DESC LIMIT 1`, teamID, model, at).Scan(
 			&p.ID, &p.TeamID, &p.Model, &p.InputUnitPrice, &p.OutputUnitPrice,
 			&p.CacheReadUnitPrice, &p.Currency, &p.EffectiveFrom, &p.CreatedBy, &p.CreatedAt)
