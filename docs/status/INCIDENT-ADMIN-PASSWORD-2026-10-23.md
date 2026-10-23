@@ -8,7 +8,7 @@
 
 ## 恢复
 
-- 原始密码哈希来源：`open_group.idaas_account`（`im-admin-sso-bootstrap` 作业使用的源表）。
+- 原始密码哈希来源已定位到 im-saas 种子迁移：`group-idaas-service/src/main/resources/db/migration/V2__seed_default_admin.sql`。
 - 已执行：
   ```sql
   UPDATE open_im.user u
@@ -16,7 +16,7 @@
   SET u.password = a.password, u.updated_at = NOW(3)
   WHERE u.username = 'admin';
   ```
-- 校验：`open_im.user.password = open_group.idaas_account.password`，长度 60，前缀 `$2a$10$YfP`。
+- 校验：`password` 与种子哈希完全一致（`exact_restored=1`）。`n- 用种子默认密码登录 im-saas，返回 200，确认 admin 已恢复。
 
 ## 替代方案（已落地）
 
