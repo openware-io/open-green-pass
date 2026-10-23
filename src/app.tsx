@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import { Layout } from '@/components/Layout';
 import TargetPage from '@/pages/TargetPage/TargetPage';
+import TargetEnvPage from '@/pages/TargetEnvPage/TargetEnvPage';
 import TracePage from '@/pages/TracePage/TracePage';
 import GenerationPage from '@/pages/GenerationPage/GenerationPage';
 import CasesPage from '@/pages/CasesPage/CasesPage';
@@ -49,6 +50,7 @@ export default function App() {
       <Route element={<ProtectedLayout />}>
         <Route index element={<Navigate to="/scenarios" replace />} />
         <Route path="target" element={<TargetPage />} />
+          <Route path="target-env" element={<TargetEnvPage />} />
         <Route path="trace" element={<TracePage />} />
         <Route path="generation" element={<GenerationPage />} />
         <Route path="cases" element={<CasesPage />} />
