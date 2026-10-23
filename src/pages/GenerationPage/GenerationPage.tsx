@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { UPSTREAM_ADAPTERS, TESTED_REPOS, type IAssetNode } from '@/data/mock';
-import { PageHeader, GhostButton, PrimaryButton, Card, ListFilter } from '@/components/shared';
+import { PageHeader, GhostButton, Card, ListFilter } from '@/components/shared';
 import { toast } from 'sonner';
 import { Sparkles, Plug, ShieldCheck, UserCheck, Database, GitBranch, BookOpen, CloudDownload, ChevronLeft, ChevronRight, Check, Crosshair, Layers } from 'lucide-react';
 import { configuredGreenPassClient } from '@/api/runtime';
@@ -241,7 +241,7 @@ function GenerationPageContent() {
   const [selectedRefs, setSelectedRefs] = useState<Record<number, { type: 'branch' | 'tag'; name: string }>>({});
   const [refsLoading, setRefsLoading] = useState(false);
   const [scmConnections, setSCMConnections] = useState<Array<{id:number;name:string;credential_status:'configured'|'verified'|'failed'}>>([]);
-  const visibleBatches = useMemo(() => activeServiceId ? realBatches.filter((batch) => batch.service_id === activeServiceId) : realBatches, [realBatches, activeServiceId]);
+  const visibleBatches = useMemo(() => realClient ? realBatches : activeServiceId ? realBatches.filter((batch) => batch.service_id === activeServiceId) : realBatches, [realBatches, realClient, activeServiceId]);
   const realBatch = visibleBatches.find((batch) => batch.id === selectedBatchId) ?? visibleBatches[0] ?? null;
   const activeBatchId = realBatch?.id;
   const activeBatchStateVersion = realBatch?.state_version;
@@ -457,7 +457,7 @@ function GenerationPageContent() {
   };
 
   return (
-    <div>
+    <div className="pb-24">
       <div className="mb-5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs shadow-sm">
         <span className="font-semibold text-slate-700">{realClient ? displayName : selectedAsset.name}</span>
         <span className="text-slate-300">/</span>
@@ -470,7 +470,6 @@ function GenerationPageContent() {
       </div>
       <PageHeader title="生成用例" desc={realClient ? `选择已确认的目录服务，为所选服务创建生成批次 · 当前可生成 ${confirmedServices.length} 个服务` : '针对当前被测对象的用例生成流程 · 适配解析 → AI 生成 → 质量验证 → 审核入库'}>
         <GhostButton onClick={() => navigate('/target')}>管理被测对象</GhostButton>
-        <PrimaryButton disabled={realBusy || batchPreparing || !realClient} onClick={() => void openBatchConfirmation()}>{realBusy ? '创建批次…' : batchPreparing ? '准备中…' : fullScope ? `全量生成用例（${confirmedServices.length}）` : `生成用例${selectedServices.length ? `（${selectedServices.length}）` : ''}`}</PrimaryButton>
       </PageHeader>
 
       <div className="mb-5 rounded-xl border border-slate-200 bg-white p-5">
@@ -517,7 +516,20 @@ function GenerationPageContent() {
         </div>
       </Card>}
 
-      {realClient && <Card title="选择生成范围" className="p-0 mb-5 overflow-hidden">
+      {realClient && fullScope && <Card title="全量范围" className="p-5 mb-5">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3"><div className="text-[10px] text-emerald-700">服务</div><div className="mt-1 text-2xl font-semibold text-slate-800">{confirmedServices.length}</div><div className="text-[10px] text-slate-500">全部已确认服务</div></div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"><div className="text-[10px] text-slate-500">仓库</div><div className="mt-1 text-2xl font-semibold text-slate-800">{new Set(confirmedServices.map((service) => service.repo_id)).size}</div><div className="text-[10px] text-slate-500">使用各仓库默认分支</div></div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"><div className="text-[10px] text-slate-500">DSH 任务</div><div className="mt-1 text-2xl font-semibold text-slate-800">{confirmedServices.length}</div><div className="text-[10px] text-slate-500">每服务一个批次</div></div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-1.5">
+          {confirmedServices.slice(0, 18).map((service) => <span key={service.id} className="rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-600">{service.name}</span>)}
+          {confirmedServices.length > 18 && <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-500">+{confirmedServices.length - 18}</span>}
+        </div>
+        <p className="mt-3 text-[11px] text-slate-500">全量模式不展示单服务勾选，也不使用单个 Tag；点击底部“全量生成”后统一确认。</p>
+      </Card>}
+
+      {realClient && !fullScope && <Card title="选择生成范围" className="p-0 mb-5 overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex flex-wrap items-center gap-3">
           <div className="flex-1 min-w-[220px]"><div className="text-sm font-semibold text-slate-700">{fullScope ? '全量范围' : '已确认服务'}</div><div className="text-[11px] text-slate-400 mt-1">{fullScope ? '全量模式自动包含所有已确认服务，使用各仓库默认分支；仍可切换“指定服务”做局部生成。' : '只有“生成测试用例 = 是”的服务可以选择；选择多个服务时会为每个服务创建独立批次。'}</div></div>
           <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">已选 {selectedServices.length} / {confirmedServices.length}</span>
@@ -571,7 +583,7 @@ function GenerationPageContent() {
       </div>}
 
       {/* 被测对象 = 全局轴心：本流程围绕当前被测对象展开（切换用页首被测对象导航） */}
-      {!fullScope && <Card title="当前被测对象 · 生成轴心" className="p-0 mb-5 overflow-hidden">
+      {!realClient && <Card title="当前被测对象 · 生成轴心" className="p-0 mb-5 overflow-hidden">
         <div className="p-6">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(260px,1fr)_minmax(360px,1.5fr)_auto] gap-5 items-start">
           <div className="flex items-center gap-3 min-w-0">
@@ -670,7 +682,7 @@ function GenerationPageContent() {
         <div className="divide-y divide-slate-100">{visibleBatches.map((batch) => {
           const service = realProjectServices.find((item) => item.id === batch.service_id);
           const active = realBatch?.id === batch.id;
-          return <button type="button" key={batch.id} onClick={() => { setSelectedBatchId(batch.id); if (service) selectService(service.id); setStep(1); }} className={'w-full px-5 py-3 text-left transition ' + (active ? 'bg-emerald-50/60' : 'hover:bg-slate-50')}>
+          return <button type="button" key={batch.id} onClick={() => { setSelectedBatchId(batch.id); setStep(1); }} className={'w-full px-5 py-3 text-left transition ' + (active ? 'bg-emerald-50/60' : 'hover:bg-slate-50')}>
             <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-semibold text-slate-700">{service?.name ?? `服务 #${batch.service_id ?? '未绑定'}`}</span><span className={'rounded-full px-2 py-0.5 text-[10px] font-medium ' + (batch.state === 'approved' ? 'bg-emerald-100 text-emerald-700' : batch.state === 'failed' || batch.state === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700')}>{STAGE_LABEL[batch.state] ?? batch.state}</span><span className="ml-auto font-mono text-[10px] text-slate-400">#{batch.id}</span></div>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500"><span>目录：{batch.source_path || service?.source_path || '项目级目录'}</span><span>{batch.ref_type === 'tag' ? 'Tag' : '分支'}：{batch.branch || '未配置'}</span><span>冻结 SHA：{batch.head_sha ? batch.head_sha.slice(0, 12) : '冻结中'}</span><span>系统基线：{batch.base_batch_id ? `已生效批次 #${batch.base_batch_id}` : '首次生成'}</span></div>
           </button>;
@@ -979,6 +991,14 @@ function GenerationPageContent() {
         </table>
         </>}
       </div>
+
+      {realClient && <div className="fixed bottom-4 right-6 z-40 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-xl shadow-slate-900/10">
+        <div className="text-[11px] leading-5 text-slate-500">
+          <div className="font-semibold text-slate-800">{fullScope ? '项目全量' : '指定服务'} · {selectedServices.length} 个服务</div>
+          <div>{fullScope ? '各仓库默认分支' : '逐服务代码引用'} · 将创建 {selectedServices.length} 个批次 / {selectedServices.length} 个 DSH 任务</div>
+        </div>
+        <button type="button" disabled={realBusy || batchPreparing || !selectedServices.length} onClick={() => void openBatchConfirmation()} className="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{realBusy ? '创建中…' : batchPreparing ? '准备中…' : fullScope ? `全量生成 ${confirmedServices.length} 个服务` : `生成 ${selectedServices.length} 个服务`}</button>
+      </div>}
     </div>
   );
 }
