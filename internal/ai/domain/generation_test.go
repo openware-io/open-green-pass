@@ -74,3 +74,6 @@ func (contextRepositoryProbe) FindByIdempotencyKey(context.Context, int64, strin
 func (contextRepositoryProbe) CompareAndSwap(context.Context, *GenerationBatch, int64) error {
 	return nil
 }
+func (contextRepositoryProbe) CleanupBatch(context.Context, int64, int64) error {
+	return nil
+}

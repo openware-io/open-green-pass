@@ -22,6 +22,7 @@ const (
 	GenerationApproved     GenerationBatchState = "approved"
 	GenerationRejected     GenerationBatchState = "rejected"
 	GenerationRolledBack   GenerationBatchState = "rolled_back"
+	GenerationCancelled    GenerationBatchState = "cancelled"
 	GenerationFailed       GenerationBatchState = "failed"
 )
 
@@ -113,17 +114,17 @@ func (b *GenerationBatch) Transition(next GenerationBatchState, expectedVersion 
 func canTransition(from, to GenerationBatchState) bool {
 	switch from {
 	case GenerationEnqueued:
-		return to == GenerationFetching || to == GenerationFailed
+		return to == GenerationFetching || to == GenerationCancelled || to == GenerationFailed
 	case GenerationFetching:
-		return to == GenerationParsing || to == GenerationFailed
+		return to == GenerationParsing || to == GenerationCancelled || to == GenerationFailed
 	case GenerationParsing:
-		return to == GenerationGenerating || to == GenerationFailed
+		return to == GenerationGenerating || to == GenerationCancelled || to == GenerationFailed
 	case GenerationGenerating:
-		return to == GenerationQualityCheck || to == GenerationFailed
+		return to == GenerationQualityCheck || to == GenerationCancelled || to == GenerationFailed
 	case GenerationQualityCheck:
-		return to == GenerationReview || to == GenerationFailed
+		return to == GenerationReview || to == GenerationCancelled || to == GenerationFailed
 	case GenerationReview:
-		return to == GenerationCommitting || to == GenerationRejected || to == GenerationFailed
+		return to == GenerationCommitting || to == GenerationRejected || to == GenerationCancelled || to == GenerationFailed
 	case GenerationCommitting:
 		return to == GenerationApproved || to == GenerationFailed
 	case GenerationApproved:
@@ -148,4 +149,5 @@ type GenerationBatchRepository interface {
 	FindLatestApprovedByScope(ctx context.Context, teamID, targetID, repoID, serviceID int64) (*GenerationBatch, error)
 	FindByIdempotencyKey(ctx context.Context, teamID int64, key string) (*GenerationBatch, error)
 	CompareAndSwap(ctx context.Context, batch *GenerationBatch, expectedVersion int64) error
+	CleanupBatch(ctx context.Context, teamID, batchID int64) error
 }

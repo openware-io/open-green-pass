@@ -141,8 +141,8 @@ func TestGenerationRollbackRequiresApprovedBatch(t *testing.T) {
 }
 
 type generationReviewPorts struct {
-	reviews, rollbacks []GenerationSignal
-	events             []GenerationAuditEvent
+	reviews, rollbacks, cancels []GenerationSignal
+	events                      []GenerationAuditEvent
 }
 
 func (p *generationReviewPorts) SignalReview(_ context.Context, signal GenerationSignal) error {
@@ -152,6 +152,11 @@ func (p *generationReviewPorts) SignalReview(_ context.Context, signal Generatio
 
 func (p *generationReviewPorts) SignalRollback(_ context.Context, signal GenerationSignal) error {
 	p.rollbacks = append(p.rollbacks, signal)
+	return nil
+}
+
+func (p *generationReviewPorts) Cancel(_ context.Context, signal GenerationSignal) error {
+	p.cancels = append(p.cancels, signal)
 	return nil
 }
 

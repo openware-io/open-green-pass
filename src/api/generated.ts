@@ -124,6 +124,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/generation/batches/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 取消生成批次并清理临时候选 */
+        post: operations["cancelGenerationBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/generation/batches/{id}/seeds": {
         parameters: {
             query?: never;
@@ -3225,6 +3242,36 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    cancelGenerationBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    expected_state_version: number;
+                    request_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 已取消 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationBatch"];
+                };
+            };
+        };
+    };
     healthz: {
         parameters: {
             query?: never;

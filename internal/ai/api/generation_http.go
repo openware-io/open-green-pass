@@ -28,6 +28,7 @@ func RegisterGeneration(mux *http.ServeMux, svc *application.GenerationBatchServ
 	mux.HandleFunc("GET /generation/batches/{id}/seeds", h.seeds)
 	mux.HandleFunc("POST /generation/batches/{id}/review", h.review)
 	mux.HandleFunc("POST /generation/batches/{id}/rollback", h.rollback)
+	mux.HandleFunc("POST /generation/batches/{id}/cancel", h.cancel)
 }
 
 func (h *generationHandler) list(w http.ResponseWriter, r *http.Request) {
@@ -192,6 +193,11 @@ func (h *generationHandler) review(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, 200, batchResponse(b))
 }
 
+type cancelRequest struct {
+	ExpectedVersion int64  `json:"expected_state_version"`
+	RequestID       string `json:"request_id"`
+}
+
 type rollbackRequest struct {
 	ExpectedVersion int64  `json:"expected_state_version"`
 	RequestID       string `json:"request_id"`
@@ -221,6 +227,31 @@ func (h *generationHandler) rollback(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, 200, batchResponse(b))
 }
+func (h *generationHandler) cancel(w http.ResponseWriter, r *http.Request) {
+	team, _ := rls.TenantFrom(r.Context())
+	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	p, ok := iam.PrincipalFromContext(r.Context())
+	if !ok {
+		httpx.WriteJSON(w, 401, map[string]string{"error": "unauthorized"})
+		return
+	}
+	actor, _ := strconv.ParseInt(p.Subject, 10, 64)
+	if actor <= 0 {
+		actor = 1
+	}
+	var in cancelRequest
+	if httpx.DecodeJSON(r, &in) != nil {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_cancel"})
+		return
+	}
+	b, err := h.svc.Cancel(r.Context(), application.CancelGenerationCommand{TeamID: team, BatchID: id, ActorID: actor, ExpectedVersion: in.ExpectedVersion, RequestID: in.RequestID})
+	if err != nil {
+		httpx.WriteJSON(w, 409, map[string]string{"error": err.Error()})
+		return
+	}
+	httpx.WriteJSON(w, 200, batchResponse(b))
+}
+
 func batchResponse(b *domain.GenerationBatch) map[string]any {
 	return map[string]any{"id": b.ID, "team_id": b.TeamID, "target_id": b.TargetID, "repo_id": b.RepoID, "service_id": b.ServiceID, "source_path": b.SourcePath, "ref_type": b.RefType, "branch": b.Branch, "version": b.RequestedVersion, "head_sha": b.HeadSHA, "base_batch_id": b.BaseBatchID, "state": b.State, "state_version": b.StateVersion, "workflow_id": b.WorkflowID, "idempotency_key": b.IdempotencyKey, "failure_summary": b.FailureSummary, "created_at": b.CreatedAt, "updated_at": b.UpdatedAt}
 }

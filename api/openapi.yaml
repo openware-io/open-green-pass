@@ -36,6 +36,16 @@ paths:
       parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
       responses:
         '200': { description: 批次状态, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationBatch' } } } }
+  /generation/batches/{id}/cancel:
+    post:
+      summary: 取消生成批次并清理临时候选
+      operationId: cancelGenerationBatch
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [ expected_state_version, request_id ], properties: { expected_state_version: { type: integer, format: int64 }, request_id: { type: string } } } } }
+      responses:
+        '200': { description: 已取消, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationBatch' } } } }
   /generation/batches/{id}/seeds:
     get:
       summary: 查询候选用例种子

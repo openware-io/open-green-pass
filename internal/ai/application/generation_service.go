@@ -66,6 +66,7 @@ type GenerationSignal struct {
 type GenerationSignalPort interface {
 	SignalReview(context.Context, GenerationSignal) error
 	SignalRollback(context.Context, GenerationSignal) error
+	Cancel(context.Context, GenerationSignal) error
 }
 
 // GenerationWorkflowPort starts the durable non-human generation pipeline.
@@ -305,6 +306,37 @@ func (s *GenerationBatchService) Review(ctx context.Context, cmd ReviewGeneratio
 		if err := s.signals.SignalReview(ctx, GenerationSignal{TeamID: cmd.TeamID, BatchID: cmd.BatchID, ActorID: cmd.ActorID, StateVersion: batch.StateVersion, Decision: cmd.Decision, RequestID: cmd.RequestID}); err != nil {
 			return nil, fmt.Errorf("signal generation review: %w", err)
 		}
+	}
+	return batch, nil
+}
+
+type CancelGenerationCommand struct {
+	TeamID, BatchID, ActorID, ExpectedVersion int64
+	RequestID                                 string
+}
+
+// Cancel stops an in-flight batch and removes its disposable seeds/snapshot.
+// The batch row remains as an auditable tombstone.
+func (s *GenerationBatchService) Cancel(ctx context.Context, cmd CancelGenerationCommand) (*domain.GenerationBatch, error) {
+	if cmd.TeamID <= 0 || cmd.BatchID <= 0 || cmd.ActorID <= 0 || cmd.ExpectedVersion <= 0 || cmd.RequestID == "" {
+		return nil, errors.New("cancel requires tenant, batch, actor, version, and request id")
+	}
+	batch, err := s.Transition(ctx, cmd.TeamID, cmd.BatchID, cmd.ExpectedVersion, domain.GenerationCancelled)
+	if err != nil {
+		return nil, err
+	}
+	if s.audit != nil {
+		if err := s.audit.AppendGenerationAudit(ctx, GenerationAuditEvent{TeamID: cmd.TeamID, BatchID: cmd.BatchID, ActorID: cmd.ActorID, StateVersion: batch.StateVersion, Action: "generation.cancel", RequestID: cmd.RequestID, OccurredAt: s.now()}); err != nil {
+			return nil, fmt.Errorf("append generation cancel audit: %w", err)
+		}
+	}
+	if s.signals != nil {
+		if err := s.signals.Cancel(ctx, GenerationSignal{TeamID: cmd.TeamID, BatchID: cmd.BatchID, ActorID: cmd.ActorID, StateVersion: batch.StateVersion, RequestID: cmd.RequestID}); err != nil {
+			return nil, fmt.Errorf("cancel generation workflow: %w", err)
+		}
+	}
+	if err := s.batches.CleanupBatch(ctx, cmd.TeamID, cmd.BatchID); err != nil {
+		return nil, fmt.Errorf("cleanup cancelled generation batch: %w", err)
 	}
 	return batch, nil
 }

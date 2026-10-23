@@ -126,6 +126,16 @@ func (r *MemoryGenerationBatchRepository) CompareAndSwap(_ context.Context, batc
 	return nil
 }
 
+// CleanupBatch removes disposable candidates; the batch tombstone remains.
+func (r *MemoryGenerationBatchRepository) CleanupBatch(_ context.Context, teamID, batchID int64) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.byID[generationBatchKey{teamID, batchID}]; !ok {
+		return domain.ErrGenerationNotFound
+	}
+	return nil
+}
+
 func cloneGenerationBatch(in *domain.GenerationBatch) *domain.GenerationBatch {
 	if in == nil {
 		return nil

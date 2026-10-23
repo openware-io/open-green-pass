@@ -375,6 +375,7 @@ func (s *GenerationBatchStore) generateDSH(ctx context.Context, batchID, seedID 
 		}
 		select {
 		case <-ctx.Done():
+			_ = s.dsh.Cancel(context.Background(), externalID)
 			return "", ctx.Err()
 		case <-ticker.C:
 			job, err = s.dsh.Get(ctx, externalID)
@@ -1176,6 +1177,18 @@ func (s *GenerationBatchStore) CompareAndSwap(ctx context.Context, b *domain.Gen
 		}
 		if result.RowsAffected() == 0 {
 			return domain.ErrGenerationStateConflict
+		}
+		return nil
+	})
+}
+
+func (s *GenerationBatchStore) CleanupBatch(ctx context.Context, teamID, batchID int64) error {
+	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `DELETE FROM gen_seed WHERE team_id=$1 AND batch_id=$2`, teamID, batchID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM gen_source_snapshot WHERE team_id=$1 AND batch_id=$2`, teamID, batchID); err != nil {
+			return err
 		}
 		return nil
 	})

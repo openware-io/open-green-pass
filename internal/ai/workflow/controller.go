@@ -37,6 +37,17 @@ func (c *TemporalController) SignalRollback(ctx context.Context, signal applicat
 	return c.client.SignalWorkflow(ctx, workflowID(signal.TeamID, signal.BatchID), "", RollbackSignal, RollbackSignalPayload{TeamID: signal.TeamID, BatchID: signal.BatchID, ActorID: signal.ActorID, RequestID: signal.RequestID, StateVersion: signal.StateVersion})
 }
 
+// Cancel requests Temporal cancellation; a workflow that already finished is
+// treated as successfully cancelled for cleanup purposes.
+func (c *TemporalController) Cancel(ctx context.Context, signal application.GenerationSignal) error {
+	err := c.client.CancelWorkflow(ctx, workflowID(signal.TeamID, signal.BatchID), "")
+	var notFound *serviceerror.NotFound
+	if errors.As(err, &notFound) {
+		return nil
+	}
+	return err
+}
+
 func workflowID(teamID, batchID int64) string {
 	return "generation-" + itoa(teamID) + "-" + itoa(batchID)
 }

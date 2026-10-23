@@ -474,6 +474,20 @@ function GenerationPageContent() {
     finally { setReviewBusy(false); }
   };
 
+  const cancelRealBatch = async () => {
+    if (!realBatch || !realClient) return;
+    setReviewBusy(true); setRealError('');
+    try {
+      const next = await realClient.cancelGenerationBatch(realBatch.id, {
+        expected_state_version: realBatch.state_version,
+        request_id: `ui-cancel-${realBatch.id}-${Date.now()}`,
+      });
+      setRealBatches((current) => current.map((batch) => batch.id === next.id && batch.state_version <= next.state_version ? next : batch));
+      toast.success('已取消生成，临时候选和源码快照已清理');
+    } catch (error) { setRealError(error instanceof Error ? error.message : '取消生成失败'); }
+    finally { setReviewBusy(false); }
+  };
+
   return (
     <div className="pb-24">
       <div className="mb-5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs shadow-sm">
@@ -716,7 +730,7 @@ function GenerationPageContent() {
       </Card>}
       {realError && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">{realError}</div>}
 
-      {realClient && realBatch && <Card title={`真实生成流程 · ${realProjectServices.find((service) => service.id === realBatch.service_id)?.name ?? '项目级批次'} · #${realBatch.id}`} className="p-5 mb-5">
+      {realClient && realBatch && <Card title={`真实生成流程 · ${realProjectServices.find((service) => service.id === realBatch.service_id)?.name ?? '项目级批次'} · #${realBatch.id}`} className="p-5 mb-5" extra={['enqueued', 'fetching', 'parsing', 'generating', 'quality_check', 'review'].includes(realBatch.state) ? <button type="button" disabled={reviewBusy} onClick={() => void cancelRealBatch()} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] text-red-600 hover:bg-red-50 disabled:opacity-50">取消生成</button> : null}>
         <div className="flex flex-wrap items-center gap-2 mb-5">
           {(['enqueued', 'fetching', 'parsing', 'generating', 'quality_check', 'review', 'committing', 'approved'] as const).map((state, index) => {
             const order = ['enqueued', 'fetching', 'parsing', 'generating', 'quality_check', 'review', 'committing', 'approved'];
