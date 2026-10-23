@@ -64,6 +64,7 @@ func (s *CostPriceStore) Effective(ctx context.Context, teamID int64, model stri
 				currency,effective_from,created_by,created_at
 			FROM cost_price
 			WHERE team_id=$1 AND model_key=$2 AND effective_from <= $3
+			  AND status='active' AND (effective_to IS NULL OR effective_to > $3)
 			ORDER BY effective_from DESC LIMIT 1`, teamID, model, at).Scan(
 			&p.ID, &p.TeamID, &p.Model, &p.InputUnitPrice, &p.OutputUnitPrice,
 			&p.CacheReadUnitPrice, &p.Currency, &p.EffectiveFrom, &p.CreatedBy, &p.CreatedAt)
