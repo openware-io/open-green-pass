@@ -56,5 +56,5 @@
 
 ## 注意
 
-- 为验证登录，临时重置了 im-saas 测试库 `admin` 密码；仅测试环境。
+- 曾错误重置 im-saas `admin` 密码；已从 `open_group.idaas_account` 恢复原哈希，并改用独立账号 `gp-e2e`。详见 `INCIDENT-ADMIN-PASSWORD-2026-10-23.md`。
 - 已将真实用例绑定到 `cov_cell 2903566203719680`（GET list happy），`coverage-sync` 后该 Cell 为 `passed`。`executed` 仍为 2，因为该 Cell 原先是 2 个失败 Cell 之一，属于替换而非净增。

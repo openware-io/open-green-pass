@@ -17,8 +17,8 @@ type Requirement = {
 
 const DEFAULT_TARGET = '2876690473259008';
 const DEFAULT_REQUIREMENTS: Requirement[] = [
-  { key: 'admin_username', label: '管理员账号', required: true, reason: '管理后台登录', evidence: 'kind: open-im-local' },
-  { key: 'admin_password', label: '管理员密码', required: true, reason: '只登记密钥引用，不写明文', sensitive: true },
+  { key: 'admin_username', label: '测试账号', required: true, reason: '专用 E2E 账号，不使用共享 admin', evidence: 'im-saas gp-e2e' },
+  { key: 'admin_password', label: '测试账号密码', required: true, reason: '只登记密钥引用，不写明文', sensitive: true },
   { key: 'tenant_id', label: '租户 ID', required: false, reason: '测试数据隔离', evidence: 'im-saas' },
   { key: 'jwt_secret', label: 'JWT 签名密钥', required: false, reason: '生成短期测试令牌', sensitive: true },
 ];
@@ -33,11 +33,11 @@ export default function TargetEnvPage() {
   const [env, setEnv] = useState('test');
   const [version, setVersion] = useState('2.2.0-SNAPSHOT');
   const [baseURL, setBaseURL] = useState('http://gateway.open-im-local.svc.cluster.local:3002');
-  const [credentialRef, setCredentialRef] = useState('k8s://open-im-local/open-im-env');
+  const [credentialRef, setCredentialRef] = useState('k8s://gp/gp-im-token');
   const [testDataProfile, setTestDataProfile] = useState('im-saas-users');
   const [browserProfile, setBrowserProfile] = useState('');
   const [requirements, setRequirements] = useState<Requirement[]>(DEFAULT_REQUIREMENTS);
-  const [values, setValues] = useState<Record<string, string>>({ tenant_id: '1', admin_username: 'admin', test_user_prefix: 'gp-' });
+  const [values, setValues] = useState<Record<string, string>>({ tenant_id: '1', admin_username: 'gp-e2e', test_user_prefix: 'gp-' });
   const [confirmed, setConfirmed] = useState(true);
   const [runtime, setRuntime] = useState<EnvRuntime | null>(null);
   const [busy, setBusy] = useState(false);
