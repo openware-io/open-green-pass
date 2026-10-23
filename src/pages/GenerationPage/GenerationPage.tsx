@@ -238,6 +238,7 @@ function GenerationPageContent() {
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
   const [realBatches, setRealBatches] = useState<GenerationBatch[]>([]);
   const [realRun, setRealRun] = useState<GenerationRun | null>(null);
+  const reviewableRunUnits = realRun ? realRun.units.filter((unit) => unit.batch_id && realBatches.find((batch) => batch.id === unit.batch_id)?.state === 'review') : [];
   const [repositoryRefs, setRepositoryRefs] = useState<Record<number, RepositoryRef[]>>({});
   const [selectedRefs, setSelectedRefs] = useState<Record<number, { type: 'branch' | 'tag'; name: string }>>({});
   const [refsLoading, setRefsLoading] = useState(false);
@@ -539,6 +540,19 @@ function GenerationPageContent() {
     finally { setReviewBusy(false); }
   };
 
+  const reviewRealRun = async (decision: 'approve' | 'reject') => {
+    if (!realClient || !realRun) return;
+    setReviewBusy(true); setRealError('');
+    try {
+      const next = await realClient.reviewGenerationRun(realRun.id, { decision, request_id: `ui-run-review-${realRun.id}-${decision}-${Date.now()}` });
+      setRealRun(next);
+      const batches = await realClient.listGenerationBatches(Number(projectId));
+      setRealBatches(batches);
+      toast.success(decision === 'approve' ? '本次任务待审核服务已全部入库' : '本次任务待审核服务已全部拒绝');
+    } catch (error) { setRealError(error instanceof Error ? error.message : '批量审核失败'); }
+    finally { setReviewBusy(false); }
+  };
+
   return (
     <div className="pb-24">
       <div className="mb-5 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs shadow-sm">
@@ -584,6 +598,7 @@ function GenerationPageContent() {
           <span className="text-slate-500">{realRun.completed_units} / {realRun.total_units} 个服务完成</span>
           {realRun.failed_units > 0 && <span className="text-red-600">{realRun.failed_units} 个失败</span>}
           <span className="text-slate-400">{realRun.scope_type === 'project' ? '项目全量' : realRun.scope_type === 'repo' ? '仓库全量' : '指定服务'}</span>
+          <span className="text-slate-400">tokens {realRun.tokens_in + realRun.tokens_out}</span>
         </div>
         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${realRun.total_units ? Math.round(((realRun.completed_units + realRun.failed_units) / realRun.total_units) * 100) : 0}%` }} /></div>
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -592,6 +607,11 @@ function GenerationPageContent() {
             <span className={'shrink-0 rounded-full px-2 py-0.5 ' + (unit.state === 'succeeded' ? 'bg-emerald-100 text-emerald-700' : unit.state === 'failed' ? 'bg-red-50 text-red-600' : unit.state === 'cancelled' ? 'bg-slate-200 text-slate-500' : 'bg-amber-50 text-amber-700')}>{unit.state === 'running' ? '生成中' : unit.state === 'succeeded' ? '已完成' : unit.state === 'failed' ? '失败' : unit.state === 'cancelled' ? '已取消' : '排队'}</span>
           </button>)}
         </div>
+        {reviewableRunUnits.length > 0 && <div className="mt-4 flex flex-wrap items-center justify-end gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <span className="mr-auto text-[11px] text-amber-800">{reviewableRunUnits.length} 个服务待审核</span>
+          <button type="button" disabled={reviewBusy} onClick={() => void reviewRealRun('reject')} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] text-red-600 hover:bg-red-50">全部拒绝</button>
+          <button type="button" disabled={reviewBusy} onClick={() => void reviewRealRun('approve')} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-emerald-700">{reviewBusy ? '提交中…' : '全部通过并入库'}</button>
+        </div>}
         <p className="mt-3 text-[11px] text-slate-500">整个任务取消会级联取消所有服务批次，并删除本次任务的候选与源码快照。</p>
       </Card>}
 

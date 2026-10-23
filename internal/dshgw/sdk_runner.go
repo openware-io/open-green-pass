@@ -172,7 +172,8 @@ func (r SDKRunner) Run(ctx context.Context, job Job) (Result, error) {
 	if text == "" {
 		text = rawNotifications(notifications)
 	}
-	return Result{Output: text}, nil
+	tokensIn, tokensOut := assistantUsage(notifications)
+	return Result{Output: text, TokensIn: tokensIn, TokensOut: tokensOut}, nil
 }
 
 func assistantText(notifications []rpcMessage) string {
@@ -220,4 +221,36 @@ func rawNotifications(notifications []rpcMessage) string {
 		buf = append(buf, '\n')
 	}
 	return string(buf)
+}
+
+// assistantUsage sums provider-reported usage across all model attempts in
+// one DSH session. Token counts are authoritative only when the provider
+// emitted them; absent usage stays zero.
+func assistantUsage(notifications []rpcMessage) (int64, int64) {
+	var in, out int64
+	for _, msg := range notifications {
+		if msg.Method != "session.event" {
+			continue
+		}
+		var params struct {
+			Event struct {
+				Type string `json:"type"`
+				Data struct {
+					Usage struct {
+						InputTokens  int64 `json:"inputTokens"`
+						OutputTokens int64 `json:"outputTokens"`
+					} `json:"usage"`
+				} `json:"data"`
+			} `json:"event"`
+		}
+		if json.Unmarshal(msg.Params, &params) != nil {
+			continue
+		}
+		if params.Event.Type != "assistant/attempt" && params.Event.Type != "assistant/message" {
+			continue
+		}
+		in += params.Event.Data.Usage.InputTokens
+		out += params.Event.Data.Usage.OutputTokens
+	}
+	return in, out
 }

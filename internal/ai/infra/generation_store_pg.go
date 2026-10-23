@@ -24,6 +24,7 @@ import (
 	"github.com/openware-io/open-green-pass/internal/ai/domain"
 	governance "github.com/openware-io/open-green-pass/internal/governance/infra"
 	"github.com/openware-io/open-green-pass/internal/platform/githubapp"
+	"github.com/openware-io/open-green-pass/internal/platform/rls"
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
 
@@ -31,15 +32,21 @@ import (
 // The application service remains responsible for legal transitions; this
 // repository only provides tenant-scoped reads and compare-and-swap writes.
 type GenerationBatchStore struct {
-	db  *governance.DB
-	gen *id.Generator
-	dsh domain.DSHJobClient
+	db   *governance.DB
+	gen  *id.Generator
+	dsh  domain.DSHJobClient
+	cost domain.GenerationCostPort
 }
 
 // SetDSHClient enables DSH SDK generation for batch seeds. When unset the
 // legacy direct model path remains available for non-DSH deployments.
 func (s *GenerationBatchStore) SetDSHClient(client domain.DSHJobClient) {
 	s.dsh = client
+}
+
+// SetCostPort enables measured DSH generation cost recording.
+func (s *GenerationBatchStore) SetCostPort(port domain.GenerationCostPort) {
+	s.cost = port
 }
 
 var (
@@ -309,8 +316,9 @@ Repository service: %s; kind: %s; language: %s; framework: %s; test tool: %s; co
 Normalized evidence: %s
 Source files (JSON): %s`, generatedCasesInstructions, serviceName, serviceKind, language, framework, testTool, testCommand, repoID, sourcePath, branch, sourceCommit, normalizedEvidence, sourceEvidence)
 	var text string
+	var tokensIn, tokensOut int64
 	if dshEnabled {
-		text, err = s.generateDSH(ctx, batchID, seedID, prompt)
+		text, tokensIn, tokensOut, err = s.generateDSH(ctx, batchID, seedID, prompt)
 	} else {
 		text, err = callModel(ctx, input, token, prompt)
 	}
@@ -348,14 +356,33 @@ Source files (JSON): %s`, generatedCasesInstructions, serviceName, serviceKind, 
 	if dshEnabled {
 		provider, model = "dsh", "dsh-sdk"
 	}
-	return s.createGeneratedSeeds(ctx, teamID, batchID, seedID, snapshotID, files, candidates, provider, model, sourcePath)
+	if err := s.createGeneratedSeeds(ctx, teamID, batchID, seedID, snapshotID, files, candidates, provider, model, sourcePath); err != nil {
+		return err
+	}
+	if tokensIn > 0 || tokensOut > 0 {
+		if err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `UPDATE gen_batch SET tokens_in=tokens_in+$3,tokens_out=tokens_out+$4 WHERE team_id=$1 AND id=$2`, teamID, batchID, tokensIn, tokensOut)
+			return err
+		}); err != nil {
+			return err
+		}
+		if s.cost != nil {
+			if err := s.cost.RecordGenerationCost(rls.WithTenant(ctx, teamID), domain.GenerationCost{
+				RequestID: fmt.Sprintf("gen-%d-%d", batchID, seedID), TeamID: teamID, TargetID: targetID,
+				BatchID: batchID, Model: provider + "/" + model, TokensIn: tokensIn, TokensOut: tokensOut,
+			}); err != nil {
+				return fmt.Errorf("record generation cost: %w", err)
+			}
+		}
+	}
+	return nil
 }
 
-func (s *GenerationBatchStore) generateDSH(ctx context.Context, batchID, seedID int64, prompt string) (string, error) {
+func (s *GenerationBatchStore) generateDSH(ctx context.Context, batchID, seedID int64, prompt string) (string, int64, int64, error) {
 	jobID := fmt.Sprintf("gp-batch-%d-%d", batchID, seedID)
 	job, err := s.dsh.Submit(ctx, jobID, prompt, int64(10*time.Minute/time.Millisecond), jobID)
 	if err != nil {
-		return "", fmt.Errorf("submit DSH generation job: %w", err)
+		return "", 0, 0, fmt.Errorf("submit DSH generation job: %w", err)
 	}
 	externalID := job.ID
 	if externalID == "" {
@@ -367,20 +394,20 @@ func (s *GenerationBatchStore) generateDSH(ctx context.Context, batchID, seedID 
 		switch job.State {
 		case "succeeded":
 			if strings.TrimSpace(job.Output) == "" {
-				return "", fmt.Errorf("DSH generation returned empty output")
+				return "", job.TokensIn, job.TokensOut, fmt.Errorf("DSH generation returned empty output")
 			}
-			return job.Output, nil
+			return job.Output, job.TokensIn, job.TokensOut, nil
 		case "failed", "timeout", "cancelled":
-			return "", fmt.Errorf("DSH generation %s: %s", job.State, job.Error)
+			return "", job.TokensIn, job.TokensOut, fmt.Errorf("DSH generation %s: %s", job.State, job.Error)
 		}
 		select {
 		case <-ctx.Done():
 			_ = s.dsh.Cancel(context.Background(), externalID)
-			return "", ctx.Err()
+			return "", 0, 0, ctx.Err()
 		case <-ticker.C:
 			job, err = s.dsh.Get(ctx, externalID)
 			if err != nil {
-				return "", fmt.Errorf("poll DSH generation job: %w", err)
+				return "", 0, 0, fmt.Errorf("poll DSH generation job: %w", err)
 			}
 		}
 	}

@@ -212,6 +212,7 @@ export class GreenPassClient {
   getGenerationRun(runId:number): JsonResponse<GenerationRun> { return this.request(`/generation/runs/${runId}`); }
   listGenerationRuns(projectId:number): JsonResponse<GenerationRun[]> { return this.request(`/generation/runs?project_id=${projectId}`); }
   cancelGenerationRun(runId:number): JsonResponse<GenerationRun> { return this.request(`/generation/runs/${runId}/cancel`,{method:'POST'}); }
+  reviewGenerationRun(runId:number,input:{decision:'approve'|'reject';request_id:string}): JsonResponse<GenerationRun> { return this.request(`/generation/runs/${runId}/review`,{method:'POST',body:JSON.stringify(input)}); }
   listGenerationSeeds(batchId:number): JsonResponse<Array<{id:number;batch_id:number;case_id?:number|null;source_locator:string;normalized_spec:Record<string,unknown>;quality_state:string;approval_state:string;dedupe_hash?:string}>> { return this.request(`/generation/batches/${batchId}/seeds`); }
   modelCatalog():JsonResponse<{providers:Array<{Provider:string;Name:string;Protocol:string;BaseURL:string}>;models:Array<{id:number;provider:string;model_key:string;status:string}>}>{return this.request('/model-catalog');}
   modelConnections():JsonResponse<{connections:Array<{id:number;provider:string;model_key:string;protocol:'api'|'cc';base_url:string;credential_status:string;configured_at?:string;token_configured:boolean}>}>{return this.request('/model-connections');}

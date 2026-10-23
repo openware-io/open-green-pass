@@ -59,6 +59,21 @@ func (s *GenerationRunStore) Find(ctx context.Context, teamID, runID int64) (*do
 			return err
 		}
 		run.State = domain.GenerationRunState(state)
+		if err := tx.QueryRow(ctx, `
+			SELECT COALESCE(SUM(b.tokens_in),0),COALESCE(SUM(b.tokens_out),0)
+			FROM gen_run_unit u JOIN gen_batch b ON b.id=u.batch_id
+			WHERE u.team_id=$1 AND u.run_id=$2`, teamID, runID).Scan(&run.TokensIn, &run.TokensOut); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(ctx, `
+			SELECT COALESCE(SUM(c.amount),0)
+			FROM cost_line_item c JOIN gen_run_unit u ON c.request_id LIKE 'gen-'||u.batch_id||'-%'
+			WHERE u.team_id=$1 AND u.run_id=$2 AND c.biz_point='case_generate'`, teamID, runID).Scan(&run.CostAmount); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE gen_run SET tokens_in=$1,tokens_out=$2,cost_amount=$3,updated_at=now() WHERE team_id=$4 AND id=$5`, run.TokensIn, run.TokensOut, run.CostAmount, teamID, runID); err != nil {
+			return err
+		}
 		rows, err := tx.Query(ctx, `
 			SELECT id,team_id,run_id,service_id,repo_id,batch_id,state,COALESCE(error_summary,''),created_at,updated_at
 			FROM gen_run_unit WHERE team_id=$1 AND run_id=$2 ORDER BY id`, teamID, runID)

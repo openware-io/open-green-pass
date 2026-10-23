@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"go.temporal.io/sdk/worker"
 
 	aiapp "github.com/openware-io/open-green-pass/internal/ai/application"
+	aidomain "github.com/openware-io/open-green-pass/internal/ai/domain"
 	aiinfra "github.com/openware-io/open-green-pass/internal/ai/infra"
 	aiaudit "github.com/openware-io/open-green-pass/internal/ai/trusted_audit"
 	aiworkflow "github.com/openware-io/open-green-pass/internal/ai/workflow"
@@ -35,6 +37,7 @@ import (
 	"github.com/openware-io/open-green-pass/internal/platform/config"
 	"github.com/openware-io/open-green-pass/internal/platform/db"
 	"github.com/openware-io/open-green-pass/internal/platform/observability"
+	"github.com/openware-io/open-green-pass/internal/platform/rls"
 	tapp "github.com/openware-io/open-green-pass/internal/trusted/application"
 	tinfra "github.com/openware-io/open-green-pass/internal/trusted/infra"
 	"github.com/openware-io/open-green-pass/pkg/id"
@@ -163,9 +166,13 @@ func main() {
 	}
 	defer c.Close()
 	generationStore := aiinfra.NewGenerationBatchStore(dbb, gen)
+	generationUnitPrice, _ := strconv.ParseFloat(os.Getenv("GP_GENERATION_UNIT_PRICE"), 64)
+	generationStore.SetCostPort(generationCostAdapter{svc: costSvc, unitPrice: generationUnitPrice})
 	if gatewayURL := os.Getenv("GP_DSH_GATEWAY_URL"); gatewayURL != "" {
 		generationStore.SetDSHClient(aiinfra.NewDSHGatewayClient(gatewayURL, os.Getenv("GP_DSH_INTERNAL_TOKEN")))
 	}
+	go purgeGenerationArtifacts(ctx, dbb, log)
+
 	generationSvc := aiapp.NewGenerationBatchService(generationStore)
 	generationSvc.SetScopePort(generationStore)
 	generationController := aiworkflow.NewTemporalController(c)
@@ -263,4 +270,46 @@ func main() {
 
 	log.Info("greenpass temporal worker started", "task_queue", "gp-execution", "temporal", addr)
 	<-workerCtx.Done()
+}
+
+func purgeGenerationArtifacts(ctx context.Context, database *db.DB, log interface{ Info(string, ...any) }) {
+	retentionHours := config.MustInt("GP_GENERATION_RETENTION_HOURS", 24)
+	if retentionHours < 1 {
+		retentionHours = 24
+	}
+	run := func() {
+		cutoff := time.Now().UTC().Add(-time.Duration(retentionHours) * time.Hour)
+		var removed int64
+		if err := database.Pool().QueryRow(context.Background(), "SELECT gp.purge_generation_artifacts($1)", cutoff).Scan(&removed); err != nil {
+			log.Info("generation artifact janitor failed", "error", err)
+			return
+		}
+		if removed > 0 {
+			log.Info("generation artifact janitor removed rows", "rows", removed, "cutoff", cutoff)
+		}
+	}
+	run()
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
+		}
+	}
+}
+
+type generationCostAdapter struct {
+	svc       *tapp.CostService
+	unitPrice float64
+}
+
+func (a generationCostAdapter) RecordGenerationCost(ctx context.Context, cost aidomain.GenerationCost) error {
+	_, err := a.svc.Record(rls.WithTenant(ctx, cost.TeamID), tapp.RecordRequest{
+		RequestID: cost.RequestID, BizPoint: "case_generate", TargetID: cost.TargetID,
+		Model: cost.Model, TokensIn: cost.TokensIn, TokensOut: cost.TokensOut, UnitPrice: a.unitPrice,
+	})
+	return err
 }

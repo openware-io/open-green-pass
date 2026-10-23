@@ -214,6 +214,41 @@ func (s *GenerationRunService) Cancel(ctx context.Context, teamID, runID, actorI
 	return s.runs.Find(ctx, teamID, runID)
 }
 
+type ReviewGenerationRunCommand struct {
+	TeamID, RunID, ActorID int64
+	Decision               string
+	RequestID              string
+}
+
+// Review applies one decision to every unit that is currently awaiting review.
+func (s *GenerationRunService) Review(ctx context.Context, cmd ReviewGenerationRunCommand) (*domain.GenerationRun, error) {
+	if cmd.TeamID <= 0 || cmd.RunID <= 0 || cmd.ActorID <= 0 || (cmd.Decision != "approve" && cmd.Decision != "reject") || strings.TrimSpace(cmd.RequestID) == "" {
+		return nil, errors.New("run review requires tenant, run, actor, decision and request id")
+	}
+	run, err := s.runs.Find(ctx, cmd.TeamID, cmd.RunID)
+	if err != nil {
+		return nil, err
+	}
+	reviewed := 0
+	for _, unit := range run.Units {
+		if unit.BatchID == nil {
+			continue
+		}
+		batch, err := s.batches.Find(ctx, cmd.TeamID, *unit.BatchID)
+		if err != nil || batch.State != domain.GenerationReview {
+			continue
+		}
+		if _, err := s.batches.Review(ctx, ReviewGenerationCommand{TeamID: cmd.TeamID, BatchID: batch.ID, ActorID: cmd.ActorID, ExpectedVersion: batch.StateVersion, Decision: GenerationReviewDecision(cmd.Decision), RequestID: cmd.RequestID + "-" + fmt.Sprint(batch.ID)}); err != nil {
+			return nil, fmt.Errorf("review unit %d: %w", unit.ServiceID, err)
+		}
+		reviewed++
+	}
+	if reviewed == 0 {
+		return nil, errors.New("no generation units are waiting for review")
+	}
+	return s.Get(ctx, cmd.TeamID, cmd.RunID)
+}
+
 // ListByProject returns aggregate runs for the UI.
 func (s *GenerationRunService) ListByProject(ctx context.Context, teamID, projectID int64, limit int) ([]*domain.GenerationRun, error) {
 	return s.runs.ListByProject(ctx, teamID, projectID, limit)

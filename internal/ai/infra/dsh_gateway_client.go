@@ -30,10 +30,12 @@ func NewDSHGatewayClient(baseURL, token string) *DSHGatewayClient {
 }
 
 type gatewayJob struct {
-	ID     string `json:"job_id"`
-	State  string `json:"state"`
-	Output string `json:"output"`
-	Error  string `json:"error"`
+	ID        string `json:"job_id"`
+	State     string `json:"state"`
+	Output    string `json:"output"`
+	TokensIn  int64  `json:"tokens_in"`
+	TokensOut int64  `json:"tokens_out"`
+	Error     string `json:"error"`
 }
 
 func (c *DSHGatewayClient) Submit(ctx context.Context, jobID, prompt string, timeoutMS int64, idempotencyKey string) (domain.DSHJob, error) {
@@ -44,7 +46,7 @@ func (c *DSHGatewayClient) Submit(ctx context.Context, jobID, prompt string, tim
 	if err := c.do(ctx, http.MethodPost, "/internal/dsh/jobs", body, &out); err != nil {
 		return domain.DSHJob{}, err
 	}
-	return domain.DSHJob{ID: out.ID, State: out.State, Output: out.Output, Error: out.Error}, nil
+	return domain.DSHJob{ID: out.ID, State: out.State, Output: out.Output, TokensIn: out.TokensIn, TokensOut: out.TokensOut, Error: out.Error}, nil
 }
 
 func (c *DSHGatewayClient) Get(ctx context.Context, jobID string) (domain.DSHJob, error) {
@@ -52,7 +54,7 @@ func (c *DSHGatewayClient) Get(ctx context.Context, jobID string) (domain.DSHJob
 	if err := c.do(ctx, http.MethodGet, "/internal/dsh/jobs/"+jobID, nil, &out); err != nil {
 		return domain.DSHJob{}, err
 	}
-	return domain.DSHJob{ID: out.ID, State: out.State, Output: out.Output, Error: out.Error}, nil
+	return domain.DSHJob{ID: out.ID, State: out.State, Output: out.Output, TokensIn: out.TokensIn, TokensOut: out.TokensOut, Error: out.Error}, nil
 }
 
 func (c *DSHGatewayClient) Cancel(ctx context.Context, jobID string) error {

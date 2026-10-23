@@ -1,0 +1,2 @@
+ALTER TABLE gen_batch DROP COLUMN IF EXISTS tokens_in;
+ALTER TABLE gen_batch DROP COLUMN IF EXISTS tokens_out;

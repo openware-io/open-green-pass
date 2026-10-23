@@ -24,6 +24,7 @@ func RegisterGenerationRuns(mux *http.ServeMux, svc *application.GenerationRunSe
 	mux.HandleFunc("GET /generation/runs", h.list)
 	mux.HandleFunc("GET /generation/runs/{id}", h.get)
 	mux.HandleFunc("POST /generation/runs/{id}/cancel", h.cancel)
+	mux.HandleFunc("POST /generation/runs/{id}/review", h.review)
 }
 
 type generationRunUnitRequest struct {
@@ -113,6 +114,40 @@ func (h *generationRunHandler) list(w http.ResponseWriter, r *http.Request) {
 		out = append(out, toGenerationRunResponse(run))
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+type generationRunReviewRequest struct {
+	Decision  string `json:"decision"`
+	RequestID string `json:"request_id"`
+}
+
+func (h *generationRunHandler) review(w http.ResponseWriter, r *http.Request) {
+	team, _ := rls.TenantFrom(r.Context())
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_generation_run"})
+		return
+	}
+	principal, ok := iam.PrincipalFromContext(r.Context())
+	if !ok {
+		httpx.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	actor, _ := strconv.ParseInt(principal.Subject, 10, 64)
+	if actor <= 0 {
+		actor = 1
+	}
+	var req generationRunReviewRequest
+	if httpx.DecodeJSON(r, &req) != nil {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_generation_review"})
+		return
+	}
+	run, err := h.svc.Review(r.Context(), application.ReviewGenerationRunCommand{TeamID: team, RunID: id, ActorID: actor, Decision: req.Decision, RequestID: req.RequestID})
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toGenerationRunResponse(run))
 }
 
 func (h *generationRunHandler) cancel(w http.ResponseWriter, r *http.Request) {
