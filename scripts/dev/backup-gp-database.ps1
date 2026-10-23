@@ -19,10 +19,11 @@ if (Test-Path -LiteralPath $OutputPath) { throw "Refusing to overwrite existing 
 
 $pods = @(kubectl --context $KubeContext -n $namespace get pod -l app=gp-postgres -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}') | Where-Object { $_ }
 if ($pods.Count -ne 1) { throw "Expected exactly one gp-postgres pod in namespace gp; found $($pods.Count)" }
+$podName = @($pods)[0]
 
 # pg_dump reads credentials from the PostgreSQL container environment. No secret
 # is copied to the host or written into this artifact.
-& kubectl --context $KubeContext -n $namespace exec $pods[0] -- sh -c 'pg_dump -U "$POSTGRES_USER" --format=plain --no-owner --no-privileges --dbname gp' |
+& kubectl --context $KubeContext -n $namespace exec $podName -- sh -c 'pg_dump -U "$POSTGRES_USER" --format=plain --no-owner --no-privileges --dbname gp' |
     Out-File -LiteralPath $OutputPath -Encoding utf8NoBOM
 if ($LASTEXITCODE -ne 0) {
     Remove-Item -LiteralPath $OutputPath -Force -ErrorAction SilentlyContinue
