@@ -2,7 +2,7 @@
 
 ## 执行
 
-run `2906443507273728`：
+run `2906443507273728`（旧 runner 兼容前）和 `2906703985086464`（兼容后）：
 
 - 场景 1
 - 13 个 user 用例
@@ -14,7 +14,7 @@ run `2906443507273728`：
 
 ```text
 pass 1（user-admin-list-live-001）
-fail 12（legacy user-gen-001..012：case has no declarative request）
+fail 12（旧格式兼容后实际发出请求；2 条通过，10 条因 `{id}` 占位符返回 HTTP 500）
 ```
 
 ## 覆盖回写
@@ -40,7 +40,7 @@ blocker=open P0/P1 findings: 0/2
 
 ## 问题
 
-1. 12 条 `user-gen-*` 仍是旧扁平脚本：
+1. 12 条 `user-gen-*` 仍是旧扁平脚本，但 runner 已兼容并解析 BaseURL：
 
 ```json
 {"path": "/api/v1/admin/users", "method": "GET", "expected_status": 200}
@@ -52,8 +52,8 @@ blocker=open P0/P1 findings: 0/2
 {"request": {...}, "assertions": [...]}
 ```
 
-2. 多条旧脚本含 `{id}` 占位符，且部分为破坏性 DELETE/PUT，不能直接自动执行。
-3. 当前 “executed=24” 包含 12 条 fail，不代表 24 条真实有效通过。
+2. 多条旧脚本含 `{id}` 占位符，且部分为破坏性 DELETE/PUT，不能直接自动执行；这是当前 10 条失败的根因。
+3. 当前 “executed=24” 包含 10 条占位符 500，不代表 24 条真实有效通过；runner 已不再返回 `case has no declarative request`。
 4. 项目门禁仍有：
 
 ```text
