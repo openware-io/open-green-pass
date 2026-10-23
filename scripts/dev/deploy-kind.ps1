@@ -145,6 +145,29 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Unable to create GP application configuration Secret." }
     }
 
+    $existingS3Auth = & kubectl --context $KubeContext -n $namespace get secret gp-s3-auth -o name 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $existingS3Auth) {
+        $minioKey = Get-KubernetesSecretValue "gp-app-config" "GP_MINIO_KEY"
+        $minioSecret = Get-KubernetesSecretValue "gp-app-config" "GP_MINIO_SECRET"
+        if (-not $minioKey -or -not $minioSecret) { throw "GP object storage credentials are missing." }
+        $s3Config = @{
+            signingKey = [guid]::NewGuid().ToString("N")
+            identities = @(@{
+                name = "gpminio"
+                credentials = @(@{ accessKey = $minioKey; secretKey = $minioSecret })
+                actions = @("Admin", "Read", "Write")
+            })
+        } | ConvertTo-Json -Depth 6 -Compress
+        $s3ConfigFile = Join-Path ([System.IO.Path]::GetTempPath()) ("gp-s3-" + [guid]::NewGuid().ToString("N") + ".json")
+        try {
+            [System.IO.File]::WriteAllText($s3ConfigFile, $s3Config, [System.Text.UTF8Encoding]::new($false))
+            kubectl --context $KubeContext -n $namespace create secret generic gp-s3-auth --from-file=s3.json=$s3ConfigFile --dry-run=client -o yaml | kubectl --context $KubeContext -n $namespace apply -f - | Out-Null
+        } finally {
+            Remove-Item -LiteralPath $s3ConfigFile -Force -ErrorAction SilentlyContinue
+        }
+        if ($LASTEXITCODE -ne 0) { throw "Unable to create SeaweedFS S3 auth Secret." }
+    }
+
     $dshToken = Get-KubernetesSecretValue "gp-dsh-auth" "token"
     if (-not $dshToken) {
         $dshToken = New-RandomLocalSecret

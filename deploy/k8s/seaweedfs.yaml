@@ -37,16 +37,23 @@ spec:
             - -dir=/data
             - -s3
             - -s3.port=9000
+            - -s3.config=/etc/seaweedfs/s3.json
           ports:
             - containerPort: 9000
               name: s3
           volumeMounts:
             - name: data
               mountPath: /data
+            - name: s3-auth
+              mountPath: /etc/seaweedfs
+              readOnly: true
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: gp-seaweedfs-data
+        - name: s3-auth
+          secret:
+            secretName: gp-s3-auth
 ---
 apiVersion: v1
 kind: Service
