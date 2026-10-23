@@ -3,6 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
+- **全量生成 + 交互调整（0.1.126-SNAPSHOT）**：生成页新增“全量生成（项目）/ 指定服务”双模式；全量模式覆盖全部已确认服务、按各仓库默认分支生成、不使用单 Tag；每次点击创建新批次；全量模式隐藏单服务 Tag 轴心，主按钮显示“全量生成用例（N）”。
 - **DSH 真实生成（0.1.125-SNAPSHOT）**：gateway 改为 Node22 + dsh 0.2.1-rc.2，`GP_DSH_RUNNER=sdk`；worker 生成批处理走 DSH job，seed provider `dsh/dsh-sdk`；生成页移除项目模型绑定，改为 DSH 生成。验证 smoke job succeeded、pc-admin batch 生成 7 条 seed。
 - **pc-admin 卡片去冗余（0.1.124-SNAPSHOT）**：移除列表摘要中的模型名/置信度/证据数和四步流程条，只保留仓库、源码目录、状态与动作；模型与来源仍在画像详情中。
 - **测试环境参数页 + im-saas 真实执行（0.1.122-SNAPSHOT）**：新增 `/target-env` 与 `GET /targets/{id}/env/runtime`；填写 im-saas test 环境参数；新增 HTTPRunner + `gp-im-token`；真实 run 2904774788288512 执行 `GET /api/v1/admin/users` 返回 pass/200；修复 failure_class 空串约束。
