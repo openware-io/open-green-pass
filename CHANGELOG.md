@@ -3,6 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
+- **pc-admin 卡片去冗余（0.1.124-SNAPSHOT）**：移除列表摘要中的模型名/置信度/证据数和四步流程条，只保留仓库、源码目录、状态与动作；模型与来源仍在画像详情中。
 - **测试环境参数页 + im-saas 真实执行（0.1.122-SNAPSHOT）**：新增 `/target-env` 与 `GET /targets/{id}/env/runtime`；填写 im-saas test 环境参数；新增 HTTPRunner + `gp-im-token`；真实 run 2904774788288512 执行 `GET /api/v1/admin/users` 返回 pass/200；修复 failure_class 空串约束。
 - **M4 安全基线（0.1.118-SNAPSHOT）**：API 安全响应头、2MiB 请求体上限、安全中间件单测；租户隔离验证 403；`go test ./...`/typecheck/api:check 通过。M2/M3/M4 仍未完全关闭。
 - **执行结果回写覆盖（0.1.116-SNAPSHOT）**：新增 `POST /runs/{id}/coverage-sync`，按 case_id 回写 cov_cell 状态；failed/blocked 计入 executed；run 9001 验证 execution_coverage 0.083。
