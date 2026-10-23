@@ -101,7 +101,8 @@ func (s *CostStore) Items(ctx context.Context, teamID int64, category, point str
 	var out []*domain.CostLineItem
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		q := `SELECT id, request_id, team_id, target_id, run_id, case_id, biz_category, biz_point,
-			 model, tokens_in, tokens_out, unit_price, amount, occurred_at
+			 model, tokens_in, tokens_out, cache_read_tokens, unit_price, input_unit_price,
+			 output_unit_price, cache_read_unit_price, price_id, price_missing, amount, occurred_at
 			FROM cost_line_item WHERE team_id=$1`
 		args := []any{teamID}
 		argi := 2
@@ -157,7 +158,9 @@ func (s *CostStore) CompareHistory(ctx context.Context, teamID, caseID int64) ([
 			var c domain.CostLineItem
 			var cat string
 			if err := rows.Scan(&c.ID, &c.RequestID, &c.TeamID, &c.TargetID, &c.RunID, &c.CaseID,
-				&cat, &c.BizPoint, &c.Model, &c.TokensIn, &c.TokensOut, &c.UnitPrice, &c.Amount, &c.OccurredAt); err != nil {
+				&cat, &c.BizPoint, &c.Model, &c.TokensIn, &c.TokensOut, &c.CacheReadTokens, &c.UnitPrice,
+				&c.InputUnitPrice, &c.OutputUnitPrice, &c.CacheReadUnitPrice, &c.PriceID, &c.PriceMissing,
+				&c.Amount, &c.OccurredAt); err != nil {
 				return err
 			}
 			c.Category = domain.CostCategory(cat)
