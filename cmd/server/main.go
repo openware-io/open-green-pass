@@ -100,7 +100,9 @@ func main() {
 	generationStore := aiinfra.NewGenerationBatchStore(db, gen)
 	generationSvc := aiapp.NewGenerationBatchService(generationStore)
 	generationSvc.SetScopePort(generationStore)
-	generationRunSvc := aiapp.NewGenerationRunService(aiinfra.NewGenerationRunStore(db), generationSvc, gen)
+	generationRunStore := aiinfra.NewGenerationRunStore(db)
+	generationRunSvc := aiapp.NewGenerationRunService(generationRunStore, generationSvc, gen)
+	generationRunSvc.SetScopePort(generationRunStore)
 	modelStore := infra.NewModelStore(db)
 	scmConnectionStore := infra.NewSCMConnectionStore(db, gen)
 	// GP3-05 reference policy is intentionally empty until the persistent

@@ -100,6 +100,33 @@ func (s *GenerationRunStore) Find(ctx context.Context, teamID, runID int64) (*do
 	return out, err
 }
 
+// ResolveGenerationRunScope expands project/repo/service into eligible services.
+func (s *GenerationRunStore) ResolveGenerationRunScope(ctx context.Context, teamID, projectID int64, scopeType string, scopeID int64) ([]domain.GenerationRunScope, error) {
+	var out []domain.GenerationRunScope
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT s.id,s.repo_id,COALESCE(s.source_path,''),COALESCE(r.default_branch,'')
+			FROM tgt_service s JOIN repo_repo r ON r.id=s.repo_id AND r.team_id=s.team_id
+			WHERE s.team_id=$1 AND s.project_id=$2 AND s.status='active'
+			  AND s.generation_status='confirmed' AND s.profile_status='confirmed'
+			  AND (($3='project') OR ($3='repo' AND s.repo_id=$4) OR ($3='service' AND s.id=$4))
+			ORDER BY s.id`, teamID, projectID, scopeType, scopeID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var item domain.GenerationRunScope
+			if err := rows.Scan(&item.ServiceID, &item.RepoID, &item.SourcePath, &item.DefaultBranch); err != nil {
+				return err
+			}
+			out = append(out, item)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
 func (s *GenerationRunStore) ListByProject(ctx context.Context, teamID, projectID int64, limit int) ([]*domain.GenerationRun, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50

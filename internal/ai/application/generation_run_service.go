@@ -36,11 +36,14 @@ type GenerationRunService struct {
 	runs    domain.GenerationRunRepository
 	batches *GenerationBatchService
 	gen     *id.Generator
+	scope   domain.GenerationRunScopePort
 }
 
 func NewGenerationRunService(runs domain.GenerationRunRepository, batches *GenerationBatchService, gen *id.Generator) *GenerationRunService {
 	return &GenerationRunService{runs: runs, batches: batches, gen: gen}
 }
+
+func (s *GenerationRunService) SetScopePort(scope domain.GenerationRunScopePort) { s.scope = scope }
 
 // Create creates the run and one batch per service. Batch failures are isolated
 // per unit; a partial run remains visible instead of being silently dropped.
@@ -50,6 +53,21 @@ func (s *GenerationRunService) Create(ctx context.Context, cmd CreateGenerationR
 	}
 	if cmd.ScopeType != "project" && cmd.ScopeType != "repo" && cmd.ScopeType != "service" {
 		return nil, errors.New("generation run scope must be project, repo or service")
+	}
+	if len(cmd.Units) == 0 {
+		if s.scope == nil {
+			return nil, errors.New("generation run scope resolver is required")
+		}
+		resolved, err := s.scope.ResolveGenerationRunScope(ctx, cmd.TeamID, cmd.ProjectID, cmd.ScopeType, cmd.ScopeID)
+		if err != nil {
+			return nil, err
+		}
+		if len(resolved) == 0 {
+			return nil, errors.New("no confirmed services match the generation scope")
+		}
+		for _, item := range resolved {
+			cmd.Units = append(cmd.Units, GenerationRunUnitInput{ServiceID: item.ServiceID, RepoID: item.RepoID, SourcePath: item.SourcePath, RefType: "branch", RefName: item.DefaultBranch})
+		}
 	}
 	if len(cmd.Units) == 0 || len(cmd.Units) > 100 {
 		return nil, errors.New("generation run requires between 1 and 100 service units")

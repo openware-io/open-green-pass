@@ -415,7 +415,7 @@ function GenerationPageContent() {
         scope_type: generationScope === 'custom' ? 'service' : generationScope,
         scope_id: generationScope === 'project' ? projectID : generationScope === 'repo' ? activeRepoScopeId ?? 0 : services[0].id,
         idempotency_key: `ui-run-${projectID}-${crypto.randomUUID()}`,
-        units,
+        units: generationScope === 'custom' ? units : [],
       });
       setRealRun(run);
       setBatchResults(run.units.map((unit) => ({

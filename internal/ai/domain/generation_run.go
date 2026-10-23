@@ -70,6 +70,19 @@ type GenerationUnit struct {
 	UpdatedAt time.Time
 }
 
+// GenerationRunScope is one eligible service resolved from the catalog.
+type GenerationRunScope struct {
+	ServiceID     int64
+	RepoID        int64
+	SourcePath    string
+	DefaultBranch string
+}
+
+// GenerationRunScopePort expands a run scope into eligible services.
+type GenerationRunScopePort interface {
+	ResolveGenerationRunScope(ctx context.Context, teamID, projectID int64, scopeType string, scopeID int64) ([]GenerationRunScope, error)
+}
+
 // GenerationRunRepository persists run and unit state.
 type GenerationRunRepository interface {
 	Create(ctx context.Context, run *GenerationRun) error
