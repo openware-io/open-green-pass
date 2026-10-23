@@ -61,7 +61,7 @@ POST   /generation/runs/{id}/cancel
 }
 ```
 
-后端在 `Create` 中：
+`units` 可以为空：后端按 scope 查询已确认服务并自动使用仓库默认分支；`custom` 仍提交 units。\n\n后端在 `Create` 中：
 
 1. 创建 `gen_run` 与全部 `gen_run_unit`；
 2. 逐服务调用现有 `GenerationBatchService.Create`；
