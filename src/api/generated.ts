@@ -2859,7 +2859,7 @@ export interface components {
              */
             readonly base_batch_id?: number | null;
             /** @enum {string} */
-            state: "enqueued" | "fetching" | "parsing" | "generating" | "quality_check" | "review" | "committing" | "approved" | "rejected" | "rolled_back" | "failed";
+            state: "enqueued" | "fetching" | "parsing" | "generating" | "quality_check" | "review" | "committing" | "approved" | "rejected" | "rolled_back" | "failed" | "cancelled";
             /** Format: int64 */
             state_version: number;
             workflow_id: string;

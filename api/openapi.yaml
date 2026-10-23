@@ -1630,7 +1630,7 @@ components:
         version: { type: string, description: 业务候选版本，不等同于代码 Tag }
         head_sha: { type: string, description: 工作流实际冻结并用于生成的不可变提交 SHA }
         base_batch_id: { type: integer, format: int64, nullable: true, readOnly: true, description: 系统自动选择的同服务最近一次已生效基线批次 }
-        state: { type: string, enum: [ enqueued, fetching, parsing, generating, quality_check, review, committing, approved, rejected, rolled_back, failed ] }
+        state: { type: string, enum: [ enqueued, fetching, parsing, generating, quality_check, review, committing, approved, rejected, rolled_back, failed, cancelled ] }
         state_version: { type: integer, format: int64 }
         workflow_id: { type: string }
         idempotency_key: { type: string }
