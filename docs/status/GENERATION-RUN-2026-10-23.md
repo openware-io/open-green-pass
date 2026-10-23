@@ -103,23 +103,32 @@ POST   /generation/runs/{id}/cancel
 
 - 取消：run `2905909840089088`
 - 成功：run `2905913900863488`
+- 最终回归：run `2906002403921920`（run 级审核后 succeeded）
+- 成本：batch `2905988727508992`，tokens `234 / 4483`，写 `case_generate` 成本行
 
 ## 成本审计
 
-`gen_run` 已预留 tokens/cost 字段，但**尚未写入**。
+已接入 DSH usage：
 
-原因：DSH gateway 还没有返回 usage。下一步：
+- 从 DSH `assistant/attempt` 事件读取 `inputTokens` / `outputTokens`；
+- gateway `Result` / HTTP 响应增加 `tokens_in/tokens_out`；
+- 写入 `gen_batch.tokens_in/tokens_out`；
+- 写 `cost_line_item`：
+  - `biz_point=case_generate`
+  - `model=dsh/dsh-sdk`
+  - `unit_price=GP_GENERATION_UNIT_PRICE`
+- `gen_run` 聚合 tokens 和 amount。
 
-1. 从 DSH `assistant/attempt` 事件提取 tokens；
-2. gateway `Result` / HTTP 响应增加 `tokens_in/tokens_out`；
-3. 生成完成/取消时写 `cost_line_item`（`case_generate`）；
-4. 聚合到 `gen_run`。
+未配置 `GP_GENERATION_UNIT_PRICE` 时金额为 0，但 tokens 会保留；需要运营配置单价。
 
-当前不能写 0 成本冒充已接入。
+## 已补充
+
+- run 级审核：`POST /generation/runs/{id}/review`，对当前待审核 unit 批量 approve/reject。
+- TTL：迁移 47 的 `gp.purge_generation_artifacts`；worker 每小时清理 failed/rejected/rolled_back/cancelled 批次超过 `GP_GENERATION_RETENTION_HOURS`（默认 24h）的候选和源码快照。
+- 用例 code 冲突：复用已存在 `cas_case`，避免重复 key 导致入库失败。
 
 ## 已知问题
 
-- 审核仍以 batch 为单位；run 卡可跳转到 unit 的 batch，但还没有 run 级批量审核。
-- 失败 unit 的 batch 数据目前保留用于排障，尚未做 TTL janitor。
+- `GP_GENERATION_UNIT_PRICE` 未配置时金额为 0。
 - `ListByProject` 目前逐 run 查询 unit，后续可改聚合查询。
-- run 成本字段为 0，等待 DSH usage。
+- 失败批次保留一段时间排障，由 TTL 清理。
