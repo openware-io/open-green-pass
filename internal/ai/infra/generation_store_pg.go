@@ -698,38 +698,51 @@ func (s *GenerationBatchStore) QualityCheckSeeds(ctx context.Context, teamID, ba
 		_ = s.MarkSeedsQuality(ctx, teamID, batchID, "failed")
 		return fmt.Errorf("quality gate requires normalized source file evidence")
 	}
-	allowedSources := make(map[string]struct{}, len(files))
+	allowedSources := make(map[string]struct{}, len(files)+len(normalized.Files))
 	for _, file := range files {
 		allowedSources[file.Path] = struct{}{}
 	}
+	// Source bodies are purged after the first quality gate. Keep the
+	// normalized manifest as durable evidence so approval can re-run the gate.
+	for _, file := range normalized.Files {
+		if file["path"] != "" {
+			allowedSources[file["path"]] = struct{}{}
+		}
+	}
 	seen := make(map[string]struct{}, len(seeds))
+	passed := 0
 	for _, seed := range seeds {
 		digest := seedDigest(seed.spec)
 		if _, duplicate := seen[digest]; duplicate {
 			_ = s.setSeedQuality(ctx, teamID, seed.id, "failed")
-			return fmt.Errorf("duplicate generated case detected")
+			continue
 		}
 		seen[digest] = struct{}{}
 		raw, err := json.Marshal(seed.spec)
 		if err != nil {
-			return err
+			_ = s.setSeedQuality(ctx, teamID, seed.id, "failed")
+			continue
 		}
 		var candidate generatedCase
 		if err := json.Unmarshal(raw, &candidate); err != nil {
 			_ = s.setSeedQuality(ctx, teamID, seed.id, "failed")
-			return fmt.Errorf("candidate %d is not a supported generated case: %w", seed.id, err)
+			continue
 		}
 		if err := validateGeneratedCase(candidate); err != nil {
 			_ = s.setSeedQuality(ctx, teamID, seed.id, "failed")
-			return fmt.Errorf("candidate %d failed quality checks: %w", seed.id, err)
+			continue
 		}
 		if _, ok := allowedSources[candidate.SourceLocator]; !ok {
 			_ = s.setSeedQuality(ctx, teamID, seed.id, "failed")
-			return fmt.Errorf("candidate %d cites source outside the frozen snapshot", seed.id)
+			continue
 		}
 		if err := s.setSeedQuality(ctx, teamID, seed.id, "passed"); err != nil {
 			return err
 		}
+		passed++
+	}
+	if passed == 0 {
+		return fmt.Errorf("no generated candidate passed the quality gate")
 	}
 	return nil
 }
@@ -862,8 +875,13 @@ func (s *GenerationBatchStore) CommitSeeds(ctx context.Context, teamID, batchID,
 		if err := tx.QueryRow(ctx, `SELECT count(*),count(*) FILTER (WHERE quality_state='passed') FROM gen_seed WHERE team_id=$1 AND batch_id=$2`, teamID, batchID).Scan(&totalSeeds, &passedSeeds); err != nil {
 			return err
 		}
-		if totalSeeds == 0 || totalSeeds != passedSeeds {
-			return fmt.Errorf("all generated seeds must pass the quality gate before commit")
+		if totalSeeds == 0 || passedSeeds == 0 {
+			return fmt.Errorf("no quality-passed generated seeds are available for commit")
+		}
+		// Rejected candidates stay in the batch for audit but never enter the
+		// active case set.
+		if _, err := tx.Exec(ctx, `UPDATE gen_seed SET approval_state='rejected' WHERE team_id=$1 AND batch_id=$2 AND quality_state<>'passed' AND approval_state<>'approved'`, teamID, batchID); err != nil {
+			return err
 		}
 		var committedSeeds int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM gen_seed WHERE team_id=$1 AND batch_id=$2 AND approval_state='approved' AND case_id IS NOT NULL`, teamID, batchID).Scan(&committedSeeds); err != nil {
@@ -872,7 +890,7 @@ func (s *GenerationBatchStore) CommitSeeds(ctx context.Context, teamID, batchID,
 		// CommitVersions can be retried after the transaction has committed but
 		// before the workflow persisted its final state transition. The original
 		// commit is already the complete atomic current-set update in that case.
-		if committedSeeds == totalSeeds {
+		if committedSeeds == passedSeeds {
 			return nil
 		}
 		if committedSeeds != 0 {
