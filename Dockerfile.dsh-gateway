@@ -1,7 +1,17 @@
-# GreenPass DSH gateway image.
-# The binary is prebuilt by scripts/dev/deploy-kind.ps1 (linux/amd64, CGO off)
-# to keep the image build offline and reproducible without a Go base image.
-FROM gcr.io/distroless/static-debian12:nonroot
+# GreenPass DSH SDK gateway image.
+# The gateway binary is prebuilt by scripts/dev/deploy-kind.ps1; this image adds
+# Node.js + the DSH CLI so the SDK runner can execute real DSH sessions.
+FROM node:22-bookworm-slim
+
+RUN npm install -g @deepseek-ai/dsh@0.2.1-rc.2
+
 COPY dsh-gateway-linux /usr/local/bin/dsh-gateway
-USER nonroot:nonroot
+RUN chmod +x /usr/local/bin/dsh-gateway
+
+ENV HOME=/tmp
+ENV GP_DSH_BINARY=/usr/local/bin/dsh
+ENV GP_DSH_PROFILE=sdk
+ENV GP_DSH_RUNNER=sdk
+
+USER 1000:1000
 ENTRYPOINT ["/usr/local/bin/dsh-gateway"]

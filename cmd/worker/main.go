@@ -163,6 +163,9 @@ func main() {
 	}
 	defer c.Close()
 	generationStore := aiinfra.NewGenerationBatchStore(dbb, gen)
+	if gatewayURL := os.Getenv("GP_DSH_GATEWAY_URL"); gatewayURL != "" {
+		generationStore.SetDSHClient(aiinfra.NewDSHGatewayClient(gatewayURL, os.Getenv("GP_DSH_INTERNAL_TOKEN")))
+	}
 	generationSvc := aiapp.NewGenerationBatchService(generationStore)
 	generationSvc.SetScopePort(generationStore)
 	generationController := aiworkflow.NewTemporalController(c)

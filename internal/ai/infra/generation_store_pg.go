@@ -33,6 +33,13 @@ import (
 type GenerationBatchStore struct {
 	db  *governance.DB
 	gen *id.Generator
+	dsh domain.DSHJobClient
+}
+
+// SetDSHClient enables DSH SDK generation for batch seeds. When unset the
+// legacy direct model path remains available for non-DSH deployments.
+func (s *GenerationBatchStore) SetDSHClient(client domain.DSHJobClient) {
+	s.dsh = client
 }
 
 var (
@@ -245,6 +252,9 @@ func (s *GenerationBatchStore) GenerateModelSeed(ctx context.Context, teamID, ba
 		if existingSeedCount > 0 {
 			return nil
 		}
+		if strings.EqualFold(os.Getenv("GP_GENERATION_ENGINE"), "dsh") && s.dsh != nil {
+			return nil
+		}
 		var binding []byte
 		if err := tx.QueryRow(ctx, `SELECT COALESCE(model_binding,'{}'::jsonb) FROM tgt_target WHERE team_id=$1 AND id=$2`, teamID, targetID).Scan(&binding); err != nil {
 			return err
@@ -270,9 +280,13 @@ func (s *GenerationBatchStore) GenerateModelSeed(ctx context.Context, teamID, ba
 	if seedCount > 0 {
 		return nil
 	}
-	token, err := resolveModelToken(ctx, input.SecretRef)
-	if err != nil {
-		return err
+	dshEnabled := s.dsh != nil && strings.EqualFold(os.Getenv("GP_GENERATION_ENGINE"), "dsh")
+	var token string
+	if !dshEnabled {
+		token, err = resolveModelToken(ctx, input.SecretRef)
+		if err != nil {
+			return err
+		}
 	}
 	snapshotID, files, normalized, err := s.ReadSourceSnapshot(ctx, teamID, batchID)
 	if err != nil {
@@ -294,7 +308,12 @@ func (s *GenerationBatchStore) GenerateModelSeed(ctx context.Context, teamID, ba
 Repository service: %s; kind: %s; language: %s; framework: %s; test tool: %s; configured test command (informational only, never execute it): %s; repository ID: %d; source directory: %s; branch: %s; frozen commit: %s.
 Normalized evidence: %s
 Source files (JSON): %s`, generatedCasesInstructions, serviceName, serviceKind, language, framework, testTool, testCommand, repoID, sourcePath, branch, sourceCommit, normalizedEvidence, sourceEvidence)
-	text, err := callModel(ctx, input, token, prompt)
+	var text string
+	if dshEnabled {
+		text, err = s.generateDSH(ctx, batchID, seedID, prompt)
+	} else {
+		text, err = callModel(ctx, input, token, prompt)
+	}
 	if err != nil {
 		return err
 	}
@@ -325,7 +344,45 @@ Source files (JSON): %s`, generatedCasesInstructions, serviceName, serviceKind, 
 			return fmt.Errorf("model cited a source file outside the frozen snapshot")
 		}
 	}
-	return s.createGeneratedSeeds(ctx, teamID, batchID, seedID, snapshotID, files, candidates, input.Provider, input.Model, sourcePath)
+	provider, model := input.Provider, input.Model
+	if dshEnabled {
+		provider, model = "dsh", "dsh-sdk"
+	}
+	return s.createGeneratedSeeds(ctx, teamID, batchID, seedID, snapshotID, files, candidates, provider, model, sourcePath)
+}
+
+func (s *GenerationBatchStore) generateDSH(ctx context.Context, batchID, seedID int64, prompt string) (string, error) {
+	jobID := fmt.Sprintf("gp-batch-%d-%d", batchID, seedID)
+	job, err := s.dsh.Submit(ctx, jobID, prompt, int64(10*time.Minute/time.Millisecond), jobID)
+	if err != nil {
+		return "", fmt.Errorf("submit DSH generation job: %w", err)
+	}
+	externalID := job.ID
+	if externalID == "" {
+		externalID = jobID
+	}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		switch job.State {
+		case "succeeded":
+			if strings.TrimSpace(job.Output) == "" {
+				return "", fmt.Errorf("DSH generation returned empty output")
+			}
+			return job.Output, nil
+		case "failed", "timeout", "cancelled":
+			return "", fmt.Errorf("DSH generation %s: %s", job.State, job.Error)
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-ticker.C:
+			job, err = s.dsh.Get(ctx, externalID)
+			if err != nil {
+				return "", fmt.Errorf("poll DSH generation job: %w", err)
+			}
+		}
+	}
 }
 
 func (s *GenerationBatchStore) createGeneratedSeeds(ctx context.Context, teamID, batchID, seedID, snapshotID int64, files []sourceFile, candidates []generatedCase, provider, model, sourcePath string) error {

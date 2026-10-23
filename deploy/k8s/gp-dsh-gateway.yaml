@@ -10,7 +10,7 @@ spec:
     spec:
       serviceAccountName: gp-dsh-gateway
       automountServiceAccountToken: false
-      securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: dsh-gateway
           image: IMAGE_REGISTRY/open-green-pass-dsh-gateway:VERSION
@@ -21,12 +21,18 @@ spec:
             - { name: GP_DSH_GATEWAY_ADDR, value: ":8090" }
             - { name: GP_DSH_WORKERS, value: "2" }
             - { name: GP_DSH_QUEUE, value: "64" }
-            - { name: GP_DSH_RUNNER, value: "stub" }
+            - { name: GP_DSH_RUNNER, value: "sdk" }
+            - { name: GP_DSH_PROVIDER, value: "deepseek-official" }
+            - { name: GP_DSH_MODEL, value: "deepseek-flash" }
+            - name: DEEPSEEK_API_KEY
+              valueFrom: { secretKeyRef: { name: gp-model-1001-deepseek-api, key: token } }
             - name: GP_DSH_INTERNAL_TOKEN
               valueFrom: { secretKeyRef: { name: gp-dsh-auth, key: token } }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
           readinessProbe: { httpGet: { path: /readyz, port: http }, initialDelaySeconds: 2, periodSeconds: 5 }
           livenessProbe: { httpGet: { path: /healthz, port: http }, initialDelaySeconds: 5, periodSeconds: 10 }
-          resources: { requests: { cpu: 100m, memory: 128Mi }, limits: { cpu: "1", memory: 1Gi } }
+          resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: "2", memory: 2Gi } }
+      volumes: [{ name: tmp, emptyDir: {} }]
 ---
 apiVersion: v1
 kind: ServiceAccount

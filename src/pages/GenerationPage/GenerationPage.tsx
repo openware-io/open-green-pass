@@ -200,9 +200,7 @@ function GenerationPageContent() {
   const { repos: realProjectRepos, services: realProjectServices, serviceId: activeServiceId, projectId, selectService } = catalog;
   const realCatalogLoading = Boolean(realClient && catalog.loading);
   const [realError, setRealError] = useState('');
-  const [configuredModels, setConfiguredModels] = useState<Array<{ id:number; provider:string; model_key:string; status:string }>>([]);
   const [modelBinding, setModelBinding] = useState<{ provider:string; model:string } | null>(null);
-  const [modelBindingBusy, setModelBindingBusy] = useState(false);
   const [q, setQ] = useState('');
   const kw = q.trim().toLowerCase();
   const upFiltered = UPSTREAM_ADAPTERS.filter((a) => !kw || (a.source + a.status).toLowerCase().includes(kw));
@@ -235,31 +233,8 @@ function GenerationPageContent() {
   }
   useEffect(() => {
     if (!realClient) return;
-    let cancelled = false;
-    const projectID = Number(projectId);
-    void Promise.all([realClient.modelCatalog(), projectID ? realClient.getModelBinding(projectID) : Promise.resolve(null)]).then(([catalog, binding]) => {
-      if (cancelled) return;
-      setConfiguredModels(catalog.models.filter((model) => model.status === 'approved'));
-      setModelBinding(binding ? { provider: binding.provider, model: binding.model } : null);
-    }).catch(() => { if (!cancelled) { setConfiguredModels([]); setModelBinding(null); } });
-    return () => { cancelled = true; };
+    setModelBinding({ provider: 'dsh', model: 'sdk' });
   }, [realClient, projectId]);
-  const changeModelBinding = async (value: string) => {
-    if (!realClient || !projectId) return;
-    const [provider, model] = value.split('::');
-    if (!provider || !model) return;
-    setModelBindingBusy(true);
-    setRealError('');
-    try {
-      await realClient.setModelBinding(Number(projectId), { provider, model });
-      setModelBinding({ provider, model });
-      toast.success('已切换生成模型', { description: `${provider} / ${model}` });
-    } catch (error) {
-      setRealError(error instanceof Error ? error.message : '切换生成模型失败');
-    } finally {
-      setModelBindingBusy(false);
-    }
-  };
 
   // 生成流程向导状态
   const [step, setStep] = useState(1);
@@ -518,22 +493,10 @@ function GenerationPageContent() {
         </div>
       </div>
 
-      {realClient && <div className={'mb-5 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 text-xs ' + (modelBinding ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800')}>
-        <span className="font-semibold">模型生成</span>
-        {modelBinding ? <>
-          <span>当前绑定：{modelBinding.provider} / {modelBinding.model}</span>
-          {configuredModels.length > 1 && <select
-            aria-label="生成模型"
-            value={`${modelBinding.provider}::${modelBinding.model}`}
-            disabled={modelBindingBusy}
-            onChange={(event) => void changeModelBinding(event.target.value)}
-            className="rounded-md border border-emerald-200 bg-white px-2 py-1 text-xs text-slate-700 disabled:opacity-50"
-          >
-            {!configuredModels.some((model) => model.provider === modelBinding.provider && model.model_key === modelBinding.model) && <option value={`${modelBinding.provider}::${modelBinding.model}`}>{modelBinding.provider} / {modelBinding.model}（当前）</option>}
-            {configuredModels.map((model) => <option key={model.id} value={`${model.provider}::${model.model_key}`}>{model.provider} / {model.model_key}</option>)}
-          </select>}
-          <span>· 已配置模型 {configuredModels.length} 个{modelBindingBusy ? ' · 切换中…' : ''}</span>
-        </> : <><span>当前项目未绑定已验证模型，暂不能生成真实用例。</span><button type="button" onClick={() => navigate('/models')} className="font-medium underline">去配置模型</button></>}
+      {realClient && <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800">
+        <span className="font-semibold">DSH 生成</span>
+        <span>当前通过内部 DSH SDK gateway 生成用例；模型由 DSH Profile 配置，不再使用项目级模型绑定。</span>
+        <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-emerald-700">DSH SDK</span>
       </div>}
 
       {realClient && <Card title="选择生成范围" className="p-0 mb-5 overflow-hidden">

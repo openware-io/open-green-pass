@@ -131,6 +131,9 @@ spec:
             - { name: GP_BUILD_REVISION, value: "VERSION" }
             - { name: GP_RUNNER_TYPE, value: http }
             - { name: GP_EXECUTION_BEARER_TOKEN, valueFrom: { secretKeyRef: { name: gp-im-token, key: token, optional: true } } }
+            - { name: GP_DSH_GATEWAY_URL, value: "http://gp-dsh-gateway.gp.svc.cluster.local:8090" }
+            - { name: GP_DSH_INTERNAL_TOKEN, valueFrom: { secretKeyRef: { name: gp-dsh-auth, key: token } } }
+            - { name: GP_GENERATION_ENGINE, value: "dsh" }
             - { name: GP_TEMPORAL_ADDR, value: gp-temporal-frontend.gp.svc.cluster.local:7233 }
             - { name: GP_CICD_MAX_ATTEMPTS, value: "5" }
             - { name: GP_CICD_RETRY_BASE_SECONDS, value: "5" }
