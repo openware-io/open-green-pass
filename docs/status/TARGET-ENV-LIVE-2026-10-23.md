@@ -57,4 +57,4 @@
 ## 注意
 
 - 为验证登录，临时重置了 im-saas 测试库 `admin` 密码；仅测试环境。
-- 该真实用例尚未绑定 Coverage Cell；M3 execution coverage 仍显示旧值，需继续把可执行用例绑定到 Cell。
+- 已将真实用例绑定到 `cov_cell 2903566203719680`（GET list happy），`coverage-sync` 后该 Cell 为 `passed`。`executed` 仍为 2，因为该 Cell 原先是 2 个失败 Cell 之一，属于替换而非净增。
