@@ -73,9 +73,9 @@ POST /cost/prices
 
 ## 实际模型
 
-- DSH gateway `Result` 返回实际模型；
+- DSH gateway `Result` 返回实际模型和 `cacheReadTokens`；
 - `DSHJob` / HTTP 响应包含 `model`；
-- 生成成本使用 `dsh/<model>`；
+- 生成成本使用 `dsh/<model>`；\n- 缓存读 token 按独立单价计费；
 - 不再固定写 `dsh/dsh-sdk`。
 
 ## 验证
