@@ -238,6 +238,7 @@ function GenerationPageContent() {
   const [selectedBatchId, setSelectedBatchId] = useState<number | null>(null);
   const [realBatches, setRealBatches] = useState<GenerationBatch[]>([]);
   const [realRun, setRealRun] = useState<GenerationRun | null>(null);
+  const [recentRuns, setRecentRuns] = useState<GenerationRun[]>([]);
   const reviewableRunUnits = realRun ? realRun.units.filter((unit) => unit.batch_id && realBatches.find((batch) => batch.id === unit.batch_id)?.state === 'review') : [];
   const [repositoryRefs, setRepositoryRefs] = useState<Record<number, RepositoryRef[]>>({});
   const [selectedRefs, setSelectedRefs] = useState<Record<number, { type: 'branch' | 'tag'; name: string }>>({});
@@ -425,6 +426,7 @@ function GenerationPageContent() {
         units: generationScope === 'custom' ? units : [],
       });
       setRealRun(run);
+      setRecentRuns((current) => [run, ...current.filter((item) => item.id !== run.id)]);
       setBatchResults(run.units.map((unit) => ({
         serviceId: unit.service_id,
         name: services.find((service) => service.id === unit.service_id)?.name ?? String(unit.service_id),
@@ -463,7 +465,7 @@ function GenerationPageContent() {
     if (!realClient || !projectId) return;
     let cancelled = false;
     void realClient.listGenerationRuns(Number(projectId)).then((runs) => {
-      if (!cancelled && runs.length) setRealRun(runs[0]);
+      if (!cancelled && runs.length) { setRecentRuns(runs); setRealRun(runs[0]); }
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [realClient, projectId]);
@@ -477,6 +479,7 @@ function GenerationPageContent() {
         const next = await realClient.getGenerationRun(realRun.id);
         if (cancelled) return;
         setRealRun(next);
+        setRecentRuns((current) => current.map((item) => item.id === next.id ? next : item));
         if (next.state === 'queued' || next.state === 'running' || next.state === 'partial_failed') {
           timer = window.setTimeout(() => void refresh(), 2000);
         }
@@ -599,7 +602,7 @@ function GenerationPageContent() {
         <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-emerald-700">DSH SDK</span>
       </div>}
 
-      {realClient && realRun && <Card title={`生成任务 #${realRun.id}`} className="p-5 mb-5" extra={['queued', 'running', 'partial_failed'].includes(realRun.state) ? <button type="button" disabled={reviewBusy} onClick={() => void cancelRealRun()} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] text-red-600 hover:bg-red-50 disabled:opacity-50">取消整个任务</button> : null}>
+      {realClient && realRun && <Card title={`最近生成任务 #${realRun.id}`} className="p-5 mb-5" extra={<div className="flex items-center gap-2">{recentRuns.length > 1 && <select value={realRun.id} onChange={(event) => { const selected = recentRuns.find((item) => item.id === Number(event.target.value)); if (selected) setRealRun(selected); }} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-600">{recentRuns.map((item) => <option key={item.id} value={item.id}>#{item.id} · {item.state}</option>)}</select>}{['queued', 'running', 'partial_failed'].includes(realRun.state) && <button type="button" disabled={reviewBusy} onClick={() => void cancelRealRun()} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] text-red-600 hover:bg-red-50 disabled:opacity-50">取消整个任务</button>}</div>}>
         <div className="flex flex-wrap items-center gap-4 text-xs">
           <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700">{realRun.state === 'queued' ? '排队中' : realRun.state === 'running' ? '运行中' : realRun.state === 'partial_failed' ? '部分失败' : realRun.state === 'succeeded' ? '已完成' : realRun.state === 'failed' ? '失败' : '已取消'}</span>
           <span className="text-slate-500">{realRun.completed_units} / {realRun.total_units} 个服务完成</span>
@@ -622,7 +625,7 @@ function GenerationPageContent() {
         <p className="mt-3 text-[11px] text-slate-500">整个任务取消会级联取消所有服务批次，并删除本次任务的候选与源码快照。</p>
       </Card>}
 
-      {realClient && <Card title="生成模式" className="p-5 mb-5">
+      {realClient && <Card title="新建生成任务" className="p-5 mb-5">
         <div className="flex flex-wrap items-center gap-3">
           <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
             <button type="button" onClick={() => setGenerationScope('project')} className={'rounded-lg px-3 py-2 text-xs font-semibold transition ' + (generationScope === 'project' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>项目全量</button>
@@ -813,7 +816,7 @@ function GenerationPageContent() {
       </Card>}
 
       {batchResults.length > 0 && <div className="mb-5 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs"><div className="font-semibold text-slate-700">本次创建结果</div><div className="mt-2 flex flex-wrap gap-2">{batchResults.map((result) => <span key={result.serviceId} className={'rounded-full px-2.5 py-1 ' + (result.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700')}>{result.ok ? '已创建' : '失败'} · {result.name}{result.error ? `：${result.error}` : ''}</span>)}</div></div>}
-      {realClient && <Card title={activeServiceId ? '当前服务生成批次' : '项目生成批次'} className="p-0 mb-5 overflow-hidden" extra={<span className="text-[11px] text-slate-400">共 {visibleBatches.length} 个 · 自动刷新</span>}>
+      {realClient && <Card title={realRun ? '本次生成任务批次' : activeServiceId ? '当前服务生成批次' : '最近生成批次'} className="p-0 mb-5 overflow-hidden" extra={<span className="text-[11px] text-slate-400">共 {visibleBatches.length} 个 · 自动刷新</span>}>
         <div className="divide-y divide-slate-100">{visibleBatches.map((batch) => {
           const service = realProjectServices.find((item) => item.id === batch.service_id);
           const active = realBatch?.id === batch.id;
