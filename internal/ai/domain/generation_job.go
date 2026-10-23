@@ -67,13 +67,14 @@ func (s GenerationJobState) Terminal() bool {
 
 // DSHJob is the gateway view of one job.
 type DSHJob struct {
-	ID        string
-	State     string
-	Output    string
-	TokensIn  int64
-	TokensOut int64
-	Model     string
-	Error     string
+	ID              string
+	State           string
+	Output          string
+	TokensIn        int64
+	TokensOut       int64
+	CacheReadTokens int64
+	Model           string
+	Error           string
 }
 
 // DSHJobClient is the internal gateway boundary.

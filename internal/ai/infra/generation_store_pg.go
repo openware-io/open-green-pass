@@ -318,8 +318,9 @@ Source files (JSON): %s`, generatedCasesInstructions, serviceName, serviceKind, 
 	var text string
 	var tokensIn, tokensOut int64
 	var dshModel string
+	var dshCacheRead int64
 	if dshEnabled {
-		text, tokensIn, tokensOut, dshModel, err = s.generateDSH(ctx, batchID, seedID, prompt)
+		text, tokensIn, tokensOut, dshCacheRead, dshModel, err = s.generateDSH(ctx, batchID, seedID, prompt)
 	} else {
 		text, err = callModel(ctx, input, token, prompt)
 	}
@@ -370,7 +371,7 @@ Source files (JSON): %s`, generatedCasesInstructions, serviceName, serviceKind, 
 		if s.cost != nil {
 			if err := s.cost.RecordGenerationCost(rls.WithTenant(ctx, teamID), domain.GenerationCost{
 				RequestID: fmt.Sprintf("gen-%d-%d", batchID, seedID), TeamID: teamID, TargetID: targetID,
-				BatchID: batchID, Model: generationCostModel(dshModel, provider, model), TokensIn: tokensIn, TokensOut: tokensOut,
+				BatchID: batchID, Model: generationCostModel(dshModel, provider, model), TokensIn: tokensIn, TokensOut: tokensOut, CacheReadTokens: dshCacheRead,
 			}); err != nil {
 				return fmt.Errorf("record generation cost: %w", err)
 			}
@@ -379,11 +380,11 @@ Source files (JSON): %s`, generatedCasesInstructions, serviceName, serviceKind, 
 	return nil
 }
 
-func (s *GenerationBatchStore) generateDSH(ctx context.Context, batchID, seedID int64, prompt string) (string, int64, int64, string, error) {
+func (s *GenerationBatchStore) generateDSH(ctx context.Context, batchID, seedID int64, prompt string) (string, int64, int64, int64, string, error) {
 	jobID := fmt.Sprintf("gp-batch-%d-%d", batchID, seedID)
 	job, err := s.dsh.Submit(ctx, jobID, prompt, int64(10*time.Minute/time.Millisecond), jobID)
 	if err != nil {
-		return "", 0, 0, "", fmt.Errorf("submit DSH generation job: %w", err)
+		return "", 0, 0, 0, "", fmt.Errorf("submit DSH generation job: %w", err)
 	}
 	externalID := job.ID
 	if externalID == "" {
@@ -395,20 +396,20 @@ func (s *GenerationBatchStore) generateDSH(ctx context.Context, batchID, seedID 
 		switch job.State {
 		case "succeeded":
 			if strings.TrimSpace(job.Output) == "" {
-				return "", job.TokensIn, job.TokensOut, job.Model, fmt.Errorf("DSH generation returned empty output")
+				return "", job.TokensIn, job.TokensOut, job.CacheReadTokens, job.Model, fmt.Errorf("DSH generation returned empty output")
 			}
-			return job.Output, job.TokensIn, job.TokensOut, job.Model, nil
+			return job.Output, job.TokensIn, job.TokensOut, job.CacheReadTokens, job.Model, nil
 		case "failed", "timeout", "cancelled":
-			return "", job.TokensIn, job.TokensOut, job.Model, fmt.Errorf("DSH generation %s: %s", job.State, job.Error)
+			return "", job.TokensIn, job.TokensOut, job.CacheReadTokens, job.Model, fmt.Errorf("DSH generation %s: %s", job.State, job.Error)
 		}
 		select {
 		case <-ctx.Done():
 			_ = s.dsh.Cancel(context.Background(), externalID)
-			return "", 0, 0, "", ctx.Err()
+			return "", 0, 0, 0, "", ctx.Err()
 		case <-ticker.C:
 			job, err = s.dsh.Get(ctx, externalID)
 			if err != nil {
-				return "", 0, 0, "", fmt.Errorf("poll DSH generation job: %w", err)
+				return "", 0, 0, 0, "", fmt.Errorf("poll DSH generation job: %w", err)
 			}
 		}
 	}

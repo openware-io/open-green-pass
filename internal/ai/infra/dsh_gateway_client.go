@@ -30,13 +30,14 @@ func NewDSHGatewayClient(baseURL, token string) *DSHGatewayClient {
 }
 
 type gatewayJob struct {
-	ID        string `json:"job_id"`
-	State     string `json:"state"`
-	Output    string `json:"output"`
-	TokensIn  int64  `json:"tokens_in"`
-	TokensOut int64  `json:"tokens_out"`
-	Model     string `json:"model"`
-	Error     string `json:"error"`
+	ID              string `json:"job_id"`
+	State           string `json:"state"`
+	Output          string `json:"output"`
+	TokensIn        int64  `json:"tokens_in"`
+	TokensOut       int64  `json:"tokens_out"`
+	CacheReadTokens int64  `json:"cache_read_tokens"`
+	Model           string `json:"model"`
+	Error           string `json:"error"`
 }
 
 func (c *DSHGatewayClient) Submit(ctx context.Context, jobID, prompt string, timeoutMS int64, idempotencyKey string) (domain.DSHJob, error) {
@@ -47,7 +48,7 @@ func (c *DSHGatewayClient) Submit(ctx context.Context, jobID, prompt string, tim
 	if err := c.do(ctx, http.MethodPost, "/internal/dsh/jobs", body, &out); err != nil {
 		return domain.DSHJob{}, err
 	}
-	return domain.DSHJob{ID: out.ID, State: out.State, Output: out.Output, TokensIn: out.TokensIn, TokensOut: out.TokensOut, Model: out.Model, Error: out.Error}, nil
+	return domain.DSHJob{ID: out.ID, State: out.State, Output: out.Output, TokensIn: out.TokensIn, TokensOut: out.TokensOut, CacheReadTokens: out.CacheReadTokens, Model: out.Model, Error: out.Error}, nil
 }
 
 func (c *DSHGatewayClient) Get(ctx context.Context, jobID string) (domain.DSHJob, error) {

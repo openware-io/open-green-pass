@@ -25,20 +25,21 @@ const (
 
 // Job is one bounded DSH invocation request.
 type Job struct {
-	ID             string        `json:"job_id"`
-	Prompt         string        `json:"prompt"`
-	Profile        string        `json:"profile,omitempty"`
-	Timeout        time.Duration `json:"-"`
-	State          State         `json:"state"`
-	Output         string        `json:"output,omitempty"`
-	TokensIn       int64         `json:"tokens_in"`
-	TokensOut      int64         `json:"tokens_out"`
-	Model          string        `json:"model,omitempty"`
-	Error          string        `json:"error,omitempty"`
-	CreatedAt      time.Time     `json:"created_at"`
-	StartedAt      *time.Time    `json:"started_at,omitempty"`
-	FinishedAt     *time.Time    `json:"finished_at,omitempty"`
-	IdempotencyKey string        `json:"idempotency_key,omitempty"`
+	ID              string        `json:"job_id"`
+	Prompt          string        `json:"prompt"`
+	Profile         string        `json:"profile,omitempty"`
+	Timeout         time.Duration `json:"-"`
+	State           State         `json:"state"`
+	Output          string        `json:"output,omitempty"`
+	TokensIn        int64         `json:"tokens_in"`
+	TokensOut       int64         `json:"tokens_out"`
+	CacheReadTokens int64         `json:"cache_read_tokens"`
+	Model           string        `json:"model,omitempty"`
+	Error           string        `json:"error,omitempty"`
+	CreatedAt       time.Time     `json:"created_at"`
+	StartedAt       *time.Time    `json:"started_at,omitempty"`
+	FinishedAt      *time.Time    `json:"finished_at,omitempty"`
+	IdempotencyKey  string        `json:"idempotency_key,omitempty"`
 }
 
 // Event is an append-only job event (kept in memory for the skeleton).
@@ -52,10 +53,11 @@ type Event struct {
 
 // Result is returned by a Runner.
 type Result struct {
-	Output    string
-	TokensIn  int64
-	TokensOut int64
-	Model     string
+	Output          string
+	TokensIn        int64
+	TokensOut       int64
+	CacheReadTokens int64
+	Model           string
 }
 
 // Runner executes one job. A production implementation wraps the DSH SDK
@@ -257,6 +259,7 @@ func (m *Manager) run(job *Job) {
 		job.Output = out.result.Output
 		job.TokensIn = out.result.TokensIn
 		job.TokensOut = out.result.TokensOut
+		job.CacheReadTokens = out.result.CacheReadTokens
 		job.Model = out.result.Model
 		m.appendEventLocked(job.ID, Event{Type: "state", State: StateSucceeded, At: finished, Message: "succeeded"})
 	case errors.Is(out.err, context.DeadlineExceeded):

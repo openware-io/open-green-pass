@@ -172,8 +172,8 @@ func (r SDKRunner) Run(ctx context.Context, job Job) (Result, error) {
 	if text == "" {
 		text = rawNotifications(notifications)
 	}
-	tokensIn, tokensOut := assistantUsage(notifications)
-	return Result{Output: text, TokensIn: tokensIn, TokensOut: tokensOut, Model: model}, nil
+	tokensIn, tokensOut, cacheRead := assistantUsage(notifications)
+	return Result{Output: text, TokensIn: tokensIn, TokensOut: tokensOut, CacheReadTokens: cacheRead, Model: model}, nil
 }
 
 func assistantText(notifications []rpcMessage) string {
@@ -226,8 +226,8 @@ func rawNotifications(notifications []rpcMessage) string {
 // assistantUsage sums provider-reported usage across all model attempts in
 // one DSH session. Token counts are authoritative only when the provider
 // emitted them; absent usage stays zero.
-func assistantUsage(notifications []rpcMessage) (int64, int64) {
-	var in, out int64
+func assistantUsage(notifications []rpcMessage) (int64, int64, int64) {
+	var in, out, cache int64
 	for _, msg := range notifications {
 		if msg.Method != "session.event" {
 			continue
@@ -237,8 +237,9 @@ func assistantUsage(notifications []rpcMessage) (int64, int64) {
 				Type string `json:"type"`
 				Data struct {
 					Usage struct {
-						InputTokens  int64 `json:"inputTokens"`
-						OutputTokens int64 `json:"outputTokens"`
+						InputTokens     int64 `json:"inputTokens"`
+						OutputTokens    int64 `json:"outputTokens"`
+						CacheReadTokens int64 `json:"cacheReadTokens"`
 					} `json:"usage"`
 				} `json:"data"`
 			} `json:"event"`
@@ -251,6 +252,7 @@ func assistantUsage(notifications []rpcMessage) (int64, int64) {
 		}
 		in += params.Event.Data.Usage.InputTokens
 		out += params.Event.Data.Usage.OutputTokens
+		cache += params.Event.Data.Usage.CacheReadTokens
 	}
-	return in, out
+	return in, out, cache
 }
