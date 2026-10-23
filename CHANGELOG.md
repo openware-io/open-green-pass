@@ -3,6 +3,7 @@
 本项目所有重要变更都会记录在 CHANGELOG 中（格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)）。
 
 ## [Unreleased]
+- **DSH 真实生成（0.1.125-SNAPSHOT）**：gateway 改为 Node22 + dsh 0.2.1-rc.2，`GP_DSH_RUNNER=sdk`；worker 生成批处理走 DSH job，seed provider `dsh/dsh-sdk`；生成页移除项目模型绑定，改为 DSH 生成。验证 smoke job succeeded、pc-admin batch 生成 7 条 seed。
 - **pc-admin 卡片去冗余（0.1.124-SNAPSHOT）**：移除列表摘要中的模型名/置信度/证据数和四步流程条，只保留仓库、源码目录、状态与动作；模型与来源仍在画像详情中。
 - **测试环境参数页 + im-saas 真实执行（0.1.122-SNAPSHOT）**：新增 `/target-env` 与 `GET /targets/{id}/env/runtime`；填写 im-saas test 环境参数；新增 HTTPRunner + `gp-im-token`；真实 run 2904774788288512 执行 `GET /api/v1/admin/users` 返回 pass/200；修复 failure_class 空串约束。
 - **M4 安全基线（0.1.118-SNAPSHOT）**：API 安全响应头、2MiB 请求体上限、安全中间件单测；租户隔离验证 403；`go test ./...`/typecheck/api:check 通过。M2/M3/M4 仍未完全关闭。
