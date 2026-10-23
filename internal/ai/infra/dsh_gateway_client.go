@@ -55,7 +55,7 @@ func (c *DSHGatewayClient) Get(ctx context.Context, jobID string) (domain.DSHJob
 	if err := c.do(ctx, http.MethodGet, "/internal/dsh/jobs/"+jobID, nil, &out); err != nil {
 		return domain.DSHJob{}, err
 	}
-	return domain.DSHJob{ID: out.ID, State: out.State, Output: out.Output, TokensIn: out.TokensIn, TokensOut: out.TokensOut, Error: out.Error}, nil
+	return domain.DSHJob{ID: out.ID, State: out.State, Output: out.Output, TokensIn: out.TokensIn, TokensOut: out.TokensOut, Model: out.Model, Error: out.Error}, nil
 }
 
 func (c *DSHGatewayClient) Cancel(ctx context.Context, jobID string) error {
