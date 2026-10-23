@@ -64,6 +64,14 @@ func (r *HTTPRunner) executeOne(ctx context.Context, spec *domain.CaseSpec) *dom
 	if !ok {
 		return fail("case script is not a JSON object")
 	}
+	if reason, blocked := root["blocked_reason"].(string); blocked && strings.TrimSpace(reason) != "" {
+		result.Status = domain.CaseBlocked
+		result.ResultText = reason
+		result.Evidence.Logs = []string{reason}
+		ended := time.Now().UTC()
+		result.EndedAt = &ended
+		return result
+	}
 	request, ok := root["request"].(map[string]any)
 	if !ok {
 		// Backward compatibility for the first generated case format:
