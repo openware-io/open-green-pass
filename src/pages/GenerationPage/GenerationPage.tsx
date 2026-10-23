@@ -200,7 +200,6 @@ function GenerationPageContent() {
   const { repos: realProjectRepos, services: realProjectServices, serviceId: activeServiceId, projectId, selectService } = catalog;
   const realCatalogLoading = Boolean(realClient && catalog.loading);
   const [realError, setRealError] = useState('');
-  const [modelBinding, setModelBinding] = useState<{ provider:string; model:string } | null>(null);
   const [q, setQ] = useState('');
   const kw = q.trim().toLowerCase();
   const upFiltered = UPSTREAM_ADAPTERS.filter((a) => !kw || (a.source + a.status).toLowerCase().includes(kw));
@@ -231,10 +230,6 @@ function GenerationPageContent() {
     setGenBranch(repo?.branches?.[0] ?? '');
     setGenVer(repo?.versions?.[0] ?? '');
   }
-  useEffect(() => {
-    if (!realClient) return;
-    setModelBinding({ provider: 'dsh', model: 'sdk' });
-  }, [realClient, projectId]);
 
   // 生成流程向导状态
   const [step, setStep] = useState(1);
@@ -251,6 +246,7 @@ function GenerationPageContent() {
   const activeBatchId = realBatch?.id;
   const activeBatchStateVersion = realBatch?.state_version;
   const [selectedServiceIds, setSelectedServiceIds] = useState<number[]>([]);
+  const [generationMode, setGenerationMode] = useState<'full' | 'custom'>('full');
   const [serviceSearch, setServiceSearch] = useState('');
   const [batchConfirmOpen, setBatchConfirmOpen] = useState(false);
   const [batchPreparing, setBatchPreparing] = useState(false);
@@ -287,7 +283,8 @@ function GenerationPageContent() {
     const command = service.test_command || '未登记';
     return { language, framework, tool, command, complete: [service.language, service.framework].every(Boolean) };
   };
-  const selectedServices = useMemo(() => confirmedServices.filter((service) => selectedServiceIds.includes(service.id)), [confirmedServices, selectedServiceIds]);
+  const fullScope = generationMode === 'full';
+  const selectedServices = useMemo(() => fullScope ? confirmedServices : confirmedServices.filter((service) => selectedServiceIds.includes(service.id)), [confirmedServices, fullScope, selectedServiceIds]);
   const activeRepoRefs = realRepo ? repositoryRefs[realRepo.id] ?? [] : [];
   const selectedRef = realRepo ? selectedRefs[realRepo.id] : undefined;
   const selectedRefDetails = activeRepoRefs.find((ref) => ref.ref_type === selectedRef?.type && ref.name === selectedRef.name) ?? null;
@@ -357,9 +354,8 @@ function GenerationPageContent() {
     if (!realClient) { setStep(1); return; }
     if (!confirmedServices.length) { setRealError('请先在被测对象页完成服务技术画像确认，并启用生成测试用例。'); return; }
     const fallback = confirmedServices.find((service) => service.id === activeServiceId);
-    const serviceList = selectedServices.length ? selectedServices : fallback ? [fallback] : [];
+    const serviceList = fullScope ? confirmedServices : selectedServices.length ? selectedServices : fallback ? [fallback] : [];
     if (!serviceList.length) { setRealError('请先选择至少一个技术画像已确认且允许生成的服务。'); return; }
-    if (!modelBinding) { setRealError('请先在 AI 模型配置中配置并绑定一个已验证模型，再生成用例'); return; }
     setRealError('');
     setBatchPreparing(true);
     try {
@@ -381,9 +377,8 @@ function GenerationPageContent() {
     try {
       const projectID = Number(projectId);
       if (!projectID) throw new Error('请先在被测对象页选择真实项目');
-      if (!modelBinding) throw new Error('当前项目未绑定已验证模型，无法生成真实用例');
       const repos = realProjectRepos.length ? realProjectRepos : await realClient.listProjectRepositories(projectID);
-      const services = confirmedServices.filter((service) => selectedServiceIds.includes(service.id));
+      const services = fullScope ? confirmedServices : confirmedServices.filter((service) => selectedServiceIds.includes(service.id));
       if (!services.length) throw new Error('请至少选择一个已确认的目录服务');
       const results: Array<{ serviceId: number; name: string; ok: boolean; error?: string }> = [];
       const created: GenerationBatch[] = [];
@@ -392,7 +387,9 @@ function GenerationPageContent() {
           const repo = repos.find((item) => item.id === service.repo_id);
           if (!repo) throw new Error('未关联代码仓库');
           const refs = repositoryRefs[repo.id]?.length ? repositoryRefs[repo.id] : await loadRepositoryRefs(repo.id);
-          const selection = selectedRefs[repo.id];
+          const selection = fullScope
+            ? { type: 'branch' as const, name: repo.default_branch }
+            : selectedRefs[repo.id];
           if (!selection?.name) throw new Error(`请先为 ${service.name} 选择分支或 Tag`);
           if (!refs.some((ref) => ref.ref_type === selection.type && ref.name === selection.name)) throw new Error(`${service.name} 的代码引用未同步，请先刷新分支 / Tag`);
           const batch = await realClient.createGenerationBatch({ target_id: projectID, repo_id: repo.id, service_id: service.id, source_path: service.source_path, ref_type: selection.type, branch: selection.name, idempotency_key: `ui-batch-${projectID}-${service.id}-${crypto.randomUUID()}` });
@@ -473,7 +470,7 @@ function GenerationPageContent() {
       </div>
       <PageHeader title="生成用例" desc={realClient ? `选择已确认的目录服务，为所选服务创建生成批次 · 当前可生成 ${confirmedServices.length} 个服务` : '针对当前被测对象的用例生成流程 · 适配解析 → AI 生成 → 质量验证 → 审核入库'}>
         <GhostButton onClick={() => navigate('/target')}>管理被测对象</GhostButton>
-        <PrimaryButton disabled={realBusy || batchPreparing || !realClient} onClick={() => void openBatchConfirmation()}>{realBusy ? '创建批次…' : batchPreparing ? '准备中…' : `生成用例${selectedServices.length ? `（${selectedServices.length}）` : ''}`}</PrimaryButton>
+        <PrimaryButton disabled={realBusy || batchPreparing || !realClient} onClick={() => void openBatchConfirmation()}>{realBusy ? '创建批次…' : batchPreparing ? '准备中…' : fullScope ? `全量生成用例（${confirmedServices.length}）` : `生成用例${selectedServices.length ? `（${selectedServices.length}）` : ''}`}</PrimaryButton>
       </PageHeader>
 
       <div className="mb-5 rounded-xl border border-slate-200 bg-white p-5">
@@ -499,21 +496,42 @@ function GenerationPageContent() {
         <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-emerald-700">DSH SDK</span>
       </div>}
 
+      {realClient && <Card title="生成模式" className="p-5 mb-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+            <button type="button" onClick={() => setGenerationMode('full')} className={'rounded-lg px-4 py-2 text-xs font-semibold transition ' + (fullScope ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>全量生成（项目）</button>
+            <button type="button" onClick={() => setGenerationMode('custom')} className={'rounded-lg px-4 py-2 text-xs font-semibold transition ' + (!fullScope ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>指定服务</button>
+          </div>
+          <div className="min-w-0 flex-1 text-xs text-slate-500">
+            {fullScope
+              ? <>将对 <b className="text-slate-700">{selectedAsset.name}</b> 下全部 {confirmedServices.length} 个已确认服务、{new Set(confirmedServices.map((service) => service.repo_id)).size} 个仓库生成用例；每个仓库使用默认分支的最新提交，不使用单个 Tag 代表全项目。</>
+              : <>自行勾选服务并逐个选择分支或 Tag；适合局部复测，不代表项目全量。</>}
+          </div>
+          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-medium text-emerald-700">可重复生成</span>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-slate-500">
+          <span className="rounded bg-slate-50 px-2 py-1">范围：{fullScope ? '项目全量' : '指定服务'}</span>
+          <span className="rounded bg-slate-50 px-2 py-1">服务：{fullScope ? confirmedServices.length : selectedServices.length}</span>
+          <span className="rounded bg-slate-50 px-2 py-1">代码引用：{fullScope ? '各仓库默认分支' : '逐服务选择'}</span>
+          <span className="rounded bg-slate-50 px-2 py-1">每次点击创建新批次</span>
+        </div>
+      </Card>}
+
       {realClient && <Card title="选择生成范围" className="p-0 mb-5 overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex flex-wrap items-center gap-3">
-          <div className="flex-1 min-w-[220px]"><div className="text-sm font-semibold text-slate-700">已确认服务</div><div className="text-[11px] text-slate-400 mt-1">只有“生成测试用例 = 是”的服务可以选择；选择多个服务时会为每个服务创建独立批次。</div></div>
+          <div className="flex-1 min-w-[220px]"><div className="text-sm font-semibold text-slate-700">{fullScope ? '全量范围' : '已确认服务'}</div><div className="text-[11px] text-slate-400 mt-1">{fullScope ? '全量模式自动包含所有已确认服务，使用各仓库默认分支；仍可切换“指定服务”做局部生成。' : '只有“生成测试用例 = 是”的服务可以选择；选择多个服务时会为每个服务创建独立批次。'}</div></div>
           <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">已选 {selectedServices.length} / {confirmedServices.length}</span>
-          <button type="button" onClick={() => setSelectedServiceIds(confirmedServices.map((service) => service.id))} className="text-xs text-emerald-700 hover:underline">全选</button>
-          <button type="button" onClick={() => setSelectedServiceIds([])} className="text-xs text-slate-500 hover:underline">清空</button>
+          {!fullScope && <button type="button" onClick={() => setSelectedServiceIds(confirmedServices.map((service) => service.id))} className="text-xs text-emerald-700 hover:underline">全选</button>}
+          {!fullScope && <button type="button" onClick={() => setSelectedServiceIds([])} className="text-xs text-slate-500 hover:underline">清空</button>}
           <input value={serviceSearch} onChange={(event) => setServiceSearch(event.target.value)} placeholder="搜索服务或源码目录" className="w-full sm:w-56 rounded-lg border border-slate-200 px-3 py-2 text-xs outline-none focus:border-emerald-400" />
         </div>
         <div className="divide-y divide-slate-100 max-h-[330px] overflow-y-auto">
           {realCatalogLoading ? <div className="p-8 text-center text-xs text-slate-500">正在读取项目目录…</div> : visibleServices.length === 0 ? <div className="p-8 text-center text-xs text-slate-500">暂无符合条件的已确认服务</div> : visibleServices.map((service) => {
-            const checked = selectedServiceIds.includes(service.id);
+            const checked = fullScope || selectedServiceIds.includes(service.id);
             const serviceRepo = realProjectRepos.find((item) => item.id === service.repo_id);
             const profile = profileFor(service);
-            return <label key={service.id} className={'flex cursor-pointer items-start gap-3 px-5 py-3 transition ' + (checked ? 'bg-emerald-50/60' : 'hover:bg-slate-50')}>
-              <input type="checkbox" checked={checked} onChange={() => toggleService(service.id)} className="mt-1 h-4 w-4 accent-emerald-600" />
+            return <label key={service.id} className={'flex items-start gap-3 px-5 py-3 transition ' + (fullScope ? 'cursor-default' : 'cursor-pointer') + (checked ? ' bg-emerald-50/60' : ' hover:bg-slate-50')}>
+              <input type="checkbox" checked={checked} disabled={fullScope} onChange={() => toggleService(service.id)} className="mt-1 h-4 w-4 accent-emerald-600" />
               <span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-700"><span>{service.name}</span><span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">生成测试用例：是</span><span className="text-[10px] font-normal text-slate-400">{service.kind}</span></span><span className="mt-1 block truncate text-[11px] text-slate-500">{sourceDirectoryLabel(service.source_path)}</span><span className="mt-1 block text-[10px] text-slate-400">语言：{profile.language} · 框架：{profile.framework} · 工具：{profile.tool}</span></span>
               <span className="hidden min-w-[180px] text-right text-[10px] text-slate-400 sm:block">{serviceRepo?.url ?? '未关联仓库'}<br /><b className="font-normal text-slate-500">{serviceRepo?.default_branch ?? '未配置分支'}</b></span>
             </label>;
@@ -540,9 +558,11 @@ function GenerationPageContent() {
               <div className="mt-1 text-[10px] text-slate-400">工具：{profile.tool} · 默认分支：{serviceRepo?.default_branch ?? '未配置'}</div>
               <div className="mt-2 rounded-md border border-slate-100 bg-slate-50 p-2">
                 <div className="mb-1 text-[10px] font-medium text-slate-500">本次代码引用</div>
-                {serviceRepo ? <CodeRefSelect label="生成代码引用" refs={refs} value={selection} onChange={(next) => { if (serviceRepo) setSelectedRefs((current) => ({ ...current, [serviceRepo.id]: next })); }} /> : <div className="text-[10px] text-red-600">未关联代码仓库</div>}
-                <div className="mt-1 text-[10px] text-slate-500">提交 SHA：{detail?.commit_sha ? detail.commit_sha.slice(0, 12) : '待刷新'}</div>
-                {!selection?.name && <div className="mt-1 text-[10px] text-red-600">请选择代码引用后再创建</div>}
+                {fullScope
+                  ? <div className="rounded-md border border-emerald-100 bg-emerald-50 px-2 py-1.5 text-[10px] text-emerald-700">默认分支：<b>{serviceRepo?.default_branch || '未配置'}</b>（全量模式不使用单个 Tag）</div>
+                  : serviceRepo ? <CodeRefSelect label="生成代码引用" refs={refs} value={selection} onChange={(next) => { if (serviceRepo) setSelectedRefs((current) => ({ ...current, [serviceRepo.id]: next })); }} /> : <div className="text-[10px] text-red-600">未关联代码仓库</div>}
+                <div className="mt-1 text-[10px] text-slate-500">提交 SHA：{detail?.commit_sha ? detail.commit_sha.slice(0, 12) : fullScope ? '创建后冻结默认分支最新 SHA' : '待刷新'}</div>
+                {!fullScope && !selection?.name && <div className="mt-1 text-[10px] text-red-600">请选择代码引用后再创建</div>}
               </div>
             </div>;
           })}
@@ -551,7 +571,7 @@ function GenerationPageContent() {
       </div>}
 
       {/* 被测对象 = 全局轴心：本流程围绕当前被测对象展开（切换用页首被测对象导航） */}
-      <Card title="当前被测对象 · 生成轴心" className="p-0 mb-5 overflow-hidden">
+      {!fullScope && <Card title="当前被测对象 · 生成轴心" className="p-0 mb-5 overflow-hidden">
         <div className="p-6">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(260px,1fr)_minmax(360px,1.5fr)_auto] gap-5 items-start">
           <div className="flex items-center gap-3 min-w-0">
@@ -643,7 +663,7 @@ function GenerationPageContent() {
           </div>
         )}
         </div>
-      </Card>
+      </Card>}
 
       {batchResults.length > 0 && <div className="mb-5 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs"><div className="font-semibold text-slate-700">本次创建结果</div><div className="mt-2 flex flex-wrap gap-2">{batchResults.map((result) => <span key={result.serviceId} className={'rounded-full px-2.5 py-1 ' + (result.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700')}>{result.ok ? '已创建' : '失败'} · {result.name}{result.error ? `：${result.error}` : ''}</span>)}</div></div>}
       {realClient && <Card title={activeServiceId ? '当前服务生成批次' : '项目生成批次'} className="p-0 mb-5 overflow-hidden" extra={<span className="text-[11px] text-slate-400">共 {visibleBatches.length} 个 · 自动刷新</span>}>
