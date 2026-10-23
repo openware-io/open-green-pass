@@ -1915,7 +1915,12 @@ components:
         model: { type: string }
         tokens_in: { type: integer, format: int64 }
         tokens_out: { type: integer, format: int64 }
+        cache_read_tokens: { type: integer, format: int64 }
         unit_price: { type: number }
+        input_unit_price: { type: number }
+        output_unit_price: { type: number }
+        cache_read_unit_price: { type: number }
+        price_missing: { type: boolean }
         amount: { type: number }
         occurred_at: { type: string, format: date-time }
     GateResult:

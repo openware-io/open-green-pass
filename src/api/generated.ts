@@ -3217,7 +3217,13 @@ export interface components {
             tokens_in: number;
             /** Format: int64 */
             tokens_out: number;
+            /** Format: int64 */
+            cache_read_tokens?: number;
             unit_price: number;
+            input_unit_price?: number;
+            output_unit_price?: number;
+            cache_read_unit_price?: number;
+            price_missing?: boolean;
             amount: number;
             /** Format: date-time */
             occurred_at: string;
