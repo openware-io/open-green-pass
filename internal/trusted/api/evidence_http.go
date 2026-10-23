@@ -19,6 +19,8 @@ func RegisterEvidence(mux *http.ServeMux, svc *application.EvidenceService) {
 	mux.HandleFunc("POST /findings/{id}/evidence", h.create)
 	mux.HandleFunc("GET /findings/{id}/evidence", h.list)
 	mux.HandleFunc("GET /findings/{id}/evidence/{eid}", h.get)
+	mux.HandleFunc("POST /findings/{id}/evidence/presign", h.presign)
+	mux.HandleFunc("GET /findings/{id}/evidence/{eid}/download-url", h.downloadURL)
 }
 
 type evidenceRequest struct {
@@ -88,6 +90,51 @@ func (h *evidenceHandler) list(w http.ResponseWriter, r *http.Request) {
 		out = append(out, toEvidenceResponse(item))
 	}
 	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+type presignEvidenceRequest struct {
+	Kind      string `json:"kind"`
+	MimeType  string `json:"mime_type"`
+	SizeBytes int64  `json:"size_bytes"`
+	SHA256    string `json:"sha256"`
+}
+
+func (h *evidenceHandler) presign(w http.ResponseWriter, r *http.Request) {
+	findingID, ok := findingID(w, r)
+	if !ok {
+		return
+	}
+	var req presignEvidenceRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	result, err := h.svc.PresignUpload(r.Context(), findingID, application.PresignEvidenceInput{
+		Kind: req.Kind, MimeType: req.MimeType, SizeBytes: req.SizeBytes, SHA256: req.SHA256,
+	})
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, result)
+}
+
+func (h *evidenceHandler) downloadURL(w http.ResponseWriter, r *http.Request) {
+	findingID, ok := findingID(w, r)
+	if !ok {
+		return
+	}
+	evidenceID, err := strconv.ParseInt(r.PathValue("eid"), 10, 64)
+	if err != nil || evidenceID <= 0 {
+		httpx.WriteErr(w, gperr.Validation("invalid evidence id"))
+		return
+	}
+	url, err := h.svc.DownloadURL(r.Context(), findingID, evidenceID)
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"download_url": url})
 }
 
 func (h *evidenceHandler) get(w http.ResponseWriter, r *http.Request) {

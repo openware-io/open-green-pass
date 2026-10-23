@@ -203,6 +203,17 @@ func main() {
 	auditStore := tinfra.NewAuditStore(trustedDB, gen)
 	auditSvc := tapp.NewAuditService(auditStore, gen)
 	evidenceSvc := tapp.NewEvidenceService(tinfra.NewEvidenceStore(trustedDB, gen), gen)
+	if store, err := tinfra.NewEvidenceObjectStore(os.Getenv("GP_MINIO_ENDPOINT"), os.Getenv("GP_MINIO_KEY"), os.Getenv("GP_MINIO_SECRET"), os.Getenv("GP_EVIDENCE_BUCKET")); err == nil {
+		bucketCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		if err := store.EnsureBucket(bucketCtx); err != nil {
+			log.Warn("evidence object store bucket unavailable", "error", err)
+		} else {
+			evidenceSvc.SetObjectStore(store)
+		}
+		cancel()
+	} else {
+		log.Warn("evidence object store not configured", "error", err)
+	}
 	findingSvc.SetAuditPort(infra.NewTrustedAuditPort(auditSvc))
 	generationSvc.SetReviewPorts(generationController, aiaudit.New(auditSvc))
 	assistantStore := assistantinfra.NewStore(db)
