@@ -191,3 +191,12 @@ func TestExecuteRunRenewsLeaseAndCancelsRunnerOnRenewFailure(t *testing.T) {
 		t.Fatal("runner completed without a lease renewal")
 	}
 }
+
+func TestHasDeclarativeHTTPRequestAcceptsLegacyShape(t *testing.T) {
+	if !hasDeclarativeHTTPRequest(map[string]any{"path": "/health", "method": "GET"}) {
+		t.Fatal("legacy flat HTTP case must resolve the environment base URL")
+	}
+	if hasDeclarativeHTTPRequest(map[string]any{"kind": "web"}) {
+		t.Fatal("non-HTTP cases must not resolve an HTTP base URL")
+	}
+}

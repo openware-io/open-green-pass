@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/openware-io/open-green-pass/internal/execution/domain"
@@ -429,7 +430,13 @@ func hasDeclarativeHTTPRequest(script any) bool {
 		return false
 	}
 	_, ok = root["request"].(map[string]any)
-	return ok
+	if ok {
+		return true
+	}
+	// The first generated case shape is still executable for compatibility.
+	path, _ := root["path"].(string)
+	method, _ := root["method"].(string)
+	return strings.TrimSpace(path) != "" && strings.TrimSpace(method) != ""
 }
 
 func (s *RunService) executeWithLeaseRenewal(ctx context.Context, specs []*domain.CaseSpec, leases []domain.ExecutionPoolLease) ([]*domain.CaseResult, error) {
