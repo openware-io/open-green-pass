@@ -7,7 +7,7 @@ import { KpiCard, PageHeader, PrimaryButton, GhostButton, ListFilter, Card } fro
 import { configuredGreenPassClient } from '@/api/runtime';
 import { useObjectCatalog, type CatalogService } from '@/context/objectCatalog';
 import SCMConnectionDialog, { type SCMConnection } from './SCMConnectionDialog';
-import { Server, Brain, ShieldAlert, ChevronRight, ChevronDown, Sparkles, GitBranch, CircleDot, FileSearch, History, CheckCircle2, AlertTriangle, XCircle, Layers, Cpu, Globe, Smartphone, X, Plus, ExternalLink, Check, Plug, Files, FileText, Wallet, LoaderCircle, LockKeyhole, CircleCheck, Circle, RefreshCw, ArrowRight, ShieldCheck, ListChecks, Database, FolderTree, Box } from 'lucide-react';
+import { Server, Brain, ShieldAlert, ChevronRight, ChevronDown, Sparkles, GitBranch, CircleDot, FileSearch, History, CheckCircle2, AlertTriangle, XCircle, Layers, Cpu, Globe, Smartphone, X, Plus, ExternalLink, Check, Plug, Files, FileText, Wallet, LoaderCircle, LockKeyhole, RefreshCw, ArrowRight, ShieldCheck, FolderTree, Box } from 'lucide-react';
 
 const ADD_STEPS = ['基本信息', '代码源接入', '上游源', '确认'];
 
@@ -166,18 +166,6 @@ const PREPARATION_COPY: Record<ServicePreparation, { label: string; detail: stri
   ready: { label: '可生成用例', detail: '技术画像已确认且生成已获授权', tone: 'bg-emerald-50 text-emerald-700' },
 };
 
-function PreparationStep({ label, state }: { label: string; state: 'done' | 'current' | 'pending' }) {
-  const palette = state === 'done'
-    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-    : state === 'current'
-      ? 'border-amber-200 bg-amber-50 text-amber-700'
-      : 'border-slate-200 bg-white text-slate-400';
-  return <div className={`flex min-w-0 items-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-medium ${palette}`}>
-    {state === 'done' ? <CircleCheck className="h-3.5 w-3.5 shrink-0" /> : <Circle className="h-3.5 w-3.5 shrink-0" />}
-    <span className="truncate">{label}</span>
-  </div>;
-}
-
 function ServicePreparationCard({
   service,
   repoName,
@@ -202,12 +190,6 @@ function ServicePreparationCard({
   const preparation = servicePreparation(service);
   const copy = PREPARATION_COPY[preparation];
   const completion = profileCompletion(service);
-  const confidence = profileConfidencePercent(service);
-  const evidenceCount = service.profile_evidence?.length ?? 0;
-  const reviewRisk = (confidence !== null && confidence < 70) || evidenceCount === 0;
-  const analysisState: 'done' | 'current' | 'pending' = ['needs_completion', 'needs_review', 'needs_authorization', 'ready'].includes(preparation) ? 'done' : preparation === 'analyzing' ? 'current' : 'pending';
-  const reviewState: 'done' | 'current' | 'pending' = service.profile_status === 'confirmed' ? 'done' : ['needs_completion', 'needs_review', 'analysis_failed'].includes(preparation) ? 'current' : 'pending';
-  const authorizationState: 'done' | 'current' | 'pending' = preparation === 'ready' ? 'done' : preparation === 'needs_authorization' ? 'current' : 'pending';
   let action: React.ReactNode;
   if (preparation === 'ready') {
     action = <div className="flex flex-wrap items-center gap-2"><button type="button" onClick={onOpenGeneration} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700"><Sparkles className="h-3.5 w-3.5" />进入用例生成<ArrowRight className="h-3.5 w-3.5" /></button><button type="button" disabled={busy} onClick={onOpenProfile} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:border-emerald-300 hover:text-emerald-700">查看画像</button><button type="button" disabled={busy} onClick={onRevokeGeneration} className="px-2 py-2 text-[11px] text-slate-400 hover:text-red-600">暂停生成授权</button></div>;
@@ -227,26 +209,17 @@ function ServicePreparationCard({
             ? <button type="button" onClick={onOpenGeneration} className="text-left text-sm font-semibold text-slate-800 hover:text-emerald-700 hover:underline">{service.name}</button>
             : <button type="button" onClick={onOpenProfile} title="需先完成技术画像核验与生成授权" className="text-left text-sm font-semibold text-slate-800 hover:text-emerald-700 hover:underline">{service.name}</button>}
           <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${copy.tone}`}>{copy.label}</span>
-          {reviewRisk && ['needs_completion', 'needs_review', 'needs_authorization'].includes(preparation) && <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-700"><AlertTriangle className="h-3 w-3" />需注意证据风险</span>}
         </div>
         <p className="mt-1 text-xs text-slate-500">{copy.detail}</p>
-        <div className="mt-3 grid gap-2 text-[11px] text-slate-600 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-3 grid gap-2 text-[11px] text-slate-600 sm:grid-cols-2">
           <span className="flex min-w-0 items-center gap-1.5"><GitBranch className="h-3.5 w-3.5 shrink-0 text-slate-400" /><span className="truncate" title={repoName(service.repo_id)}>{repoName(service.repo_id)}</span></span>
           <span className="flex min-w-0 items-center gap-1.5"><Files className="h-3.5 w-3.5 shrink-0 text-slate-400" /><code className="truncate" title={sourceDirectoryLabel(service.source_path)}>{sourceDirectoryLabel(service.source_path)}</code></span>
-          <span className="flex min-w-0 items-center gap-1.5"><Database className="h-3.5 w-3.5 shrink-0 text-slate-400" /><span className="truncate">{profileSourceLabel(service.profile_source)}</span></span>
-          <span className="flex items-center gap-1.5"><ListChecks className="h-3.5 w-3.5 shrink-0 text-slate-400" />{confidence === null ? '置信度待产出' : `置信度 ${confidence}%`} · {evidenceCount} 条证据</span>
         </div>
       </div>
       <div className="flex shrink-0 flex-col items-start gap-2 xl:items-end">
         <label className="flex items-center gap-2 text-[10px] text-slate-400">对象类型<select value={service.kind} disabled={busy} onChange={(event) => onKindChange(event.target.value)} className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-700 outline-none focus:border-emerald-400">{serviceKinds.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         {action}
       </div>
-    </div>
-    <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 sm:grid-cols-4">
-      <PreparationStep label="已登记来源" state="done" />
-      <PreparationStep label="AI 分析" state={analysisState} />
-      <PreparationStep label="人工核验" state={reviewState} />
-      <PreparationStep label="授权生成" state={authorizationState} />
     </div>
     {preparation === 'needs_completion' && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">缺少：{completion.missing.join('、')}。补齐后请核对源码证据，再明确授权 AI 生成用例。</p>}
     {preparation === 'analysis_failed' && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[11px] text-red-700">本次分析未完成，不会自动开启用例生成。可重试分析，或由测试负责人补充技术画像。</p>}
