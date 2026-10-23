@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
-var ErrCostPriceNotFound = errors.New("model cost price not found")
+var (
+	ErrCostPriceNotFound = errors.New("model cost price not found")
+	ErrCostPriceExists   = errors.New("model cost price already exists for effective time")
+)
 
 // CostLineItem 成本明细行（append-only；UNIQUE(idempotency_key) 防重复落账）。
 type CostLineItem struct {

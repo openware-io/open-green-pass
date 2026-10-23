@@ -131,34 +131,62 @@ func (s *GenerationRunStore) ListByProject(ctx context.Context, teamID, projectI
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
+	var out []*domain.GenerationRun
 	var ids []int64
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id FROM gen_run WHERE team_id=$1 AND project_id=$2 ORDER BY created_at DESC,id DESC LIMIT $3`, teamID, projectID, limit)
+		rows, err := tx.Query(ctx, `
+			SELECT id,team_id,project_id,scope_type,scope_id,state,total_units,completed_units,failed_units,
+				tokens_in,tokens_out,cost_amount,idempotency_key,created_by,created_at,updated_at
+			FROM gen_run WHERE team_id=$1 AND project_id=$2 ORDER BY created_at DESC,id DESC LIMIT $3`,
+			teamID, projectID, limit)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 		for rows.Next() {
-			var id int64
-			if err := rows.Scan(&id); err != nil {
+			var run domain.GenerationRun
+			var state string
+			if err := rows.Scan(&run.ID, &run.TeamID, &run.ProjectID, &run.ScopeType, &run.ScopeID, &state,
+				&run.TotalUnits, &run.CompletedUnits, &run.FailedUnits, &run.TokensIn, &run.TokensOut,
+				&run.CostAmount, &run.IdempotencyKey, &run.CreatedBy, &run.CreatedAt, &run.UpdatedAt); err != nil {
 				return err
 			}
-			ids = append(ids, id)
+			run.State = domain.GenerationRunState(state)
+			out = append(out, &run)
+			ids = append(ids, run.ID)
 		}
-		return rows.Err()
-	})
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*domain.GenerationRun, 0, len(ids))
-	for _, id := range ids {
-		run, err := s.Find(ctx, teamID, id)
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			return nil
+		}
+		byID := make(map[int64]*domain.GenerationRun, len(out))
+		for _, run := range out {
+			byID[run.ID] = run
+		}
+		unitRows, err := tx.Query(ctx, `
+			SELECT id,team_id,run_id,service_id,repo_id,batch_id,state,COALESCE(error_summary,''),created_at,updated_at
+			FROM gen_run_unit WHERE team_id=$1 AND run_id = ANY($2) ORDER BY id`, teamID, ids)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		out = append(out, run)
-	}
-	return out, nil
+		defer unitRows.Close()
+		for unitRows.Next() {
+			var unit domain.GenerationUnit
+			var unitState string
+			if err := unitRows.Scan(&unit.ID, &unit.TeamID, &unit.RunID, &unit.ServiceID, &unit.RepoID,
+				&unit.BatchID, &unitState, &unit.Error, &unit.CreatedAt, &unit.UpdatedAt); err != nil {
+				return err
+			}
+			unit.State = domain.GenerationUnitState(unitState)
+			if run := byID[unit.RunID]; run != nil {
+				run.Units = append(run.Units, &unit)
+			}
+		}
+		return unitRows.Err()
+	})
+	return out, err
 }
 
 func (s *GenerationRunStore) LinkBatch(ctx context.Context, teamID, runID, unitID, batchID int64) error {

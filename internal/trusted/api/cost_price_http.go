@@ -1,12 +1,14 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/openware-io/open-green-pass/internal/gateway/httpx"
 	"github.com/openware-io/open-green-pass/internal/iam"
 	"github.com/openware-io/open-green-pass/internal/trusted/application"
+	trusteddomain "github.com/openware-io/open-green-pass/internal/trusted/domain"
 )
 
 // RegisterCostPrices exposes effective-dated model tariffs.
@@ -41,6 +43,10 @@ func RegisterCostPrices(mux *http.ServeMux, svc *application.CostPriceService) {
 		}
 		price, err := svc.Create(r.Context(), req)
 		if err != nil {
+			if errors.Is(err, trusteddomain.ErrCostPriceExists) {
+				httpx.WriteJSON(w, http.StatusConflict, map[string]string{"error": "cost_price_exists"})
+				return
+			}
 			httpx.WriteErr(w, err)
 			return
 		}

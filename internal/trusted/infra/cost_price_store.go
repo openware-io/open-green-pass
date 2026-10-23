@@ -5,6 +5,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/jackc/pgx/v5"
 
 	"github.com/openware-io/open-green-pass/internal/platform/db"
@@ -28,6 +30,12 @@ func (s *CostPriceStore) Create(ctx context.Context, price *domain.CostPrice) er
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
 			price.ID, price.TeamID, price.Model, price.InputUnitPrice, price.OutputUnitPrice,
 			price.CacheReadUnitPrice, price.Currency, price.EffectiveFrom, price.CreatedBy)
+		if err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				return domain.ErrCostPriceExists
+			}
+		}
 		return err
 	})
 }
