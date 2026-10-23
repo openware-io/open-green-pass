@@ -185,6 +185,7 @@ const AUDIT_ROWS = [
 ];
 
 const TYPE_LABEL: Record<string, string> = { service: '服务', 'service-group': '服务组', module: '模块', app: '应用', end: '端', project: '工程' };
+const RUN_STATE_LABEL: Record<string, string> = { queued: '排队中', running: '运行中', succeeded: '已完成', partial_failed: '部分失败', failed: '失败', cancelled: '已取消' };
 const STAGE_LABEL: Record<string, string> = { enqueued: '待启动', fetching: '冻结源码', parsing: '解析归一化', generating: '生成候选', quality_check: '质量检查', review: '人工审核', committing: '写入用例库', approved: '已完成', rejected: '已拒绝', failed: '失败', rolled_back: '已回退', cancelled: '已取消' };
 
 export default function GenerationPage() {
@@ -602,7 +603,7 @@ function GenerationPageContent() {
         <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-emerald-700">DSH SDK</span>
       </div>}
 
-      {realClient && realRun && <Card title={`最近生成任务 #${realRun.id}`} className="p-5 mb-5" extra={<div className="flex items-center gap-2">{recentRuns.length > 1 && <select value={realRun.id} onChange={(event) => { const selected = recentRuns.find((item) => item.id === Number(event.target.value)); if (selected) setRealRun(selected); }} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-600">{recentRuns.map((item) => <option key={item.id} value={item.id}>#{item.id} · {item.state}</option>)}</select>}{['queued', 'running', 'partial_failed'].includes(realRun.state) && <button type="button" disabled={reviewBusy} onClick={() => void cancelRealRun()} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] text-red-600 hover:bg-red-50 disabled:opacity-50">取消整个任务</button>}</div>}>
+      {realClient && realRun && <Card title={`最近生成任务 #${realRun.id}`} className="p-5 mb-5" extra={<div className="flex items-center gap-2">{recentRuns.length > 1 && <select value={realRun.id} onChange={(event) => { const selected = recentRuns.find((item) => item.id === Number(event.target.value)); if (selected) setRealRun(selected); }} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] text-slate-600">{recentRuns.map((item) => <option key={item.id} value={item.id}>#{item.id} · {RUN_STATE_LABEL[item.state] ?? item.state}</option>)}</select>}{['queued', 'running', 'partial_failed'].includes(realRun.state) && <button type="button" disabled={reviewBusy} onClick={() => void cancelRealRun()} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] text-red-600 hover:bg-red-50 disabled:opacity-50">取消整个任务</button>}</div>}>
         <div className="flex flex-wrap items-center gap-4 text-xs">
           <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700">{realRun.state === 'queued' ? '排队中' : realRun.state === 'running' ? '运行中' : realRun.state === 'partial_failed' ? '部分失败' : realRun.state === 'succeeded' ? '已完成' : realRun.state === 'failed' ? '失败' : '已取消'}</span>
           <span className="text-slate-500">{realRun.completed_units} / {realRun.total_units} 个服务完成</span>
