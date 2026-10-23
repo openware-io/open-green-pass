@@ -1,0 +1,33 @@
+# Generation Arbiter Report
+
+- Time: 2026-10-23 21:47:24 +08:00
+- Base URL: http://greenpass.localhost:30080
+- Checks: 26
+- Failed: 0
+
+- [x] deploy/gp-server: ready=2 desired=2
+- [x] deploy/gp-worker: ready=2 desired=2
+- [x] deploy/gp-web: ready=1 desired=1
+- [x] deploy/gp-dsh-gateway: ready=1 desired=1
+- [x] schema/version: schema_migrations=48|false
+- [x] schema/run-tables: gen_run/gen_run_unit/cost_price count=3
+- [x] schema/price-columns: cost_price columns=5/5
+- [x] schema/cost-columns: cost_line_item columns=5/5
+- [x] schema/ttl-function: purge_generation_artifacts=1
+- [x] api/login: HTTP 200
+- [x] api/generation-runs: HTTP 200
+- [x] api/run-history: runs=5
+- [x] api/run-detail: HTTP 200
+- [x] api/cost-prices: HTTP 200
+- [x] api/cost-items: HTTP 200
+- [x] evidence/cancel-cleanup: cancelled runs with cleaned units=1
+- [x] evidence/run-succeeded: succeeded runs=3
+- [x] evidence/priced-generation: priced generation lines=1
+- [x] evidence/actual-model: actual DSH model lines=1
+- [x] evidence/run-cost: runs with cost/tokens=1
+- [x] ui/shell: HTTP 200
+- [x] ui/run-card: run card strings
+- [x] ui/run-review: run review action
+- [x] ui/price-panel: model price panel
+- [x] test/go: go test ./...
+- [x] test/typecheck: npm run typecheck
