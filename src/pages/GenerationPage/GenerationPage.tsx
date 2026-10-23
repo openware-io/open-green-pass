@@ -246,7 +246,8 @@ function GenerationPageContent() {
   const activeBatchId = realBatch?.id;
   const activeBatchStateVersion = realBatch?.state_version;
   const [selectedServiceIds, setSelectedServiceIds] = useState<number[]>([]);
-  const [generationMode, setGenerationMode] = useState<'full' | 'custom'>('full');
+  const [generationScope, setGenerationScope] = useState<'project' | 'repo' | 'custom'>('project');
+  const [repoScopeId, setRepoScopeId] = useState<number | null>(null);
   const [serviceSearch, setServiceSearch] = useState('');
   const [batchConfirmOpen, setBatchConfirmOpen] = useState(false);
   const [batchPreparing, setBatchPreparing] = useState(false);
@@ -283,8 +284,25 @@ function GenerationPageContent() {
     const command = service.test_command || '未登记';
     return { language, framework, tool, command, complete: [service.language, service.framework].every(Boolean) };
   };
-  const fullScope = generationMode === 'full';
-  const selectedServices = useMemo(() => fullScope ? confirmedServices : confirmedServices.filter((service) => selectedServiceIds.includes(service.id)), [confirmedServices, fullScope, selectedServiceIds]);
+  const repoScopeOptions = useMemo(() => {
+    const map = new Map<number, { id: number; url: string; defaultBranch: string; serviceCount: number }>();
+    for (const service of confirmedServices) {
+      const repo = realProjectRepos.find((item) => item.id === service.repo_id);
+      if (!repo) continue;
+      const current = map.get(repo.id);
+      if (current) current.serviceCount += 1;
+      else map.set(repo.id, { id: repo.id, url: repo.url, defaultBranch: repo.default_branch, serviceCount: 1 });
+    }
+    return [...map.values()].sort((a, b) => b.serviceCount - a.serviceCount || a.url.localeCompare(b.url));
+  }, [confirmedServices, realProjectRepos]);
+  const activeRepoScopeId = repoScopeId ?? repoScopeOptions[0]?.id ?? null;
+  const scopeServices = useMemo(() => {
+    if (generationScope === 'project') return confirmedServices;
+    if (generationScope === 'repo') return confirmedServices.filter((service) => service.repo_id === activeRepoScopeId);
+    return confirmedServices.filter((service) => selectedServiceIds.includes(service.id));
+  }, [confirmedServices, generationScope, activeRepoScopeId, selectedServiceIds]);
+  const fullScope = generationScope !== 'custom';
+  const selectedServices = scopeServices;
   const activeRepoRefs = realRepo ? repositoryRefs[realRepo.id] ?? [] : [];
   const selectedRef = realRepo ? selectedRefs[realRepo.id] : undefined;
   const selectedRefDetails = activeRepoRefs.find((ref) => ref.ref_type === selectedRef?.type && ref.name === selectedRef.name) ?? null;
@@ -354,7 +372,7 @@ function GenerationPageContent() {
     if (!realClient) { setStep(1); return; }
     if (!confirmedServices.length) { setRealError('请先在被测对象页完成服务技术画像确认，并启用生成测试用例。'); return; }
     const fallback = confirmedServices.find((service) => service.id === activeServiceId);
-    const serviceList = fullScope ? confirmedServices : selectedServices.length ? selectedServices : fallback ? [fallback] : [];
+    const serviceList = generationScope === 'custom' ? (selectedServices.length ? selectedServices : fallback ? [fallback] : []) : scopeServices;
     if (!serviceList.length) { setRealError('请先选择至少一个技术画像已确认且允许生成的服务。'); return; }
     setRealError('');
     setBatchPreparing(true);
@@ -378,7 +396,7 @@ function GenerationPageContent() {
       const projectID = Number(projectId);
       if (!projectID) throw new Error('请先在被测对象页选择真实项目');
       const repos = realProjectRepos.length ? realProjectRepos : await realClient.listProjectRepositories(projectID);
-      const services = fullScope ? confirmedServices : confirmedServices.filter((service) => selectedServiceIds.includes(service.id));
+      const services = generationScope === 'custom' ? confirmedServices.filter((service) => selectedServiceIds.includes(service.id)) : scopeServices;
       if (!services.length) throw new Error('请至少选择一个已确认的目录服务');
       const results: Array<{ serviceId: number; name: string; ok: boolean; error?: string }> = [];
       const created: GenerationBatch[] = [];
@@ -498,35 +516,43 @@ function GenerationPageContent() {
       {realClient && <Card title="生成模式" className="p-5 mb-5">
         <div className="flex flex-wrap items-center gap-3">
           <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-            <button type="button" onClick={() => setGenerationMode('full')} className={'rounded-lg px-4 py-2 text-xs font-semibold transition ' + (fullScope ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>全量生成（项目）</button>
-            <button type="button" onClick={() => setGenerationMode('custom')} className={'rounded-lg px-4 py-2 text-xs font-semibold transition ' + (!fullScope ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>指定服务</button>
+            <button type="button" onClick={() => setGenerationScope('project')} className={'rounded-lg px-3 py-2 text-xs font-semibold transition ' + (generationScope === 'project' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>项目全量</button>
+            <button type="button" onClick={() => setGenerationScope('repo')} className={'rounded-lg px-3 py-2 text-xs font-semibold transition ' + (generationScope === 'repo' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>仓库全量</button>
+            <button type="button" onClick={() => setGenerationScope('custom')} className={'rounded-lg px-3 py-2 text-xs font-semibold transition ' + (generationScope === 'custom' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>指定服务</button>
           </div>
+          {generationScope === 'repo' && <select value={activeRepoScopeId ?? ''} onChange={(event) => setRepoScopeId(Number(event.target.value) || null)} className="min-w-[280px] flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 outline-none focus:border-emerald-400">
+            {repoScopeOptions.map((repo) => <option key={repo.id} value={repo.id}>{repo.url} · {repo.serviceCount} 个服务</option>)}
+          </select>}
           <div className="min-w-0 flex-1 text-xs text-slate-500">
-            {fullScope
-              ? <>将对 <b className="text-slate-700">{selectedAsset.name}</b> 下全部 {confirmedServices.length} 个已确认服务、{new Set(confirmedServices.map((service) => service.repo_id)).size} 个仓库生成用例；每个仓库使用默认分支的最新提交，不使用单个 Tag 代表全项目。</>
-              : <>自行勾选服务并逐个选择分支或 Tag；适合局部复测，不代表项目全量。</>}
+            {generationScope === 'project' && <>对 <b className="text-slate-700">{selectedAsset.name}</b> 下全部 {confirmedServices.length} 个已确认服务、{repoScopeOptions.length} 个仓库生成；每个仓库使用默认分支最新提交。</>}
+            {generationScope === 'repo' && <>只对选中仓库下的 {scopeServices.length} 个服务生成，使用该仓库默认分支；不会生成其他仓库的用例。</>}
+            {generationScope === 'custom' && <>自行勾选服务并逐个选择分支或 Tag；适合局部复测，不代表项目或仓库全量。</>}
           </div>
           <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-medium text-emerald-700">可重复生成</span>
         </div>
         <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-slate-500">
-          <span className="rounded bg-slate-50 px-2 py-1">范围：{fullScope ? '项目全量' : '指定服务'}</span>
-          <span className="rounded bg-slate-50 px-2 py-1">服务：{fullScope ? confirmedServices.length : selectedServices.length}</span>
-          <span className="rounded bg-slate-50 px-2 py-1">代码引用：{fullScope ? '各仓库默认分支' : '逐服务选择'}</span>
+          <span className="rounded bg-slate-50 px-2 py-1">范围：{generationScope === 'project' ? '项目全量' : generationScope === 'repo' ? '仓库全量' : '指定服务'}</span>
+          <span className="rounded bg-slate-50 px-2 py-1">服务：{scopeServices.length}</span>
+          <span className="rounded bg-slate-50 px-2 py-1">仓库：{generationScope === 'project' ? repoScopeOptions.length : generationScope === 'repo' ? 1 : new Set(scopeServices.map((service) => service.repo_id)).size}</span>
+          <span className="rounded bg-slate-50 px-2 py-1">代码引用：{generationScope === 'custom' ? '逐服务选择' : '仓库默认分支'}</span>
           <span className="rounded bg-slate-50 px-2 py-1">每次点击创建新批次</span>
         </div>
       </Card>}
 
-      {realClient && fullScope && <Card title="全量范围" className="p-5 mb-5">
+      {realClient && fullScope && <Card title={generationScope === 'repo' ? '仓库全量范围' : '项目全量范围'} className="p-5 mb-5">
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3"><div className="text-[10px] text-emerald-700">服务</div><div className="mt-1 text-2xl font-semibold text-slate-800">{confirmedServices.length}</div><div className="text-[10px] text-slate-500">全部已确认服务</div></div>
-          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"><div className="text-[10px] text-slate-500">仓库</div><div className="mt-1 text-2xl font-semibold text-slate-800">{new Set(confirmedServices.map((service) => service.repo_id)).size}</div><div className="text-[10px] text-slate-500">使用各仓库默认分支</div></div>
-          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"><div className="text-[10px] text-slate-500">DSH 任务</div><div className="mt-1 text-2xl font-semibold text-slate-800">{confirmedServices.length}</div><div className="text-[10px] text-slate-500">每服务一个批次</div></div>
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3"><div className="text-[10px] text-emerald-700">服务</div><div className="mt-1 text-2xl font-semibold text-slate-800">{scopeServices.length}</div><div className="text-[10px] text-slate-500">{generationScope === 'repo' ? '该仓库下已确认服务' : '全部已确认服务'}</div></div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"><div className="text-[10px] text-slate-500">仓库</div><div className="mt-1 text-2xl font-semibold text-slate-800">{generationScope === 'project' ? repoScopeOptions.length : 1}</div><div className="text-[10px] text-slate-500">{generationScope === 'repo' ? '当前仓库默认分支' : '各仓库默认分支'}</div></div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"><div className="text-[10px] text-slate-500">DSH 任务</div><div className="mt-1 text-2xl font-semibold text-slate-800">{scopeServices.length}</div><div className="text-[10px] text-slate-500">每服务一个批次</div></div>
         </div>
+        {generationScope === 'repo' && <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+          {repoScopeOptions.find((repo) => repo.id === activeRepoScopeId)?.url} · 默认分支 <b>{repoScopeOptions.find((repo) => repo.id === activeRepoScopeId)?.defaultBranch}</b>
+        </div>}
         <div className="mt-4 flex flex-wrap gap-1.5">
-          {confirmedServices.slice(0, 18).map((service) => <span key={service.id} className="rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-600">{service.name}</span>)}
-          {confirmedServices.length > 18 && <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-500">+{confirmedServices.length - 18}</span>}
+          {scopeServices.slice(0, 18).map((service) => <span key={service.id} className="rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-600">{service.name}</span>)}
+          {scopeServices.length > 18 && <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-500">+{scopeServices.length - 18}</span>}
         </div>
-        <p className="mt-3 text-[11px] text-slate-500">全量模式不展示单服务勾选，也不使用单个 Tag；点击底部“全量生成”后统一确认。</p>
+        <p className="mt-3 text-[11px] text-slate-500">{generationScope === 'repo' ? '仓库全量只覆盖当前仓库下的服务，不会生成其他仓库的用例；使用默认分支最新提交。' : '项目全量覆盖全部已确认服务；每个仓库使用默认分支最新提交，不使用单个 Tag 代表全项目。'} 点击底部生成按钮后统一确认。</p>
       </Card>}
 
       {realClient && !fullScope && <Card title="选择生成范围" className="p-0 mb-5 overflow-hidden">
@@ -994,10 +1020,10 @@ function GenerationPageContent() {
 
       {realClient && <div className="fixed bottom-4 right-6 z-40 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-xl shadow-slate-900/10">
         <div className="text-[11px] leading-5 text-slate-500">
-          <div className="font-semibold text-slate-800">{fullScope ? '项目全量' : '指定服务'} · {selectedServices.length} 个服务</div>
-          <div>{fullScope ? '各仓库默认分支' : '逐服务代码引用'} · 将创建 {selectedServices.length} 个批次 / {selectedServices.length} 个 DSH 任务</div>
+          <div className="font-semibold text-slate-800">{generationScope === 'project' ? '项目全量' : generationScope === 'repo' ? '仓库全量' : '指定服务'} · {selectedServices.length} 个服务</div>
+          <div>{generationScope === 'custom' ? '逐服务代码引用' : '仓库默认分支'} · 将创建 {selectedServices.length} 个批次 / {selectedServices.length} 个 DSH 任务</div>
         </div>
-        <button type="button" disabled={realBusy || batchPreparing || !selectedServices.length} onClick={() => void openBatchConfirmation()} className="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{realBusy ? '创建中…' : batchPreparing ? '准备中…' : fullScope ? `全量生成 ${confirmedServices.length} 个服务` : `生成 ${selectedServices.length} 个服务`}</button>
+        <button type="button" disabled={realBusy || batchPreparing || !selectedServices.length} onClick={() => void openBatchConfirmation()} className="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">{realBusy ? '创建中…' : batchPreparing ? '准备中…' : generationScope === 'project' ? `项目全量生成 ${scopeServices.length} 个服务` : generationScope === 'repo' ? `生成该仓库 ${scopeServices.length} 个服务` : `生成 ${selectedServices.length} 个服务`}</button>
       </div>}
     </div>
   );
