@@ -1039,19 +1039,36 @@ func (s *GenerationBatchStore) CommitSeeds(ctx context.Context, teamID, batchID,
 			} else {
 				title, _ := spec["title"].(string)
 				if title == "" {
-					title = fmt.Sprintf("生成候选种子 %d", seed.id)
+					title = fmt.Sprintf("鐢熸垚鍊欓€夌瀛?%d", seed.id)
 				}
 				kind, _ := spec["kind"].(string)
 				if kind == "" {
 					kind = "api"
 				}
-				persistedCaseID = genNext()
 				code := fmt.Sprintf("GEN-%d-%s", serviceID, key[:12])
-				if _, err := tx.Exec(ctx, `INSERT INTO cas_case(id,team_id,target_id,code,title,kind,current_version,status,created_by) VALUES($1,$2,$3,$4,$5,$6,1,'active',$7)`, persistedCaseID, teamID, targetID, code, title, kind, actorID); err != nil {
-					return err
-				}
-				if _, err := tx.Exec(ctx, `INSERT INTO cas_version(id,team_id,case_id,version,change_type,source_repo_id,source_branch,script_json,approved_by,approved_at,created_by) VALUES($1,$2,$3,1,'added',$4,$5,$6,$7,now(),$7)`, genNext(), teamID, persistedCaseID, repoID, branch, seed.raw, actorID); err != nil {
-					return err
+				var existingID int64
+				var existingVersion int
+				lookupErr := tx.QueryRow(ctx, `SELECT id,current_version FROM cas_case WHERE team_id=$1 AND target_id=$2 AND code=$3`, teamID, targetID, code).Scan(&existingID, &existingVersion)
+				switch {
+				case lookupErr == nil:
+					persistedCaseID = existingID
+					version := existingVersion + 1
+					if _, err := tx.Exec(ctx, `UPDATE cas_case SET title=$3,kind=$4,current_version=$5,status='active',deleted_at=NULL,updated_by=$6,updated_at=now() WHERE team_id=$1 AND id=$2`, teamID, persistedCaseID, title, kind, version, actorID); err != nil {
+						return err
+					}
+					if _, err := tx.Exec(ctx, `INSERT INTO cas_version(id,team_id,case_id,version,change_type,source_repo_id,source_branch,script_json,approved_by,approved_at,created_by) VALUES($1,$2,$3,$4,'updated',$5,$6,$7,$8,now(),$8)`, genNext(), teamID, persistedCaseID, version, repoID, branch, seed.raw, actorID); err != nil {
+						return err
+					}
+				case errors.Is(lookupErr, pgx.ErrNoRows):
+					persistedCaseID = genNext()
+					if _, err := tx.Exec(ctx, `INSERT INTO cas_case(id,team_id,target_id,code,title,kind,current_version,status,created_by) VALUES($1,$2,$3,$4,$5,$6,1,'active',$7)`, persistedCaseID, teamID, targetID, code, title, kind, actorID); err != nil {
+						return err
+					}
+					if _, err := tx.Exec(ctx, `INSERT INTO cas_version(id,team_id,case_id,version,change_type,source_repo_id,source_branch,script_json,approved_by,approved_at,created_by) VALUES($1,$2,$3,1,'added',$4,$5,$6,$7,now(),$7)`, genNext(), teamID, persistedCaseID, repoID, branch, seed.raw, actorID); err != nil {
+						return err
+					}
+				default:
+					return lookupErr
 				}
 			}
 			if _, err := tx.Exec(ctx, `UPDATE gen_seed SET approval_state='approved',case_id=$4 WHERE team_id=$1 AND batch_id=$2 AND id=$3`, teamID, batchID, seed.id, persistedCaseID); err != nil {
