@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -41,25 +40,11 @@ import (
 	iaminfra "github.com/openware-io/open-green-pass/internal/iam/infra"
 	"github.com/openware-io/open-green-pass/internal/platform/config"
 	"github.com/openware-io/open-green-pass/internal/platform/observability"
-	"github.com/openware-io/open-green-pass/internal/platform/rls"
 	tapi "github.com/openware-io/open-green-pass/internal/trusted/api"
 	tapp "github.com/openware-io/open-green-pass/internal/trusted/application"
 	tinfra "github.com/openware-io/open-green-pass/internal/trusted/infra"
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
-
-type generationCostAdapter struct {
-	svc       *tapp.CostService
-	unitPrice float64
-}
-
-func (a generationCostAdapter) RecordGenerationCost(ctx context.Context, cost aidomain.GenerationCost) error {
-	_, err := a.svc.Record(rls.WithTenant(ctx, cost.TeamID), tapp.RecordRequest{
-		RequestID: cost.RequestID, BizPoint: "case_generate", TargetID: cost.TargetID,
-		Model: cost.Model, TokensIn: cost.TokensIn, TokensOut: cost.TokensOut, UnitPrice: a.unitPrice,
-	})
-	return err
-}
 
 func main() {
 	cfg := config.Load()
@@ -235,8 +220,9 @@ func main() {
 	gateSvc := tapp.NewGateService(gateStore, auditSvc, statReader, gen)
 	costStore := tinfra.NewCostStore(trustedDB, gen)
 	costSvc := tapp.NewCostService(costStore, auditSvc, gen)
-	generationUnitPrice, _ := strconv.ParseFloat(os.Getenv("GP_GENERATION_UNIT_PRICE"), 64)
-	generationStore.SetCostPort(generationCostAdapter{svc: costSvc, unitPrice: generationUnitPrice})
+	costPriceStore := tinfra.NewCostPriceStore(db)
+	costPriceSvc := tapp.NewCostPriceService(costPriceStore, auditSvc, gen)
+	generationStore.SetCostPort(aiinfra.NewGenerationCostAdapter(costSvc, costPriceSvc))
 	reportStore := tinfra.NewReportStore(db, gen)
 	reportSvc, err := tapp.NewReportService(statReader, costStore, gateStore, reportStore, gen)
 	if err != nil {
@@ -298,6 +284,7 @@ func main() {
 		func(mux *http.ServeMux) { eapi.RegisterAuthorized(mux, envSvc, runSvc, policySvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { eapi.RegisterFixtures(mux, fixtureSvc, runSvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc, costSvc, reportSvc) },
+		func(mux *http.ServeMux) { tapi.RegisterCostPrices(mux, costPriceSvc) },
 		func(mux *http.ServeMux) { tapi.RegisterEvidence(mux, evidenceSvc) },
 		func(mux *http.ServeMux) { assistantapi.Register(mux, assistantSvc) },
 	)

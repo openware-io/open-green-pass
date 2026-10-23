@@ -1912,6 +1912,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/cost/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询模型价目表 */
+        get: operations["listCostPrices"];
+        put?: never;
+        /** 新增模型价目 */
+        post: operations["createCostPrice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/reports/generate": {
         parameters: {
             query?: never;
@@ -4738,6 +4756,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CostLineItem"][];
+                };
+            };
+        };
+    };
+    listCostPrices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 价目列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>[];
+                };
+            };
+        };
+    };
+    createCostPrice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    model: string;
+                    input_unit_price: number;
+                    output_unit_price: number;
+                    cache_read_unit_price?: number;
+                    /** Format: date-time */
+                    effective_from?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 已创建 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };

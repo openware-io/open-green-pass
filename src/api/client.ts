@@ -8,7 +8,8 @@ export type CaseResult = components['schemas']['CaseResult'];
 export type Report = components['schemas']['Report'];
 export type ReportBundle = components['schemas']['ReportBundle'];
 export type CostOverview = components['schemas']['CostOverview'];
-export type CostLineItem = components['schemas']['CostLineItem'];
+export type CostLineItem = components['schemas']['CostLineItem'] & { cache_read_tokens?:number; input_unit_price?:number; output_unit_price?:number; cache_read_unit_price?:number; price_missing?:boolean };
+export type CostPrice = { id:number; model:string; currency:string; input_unit_price:number; output_unit_price:number; cache_read_unit_price:number; effective_from:string };
 export type GateResult = components['schemas']['GateResult'];
 export type GateRule = components['schemas']['GateRule'];
 export type EnvRuntime = components['schemas']['EnvRuntime'];
@@ -321,6 +322,8 @@ export class GreenPassClient {
     return this.request(`/cost/items${query.size ? `?${query}` : ''}`);
   }
   costCompare(caseId: number): JsonResponse<CostLineItem[]> { return this.request(`/cost/compare/${caseId}`); }
+  costPrices(): JsonResponse<CostPrice[]> { return this.request('/cost/prices'); }
+  createCostPrice(input: Omit<CostPrice,'id'|'currency'|'effective_from'> & { effective_from?: string }): JsonResponse<CostPrice> { return this.request('/cost/prices',{method:'POST',body:JSON.stringify(input)}); }
   generateReport(runId: number, kind = 'service'): JsonResponse<Report> {
     return this.request('/reports/generate', { method: 'POST', body: JSON.stringify({ run_id: runId, kind }) });
   }

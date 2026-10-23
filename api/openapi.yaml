@@ -843,6 +843,20 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/CostLineItem' }
+  /cost/prices:
+    get:
+      summary: 查询模型价目表
+      operationId: listCostPrices
+      responses:
+        '200': { description: 价目列表, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+    post:
+      summary: 新增模型价目
+      operationId: createCostPrice
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [model, input_unit_price, output_unit_price], properties: { model: { type: string }, input_unit_price: { type: number }, output_unit_price: { type: number }, cache_read_unit_price: { type: number }, effective_from: { type: string, format: date-time } } } } }
+      responses:
+        '201': { description: 已创建, content: { application/json: { schema: { type: object } } } }
   # ---------- 报告（trusted，GP1-07） ----------
   /reports/generate:
     post:

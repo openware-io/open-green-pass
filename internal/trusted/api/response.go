@@ -31,21 +31,26 @@ type gateResultResponse struct {
 
 // costLineResponse is the trusted-domain HTTP representation of a cost line item.
 type costLineResponse struct {
-	ID             int64     `json:"id"`
-	RequestID      string    `json:"request_id"`
-	IdempotencyKey string    `json:"idempotency_key"`
-	TeamID         int64     `json:"team_id"`
-	TargetID       int64     `json:"target_id"`
-	RunID          int64     `json:"run_id"`
-	CaseID         int64     `json:"case_id"`
-	Category       string    `json:"category"`
-	BizPoint       string    `json:"biz_point"`
-	Model          string    `json:"model"`
-	TokensIn       int64     `json:"tokens_in"`
-	TokensOut      int64     `json:"tokens_out"`
-	UnitPrice      float64   `json:"unit_price"`
-	Amount         float64   `json:"amount"`
-	OccurredAt     time.Time `json:"occurred_at"`
+	ID                 int64     `json:"id"`
+	RequestID          string    `json:"request_id"`
+	IdempotencyKey     string    `json:"idempotency_key"`
+	TeamID             int64     `json:"team_id"`
+	TargetID           int64     `json:"target_id"`
+	RunID              int64     `json:"run_id"`
+	CaseID             int64     `json:"case_id"`
+	Category           string    `json:"category"`
+	BizPoint           string    `json:"biz_point"`
+	Model              string    `json:"model"`
+	TokensIn           int64     `json:"tokens_in"`
+	TokensOut          int64     `json:"tokens_out"`
+	CacheReadTokens    int64     `json:"cache_read_tokens"`
+	UnitPrice          float64   `json:"unit_price"`
+	InputUnitPrice     float64   `json:"input_unit_price"`
+	OutputUnitPrice    float64   `json:"output_unit_price"`
+	CacheReadUnitPrice float64   `json:"cache_read_unit_price"`
+	PriceMissing       bool      `json:"price_missing"`
+	Amount             float64   `json:"amount"`
+	OccurredAt         time.Time `json:"occurred_at"`
 }
 
 // costOverviewResponse is the trusted-domain HTTP representation of a cost aggregate.
@@ -110,7 +115,9 @@ func toCostLineResponse(c *domain.CostLineItem) costLineResponse {
 		ID: c.ID, RequestID: c.RequestID, IdempotencyKey: c.IdempotencyKey,
 		TeamID: c.TeamID, TargetID: c.TargetID, RunID: c.RunID, CaseID: c.CaseID,
 		Category: string(c.Category), BizPoint: c.BizPoint, Model: c.Model,
-		TokensIn: c.TokensIn, TokensOut: c.TokensOut, UnitPrice: c.UnitPrice,
+		TokensIn: c.TokensIn, TokensOut: c.TokensOut, CacheReadTokens: c.CacheReadTokens,
+		UnitPrice: c.UnitPrice, InputUnitPrice: c.InputUnitPrice, OutputUnitPrice: c.OutputUnitPrice,
+		CacheReadUnitPrice: c.CacheReadUnitPrice, PriceMissing: c.PriceMissing,
 		Amount: c.Amount, OccurredAt: c.OccurredAt,
 	}
 }

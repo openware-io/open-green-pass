@@ -28,11 +28,15 @@ func (s *CostStore) Insert(ctx context.Context, c *domain.CostLineItem) (bool, e
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
 			INSERT INTO cost_line_item(id, request_id, idempotency_key, team_id, target_id, run_id, case_id,
-				biz_category, biz_point, model, tokens_in, tokens_out, unit_price, amount, occurred_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+				biz_category, biz_point, model, tokens_in, tokens_out, cache_read_tokens,
+				unit_price, input_unit_price, output_unit_price, cache_read_unit_price, price_id, price_missing,
+				amount, occurred_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
 			ON CONFLICT (idempotency_key) DO NOTHING`,
 			c.ID, c.RequestID, c.IdempotencyKey, c.TeamID, c.TargetID, c.RunID, c.CaseID,
-			string(c.Category), c.BizPoint, c.Model, c.TokensIn, c.TokensOut, c.UnitPrice, c.Amount, c.OccurredAt)
+			string(c.Category), c.BizPoint, c.Model, c.TokensIn, c.TokensOut, c.CacheReadTokens,
+			c.UnitPrice, c.InputUnitPrice, c.OutputUnitPrice, c.CacheReadUnitPrice, c.PriceID, c.PriceMissing,
+			c.Amount, c.OccurredAt)
 		if err != nil {
 			return err
 		}
@@ -122,7 +126,9 @@ func (s *CostStore) Items(ctx context.Context, teamID int64, category, point str
 			var c domain.CostLineItem
 			var cat string
 			if err := rows.Scan(&c.ID, &c.RequestID, &c.TeamID, &c.TargetID, &c.RunID, &c.CaseID,
-				&cat, &c.BizPoint, &c.Model, &c.TokensIn, &c.TokensOut, &c.UnitPrice, &c.Amount, &c.OccurredAt); err != nil {
+				&cat, &c.BizPoint, &c.Model, &c.TokensIn, &c.TokensOut, &c.CacheReadTokens, &c.UnitPrice,
+				&c.InputUnitPrice, &c.OutputUnitPrice, &c.CacheReadUnitPrice, &c.PriceID, &c.PriceMissing,
+				&c.Amount, &c.OccurredAt); err != nil {
 				return err
 			}
 			c.Category = domain.CostCategory(cat)
@@ -139,7 +145,8 @@ func (s *CostStore) CompareHistory(ctx context.Context, teamID, caseID int64) ([
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
 			SELECT id, request_id, team_id, target_id, run_id, case_id, biz_category, biz_point,
-			 model, tokens_in, tokens_out, unit_price, amount, occurred_at
+			 model, tokens_in, tokens_out, cache_read_tokens, unit_price, input_unit_price,
+			 output_unit_price, cache_read_unit_price, price_id, price_missing, amount, occurred_at
 			FROM cost_line_item WHERE team_id=$1 AND case_id=$2 ORDER BY occurred_at`,
 			teamID, caseID)
 		if err != nil {

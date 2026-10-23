@@ -72,6 +72,7 @@ type DSHJob struct {
 	Output    string
 	TokensIn  int64
 	TokensOut int64
+	Model     string
 	Error     string
 }
 

@@ -4,7 +4,7 @@ import { PageHeader, Card, ListFilter } from '@/components/shared';
 import { Wallet, TrendingDown, Cpu, Layers, ArrowDownRight, ArrowUpRight, History, PenTool, Rocket } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
-import type { CostLineItem, CostOverview } from '@/api/client';
+import type { CostLineItem, CostOverview, CostPrice } from '@/api/client';
 
 const SCEN_COLOR: Record<string, string> = {
   '用例生成': 'bg-emerald-500', '测试执行辅助': 'bg-teal-500', '质量判定': 'bg-indigo-500', '契约分析': 'bg-amber-500', '变异/篡改检测': 'bg-slate-400',
@@ -420,17 +420,23 @@ function RealCostPanel({ client }: { client: ReturnType<typeof configuredGreenPa
   const [caseID, setCaseID] = useState('');
   const [history, setHistory] = useState<CostLineItem[]>([]);
   const [message, setMessage] = useState('');
+  const [prices, setPrices] = useState<CostPrice[]>([]);
+  const [priceModel, setPriceModel] = useState('dsh/deepseek-flash');
+  const [priceIn, setPriceIn] = useState('0');
+  const [priceOut, setPriceOut] = useState('0');
+  const [priceCache, setPriceCache] = useState('0');
 
   const refresh = async () => {
     if (!client) return;
-    const [loadedOverview, loadedItems] = await Promise.all([client.costOverview(), client.costItems({ limit: 20 })]);
-    setOverview(loadedOverview); setItems(loadedItems);
+    const [loadedOverview, loadedItems, loadedPrices] = await Promise.all([client.costOverview(), client.costItems({ limit: 20 }), client.costPrices()]);
+    setOverview(loadedOverview); setItems(loadedItems); setPrices(loadedPrices);
   };
   useEffect(() => {
     if (!client) return;
     let active = true;
     client.costOverview().then((loaded) => { if (active) setOverview(loaded); }).catch((error: unknown) => { if (active) setMessage(error instanceof Error ? error.message : '读取真实成本失败'); });
     client.costItems({ limit: 20 }).then((loaded) => { if (active) setItems(loaded); }).catch((error: unknown) => { if (active) setMessage(error instanceof Error ? error.message : '读取真实成本明细失败'); });
+    client.costPrices().then((loaded) => { if (active) setPrices(loaded); }).catch(() => {});
     return () => { active = false; };
   }, [client]);
   if (!client) return <Card title="真实成本数据" className="mb-5" extra={<span className="text-[11px] text-slate-400">原型模式</span>}><p className="p-5 text-sm text-slate-500">配置 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_API_BASE</code> 与数值型 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_TEAM_ID</code> 后显示真实成本总览、明细与单用例历史；其余内容保持原型展示。</p></Card>;
@@ -438,6 +444,18 @@ function RealCostPanel({ client }: { client: ReturnType<typeof configuredGreenPa
     <div className="p-5 space-y-3"><p className="text-[11px] text-slate-500">连接：{greenPassConnectionHint()}。总览由服务端明细汇总，页面不写入计量数据。</p>
       {overview && <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs"><div className="rounded-lg bg-emerald-50 p-3 text-emerald-800">总额 <b>¥{overview.total_amount.toFixed(4)}</b></div><div className="rounded-lg bg-slate-50 p-3 text-slate-600">生成 ¥{(overview.by_category.generate ?? 0).toFixed(4)}</div><div className="rounded-lg bg-slate-50 p-3 text-slate-600">执行 ¥{(overview.by_category.execute ?? 0).toFixed(4)}</div></div>}
       {message && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{message}</div>}
+      {items.some((item) => item.price_missing) && <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">存在未配置单价的生成成本行：tokens 已记录，金额为 0。请在下方补齐模型价目。</div>}
+      <div className="rounded-lg border border-slate-200 p-3">
+        <div className="mb-2 flex items-center justify-between"><span className="text-xs font-semibold text-slate-700">模型价目表</span><span className="text-[10px] text-slate-400">人民币 / 千 token，按生效时间选择</span></div>
+        <div className="mb-2 overflow-x-auto"><table className="w-full text-[11px]"><thead className="text-left text-slate-400"><tr><th className="py-1">模型</th><th className="py-1">输入</th><th className="py-1">输出</th><th className="py-1">缓存读</th><th className="py-1">生效时间</th></tr></thead><tbody className="divide-y divide-slate-100">{prices.map((price) => <tr key={price.id}><td className="py-1 font-mono text-slate-600">{price.model}</td><td className="py-1">{price.input_unit_price}</td><td className="py-1">{price.output_unit_price}</td><td className="py-1">{price.cache_read_unit_price}</td><td className="py-1 text-slate-400">{price.effective_from}</td></tr>)}</tbody></table>{prices.length === 0 && <div className="py-2 text-center text-[10px] text-slate-400">暂无价目，生成成本会标记 price_missing</div>}</div>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-[10px] text-slate-500">模型<input value={priceModel} onChange={(event) => setPriceModel(event.target.value)} className="mt-1 block w-44 rounded border border-slate-200 px-2 py-1.5 text-xs" /></label>
+          <label className="text-[10px] text-slate-500">输入/千<input value={priceIn} onChange={(event) => setPriceIn(event.target.value)} inputMode="decimal" className="mt-1 block w-20 rounded border border-slate-200 px-2 py-1.5 text-xs" /></label>
+          <label className="text-[10px] text-slate-500">输出/千<input value={priceOut} onChange={(event) => setPriceOut(event.target.value)} inputMode="decimal" className="mt-1 block w-20 rounded border border-slate-200 px-2 py-1.5 text-xs" /></label>
+          <label className="text-[10px] text-slate-500">缓存读/千<input value={priceCache} onChange={(event) => setPriceCache(event.target.value)} inputMode="decimal" className="mt-1 block w-20 rounded border border-slate-200 px-2 py-1.5 text-xs" /></label>
+          <button type="button" onClick={() => { void client.createCostPrice({ model: priceModel, input_unit_price: Number(priceIn), output_unit_price: Number(priceOut), cache_read_unit_price: Number(priceCache) }).then((price) => { setPrices((current) => [price, ...current]); setMessage(`已保存价目：${price.model}`); }).catch((error: unknown) => setMessage(error instanceof Error ? error.message : '保存价目失败')); }} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-medium text-white">保存价目</button>
+        </div>
+      </div>
       <div className="overflow-x-auto rounded-lg border border-slate-200"><table className="w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-3 py-2">时间</th><th className="px-3 py-2">类别</th><th className="px-3 py-2">用例</th><th className="px-3 py-2">模型</th><th className="px-3 py-2">金额</th></tr></thead><tbody className="divide-y divide-slate-100">{items.map((item) => <tr key={item.id}><td className="px-3 py-2">{item.occurred_at}</td><td className="px-3 py-2">{item.category} / {item.biz_point}</td><td className="px-3 py-2 font-mono">#{item.case_id || '—'}</td><td className="px-3 py-2">{item.model || '—'}</td><td className="px-3 py-2">¥{item.amount.toFixed(4)}</td></tr>)}</tbody></table>{items.length === 0 && <div className="p-4 text-center text-xs text-slate-400">暂无真实成本明细</div>}</div>
       <div className="flex gap-2"><input value={caseID} onChange={(event) => setCaseID(event.target.value)} inputMode="numeric" placeholder="真实用例 ID" className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" /><button type="button" onClick={() => { const id = Number(caseID); if (!Number.isSafeInteger(id) || id <= 0) { setMessage('请输入有效的真实用例 ID'); return; } void client.costCompare(id).then(setHistory).catch((error: unknown) => setMessage(error instanceof Error ? error.message : '读取历史失败')); }} className="rounded-lg border border-emerald-300 px-3 py-2 text-xs text-emerald-700">查询用例历史</button></div>
       {history.length > 0 && <div className="text-xs text-slate-600">历史：{history.map((item) => <span key={item.id} className="mr-2 inline-block rounded bg-slate-100 px-2 py-1">#{item.run_id} ¥{item.amount.toFixed(4)}</span>)}</div>}

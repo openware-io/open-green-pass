@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -17,7 +16,6 @@ import (
 	"go.temporal.io/sdk/worker"
 
 	aiapp "github.com/openware-io/open-green-pass/internal/ai/application"
-	aidomain "github.com/openware-io/open-green-pass/internal/ai/domain"
 	aiinfra "github.com/openware-io/open-green-pass/internal/ai/infra"
 	aiaudit "github.com/openware-io/open-green-pass/internal/ai/trusted_audit"
 	aiworkflow "github.com/openware-io/open-green-pass/internal/ai/workflow"
@@ -37,7 +35,6 @@ import (
 	"github.com/openware-io/open-green-pass/internal/platform/config"
 	"github.com/openware-io/open-green-pass/internal/platform/db"
 	"github.com/openware-io/open-green-pass/internal/platform/observability"
-	"github.com/openware-io/open-green-pass/internal/platform/rls"
 	tapp "github.com/openware-io/open-green-pass/internal/trusted/application"
 	tinfra "github.com/openware-io/open-green-pass/internal/trusted/infra"
 	"github.com/openware-io/open-green-pass/pkg/id"
@@ -145,6 +142,8 @@ func main() {
 	gateSvc := tapp.NewGateService(gateStore, auditSvc, statReader, gen)
 	costStore := tinfra.NewCostStore(trustedDB, gen)
 	costSvc := tapp.NewCostService(costStore, auditSvc, gen)
+	costPriceStore := tinfra.NewCostPriceStore(dbb)
+	costPriceSvc := tapp.NewCostPriceService(costPriceStore, auditSvc, gen)
 	reportSvc, err := tapp.NewReportService(statReader, costStore, gateStore, tinfra.NewReportStore(dbb, gen), gen)
 	if err != nil {
 		log.Error("init report service", "error", err)
@@ -166,8 +165,7 @@ func main() {
 	}
 	defer c.Close()
 	generationStore := aiinfra.NewGenerationBatchStore(dbb, gen)
-	generationUnitPrice, _ := strconv.ParseFloat(os.Getenv("GP_GENERATION_UNIT_PRICE"), 64)
-	generationStore.SetCostPort(generationCostAdapter{svc: costSvc, unitPrice: generationUnitPrice})
+	generationStore.SetCostPort(aiinfra.NewGenerationCostAdapter(costSvc, costPriceSvc))
 	if gatewayURL := os.Getenv("GP_DSH_GATEWAY_URL"); gatewayURL != "" {
 		generationStore.SetDSHClient(aiinfra.NewDSHGatewayClient(gatewayURL, os.Getenv("GP_DSH_INTERNAL_TOKEN")))
 	}
@@ -299,17 +297,4 @@ func purgeGenerationArtifacts(ctx context.Context, database *db.DB, log interfac
 			run()
 		}
 	}
-}
-
-type generationCostAdapter struct {
-	svc       *tapp.CostService
-	unitPrice float64
-}
-
-func (a generationCostAdapter) RecordGenerationCost(ctx context.Context, cost aidomain.GenerationCost) error {
-	_, err := a.svc.Record(rls.WithTenant(ctx, cost.TeamID), tapp.RecordRequest{
-		RequestID: cost.RequestID, BizPoint: "case_generate", TargetID: cost.TargetID,
-		Model: cost.Model, TokensIn: cost.TokensIn, TokensOut: cost.TokensOut, UnitPrice: a.unitPrice,
-	})
-	return err
 }

@@ -24,15 +24,21 @@ func NewCostService(repo domain.CostRepository, audit *AuditService, gen *id.Gen
 
 // RecordRequest 成本计量请求（P1 mock meter；真实 AI 网关 MeterPort 后续接入）。
 type RecordRequest struct {
-	RequestID      string           `json:"request_id"`
-	BizPoint       string           `json:"biz_point"` // case_generate / case_execute / gate_judge / analysis
-	TargetID       int64            `json:"target_id"`
-	RunID          int64            `json:"run_id"`
-	CaseID         int64            `json:"case_id"`
-	Model          string           `json:"model"`
-	TokensIn       int64            `json:"tokens_in"`
-	TokensOut      int64            `json:"tokens_out"`
-	UnitPrice      float64          `json:"unit_price"` // 每千 token 单价
+	RequestID          string  `json:"request_id"`
+	BizPoint           string  `json:"biz_point"` // case_generate / case_execute / gate_judge / analysis
+	TargetID           int64   `json:"target_id"`
+	RunID              int64   `json:"run_id"`
+	CaseID             int64   `json:"case_id"`
+	Model              string  `json:"model"`
+	TokensIn           int64   `json:"tokens_in"`
+	TokensOut          int64   `json:"tokens_out"`
+	CacheReadTokens    int64   `json:"cache_read_tokens"`
+	UnitPrice          float64 `json:"unit_price"` // legacy blended price per 1K
+	InputUnitPrice     float64 `json:"input_unit_price"`
+	OutputUnitPrice    float64 `json:"output_unit_price"`
+	CacheReadUnitPrice float64 `json:"cache_read_unit_price"`
+	PriceID            *int64  `json:"price_id,omitempty"`
+	PriceMissing       bool    `json:"price_missing"`
 }
 
 // Record 计量一条成本行（幂等：同 request_id+biz_point 不重复落账）。
@@ -54,16 +60,23 @@ func (s *CostService) Record(ctx context.Context, req RecordRequest) (bool, erro
 		category = domain.CostExecute
 	}
 	amount := 0.0
-	if req.UnitPrice > 0 {
+	switch {
+	case req.InputUnitPrice > 0 || req.OutputUnitPrice > 0 || req.CacheReadUnitPrice > 0:
+		amount = float64(req.TokensIn)/1000*req.InputUnitPrice +
+			float64(req.TokensOut)/1000*req.OutputUnitPrice +
+			float64(req.CacheReadTokens)/1000*req.CacheReadUnitPrice
+	case req.UnitPrice > 0:
 		amount = float64(req.TokensIn+req.TokensOut) / 1000 * req.UnitPrice
 	}
 	item := &domain.CostLineItem{
 		ID: s.gen.Next(), RequestID: req.RequestID,
 		IdempotencyKey: req.RequestID + ":" + req.BizPoint,
-		TeamID: teamID, TargetID: req.TargetID, RunID: req.RunID, CaseID: req.CaseID,
+		TeamID:         teamID, TargetID: req.TargetID, RunID: req.RunID, CaseID: req.CaseID,
 		Category: category, BizPoint: req.BizPoint, Model: req.Model,
-		TokensIn: req.TokensIn, TokensOut: req.TokensOut,
-		UnitPrice: req.UnitPrice, Amount: amount, OccurredAt: time.Now().UTC(),
+		TokensIn: req.TokensIn, TokensOut: req.TokensOut, CacheReadTokens: req.CacheReadTokens,
+		UnitPrice: req.UnitPrice, InputUnitPrice: req.InputUnitPrice, OutputUnitPrice: req.OutputUnitPrice,
+		CacheReadUnitPrice: req.CacheReadUnitPrice, PriceID: req.PriceID, PriceMissing: req.PriceMissing,
+		Amount: amount, OccurredAt: time.Now().UTC(),
 	}
 	inserted, err := s.repo.Insert(ctx, item)
 	if err != nil {

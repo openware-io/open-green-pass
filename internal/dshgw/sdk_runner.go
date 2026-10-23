@@ -173,7 +173,7 @@ func (r SDKRunner) Run(ctx context.Context, job Job) (Result, error) {
 		text = rawNotifications(notifications)
 	}
 	tokensIn, tokensOut := assistantUsage(notifications)
-	return Result{Output: text, TokensIn: tokensIn, TokensOut: tokensOut}, nil
+	return Result{Output: text, TokensIn: tokensIn, TokensOut: tokensOut, Model: model}, nil
 }
 
 func assistantText(notifications []rpcMessage) string {

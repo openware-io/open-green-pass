@@ -33,6 +33,7 @@ type Job struct {
 	Output         string        `json:"output,omitempty"`
 	TokensIn       int64         `json:"tokens_in"`
 	TokensOut      int64         `json:"tokens_out"`
+	Model          string        `json:"model,omitempty"`
 	Error          string        `json:"error,omitempty"`
 	CreatedAt      time.Time     `json:"created_at"`
 	StartedAt      *time.Time    `json:"started_at,omitempty"`
@@ -54,6 +55,7 @@ type Result struct {
 	Output    string
 	TokensIn  int64
 	TokensOut int64
+	Model     string
 }
 
 // Runner executes one job. A production implementation wraps the DSH SDK
@@ -255,6 +257,7 @@ func (m *Manager) run(job *Job) {
 		job.Output = out.result.Output
 		job.TokensIn = out.result.TokensIn
 		job.TokensOut = out.result.TokensOut
+		job.Model = out.result.Model
 		m.appendEventLocked(job.ID, Event{Type: "state", State: StateSucceeded, At: finished, Message: "succeeded"})
 	case errors.Is(out.err, context.DeadlineExceeded):
 		job.State = StateTimeout
