@@ -49,3 +49,19 @@ run `2906718344613888`：
 - user 读路径已有真实执行证据。
 - 合法状态更新需要 `status/expectedStatusVersion/idempotencyKey/reason/correlationId` 完整 DTO；补齐后 200/409 均通过。
 - M3 仍未关闭：3 条写操作用例、24 Cell 有效映射、18 模块。
+
+## 缺测试数据：显式 blocked（2026-10-23）
+
+run `2906734884589568`：
+
+```text
+9 pass
+3 blocked
+0 fail
+```
+
+- 006：需要非管理员 token 验证 403。
+- 010：需要可删除的专用测试用户。
+- 012：需要被引用的专用测试用户。
+
+覆盖：18 passed / 6 blocked；未伪造通过。
