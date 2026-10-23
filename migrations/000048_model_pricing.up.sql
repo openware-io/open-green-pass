@@ -4,7 +4,8 @@
 ALTER TABLE cost_price ALTER COLUMN model_id DROP NOT NULL;
 ALTER TABLE cost_price ADD COLUMN IF NOT EXISTS model_key TEXT;
 ALTER TABLE cost_price ADD COLUMN IF NOT EXISTS cache_read_per_1k NUMERIC(20,10) NOT NULL DEFAULT 0 CHECK (cache_read_per_1k >= 0);
-ALTER TABLE cost_price ADD COLUMN IF NOT EXISTS created_by BIGINT;`nALTER TABLE cost_price ADD COLUMN IF NOT EXISTS updated_by BIGINT;
+ALTER TABLE cost_price ADD COLUMN IF NOT EXISTS created_by BIGINT;
+ALTER TABLE cost_price ADD COLUMN IF NOT EXISTS updated_by BIGINT;
 ALTER TABLE cost_price ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
 DROP POLICY IF EXISTS cost_price_team_policy ON cost_price;
