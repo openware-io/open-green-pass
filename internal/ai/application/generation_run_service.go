@@ -140,6 +140,10 @@ func (s *GenerationRunService) Get(ctx context.Context, teamID, runID int64) (*d
 		case domain.GenerationApproved:
 			unit.State = domain.GenerationUnitSucceeded
 			completed++
+		case domain.GenerationCancelled:
+			unit.State = domain.GenerationUnitCancelled
+			unit.Error = "batch cancelled"
+			failed++
 		case domain.GenerationFailed, domain.GenerationRejected, domain.GenerationRolledBack:
 			unit.State = domain.GenerationUnitFailed
 			unit.Error = batch.FailureSummary
