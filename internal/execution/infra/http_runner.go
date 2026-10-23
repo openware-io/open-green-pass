@@ -66,7 +66,14 @@ func (r *HTTPRunner) executeOne(ctx context.Context, spec *domain.CaseSpec) *dom
 	}
 	request, ok := root["request"].(map[string]any)
 	if !ok {
-		return fail("case has no declarative request")
+		// Backward compatibility for the first generated case format:
+		// {"path": "...", "method": "GET", "expected_status": 200}.
+		legacyPath, _ := root["path"].(string)
+		legacyMethod, _ := root["method"].(string)
+		if strings.TrimSpace(legacyPath) == "" || strings.TrimSpace(legacyMethod) == "" {
+			return fail("case has no declarative request")
+		}
+		request = normalizeLegacyRequest(root)
 	}
 	method, _ := request["method"].(string)
 	method = strings.ToUpper(strings.TrimSpace(method))
@@ -176,3 +183,18 @@ func numberToInt(value any) (int, bool) {
 }
 
 var _ domain.RunnerPort = (*HTTPRunner)(nil)
+
+// normalizeLegacyRequest converts the first generated case shape into the
+// declarative shape used by the runner. It intentionally does not resolve
+// placeholder IDs or invent request bodies.
+func normalizeLegacyRequest(root map[string]any) map[string]any {
+	path, _ := root["path"].(string)
+	method, _ := root["method"].(string)
+	request := map[string]any{"path": path, "method": method}
+	if _, hasAssertions := root["assertions"]; !hasAssertions {
+		if expected, valid := numberToInt(root["expected_status"]); valid {
+			root["assertions"] = []any{map[string]any{"type": "status", "expected_status": expected}}
+		}
+	}
+	return request
+}
