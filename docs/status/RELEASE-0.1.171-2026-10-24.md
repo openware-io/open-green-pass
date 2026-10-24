@@ -39,19 +39,19 @@ web/migrate/dsh-gateway 沿用上一版已签名 digest。
 
 ```text
 required=417
-mapped=258
-passed=224
-failed=50
+mapped=301
+passed=238
+failed=55
 blocked=8
-unmapped=159
+unmapped=140
 waived=24
-design_coverage=61.9%
+design_coverage=66.4%
 ```
 
 ## 未完成
 
 ```text
-M3 159 Cell 缺 fixture/合同
+M3 140 Cell 缺 fixture/合同
 M4 egress 在 kind CNI 下未生效
 P0/P1 未关闭
 ```
