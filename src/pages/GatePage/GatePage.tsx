@@ -6,7 +6,7 @@ import { assetToProfile, TEST_SCENARIOS, type IAsset } from '@/data/mock';
 import { PageHeader, GhostButton, PrimaryButton, Card, ListFilter } from '@/components/shared';
 import { BrainCircuit, Cpu, Globe, Smartphone, Sparkles, Loader2, BotMessageSquare, ShieldAlert, ArrowRight } from 'lucide-react';
 import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
-import type { GateResult, CoverageGapReport } from '@/api/client';
+import type { GateResult, CoverageGapReport, CoverageWaiver } from '@/api/client';
 
 const RULE_ICON = { pass: <span className="text-emerald-600">✓</span>, block: <span className="text-red-600">✕</span> };
 const RULE_BG = { pass: 'bg-emerald-100 text-emerald-600', block: 'bg-red-100 text-red-600' };
@@ -105,7 +105,7 @@ export default function GatePage() {
       </Card>
 
       <RealGatePanel client={realClient} />
-      <RealCoveragePanel client={realClient} />
+      <RealCoveragePanel client={realClient} />\n      <RealWaiverPanel client={realClient} />
 
       {/* AI 判定过程反馈条 */}
       {(running || phase === 'done') && (
@@ -307,6 +307,66 @@ function RealCoveragePanel({ client }: { client: ReturnType<typeof configuredGre
           </table>
         </div>
       </>}
+    </div>
+  </Card>;
+}
+
+function RealWaiverPanel({ client }: { client: ReturnType<typeof configuredGreenPassClient> }) {
+  const [projectID, setProjectID] = useState('');
+  const [cellIDs, setCellIDs] = useState('');
+  const [reason, setReason] = useState('');
+  const [ownerID, setOwnerID] = useState('42');
+  const [expires, setExpires] = useState('2026-12-31');
+  const [waivers, setWaivers] = useState<CoverageWaiver[]>([]);
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  if (!client) return null;
+  const list = async () => {
+    const id = Number(projectID);
+    if (!Number.isSafeInteger(id) || id <= 0) { setMessage('请输入有效的项目 ID'); return; }
+    setBusy(true); setMessage('');
+    try { setWaivers(await client.listCoverageWaivers(id)); }
+    catch (error) { setMessage(error instanceof Error ? error.message : '读取豁免失败'); }
+    finally { setBusy(false); }
+  };
+  const create = async () => {
+    const ids = cellIDs.split(',').map((value) => Number(value.trim())).filter((value) => Number.isSafeInteger(value) && value > 0);
+    const owner = Number(ownerID);
+    if (ids.length === 0 || !reason.trim() || !Number.isSafeInteger(owner) || owner <= 0) { setMessage('请填写 Cell ID、原因和 owner ID'); return; }
+    setBusy(true); setMessage('');
+    try {
+      const created = await client.createCoverageWaivers({ cell_ids: ids, reason: reason.trim(), owner_id: owner, expires_at: expires ? `${expires}T00:00:00Z` : undefined });
+      setWaivers((current) => [...created, ...current]);
+      setCellIDs(''); setReason('');
+      setMessage(`已创建 ${created.length} 条豁免`);
+    } catch (error) { setMessage(error instanceof Error ? error.message : '创建豁免失败'); }
+    finally { setBusy(false); }
+  };
+  const revoke = async (id: number) => {
+    setBusy(true); setMessage('');
+    try { await client.revokeCoverageWaiver(id); setWaivers((current) => current.filter((item) => item.id !== id)); setMessage('已撤销豁免'); }
+    catch (error) { setMessage(error instanceof Error ? error.message : '撤销豁免失败'); }
+    finally { setBusy(false); }
+  };
+  return <Card title="覆盖率豁免" className="mb-5" extra={<span className="text-[11px] text-slate-400">显式、可过期、可撤销</span>}>
+    <div className="p-5 space-y-3">
+      <div className="grid gap-2 md:grid-cols-4">
+        <input value={projectID} onChange={(event) => setProjectID(event.target.value)} inputMode="numeric" placeholder="项目 ID" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+        <input value={cellIDs} onChange={(event) => setCellIDs(event.target.value)} placeholder="Cell ID，逗号分隔" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs md:col-span-2" />
+        <input value={ownerID} onChange={(event) => setOwnerID(event.target.value)} inputMode="numeric" placeholder="owner ID" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+      </div>
+      <div className="grid gap-2 md:grid-cols-4">
+        <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="豁免原因" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs md:col-span-2" />
+        <input type="date" value={expires} onChange={(event) => setExpires(event.target.value)} disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+        <div className="flex gap-2"><button type="button" disabled={busy} onClick={() => void create()} className="rounded-lg bg-amber-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建豁免</button><button type="button" disabled={busy} onClick={() => void list()} className="rounded-lg border border-slate-200 px-3 py-2 text-xs">加载</button></div>
+      </div>
+      {message && <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700">{message}</div>}
+      <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <table className="w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-3 py-2">Cell</th><th className="px-3 py-2">原因</th><th className="px-3 py-2">过期</th><th className="px-3 py-2">操作</th></tr></thead>
+          <tbody className="divide-y divide-slate-100">{waivers.map((waiver) => <tr key={waiver.id}><td className="px-3 py-2 font-mono">#{waiver.cell_id}</td><td className="px-3 py-2">{waiver.reason}</td><td className="px-3 py-2">{waiver.expires_at ?? '—'}</td><td className="px-3 py-2"><button type="button" disabled={busy} onClick={() => void revoke(waiver.id)} className="text-red-600 disabled:opacity-60">撤销</button></td></tr>)}</tbody>
+        </table>
+        {waivers.length === 0 && <div className="p-4 text-center text-xs text-slate-400">暂无豁免</div>}
+      </div>
     </div>
   </Card>;
 }
