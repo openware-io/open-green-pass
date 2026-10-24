@@ -70,3 +70,12 @@ execution_coverage=19.7%
   - title: 非法数字 ID 返回 500 而不是 400/404
 
 当前账本：mapped=87，passed=75，failed=4，blocked=8，unmapped=354。
+
+## 必填缺失与重复路径裁剪（2026-10-24）
+
+新增 7 条 required_missing 用例：6 pass / 1 fail。
+
+- openPlatform 前端路径带尾斜杠 `/applications/`，目标返回 404；与 `/applications` 重复。
+- 已将 `/applications/` 的 14 个重复 Cell 标记 `required=false, status=waived`。
+
+当前：required=427，mapped=91，passed=79，failed=4，blocked=8。
