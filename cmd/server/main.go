@@ -96,8 +96,10 @@ func main() {
 	caseSvc := application.NewCaseService(caseStore, gen)
 	findingStore := infra.NewFindingStore(db)
 	coverageStore := infra.NewCoverageStore(db, gen)
+	waiverStore := infra.NewWaiverStore(db, gen)
 	findingSvc := application.NewFindingService(findingStore, gen)
 	coverageSvc := application.NewCoverageService(coverageStore)
+	waiverSvc := application.NewWaiverService(waiverStore)
 	coverageGateSvc := application.NewCoverageGateService(coverageStore, findingStore)
 	var dshClient aidomain.DSHJobClient
 	if gatewayURL := os.Getenv("GP_DSH_GATEWAY_URL"); gatewayURL != "" {
@@ -290,6 +292,7 @@ func main() {
 		func(mux *http.ServeMux) { gapi.RegisterCasesAuthorized(mux, caseSvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { gapi.RegisterFindings(mux, findingSvc) },
 		func(mux *http.ServeMux) { gapi.RegisterCoverage(mux, coverageSvc) },
+		func(mux *http.ServeMux) { gapi.RegisterCoverageWaivers(mux, waiverSvc) },
 		func(mux *http.ServeMux) { gapi.RegisterCoverageGate(mux, coverageGateSvc) },
 		func(mux *http.ServeMux) { gapi.RegisterCaseImport(mux, caseImportSvc) },
 		func(mux *http.ServeMux) { eapi.RegisterAuthorized(mux, envSvc, runSvc, policySvc, iamAuthorizer) },

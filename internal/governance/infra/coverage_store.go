@@ -192,11 +192,11 @@ func (s *CoverageStore) Summary(ctx context.Context, teamID int64, f domain.Cove
 		if !c.Required {
 			continue
 		}
-		sum.TotalRequired++
 		if c.WaiverID != nil || c.Status == "waived" {
 			sum.Waived++
 			continue
 		}
+		sum.TotalRequired++
 		if c.CaseID != nil || (c.Status != "planned" && c.Status != "blocked") {
 			sum.DesignCovered++
 		}
@@ -207,7 +207,7 @@ func (s *CoverageStore) Summary(ctx context.Context, teamID int64, f domain.Cove
 			sum.Passed++
 		}
 	}
-	sum.Uncovered = sum.TotalRequired - sum.DesignCovered - sum.Waived
+	sum.Uncovered = sum.TotalRequired - sum.DesignCovered
 	if sum.Uncovered < 0 {
 		sum.Uncovered = 0
 	}
