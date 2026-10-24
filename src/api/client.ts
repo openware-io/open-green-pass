@@ -41,6 +41,9 @@ export type FindingCreateInput = components['schemas']['FindingCreate'];
 export type FindingTransitionInput = components['schemas']['FindingTransition'];
 export type CoverageCell = components['schemas']['CoverageCell'];
 export type CoverageSummary = components['schemas']['CoverageSummary'];
+export type CoverageGapReport = { project_id:number; module?:string; total:{required:number;mapped:number;passed:number;failed:number;blocked:number;unmapped:number}; modules:Array<{module:string;required:number;mapped:number;passed:number;failed:number;blocked:number;unmapped:number}>; dimensions:Array<{dimension:string;required:number;mapped:number;passed:number;failed:number;blocked:number;unmapped:number}> };
+export type CoverageWaiver = { id:number;cell_id:number;reason:string;owner_id:number;expires_at?:string;evidence?:Record<string,unknown>;created_at:string };
+export type CoverageWaiverCreate = { cell_ids:number[];reason:string;owner_id:number;expires_at?:string;evidence?:Record<string,unknown> };
 export type CoveragePlanInput = components['schemas']['CoveragePlanRequest'];
 export type GenerationJob = components['schemas']['GenerationJob'];
 export type GenerationJobCreateInput = components['schemas']['GenerationJobCreate'];
@@ -161,6 +164,20 @@ export class GreenPassClient {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => { if (value !== undefined) query.set(key, String(value)); });
     return this.request(`/coverage/cells${query.size ? `?${query}` : ''}`);
+  }
+  coverageGaps(params: { project_id: number; module?: string }): JsonResponse<CoverageGapReport> {
+    const query = new URLSearchParams({ project_id: String(params.project_id) });
+    if (params.module) query.set('module', params.module);
+    return this.request(`/coverage/gaps?${query}`);
+  }
+  createCoverageWaivers(input: CoverageWaiverCreate): JsonResponse<CoverageWaiver[]> {
+    return this.request('/coverage/waivers', { method: 'POST', body: JSON.stringify(input) });
+  }
+  listCoverageWaivers(projectId: number): JsonResponse<CoverageWaiver[]> {
+    return this.request(`/coverage/waivers?project_id=${projectId}`);
+  }
+  revokeCoverageWaiver(id: number): JsonResponse<void> {
+    return this.request(`/coverage/waivers/${id}`, { method: 'DELETE' });
   }
   coverageSummary(params: { project_id?: number; module?: string } = {}): JsonResponse<CoverageSummary> {
     const query = new URLSearchParams();
