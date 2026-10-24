@@ -34,11 +34,11 @@ waived=24
 design_coverage=25.2%
 ```
 
-## 未完成
+## 镜像\n\n```text\nweb  sha256:efdcb6543390102c1365a05202f27a38fe26f76fbb3cf646405934e5fd63e6d0\ndsh  sha256:10bb114da7614d0336efd5c78e7b2f11313a83d17c9707f865036715d1a5fd37\n```\n\n## 未完成
 
 ```text
 M3 312 Cell 缺测试数据/合同/fixture
 M4 egress 在 kind CNI 下未生效
 P0/P1 未关闭
-0.1.168 镜像尚未推送/签名
+镜像已推送；server 复用 0.1.167 已签名 digest，web/dsh 新 digest 已签名验证
 ```
