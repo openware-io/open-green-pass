@@ -42,3 +42,21 @@ open_p1 = 3
 
 - 临时提高 run quota 执行；完成后已恢复 50/20/5/3。
 - 未映射剩余主要是 invalid、conflict、state、upload/media 等需要 fixture 的维度。
+
+## 详情边界（2026-10-24）
+
+新增 7 条 detail invalid_id / not_found 用例：3 pass / 4 fail。
+
+当前账本：
+
+```text
+mapped=87
+passed=74
+failed=5
+blocked=8
+unmapped=354
+design_coverage=19.7%
+execution_coverage=19.7%
+```
+
+失败用例暴露了目标在不同详情端点上的错误码不一致，保留原始失败，不伪造通过。
