@@ -1,4 +1,4 @@
-﻿# GreenPass 0.1.169-SNAPSHOT 功能记录（2026-10-24）
+# GreenPass 0.1.169-SNAPSHOT 功能记录（2026-10-24）
 
 ## 新增
 
@@ -37,5 +37,5 @@ design_coverage=25.2%
 M3 312 Cell 缺测试数据/合同/fixture
 M4 egress 在 kind CNI 下未生效
 P0/P1 未关闭
-0.1.169 镜像尚未推送/签名
+镜像已推送并签名验证：server 复用 0.1.167 digest；web `sha256:2824ba9f...`、dsh `sha256:87eebfb5...` 已 cosign verify 通过
 ```
