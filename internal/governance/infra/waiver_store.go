@@ -58,7 +58,7 @@ func (s *WaiverStore) ListWaivers(ctx context.Context, teamID, projectID int64) 
 	var out []domain.CoverageWaiver
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
-			SELECT w.id, w.team_id, w.cell_id, w.reason, w.owner_id, w.approved_by, w.expires_at, w.evidence, w.created_at
+			SELECT w.id, w.team_id, w.cell_id, w.reason, w.owner_id, COALESCE(w.approved_by,0), w.expires_at, w.evidence::text, w.created_at
 			FROM cov_waiver w
 			JOIN cov_cell c ON c.id = w.cell_id
 			WHERE w.team_id=$1 AND c.team_id=$1 AND ($2=0 OR c.project_id=$2)
@@ -69,9 +69,15 @@ func (s *WaiverStore) ListWaivers(ctx context.Context, teamID, projectID int64) 
 		defer rows.Close()
 		for rows.Next() {
 			var w domain.CoverageWaiver
-			if err := rows.Scan(&w.ID, &w.TeamID, &w.CellID, &w.Reason, &w.OwnerID, &w.ApprovedBy, &w.ExpiresAt, &w.Evidence, &w.CreatedAt); err != nil {
+			var approvedBy int64
+			var evidence []byte
+			if err := rows.Scan(&w.ID, &w.TeamID, &w.CellID, &w.Reason, &w.OwnerID, &approvedBy, &w.ExpiresAt, &evidence, &w.CreatedAt); err != nil {
 				return err
 			}
+			if approvedBy != 0 {
+				w.ApprovedBy = &approvedBy
+			}
+			w.Evidence = evidence
 			out = append(out, w)
 		}
 		return rows.Err()
