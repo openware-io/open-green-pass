@@ -1075,6 +1075,15 @@ paths:
         - { name: module, in: query, schema: { type: string } }
       responses:
         '200': { description: 汇总, content: { application/json: { schema: { $ref: '#/components/schemas/CoverageSummary' } } } }
+  /coverage/gaps:
+    get:
+      summary: 覆盖缺口报告（按模块/维度）
+      operationId: getCoverageGaps
+      parameters:
+        - { name: project_id, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: module, in: query, schema: { type: string } }
+      responses:
+        '200': { description: 缺口报告, content: { application/json: { schema: { $ref: '#/components/schemas/CoverageGapReport' } } } }
   /coverage/waivers:
     post:
       summary: 为 Coverage Cell 创建显式豁免
@@ -1212,6 +1221,36 @@ components:
         status: { type: string }
         case_id: { type: integer, format: int64, nullable: true }
         waiver_id: { type: integer, format: int64, nullable: true }
+    CoverageGapCount:
+      type: object
+      properties:
+        required: { type: integer }
+        mapped: { type: integer }
+        passed: { type: integer }
+        failed: { type: integer }
+        blocked: { type: integer }
+        unmapped: { type: integer }
+    CoverageGapModule:
+      allOf:
+        - { $ref: '#/components/schemas/CoverageGapCount' }
+        - type: object
+          properties:
+            module: { type: string }
+    CoverageGapDimension:
+      allOf:
+        - { $ref: '#/components/schemas/CoverageGapCount' }
+        - type: object
+          properties:
+            dimension: { type: string }
+    CoverageGapReport:
+      type: object
+      required: [ project_id, total, modules, dimensions ]
+      properties:
+        project_id: { type: integer, format: int64 }
+        module: { type: string }
+        total: { $ref: '#/components/schemas/CoverageGapCount' }
+        modules: { type: array, items: { $ref: '#/components/schemas/CoverageGapModule' } }
+        dimensions: { type: array, items: { $ref: '#/components/schemas/CoverageGapDimension' } }
     CoverageWaiverCreate:
       type: object
       required: [ cell_ids, reason, owner_id ]

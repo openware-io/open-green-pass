@@ -221,3 +221,38 @@ func priorityFor(ep Endpoint, dimension string) string {
 	}
 	return "P2"
 }
+
+// WaivedAt reports whether the cell is currently excluded by a waiver.
+func (c CoverageCell) WaivedAt(now time.Time) bool {
+	if c.WaiverID == nil {
+		return c.Status == "waived"
+	}
+	return c.WaiverExpiresAt == nil || c.WaiverExpiresAt.After(now)
+}
+
+type CoverageGapCount struct {
+	Required int `json:"required"`
+	Mapped   int `json:"mapped"`
+	Passed   int `json:"passed"`
+	Failed   int `json:"failed"`
+	Blocked  int `json:"blocked"`
+	Unmapped int `json:"unmapped"`
+}
+
+type CoverageGapModule struct {
+	Module string `json:"module"`
+	CoverageGapCount
+}
+
+type CoverageGapDimension struct {
+	Dimension string `json:"dimension"`
+	CoverageGapCount
+}
+
+type CoverageGapReport struct {
+	ProjectID  int64                  `json:"project_id"`
+	Module     string                 `json:"module,omitempty"`
+	Total      CoverageGapCount       `json:"total"`
+	Modules    []CoverageGapModule    `json:"modules"`
+	Dimensions []CoverageGapDimension `json:"dimensions"`
+}

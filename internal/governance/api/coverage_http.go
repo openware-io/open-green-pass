@@ -21,6 +21,7 @@ func RegisterCoverage(mux *http.ServeMux, svc *application.CoverageService) {
 	mux.HandleFunc("POST /coverage/plan", h.plan)
 	mux.HandleFunc("GET /coverage/cells", h.cells)
 	mux.HandleFunc("GET /coverage/summary", h.summary)
+	mux.HandleFunc("GET /coverage/gaps", h.gaps)
 }
 
 type endpointInput struct {
@@ -110,6 +111,20 @@ func (h *coverageHandler) summary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, summary)
+}
+
+func (h *coverageHandler) gaps(w http.ResponseWriter, r *http.Request) {
+	filter, err := coverageFilter(r)
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	report, err := h.svc.Gaps(r.Context(), filter)
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, report)
 }
 
 func coverageFilter(r *http.Request) (domain.CoverageFilter, error) {

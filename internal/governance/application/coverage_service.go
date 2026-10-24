@@ -3,7 +3,9 @@ package application
 
 import (
 	"context"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/openware-io/open-green-pass/internal/governance/domain"
 	"github.com/openware-io/open-green-pass/internal/platform/rls"
@@ -95,4 +97,73 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// Gaps reports required-cell coverage gaps grouped by module and dimension.
+func (s *CoverageService) Gaps(ctx context.Context, filter domain.CoverageFilter) (domain.CoverageGapReport, error) {
+	teamID, ok := rls.TenantFrom(ctx)
+	if !ok {
+		return domain.CoverageGapReport{}, gperr.Unauthorized("tenant required")
+	}
+	cells, err := s.repo.ListCells(ctx, teamID, filter)
+	if err != nil {
+		return domain.CoverageGapReport{}, err
+	}
+	report := domain.CoverageGapReport{ProjectID: filter.ProjectID, Module: filter.Module}
+	modules := map[string]*domain.CoverageGapModule{}
+	dimensions := map[string]*domain.CoverageGapDimension{}
+	now := time.Now().UTC()
+	for _, cell := range cells {
+		if !cell.Required || cell.WaivedAt(now) {
+			continue
+		}
+		row := &report.Total
+		addGap(row, cell)
+		m := modules[cell.Module]
+		if m == nil {
+			m = &domain.CoverageGapModule{Module: cell.Module}
+			modules[cell.Module] = m
+		}
+		addGap(&m.CoverageGapCount, cell)
+		d := dimensions[cell.Dimension]
+		if d == nil {
+			d = &domain.CoverageGapDimension{Dimension: cell.Dimension}
+			dimensions[cell.Dimension] = d
+		}
+		addGap(&d.CoverageGapCount, cell)
+	}
+	names := make([]string, 0, len(modules))
+	for name := range modules {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		report.Modules = append(report.Modules, *modules[name])
+	}
+	names = names[:0]
+	for name := range dimensions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		report.Dimensions = append(report.Dimensions, *dimensions[name])
+	}
+	return report, nil
+}
+
+func addGap(g *domain.CoverageGapCount, cell domain.CoverageCell) {
+	g.Required++
+	if cell.CaseID != nil {
+		g.Mapped++
+	} else {
+		g.Unmapped++
+	}
+	switch cell.Status {
+	case "passed":
+		g.Passed++
+	case "failed":
+		g.Failed++
+	case "blocked":
+		g.Blocked++
+	}
 }

@@ -194,11 +194,7 @@ func (s *CoverageStore) Summary(ctx context.Context, teamID int64, f domain.Cove
 		if !c.Required {
 			continue
 		}
-		waived := c.Status == "waived" && c.WaiverID == nil
-		if c.WaiverID != nil {
-			waived = c.WaiverExpiresAt == nil || c.WaiverExpiresAt.After(time.Now().UTC())
-		}
-		if waived {
+		if c.WaivedAt(time.Now().UTC()) {
 			sum.Waived++
 			continue
 		}
