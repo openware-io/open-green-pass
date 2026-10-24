@@ -46,3 +46,12 @@ waiver 生效时 total_required 441 -> 440
 0.1.161-SNAPSHOT
 schema 48 clean
 ```
+
+## 过期语义（2026-10-24）
+
+- 门禁汇总会读取 waiver 的 `expires_at`。
+- waiver 未过期：Cell 从 required 分母排除。
+- waiver 过期：Cell 重新计入 required，不再按 waived 处理。
+- 实测：生效时 total_required=440；过期后恢复 441。
+
+当前版本：0.1.162-SNAPSHOT。
