@@ -34,7 +34,7 @@ sha256:083dd2c5fa24ffcea54d0582840a7f0b89dddec4000f7aa242100d0b7d57ec11
 （已签名并 verify 通过）
 ```
 
-dsh-gateway / migrate 的 digest 与上一版相同，沿用已签名 digest；GHCR 网络抖动导致 0.1.164 tag 未全部重新推送。
+dsh-gateway:0.1.164-SNAPSHOT digest `sha256:fcfb127b34346f63db689e89e104155f1d734678edd43b20b97fdd9c015e79e8` 已推送并签名验证通过。migrate 的 digest 与上一版相同，沿用已签名 digest。
 
 ## 当前 M3
 
