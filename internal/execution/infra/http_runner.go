@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -118,6 +119,16 @@ func (r *HTTPRunner) executeOne(ctx context.Context, spec *domain.CaseSpec) *dom
 			text, ok := value.(string)
 			if !ok || strings.ContainsAny(name, "\r\n") || strings.ContainsAny(text, "\r\n") {
 				return fail("invalid request header")
+			}
+			if strings.HasPrefix(text, "env:") {
+				envName := strings.TrimPrefix(text, "env:")
+				if !strings.HasPrefix(envName, "GP_CASE_") {
+					return fail("header env reference must use GP_CASE_ prefix")
+				}
+				text = os.Getenv(envName)
+				if text == "" {
+					return fail("header env reference is empty")
+				}
 			}
 			req.Header.Set(name, text)
 		}

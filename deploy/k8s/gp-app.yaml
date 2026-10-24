@@ -82,6 +82,7 @@ spec:
             - { name: GP_BUILD_REVISION, value: "VERSION" }
             - { name: GP_RUNNER_TYPE, value: http }
             - { name: GP_EXECUTION_BEARER_TOKEN, valueFrom: { secretKeyRef: { name: gp-im-token, key: token, optional: true } } }
+            - { name: GP_CASE_NONADMIN_TOKEN, valueFrom: { secretKeyRef: { name: gp-case-auth, key: token, optional: true } } }
             - { name: GP_MODEL_SECRET_NAMESPACE, value: gp }
             - { name: GP_SCM_SECRET_NAMESPACE, value: gp }
             # GitHub App 的 App ID/Client ID/Client Secret、安装 URL、OAuth 回调、
@@ -131,6 +132,7 @@ spec:
             - { name: GP_BUILD_REVISION, value: "VERSION" }
             - { name: GP_RUNNER_TYPE, value: http }
             - { name: GP_EXECUTION_BEARER_TOKEN, valueFrom: { secretKeyRef: { name: gp-im-token, key: token, optional: true } } }
+            - { name: GP_CASE_NONADMIN_TOKEN, valueFrom: { secretKeyRef: { name: gp-case-auth, key: token, optional: true } } }
             - { name: GP_DSH_GATEWAY_URL, value: "http://gp-dsh-gateway.gp.svc.cluster.local:8090" }
             - { name: GP_DSH_INTERNAL_TOKEN, valueFrom: { secretKeyRef: { name: gp-dsh-auth, key: token } } }
             - { name: GP_GENERATION_ENGINE, value: "dsh" }
