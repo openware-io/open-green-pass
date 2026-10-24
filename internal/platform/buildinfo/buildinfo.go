@@ -14,7 +14,7 @@ type Info struct {
 
 func Current() Info {
 	return Info{
-		Version:    value("GP_VERSION", "dev"),
+		Version:    value("GP_VERSION", value("GP_BUILD_REVISION", "dev")),
 		Commit:     value("GP_COMMIT", "unknown"),
 		BuiltAt:    value("GP_BUILT_AT", "unknown"),
 		APIVersion: value("GP_API_VERSION", "0.1.0"),

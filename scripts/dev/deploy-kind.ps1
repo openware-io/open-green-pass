@@ -30,6 +30,7 @@ if ($ImageRegistry -notmatch '^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?(?:/[a-z0-9._-]+)*
 if ($Version -notmatch '^\d+\.\d+\.\d+-SNAPSHOT$') {
     throw "Development releases must use X.Y.Z-SNAPSHOT without a v prefix."
 }
+$commit = (& git rev-parse HEAD).Trim()
 
 foreach ($command in @("docker", "kind", "kubectl", "git")) {
     if (-not (Get-Command $command -ErrorAction SilentlyContinue)) { throw "Required command not found: $command" }
@@ -103,9 +104,9 @@ try {
     $renderedGateway = Join-Path ([System.IO.Path]::GetTempPath()) "gp-dsh-gateway-$Version.yaml"
     $versionName = $Version.ToLowerInvariant().Replace('.', '-').Replace('_', '-')
     $pullPolicy = if ($ImageSource -eq "local-cache" -or $ImageSource -eq "local-build") { "IfNotPresent" } else { "IfNotPresent" }
-    Write-Utf8NoBom $renderedApp ((Get-Content $appManifest -Raw).Replace("VERSION", $Version).Replace("IMAGE_REGISTRY", $ImageRegistry).Replace("IMAGE_PULL_POLICY", $pullPolicy))
-    Write-Utf8NoBom $renderedMigration ((Get-Content $migrationManifest -Raw).Replace("VERSION_NAME", $versionName).Replace("VERSION", $Version).Replace("IMAGE_REGISTRY", $ImageRegistry).Replace("IMAGE_PULL_POLICY", $pullPolicy))
-    Write-Utf8NoBom $renderedGateway ((Get-Content $gatewayManifest -Raw).Replace("VERSION", $Version).Replace("IMAGE_REGISTRY", $ImageRegistry).Replace("IMAGE_PULL_POLICY", $pullPolicy))
+    Write-Utf8NoBom $renderedApp ((Get-Content $appManifest -Raw).Replace("VERSION", $Version).Replace("IMAGE_REGISTRY", $ImageRegistry).Replace("IMAGE_PULL_POLICY", $pullPolicy).Replace("COMMIT", $commit))
+    Write-Utf8NoBom $renderedMigration ((Get-Content $migrationManifest -Raw).Replace("VERSION_NAME", $versionName).Replace("VERSION", $Version).Replace("IMAGE_REGISTRY", $ImageRegistry).Replace("IMAGE_PULL_POLICY", $pullPolicy).Replace("COMMIT", $commit))
+    Write-Utf8NoBom $renderedGateway ((Get-Content $gatewayManifest -Raw).Replace("VERSION", $Version).Replace("IMAGE_REGISTRY", $ImageRegistry).Replace("IMAGE_PULL_POLICY", $pullPolicy).Replace("COMMIT", $commit))
     # Existing kind installations may have been created by the removed Helm chart.
     # Force ownership only for the GP manifest so the script becomes the sole
     # manager without touching resources outside the GP namespace.

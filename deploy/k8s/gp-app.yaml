@@ -80,6 +80,8 @@ spec:
             - { name: GP_ENV, value: dev }
             - { name: GP_ALLOW_HEADER_AUTH, value: "true" }
             - { name: GP_BUILD_REVISION, value: "VERSION" }
+            - { name: GP_VERSION, value: "VERSION" }
+            - { name: GP_COMMIT, value: "COMMIT" }
             - { name: GP_RUNNER_TYPE, value: http }
             - { name: GP_EXECUTION_BEARER_TOKEN, valueFrom: { secretKeyRef: { name: gp-im-token, key: token, optional: true } } }
             - { name: GP_MODEL_SECRET_NAMESPACE, value: gp }
@@ -129,6 +131,8 @@ spec:
             - { name: GP_ENV, value: dev }
             - { name: GP_ALLOW_HEADER_AUTH, value: "true" }
             - { name: GP_BUILD_REVISION, value: "VERSION" }
+            - { name: GP_VERSION, value: "VERSION" }
+            - { name: GP_COMMIT, value: "COMMIT" }
             - { name: GP_RUNNER_TYPE, value: http }
             - { name: GP_EXECUTION_BEARER_TOKEN, valueFrom: { secretKeyRef: { name: gp-im-token, key: token, optional: true } } }
             - { name: GP_DSH_GATEWAY_URL, value: "http://gp-dsh-gateway.gp.svc.cluster.local:8090" }
