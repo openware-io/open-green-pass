@@ -195,8 +195,9 @@ try {
     try {
         & kubectl --context $KubeContext apply --server-side --field-manager=greenpass-deploy --force-conflicts -f $renderedApp | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "GP Kubernetes manifest apply failed." }
+        $builtAt = [DateTime]::UtcNow.ToString("o")
         foreach ($deploymentName in @("gp-server", "gp-worker")) {
-            & kubectl --context $KubeContext -n $namespace set env "deployment/$deploymentName" "GP_VERSION=$Version" "GP_COMMIT=$commit" | Out-Null
+            & kubectl --context $KubeContext -n $namespace set env "deployment/$deploymentName" "GP_VERSION=$Version" "GP_COMMIT=$commit" "GP_BUILT_AT=$builtAt" | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "Unable to publish build metadata to $deploymentName." }
         }
         & kubectl --context $KubeContext apply --server-side --field-manager=greenpass-deploy --force-conflicts -f $renderedGateway | Out-Null
