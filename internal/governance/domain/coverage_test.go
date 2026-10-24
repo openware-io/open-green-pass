@@ -1,6 +1,9 @@
 package domain
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestBuildCoveragePlanUserModule(t *testing.T) {
 	endpoints := []Endpoint{
@@ -50,5 +53,24 @@ func TestArchetype(t *testing.T) {
 		if got := Archetype(tc.ep); got != tc.want {
 			t.Fatalf("%s: got %s want %s", name, got, tc.want)
 		}
+	}
+}
+
+func TestCoverageCellWaivedAt(t *testing.T) {
+	now := time.Now().UTC()
+	waiverID := int64(9)
+	future := now.Add(time.Hour)
+	past := now.Add(-time.Hour)
+	if (CoverageCell{Status: "planned"}).WaivedAt(now) {
+		t.Fatal("planned cell must not be waived")
+	}
+	if (CoverageCell{Status: "waived"}).WaivedAt(now) == false {
+		t.Fatal("waived status without waiver must count as waived")
+	}
+	if (CoverageCell{Status: "waived", WaiverID: &waiverID, WaiverExpiresAt: &future}).WaivedAt(now) == false {
+		t.Fatal("future waiver must count as waived")
+	}
+	if (CoverageCell{Status: "waived", WaiverID: &waiverID, WaiverExpiresAt: &past}).WaivedAt(now) {
+		t.Fatal("expired waiver must not count as waived")
 	}
 }
