@@ -1075,6 +1075,31 @@ paths:
         - { name: module, in: query, schema: { type: string } }
       responses:
         '200': { description: 汇总, content: { application/json: { schema: { $ref: '#/components/schemas/CoverageSummary' } } } }
+  /coverage/waivers:
+    post:
+      summary: 为 Coverage Cell 创建显式豁免
+      operationId: createCoverageWaivers
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CoverageWaiverCreate' } } }
+      responses:
+        '201': { description: 已创建, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CoverageWaiver' } } } } }
+        '400': { description: 参数校验失败 }
+    get:
+      summary: 查询覆盖率豁免
+      operationId: listCoverageWaivers
+      parameters:
+        - { name: project_id, in: query, schema: { type: integer, format: int64 } }
+      responses:
+        '200': { description: 豁免列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CoverageWaiver' } } } } }
+  /coverage/waivers/{id}:
+    delete:
+      summary: 撤销覆盖率豁免
+      operationId: revokeCoverageWaiver
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      responses:
+        '204': { description: 已撤销 }
+        '404': { description: 豁免不存在 }
   # ---------- DSH generation jobs (AI) ----------
   /ai/generation-jobs:
     post:
@@ -1187,6 +1212,26 @@ components:
         status: { type: string }
         case_id: { type: integer, format: int64, nullable: true }
         waiver_id: { type: integer, format: int64, nullable: true }
+    CoverageWaiverCreate:
+      type: object
+      required: [ cell_ids, reason, owner_id ]
+      properties:
+        cell_ids: { type: array, items: { type: integer, format: int64 }, minItems: 1 }
+        reason: { type: string, maxLength: 2000 }
+        owner_id: { type: integer, format: int64 }
+        expires_at: { type: string, format: date-time, nullable: true }
+        evidence: { type: object, additionalProperties: true }
+    CoverageWaiver:
+      type: object
+      required: [ id, cell_id, reason, owner_id, created_at ]
+      properties:
+        id: { type: integer, format: int64 }
+        cell_id: { type: integer, format: int64 }
+        reason: { type: string }
+        owner_id: { type: integer, format: int64 }
+        expires_at: { type: string, format: date-time, nullable: true }
+        evidence: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
     CoverageSummary:
       type: object
       required: [ total_required, design_covered, executed, passed, waived, uncovered ]
