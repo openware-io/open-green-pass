@@ -525,17 +525,24 @@ function ExecPageContent({ targets, targetID, requestedCaseIDs, onTargetChange }
         </div>
 
         <div className="space-y-5">
-          <Card title="证据捕获" className="p-5">
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {['截图 01', '截图 02', '视频', '日志'].map((e) => (
-                <div key={e} className="aspect-video bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 text-xs border border-slate-200">{e}</div>
-              ))}
-            </div>
-            <div className="space-y-2 text-[11px]">
-              <div className="flex justify-between"><span className="text-slate-500">证据哈希</span><span className="font-mono text-slate-600">sha256:a3f8…c21d</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">存储位置</span><span className="text-slate-600">minio://evidence/</span></div>
-              <div className="flex justify-between"><span className="text-slate-500">写入状态</span><span className="text-emerald-600 font-medium">✓ 已锚定</span></div>
-            </div>
+          <Card title="执行证据" className="p-5">
+            {results.length === 0 ? (
+              <p className="text-xs text-slate-500">暂无真实执行证据。创建并执行运行后，这里展示每个用例的哈希、日志和截图引用。</p>
+            ) : (
+              <div className="space-y-3">
+                {results.map((result) => (
+                  <div key={result.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono font-medium text-slate-700">#{result.case_id}</span>
+                      <span className={'rounded-full px-2 py-0.5 ' + caseResultStyle(result.status)}>{result.status}</span>
+                    </div>
+                    <div className="mt-2 flex justify-between gap-3"><span className="text-slate-500">证据哈希</span><span className="truncate font-mono text-slate-600">{(result.evidence as { hash?: string } | undefined)?.hash ?? '—'}</span></div>
+                    <div className="mt-1 flex justify-between gap-3"><span className="text-slate-500">日志</span><span className="text-slate-600">{(result.evidence as { logs?: unknown[] } | undefined)?.logs?.length ?? 0} 条</span></div>
+                    <div className="mt-1 flex justify-between gap-3"><span className="text-slate-500">截图</span><span className="text-slate-600">{(result.evidence as { screenshots?: unknown[] } | undefined)?.screenshots?.length ?? 0} 张</span></div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         </div>
       </div>
