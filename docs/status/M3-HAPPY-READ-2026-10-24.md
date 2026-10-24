@@ -60,3 +60,13 @@ execution_coverage=19.7%
 ```
 
 失败用例暴露了目标在不同详情端点上的错误码不一致，保留原始失败，不伪造通过。
+
+## 错误码 triage（2026-10-24）
+
+- 缺失 cancellation logs 返回 200 []，属于空结果语义；已将用例期望修正为 200，重新执行通过。
+- 非法数字 ID 的 4 条详情用例返回 500，保留失败并创建 finding：
+  - id: 2907625674182656
+  - severity: P2
+  - title: 非法数字 ID 返回 500 而不是 400/404
+
+当前账本：mapped=87，passed=75，failed=4，blocked=8，unmapped=354。
