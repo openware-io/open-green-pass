@@ -6,7 +6,7 @@ import { assetToProfile, TEST_SCENARIOS, type IAsset } from '@/data/mock';
 import { PageHeader, GhostButton, PrimaryButton, Card, ListFilter } from '@/components/shared';
 import { BrainCircuit, Cpu, Globe, Smartphone, Sparkles, Loader2, BotMessageSquare, ShieldAlert, ArrowRight } from 'lucide-react';
 import { configuredGreenPassClient, greenPassConnectionHint } from '@/api/runtime';
-import type { GateResult } from '@/api/client';
+import type { GateResult, CoverageGapReport } from '@/api/client';
 
 const RULE_ICON = { pass: <span className="text-emerald-600">✓</span>, block: <span className="text-red-600">✕</span> };
 const RULE_BG = { pass: 'bg-emerald-100 text-emerald-600', block: 'bg-red-100 text-red-600' };
@@ -105,6 +105,7 @@ export default function GatePage() {
       </Card>
 
       <RealGatePanel client={realClient} />
+      <RealCoveragePanel client={realClient} />
 
       {/* AI 判定过程反馈条 */}
       {(running || phase === 'done') && (
@@ -272,5 +273,40 @@ function RealGatePanel({ client }: { client: ReturnType<typeof configuredGreenPa
   const run = async (action: () => Promise<void>) => { setBusy(true); setMessage(''); try { await action(); } catch (error) { setMessage(error instanceof Error ? error.message : '真实门禁操作失败'); } finally { setBusy(false); } };
   return <Card title="真实门禁控制" className="mb-5" extra={<span className="text-[11px] text-emerald-700">真实 API 已启用</span>}>
     <div className="p-5 space-y-3"><p className="text-[11px] text-slate-500">连接：{greenPassConnectionHint()}。门禁判定必须针对真实运行 ID，结果由 trusted 服务返回。</p><div className="flex flex-wrap gap-2"><input value={runID} onChange={(event) => setRunID(event.target.value)} inputMode="numeric" placeholder="真实运行 ID" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" /><button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(runID); if (!Number.isSafeInteger(id) || id <= 0) throw new Error('请输入有效的真实运行 ID'); const result = await client.evaluateGate(id); setVerdict(result.result); setResults(await client.gateResults(id)); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">判定真实运行</button><button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(runID); if (!Number.isSafeInteger(id) || id <= 0) throw new Error('请输入有效的真实运行 ID'); setResults(await client.gateResults(id)); })} className="rounded-lg border border-slate-200 px-3 py-2 text-xs">刷新结果</button></div>{message && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{message}</div>}{verdict && <div className={'rounded-lg p-3 text-xs ' + (verdict === 'pass' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700')}>真实运行 #{runID} 门禁结论：<b>{verdict}</b></div>}<div className="overflow-x-auto rounded-lg border border-slate-200"><table className="w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-3 py-2">运行</th><th className="px-3 py-2">规则</th><th className="px-3 py-2">结果</th><th className="px-3 py-2">时间</th></tr></thead><tbody className="divide-y divide-slate-100">{results.map((result) => <tr key={result.id}><td className="px-3 py-2">#{result.run_id}</td><td className="px-3 py-2">#{result.rule_id}</td><td className="px-3 py-2">{result.result}</td><td className="px-3 py-2">{result.decided_at}</td></tr>)}</tbody></table>{results.length === 0 && <div className="p-4 text-center text-xs text-slate-400">暂无真实门禁结果</div>}</div></div>
+  </Card>;
+}
+
+function RealCoveragePanel({ client }: { client: ReturnType<typeof configuredGreenPassClient> }) {
+  const [projectID, setProjectID] = useState('');
+  const [report, setReport] = useState<CoverageGapReport>();
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  if (!client) return null;
+  const load = async () => {
+    const id = Number(projectID);
+    if (!Number.isSafeInteger(id) || id <= 0) { setMessage('请输入有效的项目 ID'); return; }
+    setBusy(true); setMessage('');
+    try { setReport(await client.coverageGaps({ project_id: id })); }
+    catch (error) { setMessage(error instanceof Error ? error.message : '读取覆盖缺口失败'); }
+    finally { setBusy(false); }
+  };
+  return <Card title="真实覆盖缺口" className="mb-5" extra={<span className="text-[11px] text-slate-400">按模块 / 维度聚合</span>}>
+    <div className="p-5 space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <input value={projectID} onChange={(event) => setProjectID(event.target.value)} inputMode="numeric" placeholder="项目 ID" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+        <button type="button" disabled={busy} onClick={() => void load()} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">{busy ? '读取中…' : '读取缺口'}</button>
+      </div>
+      {message && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">{message}</div>}
+      {report && <>
+        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          {[['必需', report.total.required], ['已映射', report.total.mapped], ['通过', report.total.passed], ['失败', report.total.failed], ['阻塞', report.total.blocked], ['豁免', report.total.waived]].map(([label, value]) => <div key={String(label)} className="rounded-lg border border-slate-200 bg-slate-50 p-2"><div className="text-[10px] text-slate-500">{label}</div><div className="mt-1 text-lg font-semibold text-slate-700">{value}</div></div>)}
+        </div>
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-3 py-2">模块</th><th className="px-3 py-2">必需</th><th className="px-3 py-2">映射</th><th className="px-3 py-2">通过</th><th className="px-3 py-2">失败</th><th className="px-3 py-2">阻塞</th><th className="px-3 py-2">豁免</th><th className="px-3 py-2">未映射</th></tr></thead>
+            <tbody className="divide-y divide-slate-100">{report.modules.map((module) => <tr key={module.module}><td className="px-3 py-2 font-mono">{module.module}</td><td className="px-3 py-2">{module.required}</td><td className="px-3 py-2">{module.mapped}</td><td className="px-3 py-2 text-emerald-700">{module.passed}</td><td className="px-3 py-2 text-red-600">{module.failed}</td><td className="px-3 py-2 text-amber-700">{module.blocked}</td><td className="px-3 py-2 text-slate-500">{module.waived}</td><td className="px-3 py-2 text-slate-600">{module.unmapped}</td></tr>)}</tbody>
+          </table>
+        </div>
+      </>}
+    </div>
   </Card>;
 }
