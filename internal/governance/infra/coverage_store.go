@@ -3,6 +3,7 @@ package infra
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -124,7 +125,8 @@ func (s *CoverageStore) ListCells(ctx context.Context, teamID int64, f domain.Co
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
 			SELECT id, team_id, project_id, service_id, endpoint_id, endpoint_hash, method, path, module,
-				dimension, equivalence_class, role, state, required, priority, status, case_id, waiver_id
+				dimension, equivalence_class, role, state, required, priority, status, case_id, waiver_id,
+				(SELECT w.expires_at FROM cov_waiver w WHERE w.id = cov_cell.waiver_id)
 			FROM cov_cell WHERE `+where+` ORDER BY method, path, dimension, equivalence_class`, args...)
 		if err != nil {
 			return err
@@ -134,7 +136,7 @@ func (s *CoverageStore) ListCells(ctx context.Context, teamID int64, f domain.Co
 			var c domain.CoverageCell
 			if err := rows.Scan(&c.ID, &c.TeamID, &c.ProjectID, &c.ServiceID, &c.EndpointID,
 				&c.EndpointHash, &c.Method, &c.Path, &c.Module, &c.Dimension, &c.EquivalenceClass,
-				&c.Role, &c.State, &c.Required, &c.Priority, &c.Status, &c.CaseID, &c.WaiverID); err != nil {
+				&c.Role, &c.State, &c.Required, &c.Priority, &c.Status, &c.CaseID, &c.WaiverID, &c.WaiverExpiresAt); err != nil {
 				return err
 			}
 			out = append(out, c)
@@ -192,7 +194,11 @@ func (s *CoverageStore) Summary(ctx context.Context, teamID int64, f domain.Cove
 		if !c.Required {
 			continue
 		}
-		if c.WaiverID != nil || c.Status == "waived" {
+		waived := c.Status == "waived" && c.WaiverID == nil
+		if c.WaiverID != nil {
+			waived = c.WaiverExpiresAt == nil || c.WaiverExpiresAt.After(time.Now().UTC())
+		}
+		if waived {
 			sum.Waived++
 			continue
 		}

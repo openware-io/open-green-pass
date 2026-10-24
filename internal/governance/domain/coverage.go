@@ -7,6 +7,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"strings"
+	"time"
 )
 
 // Endpoint 契约盘点后的端点（ctr_endpoint）。
@@ -58,6 +59,7 @@ type CoverageCell struct {
 	Status           string
 	CaseID           *int64
 	WaiverID         *int64
+	WaiverExpiresAt  *time.Time
 }
 
 // CoverageFilter 覆盖账本筛选。
