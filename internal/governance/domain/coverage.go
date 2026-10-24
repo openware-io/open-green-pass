@@ -237,6 +237,7 @@ type CoverageGapCount struct {
 	Failed   int `json:"failed"`
 	Blocked  int `json:"blocked"`
 	Unmapped int `json:"unmapped"`
+	Waived   int `json:"waived"`
 }
 
 type CoverageGapModule struct {

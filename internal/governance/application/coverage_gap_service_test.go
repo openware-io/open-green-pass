@@ -47,6 +47,9 @@ func TestCoverageGapsAggregatesAndSkipsWaived(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if report.Total.Waived != 1 {
+		t.Fatalf("unexpected waived: %+v", report.Total)
+	}
 	if report.Total.Required != 3 || report.Total.Mapped != 1 || report.Total.Passed != 1 || report.Total.Unmapped != 2 {
 		t.Fatalf("unexpected total: %+v", report.Total)
 	}

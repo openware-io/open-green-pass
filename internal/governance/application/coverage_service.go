@@ -114,22 +114,27 @@ func (s *CoverageService) Gaps(ctx context.Context, filter domain.CoverageFilter
 	dimensions := map[string]*domain.CoverageGapDimension{}
 	now := time.Now().UTC()
 	for _, cell := range cells {
-		if !cell.Required || cell.WaivedAt(now) {
+		if !cell.Required {
 			continue
 		}
-		row := &report.Total
-		addGap(row, cell)
 		m := modules[cell.Module]
 		if m == nil {
 			m = &domain.CoverageGapModule{Module: cell.Module}
 			modules[cell.Module] = m
 		}
-		addGap(&m.CoverageGapCount, cell)
 		d := dimensions[cell.Dimension]
 		if d == nil {
 			d = &domain.CoverageGapDimension{Dimension: cell.Dimension}
 			dimensions[cell.Dimension] = d
 		}
+		if cell.WaivedAt(now) {
+			report.Total.Waived++
+			m.Waived++
+			d.Waived++
+			continue
+		}
+		addGap(&report.Total, cell)
+		addGap(&m.CoverageGapCount, cell)
 		addGap(&d.CoverageGapCount, cell)
 	}
 	names := make([]string, 0, len(modules))

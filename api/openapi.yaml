@@ -1230,6 +1230,7 @@ components:
         failed: { type: integer }
         blocked: { type: integer }
         unmapped: { type: integer }
+        waived: { type: integer }
     CoverageGapModule:
       allOf:
         - { $ref: '#/components/schemas/CoverageGapCount' }
