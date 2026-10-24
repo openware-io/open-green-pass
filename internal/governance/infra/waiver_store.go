@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -45,6 +46,7 @@ func (s *WaiverStore) CreateWaivers(ctx context.Context, teamID int64, waivers [
 				return fmt.Errorf("coverage cell %d not found", w.CellID)
 			}
 			w.TeamID = teamID
+			w.CreatedAt = time.Now().UTC()
 		}
 		return nil
 	})
