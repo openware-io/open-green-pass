@@ -89,3 +89,11 @@ execution_coverage=19.7%
 - `PUT /security/sensitive-words/{id}` 对不存在 ID 返回 200 空 body，已创建 P2 finding 2907631977992192。
 
 当前：required=427，mapped=102，passed=88，failed=6，blocked=8，coverage=23.9%。
+
+## openPlatform 路径修正（2026-10-24）
+
+- 把 openPlatform 路径统一为 `/api/v1/admin/open-platform/applications`，恢复 14 个 required Cell。
+- 映射 3 条：happy、authn、required_missing。
+- 执行：2 pass / 1 fail（POST 返回 405 METHOD_NOT_ALLOWED）。
+
+当前：required=441，mapped=105，passed=90，failed=7，blocked=8，coverage=23.8%。
