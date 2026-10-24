@@ -45,3 +45,19 @@ design_coverage 24.9%
 ```
 
 没有把这些 Cell 改成 passed；只是从 required 分母移除，并保留 waiver 审计记录。
+
+## 追加：messages/trend
+
+`GET /api/v1/admin/messages/trend` 是聚合时间序列，不是分页集合。  
+又对 4 个维度创建 waiver：
+
+```text
+pagination / sort / empty / invalid_filter
+```
+
+结果：
+
+```text
+total_required 421 -> 417
+design_coverage 25.2%
+```
