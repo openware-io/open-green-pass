@@ -45,3 +45,29 @@ design_coverage = 60.7%
 - 本轮通过真实查询参数覆盖列表语义。
 - 失败用例暴露了目标路由缺失和必填参数。
 - 未把失败改成 pass。
+
+## invalid_filter 追加（2026-10-24）
+
+新增 29 条 `?page=0&pageSize=-1` 用例：
+
+```text
+1 pass
+28 fail
+```
+
+目标返回 200，并把 `pageSize=-1` 回显，说明列表参数校验缺失。已创建 finding：
+
+```text
+2909355341385728  P2
+列表接口接受 pageSize=-1 等非法分页参数
+```
+
+当前门禁：
+
+```text
+total_required = 417
+design_covered = 258
+executed = 258
+design_coverage = 61.9%
+execution_coverage = 61.9%
+```
