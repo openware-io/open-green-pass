@@ -248,7 +248,18 @@ func (h *runHandler) executeRun(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, ok := h.findAndAuthorize(w, r, id, "exec"); !ok {
+	current, ok := h.findAndAuthorize(w, r, id, "exec")
+	if !ok {
+		return
+	}
+	// Runs created through this API are already enqueued on the schedule
+	// dispatcher. Executing them manually while queued or scheduled would run
+	// the same cases twice and duplicate evidence/cost.
+	if h.svc.HasScheduleQueue() && (current.State == domain.RunQueued || current.State == domain.RunScheduled) {
+		httpx.WriteJSON(w, http.StatusAccepted, struct {
+			Run     runResponse          `json:"run"`
+			Results []caseResultResponse `json:"results"`
+		}{toRunResponse(current), []caseResultResponse{}})
 		return
 	}
 	run, results, err := h.svc.ExecuteRun(r.Context(), id)

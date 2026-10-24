@@ -126,6 +126,8 @@ func (s *RunService) SetRunEventBus(bus domain.RunEventBus) { s.events = bus }
 func (s *RunService) SetExecutionPool(port domain.ExecutionPoolPort) { s.pool = port }
 
 // SetScheduleQueue enables durable asynchronous dispatch for newly created runs.
+func (s *RunService) HasScheduleQueue() bool { return s.schedule != nil }
+
 func (s *RunService) SetScheduleQueue(queue domain.ScheduleQueuePort) { s.schedule = queue }
 
 func (s *RunService) SubscribeRunEvents(ctx context.Context, teamID, runID int64) (domain.RunEventSubscription, error) {
