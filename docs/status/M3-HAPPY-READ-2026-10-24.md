@@ -79,3 +79,13 @@ execution_coverage=19.7%
 - 已将 `/applications/` 的 14 个重复 Cell 标记 `required=false, status=waived`。
 
 当前：required=427，mapped=91，passed=79，failed=4，blocked=8。
+
+## 写路径 not_found（2026-10-24）
+
+新增 11 条写路径 not_found 用例：9 pass / 2 fail。
+
+- 4 个非法数字 ID 500 仍保留。
+- `PUT /security/reports/{id}` 空 body 返回 400 "must not be null"（校验先于存在性）。
+- `PUT /security/sensitive-words/{id}` 对不存在 ID 返回 200 空 body，已创建 P2 finding 2907631977992192。
+
+当前：required=427，mapped=102，passed=88，failed=6，blocked=8，coverage=23.9%。
