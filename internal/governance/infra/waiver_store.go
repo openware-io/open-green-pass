@@ -61,7 +61,7 @@ func (s *WaiverStore) ListWaivers(ctx context.Context, teamID, projectID int64) 
 			SELECT w.id, w.team_id, w.cell_id, w.reason, w.owner_id, COALESCE(w.approved_by,0), w.expires_at, w.evidence::text, w.created_at
 			FROM cov_waiver w
 			JOIN cov_cell c ON c.id = w.cell_id
-			WHERE w.team_id=$1 AND c.team_id=$1 AND ($2=0 OR c.project_id=$2)
+			WHERE w.team_id=$1 AND c.team_id=$1 AND ($2::bigint=0 OR c.project_id=$2::bigint)
 			ORDER BY w.created_at DESC`, teamID, projectID)
 		if err != nil {
 			return err
