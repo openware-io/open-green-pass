@@ -48,8 +48,8 @@ execution
 ```text
 mode=risk
 total_required=417
-design_covered=277
-passed=223
+design_covered=285
+passed=229
 gate_passed=false
 open_p0=1
 open_p1=3
