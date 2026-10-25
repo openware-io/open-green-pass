@@ -724,6 +724,7 @@ paths:
       parameters:
         - { name: project_id, in: query, required: true, schema: { type: integer, format: int64 } }
         - { name: module, in: query, schema: { type: string } }
+        - { name: mode, in: query, schema: { type: string, enum: [strict, risk] } }
       responses:
         '200': { description: 门禁结果, content: { application/json: { schema: { $ref: '#/components/schemas/CoverageGateResult' } } } }
   /gates/rules:
@@ -1294,6 +1295,7 @@ components:
       properties:
         project_id: { type: integer, format: int64 }
         module: { type: string }
+        mode: { type: string, enum: [strict, risk] }
         total_required: { type: integer }
         design_covered: { type: integer }
         executed: { type: integer }

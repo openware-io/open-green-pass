@@ -27,7 +27,7 @@ func (h *coverageGateHandler) evaluate(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, gperr.Validation("invalid project_id"))
 		return
 	}
-	result, err := h.svc.Evaluate(r.Context(), projectID, q.Get("module"))
+	result, err := h.svc.EvaluateMode(r.Context(), projectID, q.Get("module"), q.Get("mode"))
 	if err != nil {
 		httpx.WriteErr(w, err)
 		return
