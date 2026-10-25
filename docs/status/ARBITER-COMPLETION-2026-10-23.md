@@ -1,6 +1,6 @@
 # Generation Arbiter Report
 
-- Time: 2026-10-24 14:28:09 +08:00
+- Time: 2026-10-25 09:44:51 +08:00
 - Base URL: http://greenpass.localhost:30080
 - Checks: 26
 - Failed: 0
@@ -20,7 +20,7 @@
 - [x] api/run-detail: HTTP 200
 - [x] api/cost-prices: HTTP 200
 - [x] api/cost-items: HTTP 200
-- [x] evidence/cancel-cleanup: cancelled runs with cleaned units=1
+- [x] evidence/cancel-cleanup: cancelled runs with cleaned units=2
 - [x] evidence/run-succeeded: succeeded runs=3
 - [x] evidence/priced-generation: priced generation lines=1
 - [x] evidence/actual-model: actual DSH model lines=1
