@@ -36,7 +36,7 @@ type CoverageGateResult struct {
 	ExecutionCoverage float64              `json:"execution_coverage"`
 	OpenP0            int                  `json:"open_p0"`
 	OpenP1            int                  `json:"open_p1"`
-	PassedGate        bool                 `json:"passed"`
+	PassedGate        bool                 `json:"gate_passed"`
 	Blockers          []string             `json:"blockers"`
 	Modules           []CoverageGateModule `json:"modules,omitempty"`
 }
