@@ -55,7 +55,10 @@ try {
     }
 
     $migration = Invoke-Psql "select version || '|' || dirty from schema_migrations;"
-    Add-Check "schema/version" ($migration -eq "48|f" -or $migration -eq "48|false") "schema_migrations=$migration"
+    $latestSchema = (Get-ChildItem (Join-Path $PSScriptRoot "..\..\migrations") -Filter "*.up.sql" |
+        ForEach-Object { if ($_.Name -match '^(\d+)_') { [int]$Matches[1] } } |
+        Measure-Object -Maximum).Maximum
+    Add-Check "schema/version" ($migration -eq "$latestSchema|f" -or $migration -eq "$latestSchema|false") "schema_migrations=$migration expected=$latestSchema"
 
     $requiredTables = Invoke-Psql "select count(*) from information_schema.tables where table_schema='gp' and table_name in ('gen_run','gen_run_unit','cost_price');"
     Add-Check "schema/run-tables" ($requiredTables -eq "3") "gen_run/gen_run_unit/cost_price count=$requiredTables"
