@@ -1,4 +1,4 @@
-﻿ALTER TABLE cas_case
+ALTER TABLE cas_case
     ADD COLUMN IF NOT EXISTS requirement_ref text NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS defect_ref text NOT NULL DEFAULT '',
     ADD COLUMN IF NOT EXISTS review_status text NOT NULL DEFAULT 'draft',
