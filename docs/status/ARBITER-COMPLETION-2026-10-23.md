@@ -1,6 +1,6 @@
 # Generation Arbiter Report
 
-- Time: 2026-10-26 09:43:45 +08:00
+- Time: 2026-10-26 09:55:44 +08:00
 - Base URL: http://greenpass.localhost:30080
 - Checks: 26
 - Failed: 0
@@ -9,7 +9,7 @@
 - [x] deploy/gp-worker: ready=2 desired=2
 - [x] deploy/gp-web: ready=1 desired=1
 - [x] deploy/gp-dsh-gateway: ready=1 desired=1
-- [x] schema/version: schema_migrations=52|false expected=52
+- [x] schema/version: schema_migrations=53|false expected=53
 - [x] schema/run-tables: gen_run/gen_run_unit/cost_price count=3
 - [x] schema/price-columns: cost_price columns=5/5
 - [x] schema/cost-columns: cost_line_item columns=5/5

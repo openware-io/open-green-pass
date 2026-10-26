@@ -86,3 +86,38 @@ POST /cases taxonomy -> 201，字段回显
 PATCH /cases/{id}/metadata -> 200，operation/P0 更新
 UI bundle 包含“业务域”“再次生成”
 ```
+
+## 追加：筛选、排序与按操作分组（0.1.180）
+
+新增筛选：
+
+```text
+业务域 / 功能 / 模块 / 操作 / 优先级
+```
+
+默认排序：
+
+```text
+业务域 -> 功能 -> 模块 -> 操作 -> 标题
+```
+
+生成用例的 operation 自动回填为：
+
+```text
+METHOD /api/v1/...
+```
+
+因此同一端点的 happy / authz / invalid_filter / pagination 等覆盖会归入同一操作分组。当前：
+
+```text
+357 cases
+347 有 operation
+```
+
+表格按分组渲染，组头显示：
+
+```text
+业务域 / 功能 / 模块 / 操作（N 条）
+```
+
+这样同一操作的多种覆盖用例连续排列，便于阅读和评审。
