@@ -70,15 +70,22 @@ function discoverDevices() {
   });
 }
 
-function writeJSON(response, status, body) {
-  response.writeHead(status, {
+const allowedOrigins = new Set([
+  'http://greenpass.localhost:30080',
+  'http://127.0.0.1:30080',
+  'http://localhost:30080',
+]);
+
+function writeJSON(response, status, body, origin) {
+  const headers = {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
-    // The local web UI is the sole browser consumer. Do not use a wildcard:
-    // this agent deliberately remains private to the current workstation.
-    'Access-Control-Allow-Origin': 'http://greenpass.localhost:30080',
     Vary: 'Origin',
-  });
+  };
+  // Keep the agent private to the workstation UI, but accept all loopback
+  // spellings of the same GreenPass origin.
+  if (origin && allowedOrigins.has(origin)) headers['Access-Control-Allow-Origin'] = origin;
+  response.writeHead(status, headers);
   response.end(JSON.stringify(body));
 }
 
@@ -95,10 +102,10 @@ const server = http.createServer(async (request, response) => {
       refreshed_at: new Date().toISOString(),
       devices: result.devices || [],
       ...(result.error ? { error: result.error } : {}),
-    });
+    }, request.headers.origin);
     return;
   }
-  writeJSON(response, 404, { error: 'not found' });
+  writeJSON(response, 404, { error: 'not found' }, request.headers.origin);
 });
 
 server.listen(port, listenAddress, () => {

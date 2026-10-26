@@ -7,17 +7,19 @@ param(
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $agentPath = Join-Path $repositoryRoot 'tools/local-device-agent/server.cjs'
+$watchdogPath = Join-Path $repositoryRoot 'tools/local-device-agent/watchdog.ps1'
 $node = (Get-Command node -ErrorAction Stop).Source
 
 if (-not (Test-Path -LiteralPath $agentPath)) { throw "Device agent is missing: $agentPath" }
+if (-not (Test-Path -LiteralPath $watchdogPath)) { throw "Device agent watchdog is missing: $watchdogPath" }
 if (-not (Test-Path -LiteralPath $AdbPath)) { throw "ADB not found: $AdbPath" }
 
 # schtasks starts this trusted, repository-owned script at interactive logon.
 # The agent itself only binds to 127.0.0.1 and cannot expose ADB to kind.
 # The agent also knows the default ADB location, so use a direct executable
 # action here. It is more reliable than a nested cmd.exe command on Windows.
-$command = "`"$node`" `"$agentPath`""
-& schtasks.exe /Create /TN $TaskName /SC ONLOGON /RL LIMITED /TR $command /F | Out-Null
+$watchdogCommand = "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$watchdogPath`""
+& schtasks.exe /Create /TN $TaskName /SC MINUTE /MO 1 /RL LIMITED /TR $watchdogCommand /F | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Unable to register the GreenPass local device agent.' }
 & schtasks.exe /Run /TN $TaskName | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Unable to start the GreenPass local device agent.' }
