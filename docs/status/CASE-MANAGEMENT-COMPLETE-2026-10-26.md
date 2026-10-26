@@ -121,3 +121,14 @@ taxonomy 保持不变
 - 回填 m3-/GEN- 管理端用例的仓库：352/361 已绑定 open-chat-admin。
 - 剩余 9 条没有可靠仓库来源，显示“未绑定仓库”，不伪造。
 - 新建用例表单可选择当前项目下的仓库，写入 repo_id。
+
+## 0.1.197 中文标题与语言
+
+- 用例列表/详情将技术英文标题映射为中文：
+  ```text
+  security happy-delete -> 安全治理 · 正常流程 · 删除
+  clientRelease complete-checksum -> 客户端发布 · 完成 · 校验
+  ```
+- 原始 title 仍保留在 API/数据库，便于溯源；UI 不再直接显示英文技术串。
+- 设置页“时区 / 语言”改为受控字段，持久化 `greenpass_language`，默认 `zh-CN`，并设置 `document.documentElement.lang`。
+- 当前版本只提供简体中文，移除无效的 English 选项。
