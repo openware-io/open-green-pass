@@ -34,3 +34,17 @@ coverage and does not claim PC Admin UI coverage from m3 cases.
 The local kind deployment uses a host-managed Playwright service at
 `http://host.docker.internal:48200`. A production cluster must deploy the same runner as a
 controlled service instead of relying on the workstation.
+## UI suite extension 2026-10-26
+
+Three real Playwright browser cases now pass on PC Admin:
+
+```text
+ui-pc-admin-login            2914357450051584  pass
+ui-pc-admin-login-validation 2914455870803968  pass
+ui-pc-admin-forgot-password  2914455873425408  pass
+run: 2914457997185024
+```
+
+Each recorded one screenshot in `evidence.screenshots`. Current corpus is 361 API + 3 browser cases.
+Authenticated dashboard/menu/list flows still require an approved admin test credential; no shared
+admin password is stored in a case.
