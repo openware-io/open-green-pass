@@ -294,6 +294,10 @@ type Case struct {
 	CaseType       string // 测试类型：functional/api/security/performance/compatibility
 	Priority       string // P0-P3
 	Automation     string // automated/manual
+	RequirementRef string // 需求/用户故事引用
+	DefectRef      string // 关联缺陷引用
+	ReviewStatus   string // draft/pending/approved/rejected
+	ReviewComment  string // 评审意见
 	CurrentVersion int    // 当前生效版本号
 	Status         string // active / archived / deleted
 	CreatedBy      int64  // 创建人（操作审计）
@@ -326,6 +330,7 @@ type CaseFilter struct {
 	Module         string // 按模块
 	Operation      string // 按操作
 	Priority       string // 按优先级
+	ReviewStatus   string // 按评审状态
 }
 
 // CaseRepository 用例仓储端口（实现位于 infra，RLS 由实现注入租户）。

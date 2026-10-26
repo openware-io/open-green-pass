@@ -54,6 +54,10 @@ type caseResponse struct {
 	CaseType       string `json:"case_type"`
 	Priority       string `json:"priority"`
 	Automation     string `json:"automation_status"`
+	RequirementRef string `json:"requirement_ref"`
+	DefectRef      string `json:"defect_ref"`
+	ReviewStatus   string `json:"review_status"`
+	ReviewComment  string `json:"review_comment"`
 	CurrentVersion int    `json:"current_version"`
 	Status         string `json:"status"`
 }
@@ -83,6 +87,7 @@ func toCaseResponse(c *domain.Case) caseResponse {
 		ID: c.ID, TeamID: c.TeamID, TargetID: c.TargetID, Code: c.Code, Title: c.Title,
 		Kind: c.Kind, BusinessDomain: c.BusinessDomain, Feature: c.Feature, Module: c.Module,
 		Operation: c.Operation, CaseType: c.CaseType, Priority: c.Priority, Automation: c.Automation,
+		RequirementRef: c.RequirementRef, DefectRef: c.DefectRef, ReviewStatus: c.ReviewStatus, ReviewComment: c.ReviewComment,
 		CurrentVersion: c.CurrentVersion, Status: c.Status,
 	}
 }

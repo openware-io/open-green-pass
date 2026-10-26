@@ -1,7 +1,7 @@
 import type { components, operations, paths } from './generated';
 
 export type Target = components['schemas']['Target'];
-export type CaseTaxonomyFields = { business_domain?: string; feature?: string; module?: string; operation?: string; case_type?: string; priority?: string; automation_status?: string };
+export type CaseTaxonomyFields = { business_domain?: string; feature?: string; module?: string; operation?: string; case_type?: string; priority?: string; automation_status?: string; requirement_ref?: string; defect_ref?: string; review_status?: string; review_comment?: string };
 export type TestCase = components['schemas']['TestCase'] & CaseTaxonomyFields;
 export type CaseVersion = components['schemas']['CaseVersion'];
 export type Run = components['schemas']['Run'];

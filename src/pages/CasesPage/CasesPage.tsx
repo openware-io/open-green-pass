@@ -389,6 +389,11 @@ function RealCasesPanel() {
   const { enabled, loaded, projects, projectId, selectProject } = catalog;
   const requestContext = useRef<{ key: string; pendingProject: string | null }>({ key: '', pendingProject: null });
   const [cases, setCases] = useState<TestCase[]>([]);
+  const [requirementRef, setRequirementRef] = useState('');
+  const [defectRef, setDefectRef] = useState('');
+  const [reviewStatus, setReviewStatus] = useState('draft');
+  const [reviewComment, setReviewComment] = useState('');
+  const [filterReview, setFilterReview] = useState('');
   const [preconditions, setPreconditions] = useState('');
   const [steps, setSteps] = useState('');
   const [expectedResult, setExpectedResult] = useState('');
@@ -488,6 +493,7 @@ function RealCasesPanel() {
     if (!includes(item.module, filterModule)) return false;
     if (!includes(item.operation, filterOperation)) return false;
     if (filterPriority && item.priority !== filterPriority) return false;
+    if (filterReview && item.review_status !== filterReview) return false;
     return true;
   });
   const taxonomyOptions = useMemo(() => {
@@ -539,7 +545,18 @@ function RealCasesPanel() {
             <span className="self-center text-[10px] text-slate-400">分类可后补；未知时留空，不伪造。</span>
           </div>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-3">
+'        <div className="rounded-lg border border-slate-200 bg-white p-3">
+          <div className="mb-2 text-[11px] font-medium text-slate-600">追溯与评审</div>
+          <div className="grid gap-2 md:grid-cols-4">
+            <input value={requirementRef} onChange={(event) => setRequirementRef(event.target.value)} placeholder="需求/用户故事引用" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+            <input value={defectRef} onChange={(event) => setDefectRef(event.target.value)} placeholder="关联缺陷引用" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+            <select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)} disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs">
+              <option value="draft">草稿</option><option value="pending">待评审</option><option value="approved">已通过</option><option value="rejected">已退回</option>
+            </select>
+            <input value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} placeholder="评审意见" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+          </div>
+        </div>
+'        <div className="rounded-lg border border-slate-200 bg-white p-3">
           <div className="mb-2 text-[11px] font-medium text-slate-600">测试规格（QA 用例标准字段）</div>
           <div className="grid gap-2 md:grid-cols-3">
             <input value={preconditions} onChange={(event) => setPreconditions(event.target.value)} placeholder="前置条件，如：已登录管理员" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
@@ -554,7 +571,7 @@ function RealCasesPanel() {
           <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="用例编号" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
           <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="标题" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
           <input value={kind} onChange={(event) => setKind(event.target.value)} placeholder="场景族，如 api" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
-          <button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(projectId); if (!Number.isSafeInteger(id) || id <= 0 || !code.trim() || !title.trim()) throw new Error('被测对象、编号、标题不能为空'); await client.createCase({ target_id: id, code: code.trim(), title: title.trim(), kind: kind.trim() || undefined, business_domain: businessDomain.trim(), feature: feature.trim(), module: moduleName.trim(), operation: operation.trim(), case_type: caseType, priority, automation_status: automation, script: buildScript() }); setCases(await readCases()); setCode(''); setTitle(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实用例</button>
+          <button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(projectId); if (!Number.isSafeInteger(id) || id <= 0 || !code.trim() || !title.trim()) throw new Error('被测对象、编号、标题不能为空'); await client.createCase({ target_id: id, code: code.trim(), title: title.trim(), kind: kind.trim() || undefined, business_domain: businessDomain.trim(), feature: feature.trim(), module: moduleName.trim(), operation: operation.trim(), case_type: caseType, priority, automation_status: automation, requirement_ref: requirementRef.trim(), defect_ref: defectRef.trim(), review_status: reviewStatus, review_comment: reviewComment.trim(), script: buildScript() }); setCases(await readCases()); setCode(''); setTitle(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实用例</button>
         </div>
         <textarea value={script} onChange={(event) => setScript(event.target.value)} disabled={busy} rows={2} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" aria-label="用例脚本 JSON" />
         {message && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{message}</div>}
@@ -574,7 +591,10 @@ function RealCasesPanel() {
           <select value={filterPriority} onChange={(event) => setFilterPriority(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
             <option value="">全部优先级</option><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option>
           </select>
-          <button type="button" onClick={() => { setFilterDomain(''); setFilterFeature(''); setFilterModule(''); setFilterOperation(''); setFilterPriority(''); }} className="text-[11px] text-slate-500 hover:text-emerald-700">清空筛选</button>
+'          <select value={filterReview} onChange={(event) => setFilterReview(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
+            <option value="">全部评审状态</option><option value="draft">草稿</option><option value="pending">待评审</option><option value="approved">已通过</option><option value="rejected">已退回</option>
+          </select>
+'          <button type="button" onClick={() => { setFilterDomain(''); setFilterFeature(''); setFilterModule(''); setFilterOperation(''); setFilterPriority(''); setFilterReview(''); }} className="text-[11px] text-slate-500 hover:text-emerald-700">清空筛选</button>
           <span className="text-[11px] text-slate-400">共 {visibleCases.length} / {cases.length} 条 · 默认按 业务域 → 功能 → 模块 → 操作 排序</span>
         </div>
         <div className="overflow-x-auto rounded-lg border border-slate-200">
@@ -608,6 +628,16 @@ function RealCasesPanel() {
                 <td className="px-3 py-2 align-top"><div>v{item.current_version}</div><div className="text-[10px] text-slate-500">{item.status}</div></td>
                 <td className="px-3 py-2 align-top">
                   <div className="flex flex-wrap gap-1.5">
+                    <button type="button" disabled={busy} onClick={() => void run(async () => {
+                      const comment = window.prompt('评审意见', '通过') || '通过';
+                      await client.updateCaseMetadata(item.id, { business_domain: item.business_domain, feature: item.feature, module: item.module, operation: item.operation, case_type: item.case_type, priority: item.priority, automation_status: item.automation_status, requirement_ref: item.requirement_ref, defect_ref: item.defect_ref, review_status: 'approved', review_comment: comment });
+                      setCases(await readCases());
+                    })} className="rounded border border-emerald-200 px-2 py-1 text-[10px] text-emerald-700">通过</button>
+                    <button type="button" disabled={busy} onClick={() => void run(async () => {
+                      const comment = window.prompt('退回原因', '需补充断言') || '需补充断言';
+                      await client.updateCaseMetadata(item.id, { business_domain: item.business_domain, feature: item.feature, module: item.module, operation: item.operation, case_type: item.case_type, priority: item.priority, automation_status: item.automation_status, requirement_ref: item.requirement_ref, defect_ref: item.defect_ref, review_status: 'rejected', review_comment: comment });
+                      setCases(await readCases());
+                    })} className="rounded border border-amber-200 px-2 py-1 text-[10px] text-amber-700">退回</button>
                     <button type="button" disabled={busy} onClick={() => void run(async () => {
                       const versions = await client.caseHistory(item.id);
                       setCaseDetail({ item, versions });
@@ -673,6 +703,12 @@ function RealCasesPanel() {
                   <div><div className="text-[10px] text-slate-400">预期结果</div><div className="mt-1 text-slate-700">{String(latest?.expected_result || '—')}</div></div>
                 </div>;
               })()}
+              <div className="mb-3 grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs md:grid-cols-4">
+                <div><div className="text-[10px] text-slate-400">需求引用</div><div className="mt-1 text-slate-700">{caseDetail.item.requirement_ref || '—'}</div></div>
+                <div><div className="text-[10px] text-slate-400">缺陷引用</div><div className="mt-1 text-slate-700">{caseDetail.item.defect_ref || '—'}</div></div>
+                <div><div className="text-[10px] text-slate-400">评审状态</div><div className="mt-1 text-slate-700">{caseDetail.item.review_status || 'draft'}</div></div>
+                <div><div className="text-[10px] text-slate-400">评审意见</div><div className="mt-1 text-slate-700">{caseDetail.item.review_comment || '—'}</div></div>
+              </div>
               <div className="mb-2 text-xs font-medium text-slate-600">当前版本脚本 / 断言</div>
               <pre className="max-h-72 overflow-auto rounded-lg bg-slate-900 p-3 font-mono text-[11px] leading-5 text-emerald-200">{JSON.stringify([...caseDetail.versions].sort((a, b) => b.version - a.version)[0]?.script ?? {}, null, 2)}</pre>
               <div className="mt-3 space-y-1 text-[11px] text-slate-500">

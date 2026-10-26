@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/openware-io/open-green-pass/internal/governance/domain"
@@ -83,6 +84,12 @@ func (s *CaseImportService) Import(ctx context.Context, jobID, targetID int64) (
 		}
 		out = append(out, c)
 	}
+	sort.SliceStable(out, func(i, j int) bool {
+		left, right := out[i], out[j]
+		leftKey := left.BusinessDomain + "|" + left.Feature + "|" + left.Module + "|" + left.Operation + "|" + left.Title
+		rightKey := right.BusinessDomain + "|" + right.Feature + "|" + right.Module + "|" + right.Operation + "|" + right.Title
+		return leftKey < rightKey
+	})
 	return out, nil
 }
 
