@@ -390,7 +390,9 @@ function ExecPageContent({ targets, targetID, requestedCaseIDs, onTargetChange }
                     className="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none disabled:bg-slate-50" />
                 </label>
               </div>
-              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
+              <details className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/40">
+                <summary className="cursor-pointer px-4 py-3 text-xs font-medium text-slate-700">环境与凭据 · 点击展开</summary>
+                <div className="px-4 pb-4">
                 <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="text-sm font-semibold text-slate-700">执行环境需求清单</h3><p className="mt-1 text-[11px] leading-5 text-slate-500">系统根据当前服务的技术画像生成待确认项。AI 只说明需要什么及依据，不猜测真实地址、账号或数据。</p></div><span className="rounded-full bg-white px-2 py-1 text-[10px] font-medium text-emerald-700">{activeService ? `${activeService.name} · ${activeService.kind}` : '请选择目录服务以获得更精确建议'}</span></div>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">{environmentRequirements.map((requirement) => <div key={requirement.key} className="rounded-lg border border-emerald-100 bg-white p-3"><div className="flex items-center gap-2 text-xs font-medium text-slate-700">{requirement.label}{requirement.required && <span className="text-red-500">*</span>}{requirement.sensitive && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-normal text-amber-700">仅引用</span>}</div><p className="mt-1 text-[11px] leading-5 text-slate-500">{requirement.reason}</p><p className="mt-1 text-[10px] text-slate-400">依据：{requirement.evidence}</p></div>)}</div>
                 {requiresBrowserRunner && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-800"><b>UI 执行边界：</b>pc-admin 是 Web 应用。环境登记完成后需要由受管浏览器执行器运行登录、页面交互和截图；当前 HTTP Runner 只适用于 API 用例，已禁止将其作为 UI 通过结果。</div>}
@@ -400,7 +402,7 @@ function ExecPageContent({ targets, targetID, requestedCaseIDs, onTargetChange }
                   {environmentRequirements.some((item) => item.key === 'test_data_profile') && <label className="text-xs text-slate-600">测试数据上下文<input value={testDataProfile} onChange={(event) => { setTestDataProfile(event.target.value); setRequirementsConfirmed(false); }} placeholder="如 qa 租户 / 管理员角色 / 初始化数据集" disabled={busy} className="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none" /></label>}
                 </div>
                 <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] text-slate-600"><input type="checkbox" checked={requirementsConfirmed} onChange={(event) => setRequirementsConfirmed(event.target.checked)} disabled={busy} className="mt-0.5 accent-emerald-600" /><span>我已确认以上真实环境信息；AI 推断仅作为建议。凭据字段填写的是密钥管理器引用，不包含密码、Token 或 Cookie。</span></label>
-              </div>
+              </div></details>
               <div className="mt-3 rounded-lg border border-slate-200 p-3">
                 <div className="mb-2 flex items-center justify-between text-[11px] text-slate-500"><span>{requestedCaseIDs.length ? `本批次用例 · 共 ${requestedCaseIDs.length} 条` : '本次用例 · 请明确选择执行范围'}</span><div className="flex items-center gap-3"><span>已选 {selectedCaseIDs.length} / {runnableCases.length}</span><button type="button" disabled={busy || casesLoading || Boolean(casesError) || runnableCases.length === 0} onClick={() => setSelectedCaseIDs(runnableCases.map((testCase) => testCase.id))} className="text-emerald-700 hover:underline disabled:opacity-50">全选当前项目</button></div></div>
                 {casesLoading && <p className="text-xs text-slate-400">正在读取当前项目用例…</p>}
