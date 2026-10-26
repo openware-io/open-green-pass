@@ -95,6 +95,9 @@ func (s *CaseService) UpdateCaseMetadata(ctx context.Context, caseID int64, patc
 	if patch.Automation != "" && patch.Automation != "automated" && patch.Automation != "manual" {
 		return nil, ErrInvalidCaseTaxonomy
 	}
+	if patch.ReviewStatus != "" && patch.ReviewStatus != "draft" && patch.ReviewStatus != "pending" && patch.ReviewStatus != "approved" && patch.ReviewStatus != "rejected" {
+		return nil, ErrInvalidCaseTaxonomy
+	}
 	if patch.BusinessDomain != "" {
 		c.BusinessDomain = patch.BusinessDomain
 	}
@@ -115,6 +118,18 @@ func (s *CaseService) UpdateCaseMetadata(ctx context.Context, caseID int64, patc
 	}
 	if patch.Automation != "" {
 		c.Automation = patch.Automation
+	}
+	if patch.RequirementRef != "" {
+		c.RequirementRef = patch.RequirementRef
+	}
+	if patch.DefectRef != "" {
+		c.DefectRef = patch.DefectRef
+	}
+	if patch.ReviewStatus != "" {
+		c.ReviewStatus = patch.ReviewStatus
+	}
+	if patch.ReviewComment != "" {
+		c.ReviewComment = patch.ReviewComment
 	}
 	if err := s.repo.SaveCase(ctx, c); err != nil {
 		return nil, err
