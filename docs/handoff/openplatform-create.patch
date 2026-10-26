@@ -1,0 +1,56 @@
+--- a/im-services/admin/im-admin-service/src/main/java/io/openware/im/admin/api/controller/OpenPlatformAdminController.java
++++ b/im-services/admin/im-admin-service/src/main/java/io/openware/im/admin/api/controller/OpenPlatformAdminController.java
+@@ -31,6 +31,11 @@ public class OpenPlatformAdminController {
+     return client.listApplications(status, appType, page, pageSize);
+   }
+ 
++  @PostMapping("/applications")
++  public Map<String, Object> create(@RequestBody Map<String, Object> body) {
++    return client.register(body);
++  }
++
+   @GetMapping("/applications/{appId}")
+   public Map<String, Object> detail(@PathVariable String appId) {
+     return client.detail(appId);
+--- a/im-services/admin/im-admin-service/src/main/java/io/openware/im/admin/integration/OpenPlatformAdminClient.java
++++ b/im-services/admin/im-admin-service/src/main/java/io/openware/im/admin/integration/OpenPlatformAdminClient.java
+@@ -38,6 +38,12 @@ public class OpenPlatformAdminClient {
+         .queryParamIfPresent("appType", Optional.ofNullable(appType)).build()).retrieve().body(PAGE);
+   }
+ 
++  public Map<String, Object> register(Map<String, Object> body) {
++    return client().post().uri("/internal/admin/open-applications")
++        .body(body).retrieve().body(ITEM);
++  }
++
+   public Map<String, Object> detail(String appId) {
+     return client().get().uri("/internal/admin/open-applications/{appId}", appId).retrieve().body(ITEM);
+   }
+--- a/im-services/user/im-user-service/src/main/java/io/openware/im/user/api/controller/internal/InternalOpenPlatformAdminController.java
++++ b/im-services/user/im-user-service/src/main/java/io/openware/im/user/api/controller/internal/InternalOpenPlatformAdminController.java
+@@ -3,6 +3,7 @@ package io.openware.im.user.api.controller.internal;
+ import io.openware.common.dto.PageResult;
+ import io.openware.im.user.application.openplatform.OpenPlatformApplicationService;
++import io.openware.im.user.application.openplatform.command.RegisterApplicationCommand;
+ import io.openware.im.user.application.openplatform.result.ApplicationResult;
+ import io.openware.im.user.application.openplatform.result.RegisteredApplicationResult;
+ import io.openware.im.user.domain.openplatform.model.OpenApplicationStatus;
+@@ -26,6 +27,11 @@ public class InternalOpenPlatformAdminController {
+   public PageResult<ApplicationResult> list(
+       @RequestParam(required = false) String status,
+       @RequestParam(required = false) String appType,
+       @RequestParam(defaultValue = "1") int page,
+       @RequestParam(defaultValue = "20") int pageSize) {
+     return service.listApplications(parseStatus(status), appType, page, pageSize);
+   }
+ 
++  @PostMapping
++  public RegisteredApplicationResult register(@RequestBody RegisterApplicationCommand command) {
++    return service.registerApplication(command);
++  }
++
+   @GetMapping("/{appId}")
+   public ApplicationResult detail(@PathVariable String appId) {
+     return service.getApplication(appId);
+   }
+*** End Patch
