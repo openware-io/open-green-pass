@@ -335,7 +335,13 @@ export class GreenPassClient {
   upsertGateRule(input: paths['/gates/rules']['put']['requestBody']['content']['application/json']): JsonResponse<GateRule> {
     return this.request('/gates/rules', { method: 'PUT', body: JSON.stringify(input) });
   }
-  evaluateGate(runId: number): JsonResponse<GateResult> {
+  coverageGate(projectId: number, mode: 'strict' | 'risk' = 'strict'): JsonResponse<{
+    project_id: number; mode: string; total_required: number; design_covered: number; executed: number; passed: number;
+    design_coverage: number; execution_coverage: number; open_p0: number; open_p1: number; gate_passed: boolean;
+    blockers: string[]; modules?: Array<{ module: string; required: number; mapped: number; passed: number; design_coverage: number; execution_coverage: number }>;
+  }> {
+    return this.request(`/gates/coverage?project_id=${projectId}&mode=${mode}`);
+  }  evaluateGate(runId: number): JsonResponse<GateResult> {
     return this.request('/gates/evaluate', { method: 'POST', body: JSON.stringify({ run_id: runId }) });
   }
   gateResults(runId: number): JsonResponse<GateResult[]> { return this.request(`/gates/results?run_id=${runId}`); }
