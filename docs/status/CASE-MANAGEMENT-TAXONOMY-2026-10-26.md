@@ -136,3 +136,13 @@ auto_operation = GET /api/v1/admin/groups
 security 用例按 DELETE /... 等操作分组
 0.1.181-SNAPSHOT / schema 53 / arbiter 26/26 PASS
 ```
+
+## 0.1.182 追加
+
+- 业务域/功能/模块/操作筛选改为下拉选择，选项来自当前用例库。
+- 补齐已分类用例的 feature/business_domain：
+  ```text
+  358 cases
+  339 module / 339 feature / 339 domain
+  ```
+- 未分类 19 条保留空值并显示“未分类”。
