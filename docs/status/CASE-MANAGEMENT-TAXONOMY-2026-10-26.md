@@ -121,3 +121,18 @@ METHOD /api/v1/...
 ```
 
 这样同一操作的多种覆盖用例连续排列，便于阅读和评审。
+
+## 0.1.181 追加
+
+- 新建用例自动从 `script.request.method/path` 生成 `operation`，例如 `GET /api/v1/admin/groups`。
+- 用例列表默认按 `业务域 → 功能 → 模块 → 操作 → 标题` 排序。
+- 页面按操作分组渲染，组头显示覆盖条数。
+- 筛选支持业务域、功能、模块、操作、优先级。
+
+验证：
+
+```text
+auto_operation = GET /api/v1/admin/groups
+security 用例按 DELETE /... 等操作分组
+0.1.181-SNAPSHOT / schema 53 / arbiter 26/26 PASS
+```
