@@ -97,6 +97,7 @@ func (r *BrowserRunner) executeOne(ctx context.Context, spec *domain.CaseSpec) *
 	switch parsed.Status {
 	case "pass":
 		result.Evidence.Hash = evidenceHash(logs)
+		result.Evidence.Screenshots = parsed.Screenshots
 		return finish(domain.CasePass, "browser case passed", logs)
 	case "blocked":
 		return finish(domain.CaseBlocked, "browser case blocked", logs)
