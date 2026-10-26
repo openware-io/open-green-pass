@@ -59,6 +59,22 @@ function formatFeature(feature: string): string {
   return MODULE_LABELS[feature] ?? feature;
 }
 
+const CASE_TITLE_TOKENS: Record<string, string> = {
+  happy: '正常流程', authz: '权限拒绝', authn: '未认证拒绝', 'invalid-filter': '非法过滤',
+  pagination: '分页', sort: '排序', empty: '空列表', checksum: '校验', mime: '类型限制',
+  size: '大小限制', presign: '预签名', cancel: '取消', resume: '恢复', duplicate: '重复冲突',
+  confirm: '确认', referential: '引用冲突', repeat: '重复幂等', stale: '过期版本',
+  state: '状态流转', complete: '完成', delete: '删除', get: '查询', access: '访问',
+  'non-admin': '非管理员', rejection: '拒绝', upload: '上传', sessions: '会话',
+};
+
+function formatCaseTitle(title: string, module: string): string {
+  if (!/[A-Za-z]/.test(title) || /[\u4e00-\u9fa5]/.test(title)) return title;
+  const tokens = title.trim().split(/\s+/);
+  const moduleLabel = MODULE_LABELS[module] || module || '用例';
+  const detail = tokens.slice(1).flatMap((token) => token.toLowerCase().split('-')).map((token) => CASE_TITLE_TOKENS[token] ?? token).join(' · ');
+  return detail ? `${moduleLabel} · ${detail}` : `${moduleLabel} · ${tokens[0]}`;
+}
 function formatOperation(operation: string): string {
   if (!operation) return '未分类操作';
   const match = operation.match(/^(GET|POST|PUT|PATCH|DELETE)\s+(\S+)/);
@@ -647,7 +663,7 @@ function RealCasesPanel() {
                     <div className="font-mono">{item.module || 'unclassified'} / {formatOperation(item.operation || '')}</div>
                   </div>
                 </td>
-                <td className="px-3 py-2 align-top text-slate-700">{item.title}</td>
+                <td className="px-3 py-2 align-top text-slate-700">{formatCaseTitle(item.title, item.module || '')}</td>
                 <td className="px-3 py-2 align-top">
                   <div className="flex flex-wrap gap-1">
                     <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{item.case_type || 'functional'}</span>
@@ -697,7 +713,7 @@ function RealCasesPanel() {
             <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
               <div>
                 <div className="font-mono text-[11px] text-slate-500">#{caseDetail.item.id} · {caseDetail.item.code}</div>
-                <div className="mt-1 text-sm font-semibold text-slate-800">{caseDetail.item.title}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-800">{formatCaseTitle(caseDetail.item.title, caseDetail.item.module || '')}</div>
                 <div className="mt-1 text-[11px] text-slate-500">{caseDetail.item.business_domain || '未分类业务域'} / {formatFeature(caseDetail.item.feature || '')} / {caseDetail.item.module || 'unclassified'} / {formatOperation(caseDetail.item.operation || '')}</div>
               </div>
               <button type="button" onClick={() => setCaseDetail(null)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500">关闭</button>

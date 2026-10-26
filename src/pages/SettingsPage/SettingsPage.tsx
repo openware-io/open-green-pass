@@ -56,6 +56,12 @@ export default function SettingsPage() {
   const [notifyBlock, setNotifyBlock] = useState(true);
   const [notifyReport, setNotifyReport] = useState(true);
   const [threshold, setThreshold] = useState('85');
+  const [language, setLanguage] = useState(() => { try { return localStorage.getItem('greenpass_language') || 'zh-CN'; } catch { return 'zh-CN'; } });
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+    try { localStorage.setItem('greenpass_language', language); } catch { /* ignore */ }
+  }, [language]);
 
   useEffect(()=>{void api.wechatAuthConfig().then((config)=>{setWechatLogin(config.enabled);setWechatAppID(config.app_id);setWechatCallback(config.callback_uri);setWechatSecretConfigured(config.secret_configured);}).catch((error)=>toast.error('微信配置读取失败',{description:error instanceof Error?error.message:'服务不可用'}));},[]);
 
@@ -88,7 +94,7 @@ export default function SettingsPage() {
           <Row label="平台名称"><input className={inputCls} defaultValue="GreenPass" /></Row>
           <Row label="品牌 Logo" desc="浏览器图标 / 登录页品牌"><button type="button" onClick={() => toast('上传（原型示意）')} className="text-[11px] text-emerald-600 border border-emerald-200 rounded-lg px-3 py-1.5 flex items-center gap-1"><Upload className="w-3 h-3" />上传</button></Row>
           <Row label="默认首页"><select className={selectCls} defaultValue="测试中心"><option>测试中心</option><option>被测对象</option><option>测试执行</option></select></Row>
-          <Row label="时区 / 语言"><select className={selectCls} defaultValue="Asia/Shanghai · 简体中文"><option>Asia/Shanghai · 简体中文</option><option>UTC · English</option></select></Row>
+          <Row label="时区 / 语言" desc="当前版本仅提供简体中文"><select className={selectCls} value={language} onChange={(event) => setLanguage(event.target.value)}><option value="zh-CN">Asia/Shanghai · 简体中文</option></select></Row>
           <Row label="维护模式" desc="开启后普通用户暂停操作"><Toggle on={maintenance} onChange={setMaintenance} /></Row>
         </div>
 
