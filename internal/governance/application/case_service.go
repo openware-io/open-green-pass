@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/openware-io/open-green-pass/internal/governance/domain"
 	"github.com/openware-io/open-green-pass/internal/platform/rls"
@@ -50,6 +51,17 @@ func (s *CaseService) CreateCase(ctx context.Context, c domain.Case, script json
 	}
 	if c.Automation == "" {
 		c.Automation = "automated"
+	}
+	if c.Operation == "" {
+		var requestDoc struct {
+			Request struct {
+				Method string `json:"method"`
+				Path   string `json:"path"`
+			} `json:"request"`
+		}
+		if json.Unmarshal(script, &requestDoc) == nil && requestDoc.Request.Path != "" {
+			c.Operation = strings.TrimSpace(requestDoc.Request.Method + " " + requestDoc.Request.Path)
+		}
 	}
 	v := &domain.CaseVersion{
 		ID: s.gen.Next(), CaseID: c.ID, Version: 1, TeamID: teamID,
