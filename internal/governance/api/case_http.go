@@ -32,7 +32,7 @@ func RegisterCasesAuthorized(mux *http.ServeMux, svc *application.CaseService, a
 
 func registerCases(mux *http.ServeMux, h *caseHandler) {
 	mux.HandleFunc("POST /cases", h.createCase)
-	mux.HandleFunc("PATCH /cases/{id}", h.updateMetadata)
+	mux.HandleFunc("PATCH /cases/{id}/metadata", h.updateMetadata)
 	mux.HandleFunc("POST /cases/{id}/versions", h.createVersion)
 	mux.HandleFunc("POST /cases/{id}/rollback", h.rollback)
 	mux.HandleFunc("DELETE /cases/{id}", h.deleteCase)

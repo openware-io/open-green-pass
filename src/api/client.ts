@@ -259,7 +259,7 @@ export class GreenPassClient {
     return this.request('/cases', { method: 'POST', body: JSON.stringify(input) });
   }
   updateCaseMetadata(caseId: number, input: CaseTaxonomyFields): JsonResponse<TestCase> {
-    return this.request(`/cases/${caseId}`, { method: 'PATCH', body: JSON.stringify(input) });
+    return this.request(`/cases/${caseId}/metadata`, { method: 'PATCH', body: JSON.stringify(input) });
   }
   createCaseVersion(caseId: number, input: CreateCaseVersionInput): JsonResponse<TestCase> {
     return this.request(`/cases/${caseId}/versions`, { method: 'POST', body: JSON.stringify(input) });

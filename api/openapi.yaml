@@ -448,9 +448,38 @@ paths:
                 code: { type: string }
                 title: { type: string }
                 kind: { type: string }
+                business_domain: { type: string }
+                feature: { type: string }
+                module: { type: string }
+                operation: { type: string }
+                case_type: { type: string, enum: [functional, api, security, performance, compatibility] }
+                priority: { type: string, enum: [P0, P1, P2, P3] }
+                automation_status: { type: string, enum: [automated, manual] }
                 script: { description: 用例脚本/数据（执行产物来源） }
       responses:
         '201': { description: 已创建（含版本）, content: { application/json: { schema: { $ref: '#/components/schemas/TestCase' } } } }
+  /cases/{id}/metadata:
+    patch:
+      summary: 更新用例 QA 分类（不改脚本版本）
+      operationId: updateCaseMetadata
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                business_domain: { type: string }
+                feature: { type: string }
+                module: { type: string }
+                operation: { type: string }
+                case_type: { type: string, enum: [functional, api, security, performance, compatibility] }
+                priority: { type: string, enum: [P0, P1, P2, P3] }
+                automation_status: { type: string, enum: [automated, manual] }
+      responses:
+        '200': { description: 已更新, content: { application/json: { schema: { $ref: '#/components/schemas/TestCase' } } } }
   /cases/{id}/versions:
     post:
       summary: 迭代创建用例新版本
@@ -1845,6 +1874,13 @@ components:
         code: { type: string }
         title: { type: string }
         kind: { type: string }
+        business_domain: { type: string }
+        feature: { type: string }
+        module: { type: string }
+        operation: { type: string }
+        case_type: { type: string, enum: [functional, api, security, performance, compatibility] }
+        priority: { type: string, enum: [P0, P1, P2, P3] }
+        automation_status: { type: string, enum: [automated, manual] }
         current_version: { type: integer }
         status: { type: string }
     CaseVersion:
