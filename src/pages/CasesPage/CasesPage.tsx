@@ -47,6 +47,27 @@ const SOURCE_BADGE: Record<string, string> = {
 
 const SCEN_ICON: Record<string, typeof Cpu> = { Cpu, Globe, Smartphone, Sparkles, ShieldCheck };
 const SCEN_OF: Record<string, string> = { '单元': 'SCEN-01', '集成': 'SCEN-02', '契约': 'SCEN-03', '安全': 'SCEN-07', 'Web': 'SCEN-08', '移动': 'SCEN-09' };
+const MODULE_LABELS: Record<string, string> = {
+  auth: '登录认证', user: '用户管理', security: '安全治理', config: '系统配置',
+  group: '群组管理', message: '消息管理', friend: '好友关系', media: '媒体内容',
+  clientRelease: '客户端发布', miniappService: '小程序服务', openPlatform: '开放平台',
+  monitor: '运维监控', server: '服务器', stats: '统计分析', audit: '审计合规',
+  accountCancellation: '账号注销', deviceToken: '设备令牌', userSticker: '表情贴纸',
+};
+
+function formatFeature(feature: string): string {
+  return MODULE_LABELS[feature] ?? feature;
+}
+
+function formatOperation(operation: string): string {
+  if (!operation) return '未分类操作';
+  const match = operation.match(/^(GET|POST|PUT|PATCH|DELETE)\s+(\S+)/);
+  if (!match) return operation;
+  const [, method, path] = match;
+  const action = method === 'GET' ? '查询' : method === 'POST' ? '创建/提交' : method === 'DELETE' ? '删除' : '更新';
+  const resource = Object.entries(MODULE_LABELS).find(([key]) => path.toLowerCase().includes(key.toLowerCase()))?.[1];
+  return resource ? `${action}${resource} · ${method} ${path}` : `${action} · ${method} ${path}`;
+}
 export default function CasesPage() {
   const navigate = useNavigate();
   const [rows, setRows] = useState<ICase[]>(CASES);
@@ -525,13 +546,13 @@ function RealCasesPanel() {
             <option value="">全部业务域</option>{taxonomyOptions.domains.map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
           <select value={filterFeature} onChange={(event) => setFilterFeature(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
-            <option value="">全部功能</option>{taxonomyOptions.features.map((value) => <option key={value} value={value}>{value}</option>)}
+            <option value="">全部功能</option>{taxonomyOptions.features.map((value) => <option key={value} value={value}>{formatFeature(value)}</option>)}
           </select>
           <select value={filterModule} onChange={(event) => setFilterModule(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
             <option value="">全部模块</option>{taxonomyOptions.modules.map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
           <select value={filterOperation} onChange={(event) => setFilterOperation(event.target.value)} className="max-w-[280px] rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
-            <option value="">全部操作 / 端点</option>{taxonomyOptions.operations.map((value) => <option key={value} value={value}>{value}</option>)}
+            <option value="">全部操作 / 端点</option>{taxonomyOptions.operations.map((value) => <option key={value} value={value}>{formatOperation(value)}</option>)}
           </select>
           <select value={filterPriority} onChange={(event) => setFilterPriority(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
             <option value="">全部优先级</option><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option>
@@ -551,12 +572,12 @@ function RealCasesPanel() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {groupedCases.map((group) => <Fragment key={group.key}><tr className="bg-slate-50/80"><td colSpan={5} className="px-3 py-2 text-[11px] font-medium text-slate-600">{group.parts[0]} / {group.parts[1]} / <span className="font-mono">{group.parts[2]}</span> / {group.parts[3]} <span className="ml-2 text-slate-400">{group.items.length} 条</span></td></tr>{group.items.map((item) => <tr key={item.id}>
+              {groupedCases.map((group) => <Fragment key={group.key}><tr className="bg-slate-50/80"><td colSpan={5} className="px-3 py-2 text-[11px] font-medium text-slate-600">{group.parts[0]} / {formatFeature(group.parts[1])} / <span className="font-mono">{group.parts[2]}</span> / {formatOperation(group.parts[3])} <span className="ml-2 text-slate-400">{group.items.length} 条</span></td></tr>{group.items.map((item) => <tr key={item.id}>
                 <td className="px-3 py-2 align-top">
                   <div className="font-mono text-[11px] text-slate-700">#{item.id} · {item.code}</div>
                   <div className="mt-1 text-[10px] leading-4 text-slate-500">
-                    <div>{item.business_domain || '未分类业务域'} / {item.feature || '未分类功能'}</div>
-                    <div className="font-mono">{item.module || 'unclassified'} / {item.operation || '未分类操作'}</div>
+                    <div>{item.business_domain || '未分类业务域'} / {formatFeature(item.feature || '') || '未分类功能'}</div>
+                    <div className="font-mono">{item.module || 'unclassified'} / {formatOperation(item.operation || '')}</div>
                   </div>
                 </td>
                 <td className="px-3 py-2 align-top text-slate-700">{item.title}</td>
