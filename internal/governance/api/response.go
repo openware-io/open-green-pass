@@ -47,6 +47,13 @@ type caseResponse struct {
 	Code           string `json:"code"`
 	Title          string `json:"title"`
 	Kind           string `json:"kind"`
+	BusinessDomain string `json:"business_domain"`
+	Feature        string `json:"feature"`
+	Module         string `json:"module"`
+	Operation      string `json:"operation"`
+	CaseType       string `json:"case_type"`
+	Priority       string `json:"priority"`
+	Automation     string `json:"automation_status"`
 	CurrentVersion int    `json:"current_version"`
 	Status         string `json:"status"`
 }
@@ -74,7 +81,9 @@ func toTargetResponses(targets []*domain.Target) []targetResponse {
 func toCaseResponse(c *domain.Case) caseResponse {
 	return caseResponse{
 		ID: c.ID, TeamID: c.TeamID, TargetID: c.TargetID, Code: c.Code, Title: c.Title,
-		Kind: c.Kind, CurrentVersion: c.CurrentVersion, Status: c.Status,
+		Kind: c.Kind, BusinessDomain: c.BusinessDomain, Feature: c.Feature, Module: c.Module,
+		Operation: c.Operation, CaseType: c.CaseType, Priority: c.Priority, Automation: c.Automation,
+		CurrentVersion: c.CurrentVersion, Status: c.Status,
 	}
 }
 

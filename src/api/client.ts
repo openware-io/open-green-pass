@@ -1,7 +1,8 @@
 import type { components, operations, paths } from './generated';
 
 export type Target = components['schemas']['Target'];
-export type TestCase = components['schemas']['TestCase'];
+export type CaseTaxonomyFields = { business_domain?: string; feature?: string; module?: string; operation?: string; case_type?: string; priority?: string; automation_status?: string };
+export type TestCase = components['schemas']['TestCase'] & CaseTaxonomyFields;
 export type CaseVersion = components['schemas']['CaseVersion'];
 export type Run = components['schemas']['Run'];
 export type CaseResult = components['schemas']['CaseResult'];
@@ -54,7 +55,7 @@ export type Evidence = components['schemas']['Evidence'];
 export type EvidenceCreateInput = components['schemas']['EvidenceCreate'];
 
 export type CreateTargetInput = paths['/targets']['post']['requestBody']['content']['application/json'];
-export type CreateCaseInput = paths['/cases']['post']['requestBody']['content']['application/json'];
+export type CreateCaseInput = paths['/cases']['post']['requestBody']['content']['application/json'] & CaseTaxonomyFields;
 export type CreateCaseVersionInput = paths['/cases/{id}/versions']['post']['requestBody']['content']['application/json'];
 export type CreateRunInput = paths['/runs']['post']['requestBody']['content']['application/json'];
 export type CheckVersionInput = paths['/targets/{id}/version-check']['post']['requestBody']['content']['application/json'];
@@ -256,6 +257,9 @@ export class GreenPassClient {
   }
   createCase(input: CreateCaseInput): JsonResponse<TestCase> {
     return this.request('/cases', { method: 'POST', body: JSON.stringify(input) });
+  }
+  updateCaseMetadata(caseId: number, input: CaseTaxonomyFields): JsonResponse<TestCase> {
+    return this.request(`/cases/${caseId}`, { method: 'PATCH', body: JSON.stringify(input) });
   }
   createCaseVersion(caseId: number, input: CreateCaseVersionInput): JsonResponse<TestCase> {
     return this.request(`/cases/${caseId}/versions`, { method: 'POST', body: JSON.stringify(input) });

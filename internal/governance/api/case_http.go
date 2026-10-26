@@ -32,6 +32,7 @@ func RegisterCasesAuthorized(mux *http.ServeMux, svc *application.CaseService, a
 
 func registerCases(mux *http.ServeMux, h *caseHandler) {
 	mux.HandleFunc("POST /cases", h.createCase)
+	mux.HandleFunc("PATCH /cases/{id}", h.updateMetadata)
 	mux.HandleFunc("POST /cases/{id}/versions", h.createVersion)
 	mux.HandleFunc("POST /cases/{id}/rollback", h.rollback)
 	mux.HandleFunc("DELETE /cases/{id}", h.deleteCase)
@@ -71,11 +72,18 @@ func (h *caseHandler) authorizeCase(w http.ResponseWriter, r *http.Request, acti
 
 // createCaseRequest 新建用例请求。
 type createCaseRequest struct {
-	TargetID int64           `json:"target_id"`
-	Code     string          `json:"code"`
-	Title    string          `json:"title"`
-	Kind     string          `json:"kind,omitempty"`
-	Script   json.RawMessage `json:"script,omitempty"`
+	TargetID       int64           `json:"target_id"`
+	Code           string          `json:"code"`
+	Title          string          `json:"title"`
+	Kind           string          `json:"kind,omitempty"`
+	BusinessDomain string          `json:"business_domain,omitempty"`
+	Feature        string          `json:"feature,omitempty"`
+	Module         string          `json:"module,omitempty"`
+	Operation      string          `json:"operation,omitempty"`
+	CaseType       string          `json:"case_type,omitempty"`
+	Priority       string          `json:"priority,omitempty"`
+	Automation     string          `json:"automation_status,omitempty"`
+	Script         json.RawMessage `json:"script,omitempty"`
 }
 
 func (h *caseHandler) createCase(w http.ResponseWriter, r *http.Request) {
@@ -93,6 +101,8 @@ func (h *caseHandler) createCase(w http.ResponseWriter, r *http.Request) {
 	}
 	cc := domain.Case{
 		TargetID: req.TargetID, Code: req.Code, Title: req.Title, Kind: req.Kind,
+		BusinessDomain: req.BusinessDomain, Feature: req.Feature, Module: req.Module,
+		Operation: req.Operation, CaseType: req.CaseType, Priority: req.Priority, Automation: req.Automation,
 	}
 	created, err := h.svc.CreateCase(r.Context(), cc, req.Script)
 	if err != nil {
@@ -100,6 +110,42 @@ func (h *caseHandler) createCase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusCreated, toCaseResponse(created))
+}
+
+// updateMetadataRequest edits QA taxonomy without creating a script version.
+type updateMetadataRequest struct {
+	BusinessDomain string `json:"business_domain"`
+	Feature        string `json:"feature"`
+	Module         string `json:"module"`
+	Operation      string `json:"operation"`
+	CaseType       string `json:"case_type"`
+	Priority       string `json:"priority"`
+	Automation     string `json:"automation_status"`
+}
+
+func (h *caseHandler) updateMetadata(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		httpx.WriteErr(w, gperr.Validation("invalid case id"))
+		return
+	}
+	if !h.authorizeCase(w, r, "edit", id) {
+		return
+	}
+	var req updateMetadataRequest
+	if err := httpx.DecodeJSON(r, &req); err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	c, err := h.svc.UpdateCaseMetadata(r.Context(), id, domain.Case{
+		BusinessDomain: req.BusinessDomain, Feature: req.Feature, Module: req.Module,
+		Operation: req.Operation, CaseType: req.CaseType, Priority: req.Priority, Automation: req.Automation,
+	})
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toCaseResponse(c))
 }
 
 // updateVersionRequest 新增用例版本请求。
@@ -187,7 +233,11 @@ func (h *caseHandler) listCases(w http.ResponseWriter, r *http.Request) {
 	if status == "" {
 		status = "active"
 	}
-	f := domain.CaseFilter{Kind: q.Get("kind"), Code: q.Get("code"), Status: status}
+	f := domain.CaseFilter{
+		Kind: q.Get("kind"), Code: q.Get("code"), Status: status,
+		BusinessDomain: q.Get("business_domain"), Feature: q.Get("feature"),
+		Module: q.Get("module"), Operation: q.Get("operation"), Priority: q.Get("priority"),
+	}
 	if tid := q.Get("target_id"); tid != "" {
 		if n, err := strconv.ParseInt(tid, 10, 64); err == nil {
 			f.TargetID = &n

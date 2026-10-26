@@ -120,7 +120,7 @@ export default function CasesPage() {
 
   return (
     <div>
-      <PageHeader title="用例管理" desc="版本化用例 · 新增/更新/删除可辨别 · 执行载体与脚本数据 · 测试关联服务版本">
+      <PageHeader title="用例管理" desc="QA 用例资产：业务域 → 功能 → 模块 → 操作 · 版本化 · 可回退 · 执行证据">
         <GhostButton onClick={() => toast('导入用例（原型 mock）', { description: '支持从上游 / 用例仓库批量导入，解析为版本化用例并绑定执行载体' })}>导入用例</GhostButton>
         <PrimaryButton onClick={() => navigate('/generation')}>去上游源生成用例</PrimaryButton>
       </PageHeader>
@@ -371,6 +371,15 @@ function RealCasesPanel() {
   const [code, setCode] = useState('');
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState('api');
+  const [businessDomain, setBusinessDomain] = useState('');
+  const [feature, setFeature] = useState('');
+  const [moduleName, setModuleName] = useState('');
+  const [operation, setOperation] = useState('');
+  const [caseType, setCaseType] = useState('functional');
+  const [priority, setPriority] = useState('P2');
+  const [automation, setAutomation] = useState('automated');
+  const [filterModule, setFilterModule] = useState('');
+  const [filterPriority, setFilterPriority] = useState('');
   const [script, setScript] = useState('{"method":"GET","path":"/healthz"}');
   const [versionScript, setVersionScript] = useState('');
   const [busy, setBusy] = useState(false);
@@ -439,6 +448,12 @@ function RealCasesPanel() {
     try { return JSON.parse(script); } catch { throw new Error('脚本必须是合法 JSON'); }
   };
 
+  const visibleCases = cases.filter((item) => {
+    if (filterModule && item.module !== filterModule) return false;
+    if (filterPriority && item.priority !== filterPriority) return false;
+    return true;
+  });
+
   if (!client) return (
     <Card title="真实用例控制" className="mb-5" extra={<span className="text-[11px] text-slate-400">原型模式</span>}>
       <p className="p-5 text-sm text-slate-500">配置 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_API_BASE</code> 与数值型 <code className="rounded bg-slate-100 px-1.5 py-0.5">VITE_GP_TEAM_ID</code> 后启用真实用例查询、创建、版本和删除。下方表格仍为原型数据。</p>
@@ -446,9 +461,30 @@ function RealCasesPanel() {
   );
 
   return (
-    <Card title="真实用例控制" className="mb-5" extra={<span className="text-[11px] text-emerald-700">真实 API 已启用</span>}>
+    <Card title="真实用例资产库" className="mb-5" extra={<span className="text-[11px] text-emerald-700">真实 API 已启用</span>}>
       <div className="p-5 space-y-4">
         <p className="text-[11px] text-slate-500">连接：{greenPassConnectionHint()}。本区仅使用 OpenAPI 定义的数值 ID；下方原型表格不会写入后端。</p>
+        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+          <div className="mb-2 text-[11px] font-medium text-slate-600">用例分类（QA 标准：业务域 → 功能 → 模块 → 操作）</div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <input value={businessDomain} onChange={(event) => setBusinessDomain(event.target.value)} placeholder="业务域，如 群组" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+            <input value={feature} onChange={(event) => setFeature(event.target.value)} placeholder="功能，如 群组管理" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+            <input value={moduleName} onChange={(event) => setModuleName(event.target.value)} placeholder="模块，如 group" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+            <input value={operation} onChange={(event) => setOperation(event.target.value)} placeholder="操作，如 创建群组" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+          </div>
+          <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
+            <select value={caseType} onChange={(event) => setCaseType(event.target.value)} disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs">
+              <option value="functional">功能测试</option><option value="api">接口测试</option><option value="security">安全测试</option><option value="performance">性能测试</option><option value="compatibility">兼容性测试</option>
+            </select>
+            <select value={priority} onChange={(event) => setPriority(event.target.value)} disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs">
+              <option value="P0">P0 · 核心阻断</option><option value="P1">P1 · 高</option><option value="P2">P2 · 中</option><option value="P3">P3 · 低</option>
+            </select>
+            <select value={automation} onChange={(event) => setAutomation(event.target.value)} disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs">
+              <option value="automated">自动化</option><option value="manual">手工</option>
+            </select>
+            <span className="self-center text-[10px] text-slate-400">分类可后补；未知时留空，不伪造。</span>
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
           <select value={projectId} disabled={busy || !loaded} onChange={(event) => changeTarget(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs">
             <option value="">选择真实被测对象</option>{projects.map((target) => <option key={target.id} value={target.id}>{target.name} · #{target.id}</option>)}
@@ -456,17 +492,68 @@ function RealCasesPanel() {
           <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="用例编号" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
           <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="标题" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
           <input value={kind} onChange={(event) => setKind(event.target.value)} placeholder="场景族，如 api" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
-          <button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(projectId); if (!Number.isSafeInteger(id) || id <= 0 || !code.trim() || !title.trim()) throw new Error('被测对象、编号、标题不能为空'); await client.createCase({ target_id: id, code: code.trim(), title: title.trim(), kind: kind.trim() || undefined, script: parseScript() }); setCases(await readCases()); setCode(''); setTitle(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实用例</button>
+          <button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(projectId); if (!Number.isSafeInteger(id) || id <= 0 || !code.trim() || !title.trim()) throw new Error('被测对象、编号、标题不能为空'); await client.createCase({ target_id: id, code: code.trim(), title: title.trim(), kind: kind.trim() || undefined, business_domain: businessDomain.trim(), feature: feature.trim(), module: moduleName.trim(), operation: operation.trim(), case_type: caseType, priority, automation_status: automation, script: parseScript() }); setCases(await readCases()); setCode(''); setTitle(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实用例</button>
         </div>
         <textarea value={script} onChange={(event) => setScript(event.target.value)} disabled={busy} rows={2} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" aria-label="用例脚本 JSON" />
         {message && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{message}</div>}
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="w-full text-xs"><thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-3 py-2">ID / 编号</th><th className="px-3 py-2">标题</th><th className="px-3 py-2">类型</th><th className="px-3 py-2">版本</th><th className="px-3 py-2">状态</th><th className="px-3 py-2">操作</th></tr></thead>
-            <tbody className="divide-y divide-slate-100">{cases.map((item) => <tr key={item.id}><td className="px-3 py-2 font-mono">#{item.id} · {item.code}</td><td className="px-3 py-2">{item.title}</td><td className="px-3 py-2">{item.kind}</td><td className="px-3 py-2">v{item.current_version}</td><td className="px-3 py-2">{item.status}</td><td className="px-3 py-2"><div className="flex flex-wrap gap-1.5"><button type="button" disabled={busy} onClick={() => void run(async () => { const value = versionScript.trim(); if (!value) throw new Error('先填写新版本脚本'); const parsed = JSON.parse(value) as unknown; await client.createCaseVersion(item.id, { script: parsed }); setVersionScript(''); setCases(await readCases()); })} className="rounded border border-slate-200 px-2 py-1 text-[10px] hover:border-emerald-300">提交新版本</button><button type="button" disabled={busy} onClick={() => void run(async () => { const items = await client.caseHistory(item.id); setHistory({ caseID: item.id, items }); })} className="rounded border border-slate-200 px-2 py-1 text-[10px] hover:border-emerald-300">历史</button><button type="button" disabled={busy} onClick={() => { const raw = window.prompt(`回退 #${item.id} 到哪个版本？`, String(item.current_version)); const version = Number(raw); if (raw && Number.isSafeInteger(version) && version > 0) void run(async () => { await client.rollbackCase(item.id, version); setCases(await readCases()); }); }} className="rounded border border-amber-200 px-2 py-1 text-[10px] text-amber-700">回退</button><button type="button" disabled={busy} onClick={() => void run(async () => { await client.deleteCase(item.id); setCases(await readCases()); })} className="rounded border border-red-200 px-2 py-1 text-[10px] text-red-600">删除</button></div></td></tr>)}</tbody>
-          </table>
-          {cases.length === 0 && <div className="px-3 py-5 text-center text-xs text-slate-400">当前被测对象暂无真实用例</div>}
+                <div className="flex flex-wrap items-center gap-2">
+          <input value={filterModule} onChange={(event) => setFilterModule(event.target.value)} placeholder="按模块筛选" className="w-40 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+          <select value={filterPriority} onChange={(event) => setFilterPriority(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
+            <option value="">全部优先级</option><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option>
+          </select>
+          <span className="text-[11px] text-slate-400">共 {visibleCases.length} / {cases.length} 条 · 分类维度：业务域 / 功能 / 模块 / 操作</span>
         </div>
-        <input value={versionScript} onChange={(event) => setVersionScript(event.target.value)} placeholder="新版本脚本 JSON（选中行后提交新版本）" disabled={busy} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" />
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50 text-left text-slate-500">
+              <tr>
+                <th className="px-3 py-2">用例 / 分类</th>
+                <th className="px-3 py-2">标题</th>
+                <th className="px-3 py-2">类型 / 优先级</th>
+                <th className="px-3 py-2">版本 / 状态</th>
+                <th className="px-3 py-2">操作</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {visibleCases.map((item) => <tr key={item.id}>
+                <td className="px-3 py-2 align-top">
+                  <div className="font-mono text-[11px] text-slate-700">#{item.id} · {item.code}</div>
+                  <div className="mt-1 text-[10px] leading-4 text-slate-500">
+                    <div>{item.business_domain || '未分类业务域'} / {item.feature || '未分类功能'}</div>
+                    <div className="font-mono">{item.module || 'unclassified'} / {item.operation || '未分类操作'}</div>
+                  </div>
+                </td>
+                <td className="px-3 py-2 align-top text-slate-700">{item.title}</td>
+                <td className="px-3 py-2 align-top">
+                  <div className="flex flex-wrap gap-1">
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{item.case_type || 'functional'}</span>
+                    <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700">{item.priority || 'P2'}</span>
+                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700">{item.automation_status === 'manual' ? '手工' : '自动化'}</span>
+                  </div>
+                </td>
+                <td className="px-3 py-2 align-top"><div>v{item.current_version}</div><div className="text-[10px] text-slate-500">{item.status}</div></td>
+                <td className="px-3 py-2 align-top">
+                  <div className="flex flex-wrap gap-1.5">
+                    <button type="button" disabled={busy} onClick={() => void run(async () => {
+                      const domain = window.prompt('业务域', item.business_domain || '');
+                      const feat = window.prompt('功能', item.feature || '');
+                      const mod = window.prompt('模块', item.module || '');
+                      const op = window.prompt('操作', item.operation || '');
+                      if (domain === null || feat === null || mod === null || op === null) return;
+                      await client.updateCaseMetadata(item.id, { business_domain: domain.trim(), feature: feat.trim(), module: mod.trim(), operation: op.trim(), case_type: item.case_type, priority: item.priority, automation_status: item.automation_status });
+                      setCases(await readCases());
+                    })} className="rounded border border-emerald-200 px-2 py-1 text-[10px] text-emerald-700">编辑分类</button>
+                    <button type="button" disabled={busy} onClick={() => void run(async () => { const value = versionScript.trim(); if (!value) throw new Error('先填写新版本脚本'); const parsed = JSON.parse(value) as unknown; await client.createCaseVersion(item.id, { script: parsed }); setVersionScript(''); setCases(await readCases()); })} className="rounded border border-slate-200 px-2 py-1 text-[10px]">提交新版本</button>
+                    <button type="button" disabled={busy} onClick={() => void run(async () => { const items = await client.caseHistory(item.id); setHistory({ caseID: item.id, items }); })} className="rounded border border-slate-200 px-2 py-1 text-[10px]">历史</button>
+                    <button type="button" disabled={busy} onClick={() => { const raw = window.prompt(`回退 #${item.id} 到哪个版本？`, String(item.current_version)); const version = Number(raw); if (raw && Number.isSafeInteger(version) && version > 0) void run(async () => { await client.rollbackCase(item.id, version); setCases(await readCases()); }); }} className="rounded border border-amber-200 px-2 py-1 text-[10px] text-amber-700">回退</button>
+                    <button type="button" disabled={busy} onClick={() => void run(async () => { await client.deleteCase(item.id); setCases(await readCases()); })} className="rounded border border-red-200 px-2 py-1 text-[10px] text-red-600">删除</button>
+                  </div>
+                </td>
+              </tr>)}
+            </tbody>
+          </table>
+          {visibleCases.length === 0 && <div className="px-3 py-5 text-center text-xs text-slate-400">当前筛选条件下没有真实用例</div>}
+        </div>        <input value={versionScript} onChange={(event) => setVersionScript(event.target.value)} placeholder="新版本脚本 JSON（选中行后提交新版本）" disabled={busy} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" />
         {history && <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="mb-2 text-xs font-medium text-slate-600">用例 #{history.caseID} 版本历史</div><div className="space-y-1">{history.items.map((item) => <div key={item.id} className="flex flex-wrap gap-2 text-[11px] text-slate-500"><span className="font-mono">v{item.version}</span><span>{item.change_type}</span><span>{item.created_at}</span></div>)}</div></div>}
       </div>
     </Card>

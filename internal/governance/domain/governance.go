@@ -287,6 +287,13 @@ type Case struct {
 	Code           string // 用例编号（按树命名空间稳定，如 im-saas-gw-001）
 	Title          string
 	Kind           string // 场景族：api/web/ui/contract/perf/mobile/weaknet/ai...
+	BusinessDomain string // 业务域：登录、消息、群组、安全...
+	Feature        string // 功能：群组管理、敏感词...
+	Module         string // 模块：group、security...
+	Operation      string // 操作：创建、查询、删除...
+	CaseType       string // 测试类型：functional/api/security/performance/compatibility
+	Priority       string // P0-P3
+	Automation     string // automated/manual
 	CurrentVersion int    // 当前生效版本号
 	Status         string // active / archived / deleted
 	CreatedBy      int64  // 创建人（操作审计）
@@ -310,10 +317,15 @@ type CaseVersion struct {
 
 // CaseFilter 用例查询筛选。
 type CaseFilter struct {
-	TargetID *int64 // 按被测对象节点
-	Kind     string // 按场景族
-	Code     string // 按编号模糊
-	Status   string // 按状态
+	TargetID       *int64 // 按被测对象节点
+	Kind           string // 按场景族
+	Code           string // 按编号模糊
+	Status         string // 按状态
+	BusinessDomain string // 按业务域
+	Feature        string // 按功能
+	Module         string // 按模块
+	Operation      string // 按操作
+	Priority       string // 按优先级
 }
 
 // CaseRepository 用例仓储端口（实现位于 infra，RLS 由实现注入租户）。

@@ -11,6 +11,9 @@ import (
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
 
+// ErrInvalidCaseTaxonomy 用例分类字段非法。
+var ErrInvalidCaseTaxonomy = fmt.Errorf("invalid case taxonomy")
+
 // CaseService 用例版本化应用服务实现。
 type CaseService struct {
 	repo domain.CaseRepository
@@ -39,6 +42,15 @@ func (s *CaseService) CreateCase(ctx context.Context, c domain.Case, script json
 	if c.Kind == "" {
 		c.Kind = "api"
 	}
+	if c.CaseType == "" {
+		c.CaseType = "functional"
+	}
+	if c.Priority == "" {
+		c.Priority = "P2"
+	}
+	if c.Automation == "" {
+		c.Automation = "automated"
+	}
 	v := &domain.CaseVersion{
 		ID: s.gen.Next(), CaseID: c.ID, Version: 1, TeamID: teamID,
 		ChangeType: domain.ChangeAdded, ScriptJSON: &script, CreatedBy: userID,
@@ -50,6 +62,44 @@ func (s *CaseService) CreateCase(ctx context.Context, c domain.Case, script json
 		return nil, err
 	}
 	return &c, nil
+}
+
+// UpdateCaseMetadata updates taxonomy without creating a script version.
+func (s *CaseService) UpdateCaseMetadata(ctx context.Context, caseID int64, patch domain.Case) (*domain.Case, error) {
+	teamID, ok := rls.TenantFrom(ctx)
+	if !ok {
+		return nil, ErrTenantRequired
+	}
+	c, err := s.repo.FindCase(ctx, teamID, caseID)
+	if err != nil {
+		return nil, err
+	}
+	if patch.Priority != "" && patch.Priority != "P0" && patch.Priority != "P1" && patch.Priority != "P2" && patch.Priority != "P3" {
+		return nil, ErrInvalidCaseTaxonomy
+	}
+	if patch.CaseType != "" && patch.CaseType != "functional" && patch.CaseType != "api" && patch.CaseType != "security" && patch.CaseType != "performance" && patch.CaseType != "compatibility" {
+		return nil, ErrInvalidCaseTaxonomy
+	}
+	if patch.Automation != "" && patch.Automation != "automated" && patch.Automation != "manual" {
+		return nil, ErrInvalidCaseTaxonomy
+	}
+	c.BusinessDomain = patch.BusinessDomain
+	c.Feature = patch.Feature
+	c.Module = patch.Module
+	c.Operation = patch.Operation
+	if patch.CaseType != "" {
+		c.CaseType = patch.CaseType
+	}
+	if patch.Priority != "" {
+		c.Priority = patch.Priority
+	}
+	if patch.Automation != "" {
+		c.Automation = patch.Automation
+	}
+	if err := s.repo.SaveCase(ctx, c); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 // CreateVersion 为用例新增版本（内容更新，change=updated；版本号=历史最大+1）。
