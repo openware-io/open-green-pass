@@ -95,10 +95,18 @@ func (s *CaseService) UpdateCaseMetadata(ctx context.Context, caseID int64, patc
 	if patch.Automation != "" && patch.Automation != "automated" && patch.Automation != "manual" {
 		return nil, ErrInvalidCaseTaxonomy
 	}
-	c.BusinessDomain = patch.BusinessDomain
-	c.Feature = patch.Feature
-	c.Module = patch.Module
-	c.Operation = patch.Operation
+	if patch.BusinessDomain != "" {
+		c.BusinessDomain = patch.BusinessDomain
+	}
+	if patch.Feature != "" {
+		c.Feature = patch.Feature
+	}
+	if patch.Module != "" {
+		c.Module = patch.Module
+	}
+	if patch.Operation != "" {
+		c.Operation = patch.Operation
+	}
 	if patch.CaseType != "" {
 		c.CaseType = patch.CaseType
 	}
