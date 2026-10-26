@@ -33,7 +33,7 @@ type browserRequest struct {
 type browserResponse struct {
 	Status      string   `json:"status"`
 	Logs        []string `json:"logs"`
-	Screenshots int      `json:"screenshots"`
+	Screenshots []string `json:"screenshots"`
 	FinalURL    string   `json:"final_url"`
 	Title       string   `json:"title"`
 }
@@ -93,7 +93,7 @@ func (r *BrowserRunner) executeOne(ctx context.Context, spec *domain.CaseSpec) *
 		return finish(domain.CaseFail, "invalid browser runner response", []string{err.Error()})
 	}
 	logs := parsed.Logs
-	logs = append(logs, fmt.Sprintf("final_url=%s title=%s screenshots=%d", parsed.FinalURL, parsed.Title, parsed.Screenshots))
+	logs = append(logs, fmt.Sprintf("final_url=%s title=%s screenshots=%d", parsed.FinalURL, parsed.Title, len(parsed.Screenshots)))
 	switch parsed.Status {
 	case "pass":
 		result.Evidence.Hash = evidenceHash(logs)

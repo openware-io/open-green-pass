@@ -29,16 +29,16 @@ async function execute(payload) {
   const script = payload.script && typeof payload.script === 'object' ? payload.script : {};
   const steps = Array.isArray(script.steps) ? script.steps : [];
   if (!baseURL && !steps.some((step) => step && step.url)) {
-    return { status: 'blocked', logs: ['browser case has no base_url or absolute step.url'], screenshots: 0 };
+    return { status: 'blocked', logs: ['browser case has no base_url or absolute step.url'], screenshots: [] };
   }
   const browser = await chromium.launch({ headless: true, executablePath, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'zh-CN', timezoneId: 'Asia/Shanghai' });
   const page = await context.newPage();
   const logs = [];
   const consoleErrors = [];
+  const screenshots = [];
   page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   page.on('pageerror', (error) => consoleErrors.push(error.message));
-  let screenshots = 0;
   try {
     for (const raw of steps) {
       const step = raw && typeof raw === 'object' ? raw : {};
@@ -68,8 +68,8 @@ async function execute(payload) {
         await page.waitForTimeout(ms);
         logs.push(`wait ${ms}ms`);
       } else if (action === 'screenshot') {
-        const data = await page.screenshot({ fullPage: false });
-        screenshots += 1;
+        const data = await page.screenshot({ fullPage: false, type: 'jpeg', quality: 50 });
+        screenshots.push(`data:image/jpeg;base64,${data.toString('base64')}`);
         logs.push(`screenshot ${data.length} bytes`);
       } else {
         throw new Error(`unsupported browser action: ${action}`);
@@ -97,7 +97,7 @@ const server = http.createServer(async (request, response) => {
       const payload = JSON.parse(body || '{}');
       json(response, 200, await execute(payload));
     } catch (error) {
-      json(response, 400, { status: 'fail', logs: [`invalid request: ${error.message}`], screenshots: 0 });
+      json(response, 400, { status: 'fail', logs: [`invalid request: ${error.message}`], screenshots: [] });
     }
   });
 });
