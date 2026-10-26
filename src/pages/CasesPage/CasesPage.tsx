@@ -561,7 +561,7 @@ function RealCasesPanel() {
             <span className="self-center text-[10px] text-slate-400">分类可后补；未知时留空，不伪造。</span>
           </div>
         </div>
-'        <div className="rounded-lg border border-slate-200 bg-white p-3">
+        <div className="rounded-lg border border-slate-200 bg-white p-3">
           <div className="mb-2 text-[11px] font-medium text-slate-600">追溯与评审</div>
           <div className="grid gap-2 md:grid-cols-4">
             <input value={requirementRef} onChange={(event) => setRequirementRef(event.target.value)} placeholder="需求/用户故事引用" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
@@ -572,7 +572,7 @@ function RealCasesPanel() {
             <input value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} placeholder="评审意见" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
           </div>
         </div>
-'        <div className="rounded-lg border border-slate-200 bg-white p-3">
+        <div className="rounded-lg border border-slate-200 bg-white p-3">
           <div className="mb-2 text-[11px] font-medium text-slate-600">测试规格（QA 用例标准字段）</div>
           <div className="grid gap-2 md:grid-cols-3">
             <input value={preconditions} onChange={(event) => setPreconditions(event.target.value)} placeholder="前置条件，如：已登录管理员" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
@@ -595,7 +595,7 @@ function RealCasesPanel() {
         <textarea value={script} onChange={(event) => setScript(event.target.value)} disabled={busy} rows={2} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" aria-label="用例脚本 JSON" /></div>}
         {message && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{message}</div>}
         <div className="flex flex-wrap items-center gap-2">
-'          <select value={libraryProject} onChange={(event) => setLibraryProject(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
+          <select value={libraryProject} onChange={(event) => setLibraryProject(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
             <option value="">全部项目</option>{projects.map((project) => <option key={project.id} value={project.name}>{project.name}</option>)}
           </select>
           <select value={filterRepo} onChange={(event) => setFilterRepo(event.target.value)} className="max-w-[220px] rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
@@ -616,10 +616,10 @@ function RealCasesPanel() {
           <select value={filterPriority} onChange={(event) => setFilterPriority(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
             <option value="">全部优先级</option><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option>
           </select>
-'          <select value={filterReview} onChange={(event) => setFilterReview(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
+          <select value={filterReview} onChange={(event) => setFilterReview(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
             <option value="">全部评审状态</option><option value="draft">草稿</option><option value="pending">待评审</option><option value="approved">已通过</option><option value="rejected">已退回</option>
           </select>
-'          <button type="button" onClick={() => { setFilterDomain(''); setFilterFeature(''); setFilterModule(''); setFilterOperation(''); setFilterPriority(''); setFilterReview(''); }} className="text-[11px] text-slate-500 hover:text-emerald-700">清空筛选</button>
+          <button type="button" onClick={() => { setFilterDomain(''); setFilterFeature(''); setFilterModule(''); setFilterOperation(''); setFilterPriority(''); setFilterReview(''); }} className="text-[11px] text-slate-500 hover:text-emerald-700">清空筛选</button>
           <span className="text-[11px] text-slate-400">共 {visibleCases.length} / {cases.length} 条 · 默认按 业务域 → 功能 → 模块 → 操作 排序</span>
         </div>
         <div className="overflow-x-auto rounded-lg border border-slate-200">
