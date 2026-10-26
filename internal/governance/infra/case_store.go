@@ -133,7 +133,7 @@ func (s *CaseStore) ListCases(ctx context.Context, teamID int64, f domain.CaseFi
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
 			SELECT id, team_id, target_id, code, title, kind, business_domain, feature, module, operation, case_type, priority, automation_status, current_version, status
-			FROM cas_case WHERE `+where+` ORDER BY target_id, code`, args...)
+			FROM cas_case WHERE `+where+` ORDER BY target_id, business_domain, feature, module, operation, code`, args...)
 		if err != nil {
 			return err
 		}

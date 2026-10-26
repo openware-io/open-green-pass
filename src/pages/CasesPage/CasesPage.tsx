@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Fragment, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { CASES, TEST_SCENARIOS, CURRENT_ITERATION, SERVICE_VERSIONS, CASE_EXEC, RECENT_GEN, type ICase, type CaseChange, type ExecCarrierType } from '@/data/mock';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { scenarioNav } from '@/context/scenarioNav';
@@ -378,7 +378,10 @@ function RealCasesPanel() {
   const [caseType, setCaseType] = useState('functional');
   const [priority, setPriority] = useState('P2');
   const [automation, setAutomation] = useState('automated');
+  const [filterDomain, setFilterDomain] = useState('');
+  const [filterFeature, setFilterFeature] = useState('');
   const [filterModule, setFilterModule] = useState('');
+  const [filterOperation, setFilterOperation] = useState('');
   const [filterPriority, setFilterPriority] = useState('');
   const [script, setScript] = useState('{"method":"GET","path":"/healthz"}');
   const [versionScript, setVersionScript] = useState('');
@@ -448,11 +451,27 @@ function RealCasesPanel() {
     try { return JSON.parse(script); } catch { throw new Error('脚本必须是合法 JSON'); }
   };
 
+  const includes = (value: string | undefined, filter: string) => !filter || (value ?? '').toLowerCase().includes(filter.toLowerCase());
   const visibleCases = cases.filter((item) => {
-    if (filterModule && item.module !== filterModule) return false;
+    if (!includes(item.business_domain, filterDomain)) return false;
+    if (!includes(item.feature, filterFeature)) return false;
+    if (!includes(item.module, filterModule)) return false;
+    if (!includes(item.operation, filterOperation)) return false;
     if (filterPriority && item.priority !== filterPriority) return false;
     return true;
   });
+  const groupedCases = (() => {
+    const groups = new Map<string, TestCase[]>();
+    visibleCases.forEach((item) => {
+      const key = [item.business_domain || '未分类业务域', item.feature || '未分类功能', item.module || 'unclassified', item.operation || '未分类操作'].join('||');
+      const list = groups.get(key) ?? [];
+      list.push(item);
+      groups.set(key, list);
+    });
+    return [...groups.entries()]
+      .sort(([a], [b]) => a.localeCompare(b, 'zh-CN'))
+      .map(([key, items]) => ({ key, parts: key.split('||'), items: items.sort((a, b) => a.title.localeCompare(b.title, 'zh-CN')) }));
+  })();
 
   if (!client) return (
     <Card title="真实用例控制" className="mb-5" extra={<span className="text-[11px] text-slate-400">原型模式</span>}>
@@ -496,12 +515,16 @@ function RealCasesPanel() {
         </div>
         <textarea value={script} onChange={(event) => setScript(event.target.value)} disabled={busy} rows={2} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" aria-label="用例脚本 JSON" />
         {message && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{message}</div>}
-                <div className="flex flex-wrap items-center gap-2">
-          <input value={filterModule} onChange={(event) => setFilterModule(event.target.value)} placeholder="按模块筛选" className="w-40 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+        <div className="flex flex-wrap items-center gap-2">
+          <input value={filterDomain} onChange={(event) => setFilterDomain(event.target.value)} placeholder="业务域" className="w-32 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+          <input value={filterFeature} onChange={(event) => setFilterFeature(event.target.value)} placeholder="功能" className="w-32 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+          <input value={filterModule} onChange={(event) => setFilterModule(event.target.value)} placeholder="模块" className="w-32 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+          <input value={filterOperation} onChange={(event) => setFilterOperation(event.target.value)} placeholder="操作 / 端点" className="w-48 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
           <select value={filterPriority} onChange={(event) => setFilterPriority(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
             <option value="">全部优先级</option><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option>
           </select>
-          <span className="text-[11px] text-slate-400">共 {visibleCases.length} / {cases.length} 条 · 分类维度：业务域 / 功能 / 模块 / 操作</span>
+          <button type="button" onClick={() => { setFilterDomain(''); setFilterFeature(''); setFilterModule(''); setFilterOperation(''); setFilterPriority(''); }} className="text-[11px] text-slate-500 hover:text-emerald-700">清空筛选</button>
+          <span className="text-[11px] text-slate-400">共 {visibleCases.length} / {cases.length} 条 · 默认按 业务域 → 功能 → 模块 → 操作 排序</span>
         </div>
         <div className="overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full text-xs">
@@ -515,7 +538,7 @@ function RealCasesPanel() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {visibleCases.map((item) => <tr key={item.id}>
+              {groupedCases.map((group) => <Fragment key={group.key}><tr className="bg-slate-50/80"><td colSpan={5} className="px-3 py-2 text-[11px] font-medium text-slate-600">{group.parts[0]} / {group.parts[1]} / <span className="font-mono">{group.parts[2]}</span> / {group.parts[3]} <span className="ml-2 text-slate-400">{group.items.length} 条</span></td></tr>{group.items.map((item) => <tr key={item.id}>
                 <td className="px-3 py-2 align-top">
                   <div className="font-mono text-[11px] text-slate-700">#{item.id} · {item.code}</div>
                   <div className="mt-1 text-[10px] leading-4 text-slate-500">
@@ -549,7 +572,7 @@ function RealCasesPanel() {
                     <button type="button" disabled={busy} onClick={() => void run(async () => { await client.deleteCase(item.id); setCases(await readCases()); })} className="rounded border border-red-200 px-2 py-1 text-[10px] text-red-600">删除</button>
                   </div>
                 </td>
-              </tr>)}
+              </tr>)}</Fragment>)}
             </tbody>
           </table>
           {visibleCases.length === 0 && <div className="px-3 py-5 text-center text-xs text-slate-400">当前筛选条件下没有真实用例</div>}
