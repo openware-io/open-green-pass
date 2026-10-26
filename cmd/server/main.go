@@ -124,6 +124,9 @@ func main() {
 	case "http":
 		runner = einfra.NewHTTPRunner(gen, os.Getenv("GP_EXECUTION_BEARER_TOKEN"))
 		log.Info("runner", "type", "http")
+	case "hybrid":
+		runner = einfra.NewHybridRunner(gen, os.Getenv("GP_EXECUTION_BEARER_TOKEN"), os.Getenv("GP_BROWSER_RUNNER_URL"))
+		log.Info("runner", "type", "hybrid")
 	case "k8s":
 		k8sRunner, err := einfra.NewK8sRunner(gen, einfra.K8sRunnerConfig{
 			Namespace: os.Getenv("GP_RUNNER_NS"),

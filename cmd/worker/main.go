@@ -85,6 +85,8 @@ func main() {
 		runner = gpRunner.NewScenarioRunner(gen, gpRunner.DefaultRegistry(), nil)
 	case "http":
 		runner = einfra.NewHTTPRunner(gen, os.Getenv("GP_EXECUTION_BEARER_TOKEN"))
+	case "hybrid":
+		runner = einfra.NewHybridRunner(gen, os.Getenv("GP_EXECUTION_BEARER_TOKEN"), os.Getenv("GP_BROWSER_RUNNER_URL"))
 	case "k8s":
 		kr, e := einfra.NewK8sRunner(gen, einfra.K8sRunnerConfig{Namespace: os.Getenv("GP_RUNNER_NS"), Image: os.Getenv("GP_RUNNER_IMAGE"), Timeout: 5 * time.Minute})
 		if e != nil {
