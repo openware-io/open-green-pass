@@ -146,3 +146,18 @@ security 用例按 DELETE /... 等操作分组
   339 module / 339 feature / 339 domain
   ```
 - 未分类 19 条保留空值并显示“未分类”。
+
+## 0.1.183 追加
+
+- 功能名从模块技术名映射为 QA 可读名称：
+  ```text
+  auth -> 登录认证
+  group -> 群组管理
+  security -> 安全治理
+  ```
+- 操作名改为：
+  ```text
+  查询安全治理 · GET /api/v1/admin/security/violations
+  创建/提交安全治理 · POST ...
+  ```
+- 下拉筛选和分组表头都使用可读名称，原始 module/path 仍保留用于追溯。
