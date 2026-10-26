@@ -417,6 +417,7 @@ function RealCasesPanel() {
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<{ caseID: number; items: CaseVersion[] }>();
   const [caseDetail, setCaseDetail] = useState<{ item: TestCase; versions: CaseVersion[] } | null>(null);
+  const [caseFormOpen, setCaseFormOpen] = useState(false);
   const [message, setMessage] = useState('');
 
   const readCases = useCallback(async (targetId = projectId): Promise<TestCase[]> => {
@@ -521,10 +522,10 @@ function RealCasesPanel() {
   );
 
   return (
-    <Card title="真实用例资产库" className="mb-5" extra={<span className="text-[11px] text-emerald-700">真实 API 已启用</span>}>
+    <Card title="真实用例资产库" className="mb-5" extra={<div className="flex items-center gap-2"><span className="text-[11px] text-emerald-700">真实 API 已启用</span><button type="button" onClick={() => setCaseFormOpen((current) => !current)} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-emerald-700">{caseFormOpen ? '收起新建' : '＋ 新建用例'}</button></div>}>
       <div className="p-5 space-y-4">
         <p className="text-[11px] text-slate-500">连接：{greenPassConnectionHint()}。本区仅使用 OpenAPI 定义的数值 ID；下方原型表格不会写入后端。</p>
-        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+        {caseFormOpen && <div className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50/30 p-4"><div className="flex items-center justify-between"><div className="text-xs font-semibold text-slate-700">新建真实用例</div><button type="button" onClick={() => setCaseFormOpen(false)} className="text-[11px] text-slate-500">收起</button></div>\n        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
           <div className="mb-2 text-[11px] font-medium text-slate-600">用例分类（QA 标准：业务域 → 功能 → 模块 → 操作）</div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <input value={businessDomain} onChange={(event) => setBusinessDomain(event.target.value)} placeholder="业务域，如 群组" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
@@ -573,7 +574,7 @@ function RealCasesPanel() {
           <input value={kind} onChange={(event) => setKind(event.target.value)} placeholder="场景族，如 api" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
           <button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(projectId); if (!Number.isSafeInteger(id) || id <= 0 || !code.trim() || !title.trim()) throw new Error('被测对象、编号、标题不能为空'); await client.createCase({ target_id: id, code: code.trim(), title: title.trim(), kind: kind.trim() || undefined, business_domain: businessDomain.trim(), feature: feature.trim(), module: moduleName.trim(), operation: operation.trim(), case_type: caseType, priority, automation_status: automation, requirement_ref: requirementRef.trim(), defect_ref: defectRef.trim(), review_status: reviewStatus, review_comment: reviewComment.trim(), script: buildScript() }); setCases(await readCases()); setCode(''); setTitle(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实用例</button>
         </div>
-        <textarea value={script} onChange={(event) => setScript(event.target.value)} disabled={busy} rows={2} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" aria-label="用例脚本 JSON" />
+        <textarea value={script} onChange={(event) => setScript(event.target.value)} disabled={busy} rows={2} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" aria-label="用例脚本 JSON" /></div>}
         {message && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{message}</div>}
         <div className="flex flex-wrap items-center gap-2">
           <select value={filterDomain} onChange={(event) => setFilterDomain(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
@@ -642,7 +643,7 @@ function RealCasesPanel() {
                       const versions = await client.caseHistory(item.id);
                       setCaseDetail({ item, versions });
                     })} className="rounded border border-slate-200 px-2 py-1 text-[10px]">查看</button>
-                    <button type="button" disabled={busy} onClick={() => void run(async () => {
+                    <details className="relative"><summary className="cursor-pointer list-none rounded border border-slate-200 px-2 py-1 text-[10px] text-slate-600">更多</summary><div className="absolute right-0 z-20 mt-1 w-36 space-y-1 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"><button type="button" disabled={busy} onClick={() => void run(async () => {
                       const domain = window.prompt('业务域', item.business_domain || '');
                       const feat = window.prompt('功能', item.feature || '');
                       const mod = window.prompt('模块', item.module || '');
@@ -654,7 +655,7 @@ function RealCasesPanel() {
                     <button type="button" disabled={busy} onClick={() => void run(async () => { const value = versionScript.trim(); if (!value) throw new Error('先填写新版本脚本'); const parsed = JSON.parse(value) as unknown; await client.createCaseVersion(item.id, { script: parsed }); setVersionScript(''); setCases(await readCases()); })} className="rounded border border-slate-200 px-2 py-1 text-[10px]">提交新版本</button>
                     <button type="button" disabled={busy} onClick={() => void run(async () => { const items = await client.caseHistory(item.id); setHistory({ caseID: item.id, items }); })} className="rounded border border-slate-200 px-2 py-1 text-[10px]">历史</button>
                     <button type="button" disabled={busy} onClick={() => { const raw = window.prompt(`回退 #${item.id} 到哪个版本？`, String(item.current_version)); const version = Number(raw); if (raw && Number.isSafeInteger(version) && version > 0) void run(async () => { await client.rollbackCase(item.id, version); setCases(await readCases()); }); }} className="rounded border border-amber-200 px-2 py-1 text-[10px] text-amber-700">回退</button>
-                    <button type="button" disabled={busy} onClick={() => void run(async () => { await client.deleteCase(item.id); setCases(await readCases()); })} className="rounded border border-red-200 px-2 py-1 text-[10px] text-red-600">删除</button>
+                    <button type="button" disabled={busy} onClick={() => void run(async () => { await client.deleteCase(item.id); setCases(await readCases()); })} className="rounded border border-red-200 px-2 py-1 text-[10px] text-red-600">删除</button></div></details>
                   </div>
                 </td>
               </tr>)}</Fragment>)}
