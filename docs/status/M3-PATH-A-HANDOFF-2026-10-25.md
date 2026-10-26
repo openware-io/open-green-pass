@@ -5,8 +5,8 @@
 ```text
 version: 0.1.174-SNAPSHOT
 schema: 48 clean
-M3 required=417 mapped=341 passed=262 failed=71 blocked=8 planned=100
-risk: design_covered=317 passed=247 gate_passed=false
+M3 required=417 mapped=347 passed=268 failed=71 blocked=8 planned=94
+risk: design_covered=323 passed=253 gate_passed=false
 open_p0=1 open_p1=3
 ```
 
@@ -19,7 +19,7 @@ security     51/56   91.1%
 clientRelease 43/45  95.6%
 ```
 
-clientRelease 仅剩 2 个 tenant_isolation。
+clientRelease 仅剩 2 个 tenant_isolation；media 已用 100x100 PNG 映射 6 个 Cell。
 
 ## 目标侧阻塞
 
@@ -38,25 +38,30 @@ POST /api/v1/admin/open-platform/applications
 提供 POST 创建应用路由，或明确该能力不在当前版本范围并给出排除决定。
 ```
 
-### 2. media 校验链路 rejected
+### 2. media：1x1 PNG 被拒绝，但 100x100 正常
 
-使用合法 1x1 PNG：
+实测：
 
 ```text
-create upload-session -> 200
-PUT object             -> 200
-complete               -> 200
-GET /media/{id}        -> status=rejected
-GET /media/{id}/access -> 409
+1x1 PNG:
+create session -> 200
+PUT object     -> 200
+complete       -> 200
+GET media      -> status=rejected
+GET access     -> 409
+
+100x100 PNG:
+create session -> 200
+PUT object     -> 200
+complete       -> 200
+GET media      -> status=active
+GET access     -> 200
 ```
 
-说明媒体校验/异步处理链路不可用，不是缺 fixture。
+结论：media 链路可用，最小尺寸 1x1 不满足校验。  
+已按 100x100 PNG 建立 fixture，并映射 6 个 media Cell。
 
-修复要求：
-
-```text
-确认 media 校验器/处理器为何 rejected，并让合法 PNG 最终变为 active；
-否则 media 41 个 Cell 只能 blocked。
+剩余 media 缺口是 multipart/large-file 和状态维度，不再把整个 media 标为 blocker。
 ```
 
 ### 3. Open P0/P1

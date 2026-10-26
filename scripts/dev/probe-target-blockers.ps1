@@ -53,9 +53,15 @@ $report.openPlatform = Invoke-Target -Method POST -Path "/api/v1/admin/open-plat
     -Body '{"name":"gp-e2e-probe"}' -IdempotencyKey ([guid]::NewGuid().ToString())
 
 # Blocker 2: media validation rejects a valid 1x1 PNG.
-$png = [Convert]::FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z3ZkAAAAASUVORK5CYII=")
+Add-Type -AssemblyName System.Drawing
+$bitmap = [Drawing.Bitmap]::new(100, 100)
+$graphics = [Drawing.Graphics]::FromImage($bitmap)
+$graphics.Clear([Drawing.Color]::FromArgb(255, 20, 120, 220))
 $pngPath = Join-Path ([IO.Path]::GetTempPath()) ("gp-probe-" + [guid]::NewGuid().ToString() + ".png")
-[IO.File]::WriteAllBytes($pngPath, $png)
+$bitmap.Save($pngPath, [Drawing.Imaging.ImageFormat]::Png)
+$graphics.Dispose()
+$bitmap.Dispose()
+$png = [IO.File]::ReadAllBytes($pngPath)
 $sha = [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($png)).Replace("-", "").ToLowerInvariant()
 $mediaBody = @{
     scope = "avatar"; mediaKind = "image"; fileName = "gp-probe.png";
@@ -78,7 +84,7 @@ if ($session.Status -eq 200) {
 
 # Blocker 3: client release draft creation returns 500.
 $releaseBody = @{
-    platform = "android"; channel = "stable"; releaseVersion = "9.9.9"; buildNumber = 999;
+    platform = "android"; channel = "stable"; releaseVersion = "9.9.10"; buildNumber = 1000;
     releaseNotes = "gp blocker probe"; storeUrl = "https://play.google.com/store/apps/details?id=com.gp.probe";
     mandatory = $false; reason = "gp blocker probe";
     compatibility = @{ protocolVersion = "v1"; minimumServerCapabilityVersion = 1 };
