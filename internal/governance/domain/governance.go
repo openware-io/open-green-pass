@@ -284,6 +284,7 @@ type Case struct {
 	ID             int64
 	TeamID         int64
 	TargetID       int64  // 归属被测对象节点（服务/模块）
+	RepoID         *int64 // 归属代码仓库；可为空
 	Code           string // 用例编号（按树命名空间稳定，如 im-saas-gw-001）
 	Title          string
 	Kind           string // 场景族：api/web/ui/contract/perf/mobile/weaknet/ai...

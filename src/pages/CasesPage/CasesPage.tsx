@@ -68,7 +68,7 @@ function formatOperation(operation: string): string {
   const resource = Object.entries(MODULE_LABELS).find(([key]) => path.toLowerCase().includes(key.toLowerCase()))?.[1];
   return resource ? `${action}${resource} · ${method} ${path}` : `${action} · ${method} ${path}`;
 }
-type CaseRow = TestCase & { project_name?: string };
+type CaseRow = TestCase & { project_name?: string; repo_name?: string };
 
 export default function CasesPage() {
   const navigate = useNavigate();
@@ -388,10 +388,12 @@ function RealCasesPanel() {
   const catalog = useObjectCatalog();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTargetID = searchParams.get('target_id') ?? '';
-  const { enabled, loaded, projects, projectId, selectProject } = catalog;
+  const { enabled, loaded, projects, projectId, repos, selectProject } = catalog;
   const requestContext = useRef<{ key: string; pendingProject: string | null }>({ key: '', pendingProject: null });
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [libraryProject, setLibraryProject] = useState('');
+  const [filterRepo, setFilterRepo] = useState('');
+  const [repoId, setRepoId] = useState('');
   const [requirementRef, setRequirementRef] = useState('');
   const [defectRef, setDefectRef] = useState('');
   const [reviewStatus, setReviewStatus] = useState('draft');
@@ -425,9 +427,15 @@ function RealCasesPanel() {
 
   const readAllCases = useCallback(async (): Promise<CaseRow[]> => {
     if (!client || projects.length === 0) return [];
+    const repoLists = await Promise.all(projects.map((project) => client.listProjectRepositories(project.id).catch(() => [])));
+    const repoNames = new Map<number, string>();
+    repoLists.flat().forEach((repo) => {
+      const item = repo as { name?: string; url?: string };
+      repoNames.set(repo.id, item.name || item.url || `repo#${repo.id}`);
+    });
     const groups = await Promise.all(projects.map(async (project) => {
       const rows = await client.listCases({ target_id: project.id });
-      return rows.map((row) => ({ ...row, project_name: project.name }));
+      return rows.map((row) => ({ ...row, project_name: project.name, repo_name: row.repo_id ? repoNames.get(row.repo_id) : undefined }));
     }));
     return groups.flat();
   }, [client, projects]);
@@ -506,12 +514,12 @@ function RealCasesPanel() {
   const taxonomyOptions = useMemo(() => {
     const values = (field: 'business_domain' | 'feature' | 'module' | 'operation') =>
       [...new Set(cases.map((item) => item[field]).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b, 'zh-CN'));
-    return { domains: values('business_domain'), features: values('feature'), modules: values('module'), operations: values('operation') };
+    return { domains: values('business_domain'), features: values('feature'), modules: values('module'), operations: values('operation'), repositories: [...new Set(cases.map((item) => item.repo_name).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b, 'zh-CN')) };
   }, [cases]);
   const groupedCases = (() => {
     const groups = new Map<string, TestCase[]>();
     visibleCases.forEach((item) => {
-      const key = [item.project_name || '未分类项目', item.business_domain || '未分类业务域', item.feature || '未分类功能', item.module || 'unclassified', item.operation || '未分类操作'].join('||');
+      const key = [item.project_name || '未分类项目', item.repo_name || '未绑定仓库', item.business_domain || '未分类业务域', item.feature || '未分类功能', item.module || 'unclassified', item.operation || '未分类操作'].join('||');
       const list = groups.get(key) ?? [];
       list.push(item);
       groups.set(key, list);
@@ -572,14 +580,17 @@ function RealCasesPanel() {
           </div>
           <textarea value={expectedResult} onChange={(event) => setExpectedResult(event.target.value)} placeholder="预期结果，如：返回 200，列表包含新群组" disabled={busy} rows={2} className="mt-2 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
           <select value={projectId} disabled={busy || !loaded} onChange={(event) => changeTarget(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs">
             <option value="">选择真实被测对象</option>{projects.map((target) => <option key={target.id} value={target.id}>{target.name} · #{target.id}</option>)}
+          </select>
+          <select value={repoId} onChange={(event) => setRepoId(event.target.value)} disabled={busy || !repos.length} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs">
+            <option value="">未绑定仓库</option>{repos.map((repo) => <option key={repo.id} value={repo.id}>{repo.url || `repo#${repo.id}`}</option>)}
           </select>
           <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="用例编号" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
           <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="标题" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
           <input value={kind} onChange={(event) => setKind(event.target.value)} placeholder="场景族，如 api" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
-          <button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(projectId); if (!Number.isSafeInteger(id) || id <= 0 || !code.trim() || !title.trim()) throw new Error('被测对象、编号、标题不能为空'); await client.createCase({ target_id: id, code: code.trim(), title: title.trim(), kind: kind.trim() || undefined, business_domain: businessDomain.trim(), feature: feature.trim(), module: moduleName.trim(), operation: operation.trim(), case_type: caseType, priority, automation_status: automation, requirement_ref: requirementRef.trim(), defect_ref: defectRef.trim(), review_status: reviewStatus, review_comment: reviewComment.trim(), script: buildScript() }); setCases(await readAllCases()); setCode(''); setTitle(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实用例</button>
+          <button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(projectId); if (!Number.isSafeInteger(id) || id <= 0 || !code.trim() || !title.trim()) throw new Error('被测对象、编号、标题不能为空'); await client.createCase({ target_id: id, code: code.trim(), title: title.trim(), kind: kind.trim() || undefined, business_domain: businessDomain.trim(), feature: feature.trim(), module: moduleName.trim(), operation: operation.trim(), case_type: caseType, priority, automation_status: automation, repo_id: repoId ? Number(repoId) : undefined, requirement_ref: requirementRef.trim(), defect_ref: defectRef.trim(), review_status: reviewStatus, review_comment: reviewComment.trim(), script: buildScript() }); setCases(await readAllCases()); setCode(''); setTitle(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实用例</button>
         </div>
         <textarea value={script} onChange={(event) => setScript(event.target.value)} disabled={busy} rows={2} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" aria-label="用例脚本 JSON" /></div>}
         {message && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{message}</div>}
@@ -587,7 +598,10 @@ function RealCasesPanel() {
 '          <select value={libraryProject} onChange={(event) => setLibraryProject(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
             <option value="">全部项目</option>{projects.map((project) => <option key={project.id} value={project.name}>{project.name}</option>)}
           </select>
-'          <select value={filterDomain} onChange={(event) => setFilterDomain(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
+          <select value={filterRepo} onChange={(event) => setFilterRepo(event.target.value)} className="max-w-[220px] rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
+            <option value="">全部仓库</option>{taxonomyOptions.repositories.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          <select value={filterDomain} onChange={(event) => setFilterDomain(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
             <option value="">全部业务域</option>{taxonomyOptions.domains.map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
           <select value={filterFeature} onChange={(event) => setFilterFeature(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
@@ -620,7 +634,7 @@ function RealCasesPanel() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {groupedCases.map((group) => <Fragment key={group.key}><tr className="bg-slate-50/80"><td colSpan={5} className="px-3 py-2 text-[11px] font-medium text-slate-600">{group.parts[0]} / {group.parts[1]} / {formatFeature(group.parts[2])} / <span className="font-mono">{group.parts[3]}</span> / {formatOperation(group.parts[4])} <span className="ml-2 text-slate-400">{group.items.length} 条</span></td></tr>{group.items.map((item) => <tr key={item.id}>
+              {groupedCases.map((group) => <Fragment key={group.key}><tr className="bg-slate-50/80"><td colSpan={5} className="px-3 py-2 text-[11px] font-medium text-slate-600">{group.parts[0]} / {group.parts[1]} / {group.parts[2]} / {formatFeature(group.parts[3])} / <span className="font-mono">{group.parts[4]}</span> / {formatOperation(group.parts[5])} <span className="ml-2 text-slate-400">{group.items.length} 条</span></td></tr>{group.items.map((item) => <tr key={item.id}>
                 <td className="px-3 py-2 align-top">
                   <div className="font-mono text-[11px] text-slate-700">#{item.id} · {item.code}</div>
                   <div className="mt-1 text-[10px] leading-4 text-slate-500">
