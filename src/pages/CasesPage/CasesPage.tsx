@@ -408,6 +408,7 @@ function RealCasesPanel() {
   const [versionScript, setVersionScript] = useState('');
   const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<{ caseID: number; items: CaseVersion[] }>();
+  const [caseDetail, setCaseDetail] = useState<{ item: TestCase; versions: CaseVersion[] } | null>(null);
   const [message, setMessage] = useState('');
 
   const readCases = useCallback(async (targetId = projectId): Promise<TestCase[]> => {
@@ -592,6 +593,10 @@ function RealCasesPanel() {
                 <td className="px-3 py-2 align-top">
                   <div className="flex flex-wrap gap-1.5">
                     <button type="button" disabled={busy} onClick={() => void run(async () => {
+                      const versions = await client.caseHistory(item.id);
+                      setCaseDetail({ item, versions });
+                    })} className="rounded border border-slate-200 px-2 py-1 text-[10px]">查看</button>
+                    <button type="button" disabled={busy} onClick={() => void run(async () => {
                       const domain = window.prompt('业务域', item.business_domain || '');
                       const feat = window.prompt('功能', item.feature || '');
                       const mod = window.prompt('模块', item.module || '');
@@ -610,7 +615,48 @@ function RealCasesPanel() {
             </tbody>
           </table>
           {visibleCases.length === 0 && <div className="px-3 py-5 text-center text-xs text-slate-400">当前筛选条件下没有真实用例</div>}
-        </div>        <input value={versionScript} onChange={(event) => setVersionScript(event.target.value)} placeholder="新版本脚本 JSON（选中行后提交新版本）" disabled={busy} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" />
+        </div>
+        {caseDetail && <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-6" onClick={() => setCaseDetail(null)}>
+          <div className="mt-8 w-full max-w-3xl rounded-xl border border-slate-200 bg-white shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
+              <div>
+                <div className="font-mono text-[11px] text-slate-500">#{caseDetail.item.id} · {caseDetail.item.code}</div>
+                <div className="mt-1 text-sm font-semibold text-slate-800">{caseDetail.item.title}</div>
+                <div className="mt-1 text-[11px] text-slate-500">{caseDetail.item.business_domain || '未分类业务域'} / {formatFeature(caseDetail.item.feature || '')} / {caseDetail.item.module || 'unclassified'} / {formatOperation(caseDetail.item.operation || '')}</div>
+              </div>
+              <button type="button" onClick={() => setCaseDetail(null)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500">关闭</button>
+            </div>
+            <div className="grid gap-4 px-5 py-4 md:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
+                <div className="mb-2 font-medium text-slate-600">用例属性</div>
+                <div className="space-y-1 text-slate-600">
+                  <div>类型：{caseDetail.item.case_type || 'functional'}</div>
+                  <div>优先级：{caseDetail.item.priority || 'P2'}</div>
+                  <div>自动化：{caseDetail.item.automation_status === 'manual' ? '手工' : '自动化'}</div>
+                  <div>当前版本：v{caseDetail.item.current_version}</div>
+                  <div>状态：{caseDetail.item.status}</div>
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
+                <div className="mb-2 font-medium text-slate-600">分类路径</div>
+                <div className="space-y-1 text-slate-600">
+                  <div>业务域：{caseDetail.item.business_domain || '未分类'}</div>
+                  <div>功能：{formatFeature(caseDetail.item.feature || '') || '未分类'}</div>
+                  <div>模块：{caseDetail.item.module || '未分类'}</div>
+                  <div>操作：{formatOperation(caseDetail.item.operation || '')}</div>
+                </div>
+              </div>
+            </div>
+            <div className="px-5 pb-4">
+              <div className="mb-2 text-xs font-medium text-slate-600">当前版本脚本 / 断言</div>
+              <pre className="max-h-72 overflow-auto rounded-lg bg-slate-900 p-3 font-mono text-[11px] leading-5 text-emerald-200">{JSON.stringify([...caseDetail.versions].sort((a, b) => b.version - a.version)[0]?.script ?? {}, null, 2)}</pre>
+              <div className="mt-3 space-y-1 text-[11px] text-slate-500">
+                {[...caseDetail.versions].sort((a, b) => b.version - a.version).map((version) => <div key={version.id} className="flex gap-2"><span className="font-mono">v{version.version}</span><span>{version.change_type}</span><span>{version.created_at}</span></div>)}
+              </div>
+            </div>
+          </div>
+        </div>}
+        <input value={versionScript} onChange={(event) => setVersionScript(event.target.value)} placeholder="新版本脚本 JSON（选中行后提交新版本）" disabled={busy} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" />
         {history && <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><div className="mb-2 text-xs font-medium text-slate-600">用例 #{history.caseID} 版本历史</div><div className="space-y-1">{history.items.map((item) => <div key={item.id} className="flex flex-wrap gap-2 text-[11px] text-slate-500"><span className="font-mono">v{item.version}</span><span>{item.change_type}</span><span>{item.created_at}</span></div>)}</div></div>}
       </div>
     </Card>
