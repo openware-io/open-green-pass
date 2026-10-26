@@ -75,6 +75,12 @@ function formatCaseTitle(title: string, module: string): string {
   const detail = tokens.slice(1).flatMap((token) => token.toLowerCase().split('-')).map((token) => CASE_TITLE_TOKENS[token] ?? token).join(' · ');
   return detail ? `${moduleLabel} · ${detail}` : `${moduleLabel} · ${tokens[0]}`;
 }
+
+const CARRIER_LABELS: Record<string, string> = { api: 'HTTP', web: '浏览器', ui: '浏览器', mobile: '真机', app: '真机', contract: '契约', perf: '压测' };
+
+function formatCarrier(kind: string): string {
+  return CARRIER_LABELS[kind] ?? kind ?? '未标注';
+}
 function formatOperation(operation: string): string {
   if (!operation) return '未分类操作';
   const match = operation.match(/^(GET|POST|PUT|PATCH|DELETE)\s+(\S+)/);
@@ -538,7 +544,7 @@ function RealCasesPanel() {
     return { domains: values('business_domain'), features: values('feature'), modules: values('module'), operations: values('operation'), repositories: [...new Set(cases.map((item) => item.repo_name).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b, 'zh-CN')) };
   }, [cases]);
   const groupedCases = (() => {
-    const groups = new Map<string, TestCase[]>();
+    const groups = new Map<string, CaseRow[]>();
     visibleCases.forEach((item) => {
       const key = [item.project_name || '未分类项目', item.repo_name || '未绑定仓库', item.business_domain || '未分类业务域', item.feature || '未分类功能', item.module || 'unclassified', item.operation || '未分类操作'].join('||');
       const list = groups.get(key) ?? [];
@@ -649,13 +655,16 @@ function RealCasesPanel() {
               <tr>
                 <th className="px-3 py-2">用例 / 分类</th>
                 <th className="px-3 py-2">标题</th>
+                <th className="px-3 py-2">执行载体</th>
+                <th className="px-3 py-2">被测对象 / 上游源</th>
                 <th className="px-3 py-2">类型 / 优先级</th>
+                <th className="px-3 py-2">断言强度 / 变异分</th>
                 <th className="px-3 py-2">版本 / 状态</th>
                 <th className="px-3 py-2">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {groupedCases.map((group) => <Fragment key={group.key}><tr className="bg-slate-50/80"><td colSpan={5} className="px-3 py-2 text-[11px] font-medium text-slate-600">{group.parts[0]} / {group.parts[1]} / {group.parts[2]} / {formatFeature(group.parts[3])} / <span className="font-mono">{group.parts[4]}</span> / {formatOperation(group.parts[5])} <span className="ml-2 text-slate-400">{group.items.length} 条</span></td></tr>{group.items.map((item) => <tr key={item.id}>
+              {groupedCases.map((group) => <Fragment key={group.key}><tr className="bg-slate-50/80"><td colSpan={8} className="px-3 py-2 text-[11px] font-medium text-slate-600">{group.parts[0]} / {group.parts[1]} / {group.parts[2]} / {formatFeature(group.parts[3])} / <span className="font-mono">{group.parts[4]}</span> / {formatOperation(group.parts[5])} <span className="ml-2 text-slate-400">{group.items.length} 条</span></td></tr>{group.items.map((item) => <tr key={item.id}>
                 <td className="px-3 py-2 align-top">
                   <div className="font-mono text-[11px] text-slate-700">#{item.id} · {item.code}</div>
                   <div className="mt-1 text-[10px] leading-4 text-slate-500">
@@ -664,6 +673,8 @@ function RealCasesPanel() {
                   </div>
                 </td>
                 <td className="px-3 py-2 align-top text-slate-700">{formatCaseTitle(item.title, item.module || '')}</td>
+                <td className="px-3 py-2 align-top"><span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{formatCarrier(item.kind)}</span></td>
+                <td className="px-3 py-2 align-top"><div className="text-slate-700">{item.project_name || '—'}</div><div className="mt-0.5 max-w-[180px] truncate font-mono text-[10px] text-slate-400">{item.repo_name || '未绑定仓库'}</div></td>
                 <td className="px-3 py-2 align-top">
                   <div className="flex flex-wrap gap-1">
                     <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{item.case_type || 'functional'}</span>
@@ -671,6 +682,7 @@ function RealCasesPanel() {
                     <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700">{item.automation_status === 'manual' ? '手工' : '自动化'}</span>
                   </div>
                 </td>
+                <td className="px-3 py-2 align-top"><div className="text-slate-600">—</div><div className="text-[10px] text-slate-400">未采集</div></td>
                 <td className="px-3 py-2 align-top"><div>v{item.current_version}</div><div className="text-[10px] text-slate-500">{item.status}</div></td>
                 <td className="px-3 py-2 align-top">
                   <div className="flex flex-wrap gap-1.5">
