@@ -460,6 +460,11 @@ function RealCasesPanel() {
     if (filterPriority && item.priority !== filterPriority) return false;
     return true;
   });
+  const taxonomyOptions = useMemo(() => {
+    const values = (field: 'business_domain' | 'feature' | 'module' | 'operation') =>
+      [...new Set(cases.map((item) => item[field]).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+    return { domains: values('business_domain'), features: values('feature'), modules: values('module'), operations: values('operation') };
+  }, [cases]);
   const groupedCases = (() => {
     const groups = new Map<string, TestCase[]>();
     visibleCases.forEach((item) => {
@@ -516,10 +521,18 @@ function RealCasesPanel() {
         <textarea value={script} onChange={(event) => setScript(event.target.value)} disabled={busy} rows={2} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" aria-label="用例脚本 JSON" />
         {message && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{message}</div>}
         <div className="flex flex-wrap items-center gap-2">
-          <input value={filterDomain} onChange={(event) => setFilterDomain(event.target.value)} placeholder="业务域" className="w-32 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
-          <input value={filterFeature} onChange={(event) => setFilterFeature(event.target.value)} placeholder="功能" className="w-32 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
-          <input value={filterModule} onChange={(event) => setFilterModule(event.target.value)} placeholder="模块" className="w-32 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
-          <input value={filterOperation} onChange={(event) => setFilterOperation(event.target.value)} placeholder="操作 / 端点" className="w-48 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs" />
+          <select value={filterDomain} onChange={(event) => setFilterDomain(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
+            <option value="">全部业务域</option>{taxonomyOptions.domains.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          <select value={filterFeature} onChange={(event) => setFilterFeature(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
+            <option value="">全部功能</option>{taxonomyOptions.features.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          <select value={filterModule} onChange={(event) => setFilterModule(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
+            <option value="">全部模块</option>{taxonomyOptions.modules.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          <select value={filterOperation} onChange={(event) => setFilterOperation(event.target.value)} className="max-w-[280px] rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
+            <option value="">全部操作 / 端点</option>{taxonomyOptions.operations.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
           <select value={filterPriority} onChange={(event) => setFilterPriority(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
             <option value="">全部优先级</option><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option>
           </select>
