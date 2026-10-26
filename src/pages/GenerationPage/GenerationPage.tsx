@@ -1065,8 +1065,8 @@ function GenerationPageContent() {
         </div>
       </Card>
 
-      {/* 上游源适配器明细（随当前被测对象联动） */}
-      <div className="card bg-white rounded-xl border border-slate-200 overflow-hidden">
+      {/* 上游源适配器明细（仅原型模式；真实模式由生成任务源码证据替代） */}
+      <div className={realClient ? 'hidden' : 'card bg-white rounded-xl border border-slate-200 overflow-hidden'}>
         <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
             <h2 className="font-semibold text-slate-700 text-sm">上游源适配器 · 明细</h2>
