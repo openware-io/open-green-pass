@@ -525,7 +525,8 @@ function RealCasesPanel() {
     <Card title="真实用例资产库" className="mb-5" extra={<div className="flex items-center gap-2"><span className="text-[11px] text-emerald-700">真实 API 已启用</span><button type="button" onClick={() => setCaseFormOpen((current) => !current)} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-emerald-700">{caseFormOpen ? '收起新建' : '＋ 新建用例'}</button></div>}>
       <div className="p-5 space-y-4">
         <p className="text-[11px] text-slate-500">连接：{greenPassConnectionHint()}。本区仅使用 OpenAPI 定义的数值 ID；下方原型表格不会写入后端。</p>
-        {caseFormOpen && <div className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50/30 p-4"><div className="flex items-center justify-between"><div className="text-xs font-semibold text-slate-700">新建真实用例</div><button type="button" onClick={() => setCaseFormOpen(false)} className="text-[11px] text-slate-500">收起</button></div>\n        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+        {caseFormOpen && <div className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50/30 p-4"><div className="flex items-center justify-between"><div className="text-xs font-semibold text-slate-700">新建真实用例</div><button type="button" onClick={() => setCaseFormOpen(false)} className="text-[11px] text-slate-500">收起</button></div>
+        <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
           <div className="mb-2 text-[11px] font-medium text-slate-600">用例分类（QA 标准：业务域 → 功能 → 模块 → 操作）</div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <input value={businessDomain} onChange={(event) => setBusinessDomain(event.target.value)} placeholder="业务域，如 群组" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
