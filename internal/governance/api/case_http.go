@@ -72,22 +72,24 @@ func (h *caseHandler) authorizeCase(w http.ResponseWriter, r *http.Request, acti
 
 // createCaseRequest 新建用例请求。
 type createCaseRequest struct {
-	TargetID       int64           `json:"target_id"`
-	Code           string          `json:"code"`
-	Title          string          `json:"title"`
-	Kind           string          `json:"kind,omitempty"`
-	BusinessDomain string          `json:"business_domain,omitempty"`
-	Feature        string          `json:"feature,omitempty"`
-	Module         string          `json:"module,omitempty"`
-	Operation      string          `json:"operation,omitempty"`
-	CaseType       string          `json:"case_type,omitempty"`
-	Priority       string          `json:"priority,omitempty"`
-	Automation     string          `json:"automation_status,omitempty"`
-	RequirementRef string          `json:"requirement_ref,omitempty"`
-	DefectRef      string          `json:"defect_ref,omitempty"`
-	ReviewStatus   string          `json:"review_status,omitempty"`
-	ReviewComment  string          `json:"review_comment,omitempty"`
-	Script         json.RawMessage `json:"script,omitempty"`
+	TargetID         int64           `json:"target_id"`
+	Code             string          `json:"code"`
+	Title            string          `json:"title"`
+	Kind             string          `json:"kind,omitempty"`
+	BusinessDomain   string          `json:"business_domain,omitempty"`
+	Feature          string          `json:"feature,omitempty"`
+	Module           string          `json:"module,omitempty"`
+	Operation        string          `json:"operation,omitempty"`
+	CaseType         string          `json:"case_type,omitempty"`
+	Priority         string          `json:"priority,omitempty"`
+	Automation       string          `json:"automation_status,omitempty"`
+	RepoID           *int64          `json:"repo_id,omitempty"`
+	ExecutionSurface string          `json:"execution_surface,omitempty"`
+	RequirementRef   string          `json:"requirement_ref,omitempty"`
+	DefectRef        string          `json:"defect_ref,omitempty"`
+	ReviewStatus     string          `json:"review_status,omitempty"`
+	ReviewComment    string          `json:"review_comment,omitempty"`
+	Script           json.RawMessage `json:"script,omitempty"`
 }
 
 func (h *caseHandler) createCase(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +108,7 @@ func (h *caseHandler) createCase(w http.ResponseWriter, r *http.Request) {
 	cc := domain.Case{
 		TargetID: req.TargetID, Code: req.Code, Title: req.Title, Kind: req.Kind,
 		BusinessDomain: req.BusinessDomain, Feature: req.Feature, Module: req.Module,
-		Operation: req.Operation, CaseType: req.CaseType, Priority: req.Priority, Automation: req.Automation,
+		Operation: req.Operation, CaseType: req.CaseType, Priority: req.Priority, Automation: req.Automation, RepoID: req.RepoID, ExecutionSurface: req.ExecutionSurface,
 		RequirementRef: req.RequirementRef, DefectRef: req.DefectRef, ReviewStatus: req.ReviewStatus, ReviewComment: req.ReviewComment,
 	}
 	created, err := h.svc.CreateCase(r.Context(), cc, req.Script)
@@ -119,17 +121,19 @@ func (h *caseHandler) createCase(w http.ResponseWriter, r *http.Request) {
 
 // updateMetadataRequest edits QA taxonomy without creating a script version.
 type updateMetadataRequest struct {
-	BusinessDomain string `json:"business_domain"`
-	Feature        string `json:"feature"`
-	Module         string `json:"module"`
-	Operation      string `json:"operation"`
-	CaseType       string `json:"case_type"`
-	Priority       string `json:"priority"`
-	Automation     string `json:"automation_status"`
-	RequirementRef string `json:"requirement_ref"`
-	DefectRef      string `json:"defect_ref"`
-	ReviewStatus   string `json:"review_status"`
-	ReviewComment  string `json:"review_comment"`
+	BusinessDomain   string `json:"business_domain"`
+	Feature          string `json:"feature"`
+	Module           string `json:"module"`
+	Operation        string `json:"operation"`
+	CaseType         string `json:"case_type"`
+	Priority         string `json:"priority"`
+	Automation       string `json:"automation_status"`
+	RepoID           *int64 `json:"repo_id,omitempty"`
+	ExecutionSurface string `json:"execution_surface,omitempty"`
+	RequirementRef   string `json:"requirement_ref"`
+	DefectRef        string `json:"defect_ref"`
+	ReviewStatus     string `json:"review_status"`
+	ReviewComment    string `json:"review_comment"`
 }
 
 func (h *caseHandler) updateMetadata(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +152,7 @@ func (h *caseHandler) updateMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 	c, err := h.svc.UpdateCaseMetadata(r.Context(), id, domain.Case{
 		BusinessDomain: req.BusinessDomain, Feature: req.Feature, Module: req.Module,
-		Operation: req.Operation, CaseType: req.CaseType, Priority: req.Priority, Automation: req.Automation,
+		Operation: req.Operation, CaseType: req.CaseType, Priority: req.Priority, Automation: req.Automation, RepoID: req.RepoID, ExecutionSurface: req.ExecutionSurface,
 		RequirementRef: req.RequirementRef, DefectRef: req.DefectRef, ReviewStatus: req.ReviewStatus, ReviewComment: req.ReviewComment,
 	})
 	if err != nil {
