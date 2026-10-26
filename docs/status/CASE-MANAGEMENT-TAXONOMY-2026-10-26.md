@@ -172,3 +172,21 @@ security 用例按 DELETE /... 等操作分组
 - 版本历史
 
 验证：UI bundle 包含“用例属性”；0.1.184-SNAPSHOT；arbiter 26/26 PASS。
+
+## 0.1.185 追加
+
+用例创建和详情增加 QA 规格字段：
+
+```text
+preconditions 前置条件
+steps         测试步骤（每行一步）
+expected_result 预期结果
+```
+
+字段写入当前版本脚本 JSON，不新增数据库列；详情抽屉显示：
+
+```text
+前置条件 / 测试步骤 / 预期结果
+```
+
+验证：UI bundle 包含“前置条件”“测试步骤”；0.1.185-SNAPSHOT；arbiter 26/26 PASS。
