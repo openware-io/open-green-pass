@@ -250,10 +250,6 @@ function ExecPageContent({ targets, targetID, requestedCaseIDs, onTargetChange }
       toast.error('请填写有效的被测对象、场景 ID 与目标版本');
       return;
     }
-    if (requiresBrowserRunner) {
-      toast.error('Web UI 用例需要受管浏览器执行器', { description: '环境信息可先登记；当前 HTTP 执行器不会把 pc-admin 伪装成 UI 测试。' });
-      return;
-    }
     if (casesLoading || casesError || selectedCaseIDs.length === 0 || selectedCaseIDs.some((id) => !runnableCases.some((testCase) => testCase.id === id))) {
       toast.error('请先选择当前项目要执行的用例', { description: '空选择不会自动扩大为全量执行。' });
       return;
@@ -395,7 +391,7 @@ function ExecPageContent({ targets, targetID, requestedCaseIDs, onTargetChange }
                 <div className="px-4 pb-4">
                 <div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="text-sm font-semibold text-slate-700">执行环境需求清单</h3><p className="mt-1 text-[11px] leading-5 text-slate-500">系统根据当前服务的技术画像生成待确认项。AI 只说明需要什么及依据，不猜测真实地址、账号或数据。</p></div><span className="rounded-full bg-white px-2 py-1 text-[10px] font-medium text-emerald-700">{activeService ? `${activeService.name} · ${activeService.kind}` : '请选择目录服务以获得更精确建议'}</span></div>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">{environmentRequirements.map((requirement) => <div key={requirement.key} className="rounded-lg border border-emerald-100 bg-white p-3"><div className="flex items-center gap-2 text-xs font-medium text-slate-700">{requirement.label}{requirement.required && <span className="text-red-500">*</span>}{requirement.sensitive && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-normal text-amber-700">仅引用</span>}</div><p className="mt-1 text-[11px] leading-5 text-slate-500">{requirement.reason}</p><p className="mt-1 text-[10px] text-slate-400">依据：{requirement.evidence}</p></div>)}</div>
-                {requiresBrowserRunner && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-800"><b>UI 执行边界：</b>pc-admin 是 Web 应用。环境登记完成后需要由受管浏览器执行器运行登录、页面交互和截图；当前 HTTP Runner 只适用于 API 用例，已禁止将其作为 UI 通过结果。</div>}
+                {requiresBrowserRunner && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-5 text-amber-800"><b>UI 执行边界：</b>pc-admin 是 Web 应用。环境登记完成后由 BrowserRunner（Playwright）运行登录、页面交互和截图；HTTP 仅用于 API 用例，不能作为 UI 通过结果。</div>}
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
                   {environmentRequirements.some((item) => item.key === 'credential_ref') && <label className="text-xs text-slate-600">测试账号凭据引用（不填密码）<input value={credentialRef} onChange={(event) => { setCredentialRef(event.target.value); setRequirementsConfirmed(false); }} placeholder="如 vault://qa/pc-admin/admin" disabled={busy} className="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none" /></label>}
                   {environmentRequirements.some((item) => item.key === 'browser_profile') && <label className="text-xs text-slate-600">浏览器配置<input value={browserProfile} onChange={(event) => { setBrowserProfile(event.target.value); setRequirementsConfirmed(false); }} disabled={busy} className="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none" /></label>}
@@ -413,8 +409,7 @@ function ExecPageContent({ targets, targetID, requestedCaseIDs, onTargetChange }
               <div className="mt-4 flex flex-wrap gap-2">
                 <button type="button" onClick={() => void registerEnvironment()} disabled={busy}
                   className={'px-3 py-1.5 rounded-lg text-sm border ' + (registeredRuntimeKey ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-300 text-slate-700 hover:bg-slate-50')}>{registeredRuntimeKey ? '环境已登记' : '登记环境地址'}</button>
-                <button type="button" onClick={submitRealRun} disabled={busy || casesLoading || Boolean(casesError) || selectedCaseIDs.length === 0 || requiresBrowserRunner || runnableCases.length === 0}
-                  title={requiresBrowserRunner ? 'Web UI 执行需要受管浏览器执行器，当前未接入，不能把 API 用例当成 UI 结果' : undefined}
+                <button type="button" onClick={submitRealRun} disabled={busy || casesLoading || Boolean(casesError) || selectedCaseIDs.length === 0 || runnableCases.length === 0}
                   className="px-3 py-1.5 rounded-lg text-sm bg-emerald-600 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">创建真实运行</button>
                 <button type="button" onClick={() => run && invokeRunAction('pause')} disabled={!run || busy || run.state !== 'running'}
                   className="px-3 py-1.5 rounded-lg text-sm border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">暂停</button>
