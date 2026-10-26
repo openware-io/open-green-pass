@@ -27,16 +27,16 @@ func NewCaseStore(db *DB, gen *id.Generator) *CaseStore {
 func (s *CaseStore) SaveCase(ctx context.Context, c *domain.Case) error {
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO cas_case(id, team_id, target_id, code, title, kind, business_domain, feature, module, operation, case_type, priority, automation_status, requirement_ref, defect_ref, review_status, review_comment, repo_id, current_version, status, created_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+			INSERT INTO cas_case(id, team_id, target_id, code, title, kind, business_domain, feature, module, operation, case_type, priority, automation_status, requirement_ref, defect_ref, review_status, review_comment, repo_id, execution_surface, current_version, status, created_by)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
 			ON CONFLICT (id) DO UPDATE SET
 				target_id = EXCLUDED.target_id, code = EXCLUDED.code, title = EXCLUDED.title,
 				kind = EXCLUDED.kind, business_domain = EXCLUDED.business_domain, feature = EXCLUDED.feature,
 				module = EXCLUDED.module, operation = EXCLUDED.operation, case_type = EXCLUDED.case_type,
-				priority = EXCLUDED.priority, automation_status = EXCLUDED.automation_status, requirement_ref = EXCLUDED.requirement_ref, defect_ref = EXCLUDED.defect_ref, review_status = EXCLUDED.review_status, review_comment = EXCLUDED.review_comment, repo_id = EXCLUDED.repo_id,
+				priority = EXCLUDED.priority, automation_status = EXCLUDED.automation_status, requirement_ref = EXCLUDED.requirement_ref, defect_ref = EXCLUDED.defect_ref, review_status = EXCLUDED.review_status, review_comment = EXCLUDED.review_comment, repo_id = EXCLUDED.repo_id, execution_surface = EXCLUDED.execution_surface,
 				current_version = EXCLUDED.current_version, status = EXCLUDED.status, updated_at = now()`,
 			c.ID, c.TeamID, c.TargetID, c.Code, c.Title, c.Kind,
-			c.BusinessDomain, c.Feature, c.Module, c.Operation, c.CaseType, c.Priority, c.Automation, c.RequirementRef, c.DefectRef, c.ReviewStatus, c.ReviewComment, c.RepoID,
+			c.BusinessDomain, c.Feature, c.Module, c.Operation, c.CaseType, c.Priority, c.Automation, c.RequirementRef, c.DefectRef, c.ReviewStatus, c.ReviewComment, c.RepoID, c.ExecutionSurface,
 			c.CurrentVersion, c.Status, c.CreatedBy)
 		return err
 	})
@@ -63,7 +63,7 @@ func (s *CaseStore) FindCase(ctx context.Context, teamID, id int64) (*domain.Cas
 	var c domain.Case
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		row := tx.QueryRow(ctx, `
-			SELECT id, team_id, target_id, code, title, kind, business_domain, feature, module, operation, case_type, priority, automation_status, requirement_ref, defect_ref, review_status, review_comment, repo_id, current_version, status
+			SELECT id, team_id, target_id, code, title, kind, business_domain, feature, module, operation, case_type, priority, automation_status, requirement_ref, defect_ref, review_status, review_comment, repo_id, execution_surface, current_version, status
 			FROM cas_case WHERE id = $1 AND team_id = $2`, id, teamID)
 		return scanCase(row, &c)
 	})
@@ -132,7 +132,7 @@ func (s *CaseStore) ListCases(ctx context.Context, teamID int64, f domain.CaseFi
 	var out []*domain.Case
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
-			SELECT id, team_id, target_id, code, title, kind, business_domain, feature, module, operation, case_type, priority, automation_status, requirement_ref, defect_ref, review_status, review_comment, repo_id, current_version, status
+			SELECT id, team_id, target_id, code, title, kind, business_domain, feature, module, operation, case_type, priority, automation_status, requirement_ref, defect_ref, review_status, review_comment, repo_id, execution_surface, current_version, status
 			FROM cas_case WHERE `+where+` ORDER BY target_id, business_domain, feature, module, operation, code`, args...)
 		if err != nil {
 			return err
@@ -177,7 +177,7 @@ func (s *CaseStore) History(ctx context.Context, teamID, caseID int64) ([]*domai
 func scanCase(row pgx.Row, c *domain.Case) error {
 	var targetID, currentVersion int64
 	if err := row.Scan(&c.ID, &c.TeamID, &targetID, &c.Code, &c.Title, &c.Kind,
-		&c.BusinessDomain, &c.Feature, &c.Module, &c.Operation, &c.CaseType, &c.Priority, &c.Automation, &c.RequirementRef, &c.DefectRef, &c.ReviewStatus, &c.ReviewComment, &c.RepoID,
+		&c.BusinessDomain, &c.Feature, &c.Module, &c.Operation, &c.CaseType, &c.Priority, &c.Automation, &c.RequirementRef, &c.DefectRef, &c.ReviewStatus, &c.ReviewComment, &c.RepoID, &c.ExecutionSurface,
 		&currentVersion, &c.Status); err != nil {
 		return err
 	}

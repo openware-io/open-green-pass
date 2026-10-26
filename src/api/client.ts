@@ -1,7 +1,7 @@
 import type { components, operations, paths } from './generated';
 
 export type Target = components['schemas']['Target'];
-export type CaseTaxonomyFields = { repo_id?: number | null; business_domain?: string; feature?: string; module?: string; operation?: string; case_type?: string; priority?: string; automation_status?: string; requirement_ref?: string; defect_ref?: string; review_status?: string; review_comment?: string };
+export type CaseTaxonomyFields = { repo_id?: number | null; execution_surface?: string; business_domain?: string; feature?: string; module?: string; operation?: string; case_type?: string; priority?: string; automation_status?: string; requirement_ref?: string; defect_ref?: string; review_status?: string; review_comment?: string };
 export type TestCase = components['schemas']['TestCase'] & CaseTaxonomyFields;
 export type CaseVersion = components['schemas']['CaseVersion'];
 export type Run = components['schemas']['Run'];
@@ -336,7 +336,7 @@ export class GreenPassClient {
     return this.request('/gates/rules', { method: 'PUT', body: JSON.stringify(input) });
   }
   coverageGate(projectId: number, mode: 'strict' | 'risk' = 'strict'): JsonResponse<{
-    project_id: number; mode: string; total_required: number; design_covered: number; executed: number; passed: number;
+    project_id: number; mode: string; surface: string; total_required: number; design_covered: number; executed: number; passed: number;
     design_coverage: number; execution_coverage: number; open_p0: number; open_p1: number; gate_passed: boolean;
     blockers: string[]; modules?: Array<{ module: string; required: number; mapped: number; passed: number; design_coverage: number; execution_coverage: number }>;
   }> {

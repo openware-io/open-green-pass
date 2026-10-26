@@ -285,6 +285,7 @@ type Case struct {
 	TeamID         int64
 	TargetID       int64  // 归属被测对象节点（服务/模块）
 	RepoID         *int64 // 归属代码仓库；可为空
+	ExecutionSurface string // api / browser / android / ios
 	Code           string // 用例编号（按树命名空间稳定，如 im-saas-gw-001）
 	Title          string
 	Kind           string // 场景族：api/web/ui/contract/perf/mobile/weaknet/ai...
@@ -323,6 +324,7 @@ type CaseVersion struct {
 // CaseFilter 用例查询筛选。
 type CaseFilter struct {
 	TargetID       *int64 // 按被测对象节点
+	ExecutionSurface string // 按执行面
 	Kind           string // 按场景族
 	Code           string // 按编号模糊
 	Status         string // 按状态

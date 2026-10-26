@@ -26,6 +26,7 @@ type CoverageGateModule struct {
 // CoverageGateResult 门禁结果。
 type CoverageGateResult struct {
 	ProjectID         int64                `json:"project_id"`
+	Surface           string               `json:"surface"`
 	Module            string               `json:"module"`
 	Mode              string               `json:"mode"`
 	TotalRequired     int                  `json:"total_required"`
@@ -184,7 +185,7 @@ func (s *CoverageGateService) load(ctx context.Context, projectID int64, module 
 
 func newGateResult(projectID int64, module, mode string, summary domain.CoverageSummary, p0, p1 int) *CoverageGateResult {
 	result := &CoverageGateResult{
-		ProjectID: projectID, Module: module, Mode: mode,
+		ProjectID: projectID, Surface: "api", Module: module, Mode: mode,
 		TotalRequired: summary.TotalRequired, DesignCovered: summary.DesignCovered,
 		Executed: summary.Executed, Passed: summary.Passed, OpenP0: p0, OpenP1: p1,
 		Blockers: []string{},

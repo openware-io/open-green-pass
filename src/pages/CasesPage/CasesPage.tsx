@@ -90,7 +90,7 @@ function formatOperation(operation: string): string {
   const resource = Object.entries(MODULE_LABELS).find(([key]) => path.toLowerCase().includes(key.toLowerCase()))?.[1];
   return resource ? `${action}${resource} · ${method} ${path}` : `${action} · ${method} ${path}`;
 }
-type CaseRow = TestCase & { project_name?: string; repo_name?: string };
+type CaseRow = TestCase & { project_name?: string; repo_name?: string; execution_surface?: string };
 
 export default function CasesPage() {
   const navigate = useNavigate();
@@ -416,6 +416,8 @@ function RealCasesPanel() {
   const [libraryProject, setLibraryProject] = useState('');
   const [filterRepo, setFilterRepo] = useState('');
   const [repoId, setRepoId] = useState('');
+  const [executionSurface, setExecutionSurface] = useState('api');
+  const [filterSurface, setFilterSurface] = useState('');
   const [requirementRef, setRequirementRef] = useState('');
   const [defectRef, setDefectRef] = useState('');
   const [reviewStatus, setReviewStatus] = useState('draft');
@@ -614,10 +616,13 @@ function RealCasesPanel() {
           <select value={repoId} onChange={(event) => setRepoId(event.target.value)} disabled={busy || !repos.length} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs">
             <option value="">未绑定仓库</option>{repos.map((repo) => <option key={repo.id} value={repo.id}>{repo.url || `repo#${repo.id}`}</option>)}
           </select>
+          <select value={executionSurface} onChange={(event) => setExecutionSurface(event.target.value)} disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs">
+            <option value="api">API 接口</option><option value="browser">浏览器 UI</option><option value="android">Android 真机</option><option value="ios">iOS 真机</option>
+          </select>
           <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="用例编号" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
           <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="标题" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
           <input value={kind} onChange={(event) => setKind(event.target.value)} placeholder="场景族，如 api" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
-          <button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(projectId); if (!Number.isSafeInteger(id) || id <= 0 || !code.trim() || !title.trim()) throw new Error('被测对象、编号、标题不能为空'); if (repos.length > 0 && !repoId) throw new Error('请选择代码仓库'); await client.createCase({ target_id: id, code: code.trim(), title: title.trim(), kind: kind.trim() || undefined, business_domain: businessDomain.trim(), feature: feature.trim(), module: moduleName.trim(), operation: operation.trim(), case_type: caseType, priority, automation_status: automation, repo_id: repoId ? Number(repoId) : undefined, requirement_ref: requirementRef.trim(), defect_ref: defectRef.trim(), review_status: reviewStatus, review_comment: reviewComment.trim(), script: buildScript() }); setCases(await readAllCases()); setCode(''); setTitle(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实用例</button>
+          <button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(projectId); if (!Number.isSafeInteger(id) || id <= 0 || !code.trim() || !title.trim()) throw new Error('被测对象、编号、标题不能为空'); if (repos.length > 0 && !repoId) throw new Error('请选择代码仓库'); await client.createCase({ target_id: id, code: code.trim(), title: title.trim(), kind: kind.trim() || undefined, business_domain: businessDomain.trim(), feature: feature.trim(), module: moduleName.trim(), operation: operation.trim(), case_type: caseType, priority, automation_status: automation, execution_surface: executionSurface, repo_id: repoId ? Number(repoId) : undefined, requirement_ref: requirementRef.trim(), defect_ref: defectRef.trim(), review_status: reviewStatus, review_comment: reviewComment.trim(), script: buildScript() }); setCases(await readAllCases()); setCode(''); setTitle(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实用例</button>
         </div>
         <textarea value={script} onChange={(event) => setScript(event.target.value)} disabled={busy} rows={2} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" aria-label="用例脚本 JSON" /></div>}
         {message && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{message}</div>}
@@ -627,6 +632,9 @@ function RealCasesPanel() {
           </select>
           <select value={filterRepo} onChange={(event) => setFilterRepo(event.target.value)} className="max-w-[220px] rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
             <option value="">全部仓库</option>{taxonomyOptions.repositories.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+          <select value={filterSurface} onChange={(event) => setFilterSurface(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
+            <option value="">全部执行面</option><option value="api">API 接口</option><option value="browser">浏览器 UI</option><option value="android">Android 真机</option><option value="ios">iOS 真机</option>
           </select>
           <select value={filterDomain} onChange={(event) => setFilterDomain(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
             <option value="">全部业务域</option>{taxonomyOptions.domains.map((value) => <option key={value} value={value}>{value}</option>)}
@@ -673,7 +681,7 @@ function RealCasesPanel() {
                   </div>
                 </td>
                 <td className="px-3 py-2 align-top text-slate-700">{formatCaseTitle(item.title, item.module || '')}</td>
-                <td className="px-3 py-2 align-top"><span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{formatCarrier(item.kind)}</span></td>
+                <td className="px-3 py-2 align-top"><span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{formatCarrier(item.execution_surface || item.kind)}</span></td>
                 <td className="px-3 py-2 align-top"><div className="text-slate-700">{item.project_name || '—'}</div><div className="mt-0.5 max-w-[180px] truncate font-mono text-[10px] text-slate-400">{item.repo_name || '未绑定仓库'}</div></td>
                 <td className="px-3 py-2 align-top">
                   <div className="flex flex-wrap gap-1">

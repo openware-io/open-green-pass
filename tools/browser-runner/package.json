@@ -1,0 +1,8 @@
+﻿{
+  "name": "greenpass-browser-runner",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Managed Playwright browser runner for GreenPass",
+  "main": "server.cjs",
+  "dependencies": { "playwright-core": "1.64.1" }
+}

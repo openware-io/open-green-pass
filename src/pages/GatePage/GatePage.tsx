@@ -55,7 +55,7 @@ export default function GatePage() {
     <div>
       <PageHeader
         title="质量门禁"
-        desc="直接读取覆盖率账本与未关闭缺陷；不展示原型规则，不使用模拟通过结果。"
+        desc="直接读取 API 接口覆盖账本与未关闭缺陷；m3-* 只计入 API 覆盖，不计入 PC Admin UI 覆盖。"
       />
 
       <Card title="门禁口径" className="mb-5 p-4">
@@ -94,8 +94,8 @@ export default function GatePage() {
         <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
             { label: '必需 Cell', value: data.total_required, icon: Database },
-            { label: '设计覆盖', value: `${data.design_covered} · ${pct(data.design_coverage)}`, icon: FlaskConical },
-            { label: '执行覆盖', value: `${data.executed} · ${pct(data.execution_coverage)}`, icon: Wrench },
+            { label: 'API 设计覆盖', value: `${data.design_covered} · ${pct(data.design_coverage)}`, icon: FlaskConical },
+            { label: 'API 执行覆盖', value: `${data.executed} · ${pct(data.execution_coverage)}`, icon: Wrench },
             { label: '未关闭缺陷', value: `P0 ${data.open_p0} · P1 ${data.open_p1}`, icon: ShieldAlert },
           ].map((item) => <div key={item.label} className="rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center gap-2 text-[11px] text-slate-500"><item.icon className="h-3.5 w-3.5" />{item.label}</div><div className="mt-2 text-lg font-semibold text-slate-800">{item.value}</div></div>)}
         </div>
@@ -105,7 +105,7 @@ export default function GatePage() {
         <Card title="模块覆盖" className="p-0" extra={<span className="text-[11px] text-slate-400">来自 cov_cell 账本</span>}>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-4 py-2.5">模块</th><th className="px-4 py-2.5">必需</th><th className="px-4 py-2.5">已映射</th><th className="px-4 py-2.5">已通过</th><th className="px-4 py-2.5">设计覆盖</th><th className="px-4 py-2.5">执行覆盖</th><th className="px-4 py-2.5">风险口径</th></tr></thead>
+              <thead className="bg-slate-50 text-left text-slate-500"><tr><th className="px-4 py-2.5">模块</th><th className="px-4 py-2.5">必需</th><th className="px-4 py-2.5">已映射</th><th className="px-4 py-2.5">已通过</th><th className="px-4 py-2.5">API 设计覆盖</th><th className="px-4 py-2.5">API 执行覆盖</th><th className="px-4 py-2.5">风险口径</th></tr></thead>
               <tbody className="divide-y divide-slate-100">{modules.map((module) => <tr key={module.module}><td className="px-4 py-2 font-mono text-slate-700">{module.module}</td><td className="px-4 py-2">{module.required}</td><td className="px-4 py-2">{module.mapped}</td><td className="px-4 py-2 text-emerald-700">{module.passed}</td><td className="px-4 py-2">{pct(module.design_coverage)}</td><td className="px-4 py-2">{pct(module.execution_coverage)}</td><td className="px-4 py-2 text-[11px]">{RISK_MODULES.has(module.module) ? '高风险模块 · ≥90%' : '模块 smoke'}</td></tr>)}</tbody>
             </table>
           </div>
