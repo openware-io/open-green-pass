@@ -68,6 +68,8 @@ function formatOperation(operation: string): string {
   const resource = Object.entries(MODULE_LABELS).find(([key]) => path.toLowerCase().includes(key.toLowerCase()))?.[1];
   return resource ? `${action}${resource} · ${method} ${path}` : `${action} · ${method} ${path}`;
 }
+type CaseRow = TestCase & { project_name?: string };
+
 export default function CasesPage() {
   const navigate = useNavigate();
   const [rows, setRows] = useState<ICase[]>(CASES);
@@ -388,7 +390,8 @@ function RealCasesPanel() {
   const requestedTargetID = searchParams.get('target_id') ?? '';
   const { enabled, loaded, projects, projectId, selectProject } = catalog;
   const requestContext = useRef<{ key: string; pendingProject: string | null }>({ key: '', pendingProject: null });
-  const [cases, setCases] = useState<TestCase[]>([]);
+  const [cases, setCases] = useState<CaseRow[]>([]);
+  const [libraryProject, setLibraryProject] = useState('');
   const [requirementRef, setRequirementRef] = useState('');
   const [defectRef, setDefectRef] = useState('');
   const [reviewStatus, setReviewStatus] = useState('draft');
@@ -420,11 +423,14 @@ function RealCasesPanel() {
   const [caseFormOpen, setCaseFormOpen] = useState(false);
   const [message, setMessage] = useState('');
 
-  const readCases = useCallback(async (targetId = projectId): Promise<TestCase[]> => {
-    if (!client) return [];
-    const parsed = Number(targetId);
-    return client.listCases(Number.isSafeInteger(parsed) && parsed > 0 ? { target_id: parsed } : {});
-  }, [client, projectId]);
+  const readAllCases = useCallback(async (): Promise<CaseRow[]> => {
+    if (!client || projects.length === 0) return [];
+    const groups = await Promise.all(projects.map(async (project) => {
+      const rows = await client.listCases({ target_id: project.id });
+      return rows.map((row) => ({ ...row, project_name: project.name }));
+    }));
+    return groups.flat();
+  }, [client, projects]);
 
   useEffect(() => {
     if (!client || !enabled || !loaded || !requestedTargetID) return;
@@ -460,13 +466,13 @@ function RealCasesPanel() {
   }, [requestedTargetID]);
 
   useEffect(() => {
-    if (!client || !enabled || !loaded || !projectId) return;
+    if (!client || !enabled || !loaded || projects.length === 0) return;
     let active = true;
-    void readCases(projectId)
+    void readAllCases()
       .then((loadedCases) => { if (active) { setCases(loadedCases); setMessage(''); } })
       .catch((error: unknown) => { if (active) setMessage(error instanceof Error ? error.message : '读取真实用例失败'); });
     return () => { active = false; };
-  }, [client, enabled, loaded, projectId, readCases]);
+  }, [client, enabled, loaded, projects, readAllCases]);
 
   const changeTarget = (nextProjectID: string) => {
     setSearchParams((current) => { const next = new URLSearchParams(current); next.delete('target_id'); return next; }, { replace: true });
@@ -505,7 +511,7 @@ function RealCasesPanel() {
   const groupedCases = (() => {
     const groups = new Map<string, TestCase[]>();
     visibleCases.forEach((item) => {
-      const key = [item.business_domain || '未分类业务域', item.feature || '未分类功能', item.module || 'unclassified', item.operation || '未分类操作'].join('||');
+      const key = [item.project_name || '未分类项目', item.business_domain || '未分类业务域', item.feature || '未分类功能', item.module || 'unclassified', item.operation || '未分类操作'].join('||');
       const list = groups.get(key) ?? [];
       list.push(item);
       groups.set(key, list);
@@ -573,12 +579,15 @@ function RealCasesPanel() {
           <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="用例编号" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
           <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="标题" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
           <input value={kind} onChange={(event) => setKind(event.target.value)} placeholder="场景族，如 api" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
-          <button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(projectId); if (!Number.isSafeInteger(id) || id <= 0 || !code.trim() || !title.trim()) throw new Error('被测对象、编号、标题不能为空'); await client.createCase({ target_id: id, code: code.trim(), title: title.trim(), kind: kind.trim() || undefined, business_domain: businessDomain.trim(), feature: feature.trim(), module: moduleName.trim(), operation: operation.trim(), case_type: caseType, priority, automation_status: automation, requirement_ref: requirementRef.trim(), defect_ref: defectRef.trim(), review_status: reviewStatus, review_comment: reviewComment.trim(), script: buildScript() }); setCases(await readCases()); setCode(''); setTitle(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实用例</button>
+          <button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(projectId); if (!Number.isSafeInteger(id) || id <= 0 || !code.trim() || !title.trim()) throw new Error('被测对象、编号、标题不能为空'); await client.createCase({ target_id: id, code: code.trim(), title: title.trim(), kind: kind.trim() || undefined, business_domain: businessDomain.trim(), feature: feature.trim(), module: moduleName.trim(), operation: operation.trim(), case_type: caseType, priority, automation_status: automation, requirement_ref: requirementRef.trim(), defect_ref: defectRef.trim(), review_status: reviewStatus, review_comment: reviewComment.trim(), script: buildScript() }); setCases(await readAllCases()); setCode(''); setTitle(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实用例</button>
         </div>
         <textarea value={script} onChange={(event) => setScript(event.target.value)} disabled={busy} rows={2} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" aria-label="用例脚本 JSON" /></div>}
         {message && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{message}</div>}
         <div className="flex flex-wrap items-center gap-2">
-          <select value={filterDomain} onChange={(event) => setFilterDomain(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
+'          <select value={libraryProject} onChange={(event) => setLibraryProject(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
+            <option value="">全部项目</option>{projects.map((project) => <option key={project.id} value={project.name}>{project.name}</option>)}
+          </select>
+'          <select value={filterDomain} onChange={(event) => setFilterDomain(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
             <option value="">全部业务域</option>{taxonomyOptions.domains.map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
           <select value={filterFeature} onChange={(event) => setFilterFeature(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs">
@@ -611,7 +620,7 @@ function RealCasesPanel() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {groupedCases.map((group) => <Fragment key={group.key}><tr className="bg-slate-50/80"><td colSpan={5} className="px-3 py-2 text-[11px] font-medium text-slate-600">{group.parts[0]} / {formatFeature(group.parts[1])} / <span className="font-mono">{group.parts[2]}</span> / {formatOperation(group.parts[3])} <span className="ml-2 text-slate-400">{group.items.length} 条</span></td></tr>{group.items.map((item) => <tr key={item.id}>
+              {groupedCases.map((group) => <Fragment key={group.key}><tr className="bg-slate-50/80"><td colSpan={5} className="px-3 py-2 text-[11px] font-medium text-slate-600">{group.parts[0]} / {group.parts[1]} / {formatFeature(group.parts[2])} / <span className="font-mono">{group.parts[3]}</span> / {formatOperation(group.parts[4])} <span className="ml-2 text-slate-400">{group.items.length} 条</span></td></tr>{group.items.map((item) => <tr key={item.id}>
                 <td className="px-3 py-2 align-top">
                   <div className="font-mono text-[11px] text-slate-700">#{item.id} · {item.code}</div>
                   <div className="mt-1 text-[10px] leading-4 text-slate-500">
@@ -633,12 +642,12 @@ function RealCasesPanel() {
                     <button type="button" disabled={busy} onClick={() => void run(async () => {
                       const comment = window.prompt('评审意见', '通过') || '通过';
                       await client.updateCaseMetadata(item.id, { business_domain: item.business_domain, feature: item.feature, module: item.module, operation: item.operation, case_type: item.case_type, priority: item.priority, automation_status: item.automation_status, requirement_ref: item.requirement_ref, defect_ref: item.defect_ref, review_status: 'approved', review_comment: comment });
-                      setCases(await readCases());
+                      setCases(await readAllCases());
                     })} className="rounded border border-emerald-200 px-2 py-1 text-[10px] text-emerald-700">通过</button>
                     <button type="button" disabled={busy} onClick={() => void run(async () => {
                       const comment = window.prompt('退回原因', '需补充断言') || '需补充断言';
                       await client.updateCaseMetadata(item.id, { business_domain: item.business_domain, feature: item.feature, module: item.module, operation: item.operation, case_type: item.case_type, priority: item.priority, automation_status: item.automation_status, requirement_ref: item.requirement_ref, defect_ref: item.defect_ref, review_status: 'rejected', review_comment: comment });
-                      setCases(await readCases());
+                      setCases(await readAllCases());
                     })} className="rounded border border-amber-200 px-2 py-1 text-[10px] text-amber-700">退回</button>
                     <button type="button" disabled={busy} onClick={() => void run(async () => {
                       const versions = await client.caseHistory(item.id);
@@ -651,12 +660,12 @@ function RealCasesPanel() {
                       const op = window.prompt('操作', item.operation || '');
                       if (domain === null || feat === null || mod === null || op === null) return;
                       await client.updateCaseMetadata(item.id, { business_domain: domain.trim(), feature: feat.trim(), module: mod.trim(), operation: op.trim(), case_type: item.case_type, priority: item.priority, automation_status: item.automation_status });
-                      setCases(await readCases());
+                      setCases(await readAllCases());
                     })} className="rounded border border-emerald-200 px-2 py-1 text-[10px] text-emerald-700">编辑分类</button>
-                    <button type="button" disabled={busy} onClick={() => void run(async () => { const value = versionScript.trim(); if (!value) throw new Error('先填写新版本脚本'); const parsed = JSON.parse(value) as unknown; await client.createCaseVersion(item.id, { script: parsed }); setVersionScript(''); setCases(await readCases()); })} className="rounded border border-slate-200 px-2 py-1 text-[10px]">提交新版本</button>
+                    <button type="button" disabled={busy} onClick={() => void run(async () => { const value = versionScript.trim(); if (!value) throw new Error('先填写新版本脚本'); const parsed = JSON.parse(value) as unknown; await client.createCaseVersion(item.id, { script: parsed }); setVersionScript(''); setCases(await readAllCases()); })} className="rounded border border-slate-200 px-2 py-1 text-[10px]">提交新版本</button>
                     <button type="button" disabled={busy} onClick={() => void run(async () => { const items = await client.caseHistory(item.id); setHistory({ caseID: item.id, items }); })} className="rounded border border-slate-200 px-2 py-1 text-[10px]">历史</button>
-                    <button type="button" disabled={busy} onClick={() => { const raw = window.prompt(`回退 #${item.id} 到哪个版本？`, String(item.current_version)); const version = Number(raw); if (raw && Number.isSafeInteger(version) && version > 0) void run(async () => { await client.rollbackCase(item.id, version); setCases(await readCases()); }); }} className="rounded border border-amber-200 px-2 py-1 text-[10px] text-amber-700">回退</button>
-                    <button type="button" disabled={busy} onClick={() => void run(async () => { await client.deleteCase(item.id); setCases(await readCases()); })} className="rounded border border-red-200 px-2 py-1 text-[10px] text-red-600">删除</button></div></details>
+                    <button type="button" disabled={busy} onClick={() => { const raw = window.prompt(`回退 #${item.id} 到哪个版本？`, String(item.current_version)); const version = Number(raw); if (raw && Number.isSafeInteger(version) && version > 0) void run(async () => { await client.rollbackCase(item.id, version); setCases(await readAllCases()); }); }} className="rounded border border-amber-200 px-2 py-1 text-[10px] text-amber-700">回退</button>
+                    <button type="button" disabled={busy} onClick={() => void run(async () => { await client.deleteCase(item.id); setCases(await readAllCases()); })} className="rounded border border-red-200 px-2 py-1 text-[10px] text-red-600">删除</button></div></details>
                   </div>
                 </td>
               </tr>)}</Fragment>)}
