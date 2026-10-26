@@ -97,10 +97,10 @@ function fromApiFinding(row: ApiFinding, media: Finding['media'] = { screenshot:
       trace: row.evidence?.trace ?? '',
     },
     repo: {
-      name: row.repository.name,
-      url: row.repository.url,
-      branch: row.repository.branch,
-      commit: row.repository.commit_sha,
+      name: row.repository?.name ?? '未关联仓库',
+      url: row.repository?.url ?? '',
+      branch: row.repository?.branch ?? '',
+      commit: row.repository?.commit_sha ?? '',
     },
     media,
     coverage: row.coverage_cells ?? [],
@@ -329,7 +329,7 @@ function hasVideo(finding: Finding) {
 }
 
 export default function FindingsPage() {
-  const [items, setItems] = useState<Finding[]>(SEED);
+  const [items, setItems] = useState<Finding[]>(FINDINGS_API ? [] : SEED);
   const [selectedID, setSelectedID] = useState<string>('');
   const evidenceInput = useRef<HTMLInputElement>(null);
   const [evidenceBusy, setEvidenceBusy] = useState(false);
@@ -338,18 +338,34 @@ export default function FindingsPage() {
   const [status, setStatus] = useState('全部');
   const [lightbox, setLightbox] = useState('');
   const [apiBacked, setApiBacked] = useState(false);
+  const [loading, setLoading] = useState(Boolean(FINDINGS_API));
+  const [loadError, setLoadError] = useState('');
   const selected = items.find((item) => item.id === selectedID) ?? null;
+
+  const loadFindings = async () => {
+    if (!FINDINGS_API) return;
+    setLoading(true); setLoadError('');
+    try {
+      const rows = await FINDINGS_API.listFindings({ limit: 100 });
+      setItems(rows.map((row) => fromApiFinding(row)));
+      setApiBacked(true);
+      setSelectedID((current) => rows.some((row) => String(row.id) === current) ? current : '');
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : '读取缺陷失败');
+    } finally { setLoading(false); }
+  };
 
   useEffect(() => {
     if (!FINDINGS_API) return;
     let cancelled = false;
     FINDINGS_API.listFindings({ limit: 100 })
       .then((rows) => {
-        if (cancelled || rows.length === 0) return;
+        if (cancelled) return;
         setItems(rows.map((row) => fromApiFinding(row)));
         setApiBacked(true);
       })
-      .catch(() => { /* keep prototype data when the API is unavailable */ });
+      .catch((error: unknown) => { if (!cancelled) setLoadError(error instanceof Error ? error.message : '读取缺陷失败'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
@@ -406,11 +422,13 @@ export default function FindingsPage() {
           <Bug className="h-3.5 w-3.5" />缺陷建议不写回仓库
         </span>
         <span className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs ${apiBacked ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
-          {apiBacked ? 'API 数据' : '原型数据'}
+          {apiBacked ? 'API 数据' : loading ? '读取中' : '未连接'}
         </span>
       </PageHeader>
 
-      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-5">
+'      {loadError && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">缺陷读取失败：{loadError}</div>}
+      {loading && <div className="mb-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500">正在读取真实缺陷…</div>}
+'      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-5">
         {[
           { label: '待确认', value: items.filter((item) => item.status === '待确认').length, tone: 'text-amber-700 bg-amber-50' },
           { label: '已确认', value: items.filter((item) => item.status === '已确认').length, tone: 'text-red-700 bg-red-50' },
