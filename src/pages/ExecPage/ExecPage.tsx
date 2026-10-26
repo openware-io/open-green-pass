@@ -167,7 +167,21 @@ function ExecPageContent({ targets, targetID, requestedCaseIDs, onTargetChange }
   const [busy, setBusy] = useState(false);
   const activeService = catalog.services.find((service) => service.id === catalog.serviceId);
   const environmentRequirements = useMemo(() => requirementsFor(activeService), [activeService]);
-  const requiresBrowserRunner = activeService?.kind === 'web_app';
+  const [executionMode, setExecutionMode] = useState<'web' | 'api'>('api');
+  const requiresBrowserRunner = executionMode === 'web';
+  const runnableCases = useMemo(
+    () => cases.filter((testCase) => executionMode === 'web' ? ['ui', 'web'].includes(testCase.kind) : testCase.kind === 'api'),
+    [cases, executionMode],
+  );
+
+  useEffect(() => {
+    setSelectedCaseIDs((current) => current.filter((id) => runnableCases.some((testCase) => testCase.id === id)));
+  }, [runnableCases]);
+
+  useEffect(() => {
+    if (!activeService) return;
+    setExecutionMode(activeService.kind === 'web_app' ? 'web' : 'api');
+  }, [activeService?.id, activeService?.kind]);
 
   useEffect(() => {
     if (!client || !targetID) return;
@@ -240,7 +254,7 @@ function ExecPageContent({ targets, targetID, requestedCaseIDs, onTargetChange }
       toast.error('Web UI 用例需要受管浏览器执行器', { description: '环境信息可先登记；当前 HTTP 执行器不会把 pc-admin 伪装成 UI 测试。' });
       return;
     }
-    if (casesLoading || casesError || selectedCaseIDs.length === 0 || selectedCaseIDs.some((id) => !cases.some((testCase) => testCase.id === id))) {
+    if (casesLoading || casesError || selectedCaseIDs.length === 0 || selectedCaseIDs.some((id) => !runnableCases.some((testCase) => testCase.id === id))) {
       toast.error('请先选择当前项目要执行的用例', { description: '空选择不会自动扩大为全量执行。' });
       return;
     }
@@ -335,6 +349,14 @@ function ExecPageContent({ targets, targetID, requestedCaseIDs, onTargetChange }
           {client ? (
             <>
               <p className="text-[11px] text-slate-500 mb-4">连接：{greenPassConnectionHint()}。仅发送 OpenAPI 定义的数值 ID 与版本字段；页面不会将原型数据写入后端。</p>
+              <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <span className="text-[11px] font-medium text-slate-600">执行面</span>
+                <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+                  <button type="button" onClick={() => setExecutionMode('web')} className={'rounded-md px-3 py-1 text-[11px] ' + (executionMode === 'web' ? 'bg-emerald-600 text-white' : 'text-slate-600')}>Web UI</button>
+                  <button type="button" onClick={() => setExecutionMode('api')} className={'rounded-md px-3 py-1 text-[11px] ' + (executionMode === 'api' ? 'bg-emerald-600 text-white' : 'text-slate-600')}>API 接口</button>
+                </div>
+                <span className="text-[11px] text-slate-400">{executionMode === 'web' ? 'PC Admin 真实测试：浏览器登录、点击、填表、截图' : '接口测试：HTTP 请求 / 响应断言，不代表 UI 通过'}</span>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                 <label className="text-xs text-slate-600">被测对象
                   <select value={targetID} onChange={(event) => onTargetChange(event.target.value)} disabled={busy}
@@ -380,16 +402,17 @@ function ExecPageContent({ targets, targetID, requestedCaseIDs, onTargetChange }
                 <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] text-slate-600"><input type="checkbox" checked={requirementsConfirmed} onChange={(event) => setRequirementsConfirmed(event.target.checked)} disabled={busy} className="mt-0.5 accent-emerald-600" /><span>我已确认以上真实环境信息；AI 推断仅作为建议。凭据字段填写的是密钥管理器引用，不包含密码、Token 或 Cookie。</span></label>
               </div>
               <div className="mt-3 rounded-lg border border-slate-200 p-3">
-                <div className="mb-2 flex items-center justify-between text-[11px] text-slate-500"><span>{requestedCaseIDs.length ? `本批次用例 · 共 ${requestedCaseIDs.length} 条` : '本次用例 · 请明确选择执行范围'}</span><div className="flex items-center gap-3"><span>已选 {selectedCaseIDs.length} / {cases.length}</span><button type="button" disabled={busy || casesLoading || Boolean(casesError) || cases.length === 0} onClick={() => setSelectedCaseIDs(cases.map((testCase) => testCase.id))} className="text-emerald-700 hover:underline disabled:opacity-50">全选当前项目</button></div></div>
+                <div className="mb-2 flex items-center justify-between text-[11px] text-slate-500"><span>{requestedCaseIDs.length ? `本批次用例 · 共 ${requestedCaseIDs.length} 条` : '本次用例 · 请明确选择执行范围'}</span><div className="flex items-center gap-3"><span>已选 {selectedCaseIDs.length} / {runnableCases.length}</span><button type="button" disabled={busy || casesLoading || Boolean(casesError) || runnableCases.length === 0} onClick={() => setSelectedCaseIDs(runnableCases.map((testCase) => testCase.id))} className="text-emerald-700 hover:underline disabled:opacity-50">全选当前项目</button></div></div>
                 {casesLoading && <p className="text-xs text-slate-400">正在读取当前项目用例…</p>}
                 {casesError && <p className="text-xs text-red-600">用例读取失败：{casesError}</p>}
-                {!casesLoading && !casesError && cases.length === 0 && <p className="text-xs text-slate-400">当前项目暂无可执行用例。</p>}
-                <div className="max-h-32 space-y-1 overflow-auto">{cases.map((testCase) => <label key={testCase.id} className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={selectedCaseIDs.includes(testCase.id)} onChange={() => setSelectedCaseIDs((current) => current.includes(testCase.id) ? current.filter((id) => id !== testCase.id) : [...current, testCase.id])} disabled={busy} className="accent-emerald-600" /><span className="font-mono">#{testCase.id}</span><span>{testCase.code} · {testCase.title}</span></label>)}</div>
+                {!casesLoading && !casesError && runnableCases.length === 0 && <p className="text-xs text-slate-500">{executionMode === 'web' ? '当前没有 Web UI 用例；请先在用例生成页生成浏览器交互用例。API 用例不会作为 UI 通过结果。' : '当前没有 API 用例。'}</p>}
+                <div className="max-h-32 space-y-1 overflow-auto">{runnableCases.map((testCase) => <label key={testCase.id} className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={selectedCaseIDs.includes(testCase.id)} onChange={() => setSelectedCaseIDs((current) => current.includes(testCase.id) ? current.filter((id) => id !== testCase.id) : [...current, testCase.id])} disabled={busy} className="accent-emerald-600" /><span className="font-mono">#{testCase.id}</span><span>{testCase.code} · {testCase.title}</span></label>)}</div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button type="button" onClick={() => void registerEnvironment()} disabled={busy}
                   className={'px-3 py-1.5 rounded-lg text-sm border ' + (registeredRuntimeKey ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-300 text-slate-700 hover:bg-slate-50')}>{registeredRuntimeKey ? '环境已登记' : '登记环境地址'}</button>
-                <button type="button" onClick={submitRealRun} disabled={busy || casesLoading || Boolean(casesError) || selectedCaseIDs.length === 0}
+                <button type="button" onClick={submitRealRun} disabled={busy || casesLoading || Boolean(casesError) || selectedCaseIDs.length === 0 || requiresBrowserRunner || runnableCases.length === 0}
+                  title={requiresBrowserRunner ? 'Web UI 执行需要受管浏览器执行器，当前未接入，不能把 API 用例当成 UI 结果' : undefined}
                   className="px-3 py-1.5 rounded-lg text-sm bg-emerald-600 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">创建真实运行</button>
                 <button type="button" onClick={() => run && invokeRunAction('pause')} disabled={!run || busy || run.state !== 'running'}
                   className="px-3 py-1.5 rounded-lg text-sm border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">暂停</button>
