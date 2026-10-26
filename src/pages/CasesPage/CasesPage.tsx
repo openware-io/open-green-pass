@@ -389,6 +389,9 @@ function RealCasesPanel() {
   const { enabled, loaded, projects, projectId, selectProject } = catalog;
   const requestContext = useRef<{ key: string; pendingProject: string | null }>({ key: '', pendingProject: null });
   const [cases, setCases] = useState<TestCase[]>([]);
+  const [preconditions, setPreconditions] = useState('');
+  const [steps, setSteps] = useState('');
+  const [expectedResult, setExpectedResult] = useState('');
   const [code, setCode] = useState('');
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState('api');
@@ -472,6 +475,11 @@ function RealCasesPanel() {
   const parseScript = () => {
     try { return JSON.parse(script); } catch { throw new Error('脚本必须是合法 JSON'); }
   };
+  const buildScript = () => {
+    const parsed = parseScript();
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('脚本必须是 JSON 对象');
+    return { ...(parsed as Record<string, unknown>), preconditions: preconditions.trim(), steps: steps.split('\n').map((line) => line.trim()).filter(Boolean), expected_result: expectedResult.trim() };
+  };
 
   const includes = (value: string | undefined, filter: string) => !filter || (value ?? '').toLowerCase().includes(filter.toLowerCase());
   const visibleCases = cases.filter((item) => {
@@ -531,6 +539,14 @@ function RealCasesPanel() {
             <span className="self-center text-[10px] text-slate-400">分类可后补；未知时留空，不伪造。</span>
           </div>
         </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-3">
+          <div className="mb-2 text-[11px] font-medium text-slate-600">测试规格（QA 用例标准字段）</div>
+          <div className="grid gap-2 md:grid-cols-3">
+            <input value={preconditions} onChange={(event) => setPreconditions(event.target.value)} placeholder="前置条件，如：已登录管理员" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+            <textarea value={steps} onChange={(event) => setSteps(event.target.value)} placeholder="测试步骤，每行一步" disabled={busy} rows={2} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs md:col-span-2" />
+          </div>
+          <textarea value={expectedResult} onChange={(event) => setExpectedResult(event.target.value)} placeholder="预期结果，如：返回 200，列表包含新群组" disabled={busy} rows={2} className="mt-2 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
           <select value={projectId} disabled={busy || !loaded} onChange={(event) => changeTarget(event.target.value)} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs">
             <option value="">选择真实被测对象</option>{projects.map((target) => <option key={target.id} value={target.id}>{target.name} · #{target.id}</option>)}
@@ -538,7 +554,7 @@ function RealCasesPanel() {
           <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="用例编号" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
           <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="标题" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
           <input value={kind} onChange={(event) => setKind(event.target.value)} placeholder="场景族，如 api" disabled={busy} className="rounded-lg border border-slate-200 px-2.5 py-2 text-xs" />
-          <button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(projectId); if (!Number.isSafeInteger(id) || id <= 0 || !code.trim() || !title.trim()) throw new Error('被测对象、编号、标题不能为空'); await client.createCase({ target_id: id, code: code.trim(), title: title.trim(), kind: kind.trim() || undefined, business_domain: businessDomain.trim(), feature: feature.trim(), module: moduleName.trim(), operation: operation.trim(), case_type: caseType, priority, automation_status: automation, script: parseScript() }); setCases(await readCases()); setCode(''); setTitle(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实用例</button>
+          <button type="button" disabled={busy} onClick={() => void run(async () => { const id = Number(projectId); if (!Number.isSafeInteger(id) || id <= 0 || !code.trim() || !title.trim()) throw new Error('被测对象、编号、标题不能为空'); await client.createCase({ target_id: id, code: code.trim(), title: title.trim(), kind: kind.trim() || undefined, business_domain: businessDomain.trim(), feature: feature.trim(), module: moduleName.trim(), operation: operation.trim(), case_type: caseType, priority, automation_status: automation, script: buildScript() }); setCases(await readCases()); setCode(''); setTitle(''); })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs text-white disabled:opacity-60">创建真实用例</button>
         </div>
         <textarea value={script} onChange={(event) => setScript(event.target.value)} disabled={busy} rows={2} className="w-full rounded-lg border border-slate-200 px-2.5 py-2 font-mono text-xs" aria-label="用例脚本 JSON" />
         {message && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{message}</div>}
@@ -648,6 +664,15 @@ function RealCasesPanel() {
               </div>
             </div>
             <div className="px-5 pb-4">
+              {(() => {
+                const latest = [...caseDetail.versions].sort((a, b) => b.version - a.version)[0]?.script as Record<string, unknown> | undefined;
+                const steps = Array.isArray(latest?.steps) ? latest.steps.map(String).join(' → ') : '';
+                return <div className="mb-3 grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs md:grid-cols-3">
+                  <div><div className="text-[10px] text-slate-400">前置条件</div><div className="mt-1 text-slate-700">{String(latest?.preconditions || '—')}</div></div>
+                  <div><div className="text-[10px] text-slate-400">测试步骤</div><div className="mt-1 text-slate-700">{steps || '—'}</div></div>
+                  <div><div className="text-[10px] text-slate-400">预期结果</div><div className="mt-1 text-slate-700">{String(latest?.expected_result || '—')}</div></div>
+                </div>;
+              })()}
               <div className="mb-2 text-xs font-medium text-slate-600">当前版本脚本 / 断言</div>
               <pre className="max-h-72 overflow-auto rounded-lg bg-slate-900 p-3 font-mono text-[11px] leading-5 text-emerald-200">{JSON.stringify([...caseDetail.versions].sort((a, b) => b.version - a.version)[0]?.script ?? {}, null, 2)}</pre>
               <div className="mt-3 space-y-1 text-[11px] text-slate-500">
