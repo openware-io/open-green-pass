@@ -101,14 +101,15 @@ paths:
         '409': { description: 审核状态冲突 }
   /generation/batches:
     get:
-      summary: 查询当前项目最近的用例生成批次
-      description: 仅返回当前租户和指定项目的批次，按创建时间降序排列，同一时间按 ID 降序排列。
+      summary: 查询当前项目最近的用例生成批次（按 id 倒序 cursor 分页）
+      description: 仅返回当前租户和指定项目的批次，按 batch id 降序稳定分页；cursor 为上一页最后一条 id，无更多时 next_cursor=null。
       parameters:
         - { name: target_id, in: query, required: true, schema: { type: integer, format: int64, minimum: 1 } }
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: cursor, in: query, schema: { type: string, pattern: '^[0-9]+$' }, description: 上一页最后一条 batch.id；首页省略 }
       responses:
-        '200': { description: 生成批次列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/GenerationBatch' } } } } }
-        '400': { description: 缺少租户或项目 ID、查询参数无效 }
+        '200': { description: 分页结果；next_cursor 为 null 表示无更多, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationBatchPage' } } } }
+        '400': { description: 缺少租户或项目 ID、查询参数无效（含非法 cursor） }
     post:
       summary: 创建用例生成批次
       requestBody:
@@ -1844,6 +1845,12 @@ components:
         failure_summary: { type: string, description: 生成失败原因摘要 }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    GenerationBatchPage:
+      type: object
+      required: [ batches, next_cursor ]
+      properties:
+        batches: { type: array, items: { $ref: '#/components/schemas/GenerationBatch' } }
+        next_cursor: { type: string, nullable: true, description: 下一页 cursor（本页最后一条 batch.id 的十进制字符串）；null 表示已到末页 }
     GenerationBatchCreate:
       type: object
       required: [ target_id, repo_id, service_id, branch, idempotency_key ]

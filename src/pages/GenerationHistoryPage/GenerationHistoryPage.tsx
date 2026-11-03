@@ -64,7 +64,9 @@ function batchBadgeClass(state: GenerationBatch['state']): string {
  * + optional server-side `state`); the UI appends pages via “加载更多” instead
  * of fetching everything and filtering in the browser. The selected state
  * filter is stored in the URL (`#/generation/history?state=failed`) so it is
- * deep-linkable. Batches still use the legacy non-paginated list endpoint.
+ * deep-linkable. Batches use their own cursor pagination
+ * (`GET /generation/batches?target_id&limit&cursor`) with a local stage filter
+ * that is applied to already loaded pages only (changing it resets the cursor).
  */
 export default function GenerationHistoryPage() {
   const navigate = useNavigate();
@@ -82,9 +84,14 @@ export default function GenerationHistoryPage() {
   const [runsLoadingMore, setRunsLoadingMore] = useState(false);
   const [runsError, setRunsError] = useState<GenerationErrorState | null>(null);
   const [batches, setBatches] = useState<GenerationBatch[]>([]);
+  const [batchNextCursor, setBatchNextCursor] = useState<string | null>(null);
+  const [batchLegacyPage, setBatchLegacyPage] = useState(false);
+  const [batchesLoading, setBatchesLoading] = useState(false);
+  const [batchesLoadingMore, setBatchesLoadingMore] = useState(false);
   const [batchesError, setBatchesError] = useState<GenerationErrorState | null>(null);
   const [batchStateFilter, setBatchStateFilter] = useState<string>('all');
   const runRequestSeq = useRef(0);
+  const batchRequestSeq = useRef(0);
 
   const handleError = useCallback(async (cause: unknown, fallback: string): Promise<GenerationErrorState> => {
     if (cause instanceof GreenPassApiError) {
@@ -149,17 +156,46 @@ export default function GenerationHistoryPage() {
     }
   }, [client, handleError, projectId, runStateFilter]);
 
-  const loadBatches = useCallback(async () => {
+  const loadBatchPage = useCallback(async (cursor: string | null, append: boolean) => {
     if (!client || !projectId) {
       setBatches([]);
+      setBatchNextCursor(null);
+      setBatchesLoading(false);
+      setBatchesLoadingMore(false);
       return;
     }
+    const requestId = ++batchRequestSeq.current;
+    if (append) setBatchesLoadingMore(true);
+    else {
+      setBatchesLoading(true);
+      setBatches([]);
+      setBatchNextCursor(null);
+    }
+    setBatchesError(null);
     try {
-      const list = await client.listGenerationBatches(projectId);
-      setBatches(list);
-      setBatchesError(null);
+      // Batch list is cursor-paginated (batch.id DESC). The request itself never
+      // tries to fetch everything; “加载更多” follows next_cursor.
+      const page = await client.listGenerationBatchPage({
+        targetId: projectId,
+        limit: HISTORY_PAGE_SIZE,
+        cursor: append ? cursor : null,
+      });
+      if (requestId !== batchRequestSeq.current) return;
+      setBatches((current) => (append ? mergeRunPages(current, page.batches) : page.batches));
+      setBatchNextCursor(page.nextCursor);
+      setBatchLegacyPage(page.legacy);
     } catch (cause) {
+      if (requestId !== batchRequestSeq.current) return;
       setBatchesError(await handleError(cause, '读取生成批次失败'));
+      if (!append) {
+        setBatches([]);
+        setBatchNextCursor(null);
+      }
+    } finally {
+      if (requestId === batchRequestSeq.current) {
+        setBatchesLoading(false);
+        setBatchesLoadingMore(false);
+      }
     }
   }, [client, handleError, projectId]);
 
@@ -169,15 +205,15 @@ export default function GenerationHistoryPage() {
   }, [loadRunPage]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot batch list load (legacy non-paginated endpoint)
-    void loadBatches();
-  }, [loadBatches]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- page load; the stage filter resets the batch cursor to page 1
+    void loadBatchPage(null, false);
+  }, [batchStateFilter, loadBatchPage]);
 
   const error = runsError ?? batchesError;
   const refresh = useCallback(() => {
     void loadRunPage(null, false);
-    void loadBatches();
-  }, [loadBatches, loadRunPage]);
+    void loadBatchPage(null, false);
+  }, [loadBatchPage, loadRunPage]);
 
   const changeStateFilter = useCallback((value: HistoryStateFilter) => {
     const next = new URLSearchParams(searchParams);
@@ -186,9 +222,13 @@ export default function GenerationHistoryPage() {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  const visibleBatches = useMemo(() => [...batches]
-    .filter((batch) => batchStateFilter === 'all' || batch.state === batchStateFilter)
-    .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at)), [batches, batchStateFilter]);
+  // The batch stage filter is a view filter over already loaded pages (the
+  // backend batch cursor contract has no server-side state filter). Changing it
+  // resets the cursor to page 1; “加载更多” continues scanning next pages.
+  const visibleBatches = useMemo(
+    () => batches.filter((batch) => batchStateFilter === 'all' || batch.state === batchStateFilter),
+    [batches, batchStateFilter],
+  );
   const serviceNameById = useMemo(() => new Map(catalog.services.map((service) => [service.id, service.name])), [catalog.services]);
   const serviceNameForBatch = useCallback((batch: GenerationBatch): string => {
     if (batch.service_id && serviceNameById.get(batch.service_id)) return serviceNameById.get(batch.service_id) as string;
@@ -202,6 +242,7 @@ export default function GenerationHistoryPage() {
   // should ever mention the legacy list interface. A cursor backend must not
   // show legacy wording anywhere (header/stats/footer).
   const pagingLabel = legacyPage ? '旧接口单页' : 'cursor 分页';
+  const batchPagingLabel = batchLegacyPage ? '旧接口单页' : 'cursor 分页';
   const showEmptyState = !runsLoading && !error && runs.length === 0 && batches.length === 0 && runStateFilter === 'all';
 
   const openRun = (run: GenerationRunSummary) => {
@@ -253,8 +294,8 @@ export default function GenerationHistoryPage() {
         <button type="button" onClick={() => navigate('/generation')} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50">
           <ArrowLeft className="h-3.5 w-3.5" />返回生成用例
         </button>
-        <button type="button" onClick={refresh} disabled={runsLoading} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-sm text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
-          <RefreshCw className={'h-3.5 w-3.5 ' + (runsLoading ? 'animate-spin' : '')} />刷新
+        <button type="button" onClick={refresh} disabled={runsLoading || batchesLoading} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-sm text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+          <RefreshCw className={'h-3.5 w-3.5 ' + (runsLoading || batchesLoading ? 'animate-spin' : '')} />刷新
         </button>
       </PageHeader>
 
@@ -289,7 +330,7 @@ export default function GenerationHistoryPage() {
         <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
           <div className="text-[10px] text-slate-500">服务批次</div>
           <div className="mt-1 text-2xl font-semibold text-slate-800">{batches.length}</div>
-          <div className="text-[10px] text-slate-400">含历史生成与待审核批次</div>
+          <div className="text-[10px] text-slate-400">已加载（{batchPagingLabel}）· 阶段筛选作用于已加载批次</div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
           <div className="text-[10px] text-slate-500">审核积压（已加载）</div>
@@ -381,6 +422,7 @@ export default function GenerationHistoryPage() {
           {hasNextPage(nextCursor) ? (
             <button
               type="button"
+              aria-label="加载更多任务"
               onClick={() => { if (nextCursor) void loadRunPage(nextCursor, true); }}
               disabled={runsLoadingMore}
               className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
@@ -398,22 +440,25 @@ export default function GenerationHistoryPage() {
         title="服务批次"
         className="p-0 overflow-hidden"
         extra={
-          <label className="flex items-center gap-2 text-[11px] text-slate-500">
-            阶段
-            <select
-              value={batchStateFilter}
-              onChange={(event) => setBatchStateFilter(event.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600"
-            >
-              <option value="all">全部</option>
-              {Object.entries(BATCH_STAGE_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-[11px] text-slate-400">{batchLegacyPage ? '单页列表' : `每页 ${HISTORY_PAGE_SIZE} 条 · cursor 分页`}</span>
+            <label className="flex items-center gap-2 text-[11px] text-slate-500" title="阶段筛选作用于已加载批次；切换筛选会重置分页并重新加载第一页">
+              阶段
+              <select
+                value={batchStateFilter}
+                onChange={(event) => setBatchStateFilter(event.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600"
+              >
+                <option value="all">全部</option>
+                {Object.entries(BATCH_STAGE_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+          </div>
         }
       >
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <caption className="sr-only">历史生成批次列表</caption>
+            <caption className="sr-only">历史生成批次列表（{batchPagingLabel}）</caption>
             <thead className="bg-slate-50 text-left text-slate-500">
               <tr>
                 <th scope="col" className="px-4 py-2.5 font-medium">批次</th>
@@ -448,6 +493,27 @@ export default function GenerationHistoryPage() {
               )}
             </tbody>
           </table>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 text-[11px] text-slate-500">
+          <span>
+            已加载 {batches.length} 个批次
+            {batchStateFilter !== 'all' && ` · 阶段筛选“${BATCH_STAGE_LABEL[batchStateFilter] ?? batchStateFilter}”作用于已加载批次，可继续加载更多`}
+            {batchLegacyPage && ' · 当前后端为旧批次列表接口（无 cursor），已按单页展示'}
+          </span>
+          {hasNextPage(batchNextCursor) ? (
+            <button
+              type="button"
+              aria-label="加载更多批次"
+              onClick={() => { if (batchNextCursor) void loadBatchPage(batchNextCursor, true); }}
+              disabled={batchesLoadingMore}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {batchesLoadingMore ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+              {batchesLoadingMore ? '加载中…' : '加载更多'}
+            </button>
+          ) : batches.length > 0 ? (
+            <span className="text-slate-400">已加载全部</span>
+          ) : null}
         </div>
       </Card>
 

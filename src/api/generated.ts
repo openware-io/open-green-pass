@@ -132,14 +132,16 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 查询当前项目最近的用例生成批次
-         * @description 仅返回当前租户和指定项目的批次，按创建时间降序排列，同一时间按 ID 降序排列。
+         * 查询当前项目最近的用例生成批次（按 id 倒序 cursor 分页）
+         * @description 仅返回当前租户和指定项目的批次，按 batch id 降序稳定分页；cursor 为上一页最后一条 id，无更多时 next_cursor=null。
          */
         get: {
             parameters: {
                 query: {
                     target_id: number;
                     limit?: number;
+                    /** @description 上一页最后一条 batch.id；首页省略 */
+                    cursor?: string;
                 };
                 header?: never;
                 path?: never;
@@ -147,16 +149,16 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description 生成批次列表 */
+                /** @description 分页结果；next_cursor 为 null 表示无更多 */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["GenerationBatch"][];
+                        "application/json": components["schemas"]["GenerationBatchPage"];
                     };
                 };
-                /** @description 缺少租户或项目 ID、查询参数无效 */
+                /** @description 缺少租户或项目 ID、查询参数无效（含非法 cursor） */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -3094,6 +3096,11 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        GenerationBatchPage: {
+            batches: components["schemas"]["GenerationBatch"][];
+            /** @description 下一页 cursor（本页最后一条 batch.id 的十进制字符串）；null 表示已到末页 */
+            next_cursor: string | null;
         };
         GenerationBatchCreate: {
             /** Format: int64 */

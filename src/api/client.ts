@@ -26,6 +26,14 @@ export type WechatAuthConfig = { team_id:number; enabled:boolean; app_id:string;
 export type WechatBinding = { bound:boolean; display_name?:string; avatar_url?:string };
 export type GenerationBatch = components['schemas']['GenerationBatch'] & { service_id?: number | null; source_path?: string };
 export type CreateGenerationBatchInput = components['schemas']['GenerationBatchCreate'] & { service_id?: number; source_path?: string };
+/** Cursor-paginated batch history page (GET /generation/batches?limit&cursor). */
+export type GenerationBatchPage = {
+  batches: GenerationBatch[];
+  /** Cursor for the next page; null means the list is exhausted. */
+  nextCursor: string | null;
+  /** True when the server returned the legacy bare array (no cursor metadata yet). */
+  legacy: boolean;
+};
 export type RepositoryRef = components['schemas']['RepositoryRef'];
 /* ------------------------------------------------------------------ *
  * Generation S1 contract types (frozen: .outputs/generation-refactor/CONTRACT.md)
@@ -242,6 +250,32 @@ export function normalizeGenerationRunPage(payload: unknown): GenerationRunPage 
   return { runs: [], nextCursor: null, legacy: false };
 }
 
+function isGenerationBatchList(value: unknown): value is GenerationBatch[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'object' && item !== null && typeof (item as { id?: unknown }).id === 'number');
+}
+
+/**
+ * Normalizes the batch cursor-page response defensively so the UI works both
+ * with `{batches, next_cursor}` and with the legacy bare array.
+ */
+export function normalizeGenerationBatchPage(payload: unknown): GenerationBatchPage {
+  if (Array.isArray(payload)) {
+    return { batches: isGenerationBatchList(payload) ? payload : [], nextCursor: null, legacy: true };
+  }
+  if (payload && typeof payload === 'object') {
+    const record = payload as Record<string, unknown>;
+    const list = record.batches ?? record.items ?? record.data;
+    const rawCursor = record.next_cursor ?? record.nextCursor ?? record.next;
+    const nextCursor = typeof rawCursor === 'string' && rawCursor ? rawCursor : null;
+    return {
+      batches: isGenerationBatchList(list) ? list : [],
+      nextCursor,
+      legacy: false,
+    };
+  }
+  return { batches: [], nextCursor: null, legacy: false };
+}
+
 export interface GreenPassClientOptions {
   baseUrl?: string;
   teamId: number;
@@ -404,7 +438,19 @@ export class GreenPassClient {
   analyzeProjectServiceProfile(projectId:number,serviceId:number):JsonResponse<{status:string}>{return this.request(`/projects/${projectId}/services/${serviceId}/analyze-profile`,{method:'POST'});}
   createGenerationBatch(input: CreateGenerationBatchInput): JsonResponse<GenerationBatch> { return this.request('/generation/batches',{method:'POST',body:JSON.stringify(input)}); }
   getGenerationBatch(batchId:number): JsonResponse<GenerationBatch> { return this.request(`/generation/batches/${batchId}`); }
+  /** @deprecated Prefer listGenerationBatchPage (cursor pagination). */
   listGenerationBatches(targetId:number): JsonResponse<GenerationBatch[]> { return this.request(`/generation/batches?target_id=${targetId}`); }
+  /**
+   * Cursor-paginated batch history. Contract (backend): `{ batches, next_cursor }`,
+   * batch.id DESC, cursor = last batch id of the previous page, limit default 20/max 100.
+   */
+  async listGenerationBatchPage(params: { targetId:number; limit?:number; cursor?:string | null }): Promise<GenerationBatchPage> {
+    const query = new URLSearchParams({ target_id: String(params.targetId) });
+    if (params.limit) query.set('limit', String(params.limit));
+    if (params.cursor) query.set('cursor', params.cursor);
+    const payload = await this.request<unknown>(`/generation/batches?${query}`);
+    return normalizeGenerationBatchPage(payload);
+  }
   reviewGenerationBatch(batchId:number,input: paths['/generation/batches/{id}/review']['post']['requestBody']['content']['application/json']): JsonResponse<GenerationBatch> { return this.request(`/generation/batches/${batchId}/review`,{method:'POST',body:JSON.stringify(input)}); }
   cancelGenerationBatch(batchId:number,input:{expected_state_version:number;request_id:string}): JsonResponse<GenerationBatch> { return this.request(`/generation/batches/${batchId}/cancel`,{method:'POST',body:JSON.stringify(input)}); }
   preflightGenerationPlan(input: GenerationPlanRequest, signal?: AbortSignal): JsonResponse<GenerationPlan> {

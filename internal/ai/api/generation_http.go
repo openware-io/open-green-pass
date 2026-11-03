@@ -87,14 +87,26 @@ func (h *generationHandler) list(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	batches, err := h.svc.ListByTarget(r.Context(), team, targetID, limit)
+	var beforeID int64
+	if raw := r.URL.Query().Get("cursor"); raw != "" {
+		beforeID, err = strconv.ParseInt(raw, 10, 64)
+		if err != nil || beforeID <= 0 {
+			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_cursor"})
+			return
+		}
+	}
+	page, err := h.svc.ListByTargetPage(r.Context(), team, targetID, beforeID, limit)
 	if err != nil {
 		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "generation_batches_unavailable"})
 		return
 	}
-	response := make([]map[string]any, 0, len(batches))
-	for _, batch := range batches {
-		response = append(response, batchResponse(batch))
+	batches := make([]map[string]any, 0, len(page.Batches))
+	for _, batch := range page.Batches {
+		batches = append(batches, batchResponse(batch))
+	}
+	response := map[string]any{"batches": batches, "next_cursor": nil}
+	if page.NextCursor != nil {
+		response["next_cursor"] = strconv.FormatInt(*page.NextCursor, 10)
 	}
 	httpx.WriteJSON(w, http.StatusOK, response)
 }

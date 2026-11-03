@@ -1402,6 +1402,50 @@ func (s *GenerationBatchStore) ListByTarget(ctx context.Context, teamID, targetI
 	return out, err
 }
 
+// ListByTargetPage pages batches by id DESC for stable history pagination. It
+// fetches limit+1 rows so NextCursor is reported only when an older page exists.
+func (s *GenerationBatchStore) ListByTargetPage(ctx context.Context, teamID, targetID, beforeID int64, limit int) (*domain.GenerationBatchPage, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	page := &domain.GenerationBatchPage{Batches: make([]*domain.GenerationBatch, 0, limit)}
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT id,team_id,target_id,repo_id,service_id,COALESCE(source_path,''),ref_type,branch,COALESCE(requested_version,''),COALESCE(head_sha,''),state,state_version,COALESCE(workflow_id,''),idempotency_key,parent_batch_id,base_batch_id,created_by,COALESCE(failure_summary,''),created_at,updated_at
+			FROM gen_batch
+			WHERE team_id=$1 AND target_id=$2 AND ($3::bigint = 0 OR id < $3::bigint)
+			ORDER BY id DESC
+			LIMIT $4`, teamID, targetID, beforeID, limit+1)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		hasMore := false
+		for rows.Next() {
+			if len(page.Batches) == limit {
+				hasMore = true
+				break
+			}
+			var b domain.GenerationBatch
+			if err := scanBatch(rows, &b); err != nil {
+				return err
+			}
+			page.Batches = append(page.Batches, &b)
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		if hasMore && len(page.Batches) > 0 {
+			cursor := page.Batches[len(page.Batches)-1].ID
+			page.NextCursor = &cursor
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return page, nil
+}
+
 func (s *GenerationBatchStore) FindLatestApprovedByScope(ctx context.Context, teamID, targetID, repoID, serviceID int64) (*domain.GenerationBatch, error) {
 	var batch domain.GenerationBatch
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {

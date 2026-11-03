@@ -127,6 +127,14 @@ func canTransition(from, to GenerationBatchState) bool {
 	return allowed
 }
 
+// GenerationBatchPage is one stable id-descending page of generation batches.
+// NextCursor is set only when an older page exists and is the last batch id of
+// this page.
+type GenerationBatchPage struct {
+	Batches    []*GenerationBatch
+	NextCursor *int64
+}
+
 // GenerationBatchRepository is the persistence boundary for generation batch
 // metadata. CompareAndSwap must atomically compare state_version and persist a
 // new version so concurrent review/rollback commands cannot overwrite one
@@ -136,6 +144,9 @@ type GenerationBatchRepository interface {
 	Find(ctx context.Context, teamID, batchID int64) (*GenerationBatch, error)
 	// ListByTarget returns newest batches first, with descending ID breaking timestamp ties.
 	ListByTarget(ctx context.Context, teamID, targetID int64, limit int) ([]*GenerationBatch, error)
+	// ListByTargetPage returns batches strictly older than beforeID (0 = first
+	// page), ordered by id DESC; NextCursor is set only when more rows exist.
+	ListByTargetPage(ctx context.Context, teamID, targetID, beforeID int64, limit int) (*GenerationBatchPage, error)
 	// FindLatestApprovedByScope returns the last effective iteration for exactly
 	// one project/repository/service. It is the system-owned baseline for the
 	// next iteration; callers must never supply a baseline batch ID.

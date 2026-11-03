@@ -99,6 +99,76 @@ function collectRoutePaths(srcDir: string): string[] {
   return [...paths];
 }
 
+// ── 生产 chunk 拆分 ────────────────────────────────────────────────────
+// 单入口 SPA 默认把 React/图表/页面代码全部打进 index-*.js（~980KB）。
+// 按“依赖域 + 页面域”拆成稳定 chunk：shared 入口变小、页面按域并行加载并缓存，
+// 避免首屏加载一个超大文件。命名稳定（文件名带 hash，内容变才失效）。
+// 注：页面仍是静态 import（不改变路由/首屏行为）；如需真正按路由懒加载，
+// 可后续把 app.tsx 的页面 import 改为 React.lazy（会引入 Suspense fallback）。
+const PAGE_CHUNKS: Record<string, string> = {
+  GenerationPage: 'page-generation',
+  GenerationHistoryPage: 'page-generation',
+  TargetPage: 'page-target',
+  TargetEnvPage: 'page-target',
+  CasesPage: 'page-cases-exec',
+  ExecPage: 'page-cases-exec',
+  GatePage: 'page-governance',
+  FindingsPage: 'page-governance',
+  HistoryPage: 'page-governance',
+  ReportPage: 'page-governance',
+  AuditPage: 'page-governance',
+  AuditCostPage: 'page-governance',
+  AuditExecPage: 'page-governance',
+  AuditOpPage: 'page-governance',
+  TeamPage: 'page-platform',
+  ModelPage: 'page-platform',
+  SettingsPage: 'page-platform',
+  CicdPage: 'page-platform',
+  CicdTriggerPage: 'page-platform',
+  CicdConnectorPage: 'page-platform',
+  ConcurrencyPage: 'page-platform',
+  ScenarioCenterPage: 'page-platform',
+  AssistantPage: 'page-platform',
+  TracePage: 'page-platform',
+  LoginPage: 'page-access',
+  NotFoundPage: 'page-access',
+};
+
+function manualChunks(id: string): string | undefined {
+  const normalized = id.replace(/\\/g, '/');
+  if (!normalized.includes('node_modules')) {
+    // src 内页面按功能域拆分；shared/components/api 留在入口 chunk。
+    const pageMatch = normalized.match(/\/src\/pages\/([^/]+)\//);
+    if (pageMatch) return PAGE_CHUNKS[pageMatch[1]] ?? 'page-other';
+    return undefined;
+  }
+  // React runtime + router（所有页面共享，必须最早加载）。
+  if (normalized.includes('/react/') || normalized.includes('/react-dom/') || normalized.includes('/scheduler/') || normalized.includes('/react-router')) {
+    return 'react-vendor';
+  }
+  // Radix/UI 原子组件（Dialog/Drawer/Select/Command 等）。
+  if (normalized.includes('@radix-ui') || normalized.includes('/vaul/') || normalized.includes('/cmdk/') || normalized.includes('@floating-ui') || normalized.includes('react-remove-scroll') || normalized.includes('/aria-hidden/')) {
+    return 'ui-vendor';
+  }
+  // 图表：echarts（AI 覆盖率/执行面板）与 recharts/d3（报告/成本）。
+  if (normalized.includes('/echarts/') || normalized.includes('/zrender/')) return 'echarts-vendor';
+  if (normalized.includes('/recharts/') || normalized.includes('/d3-') || normalized.includes('/victory-vendor/')) return 'charts-vendor';
+  // 动效与交互增强。
+  if (normalized.includes('framer-motion') || normalized.includes('/motion-dom/') || normalized.includes('/motion-utils/') || normalized.includes('/gsap/') || normalized.includes('@gsap/') || normalized.includes('@formkit')) {
+    return 'motion-vendor';
+  }
+  // Markdown/助手渲染。
+  if (normalized.includes('react-markdown') || normalized.includes('remark-') || normalized.includes('/micromark') || normalized.includes('/mdast-') || normalized.includes('/hast-') || normalized.includes('/unist-') || normalized.includes('/unified/') || normalized.includes('/vfile') || normalized.includes('property-information') || normalized.includes('space-separated-tokens') || normalized.includes('comma-separated-tokens') || normalized.includes('html-url-attributes') || normalized.includes('trim-lines') || normalized.includes('/devlop/')) {
+    return 'markdown-vendor';
+  }
+  // 表单/校验/日期。
+  if (normalized.includes('react-hook-form') || normalized.includes('@hookform') || normalized.includes('/zod/') || normalized.includes('date-fns') || normalized.includes('react-day-picker') || normalized.includes('input-otp')) {
+    return 'form-vendor';
+  }
+  if (normalized.includes('lucide-react')) return 'icons-vendor';
+  return 'vendor';
+}
+
 export default defineConfig(({ command }) => ({
   plugins: [react(), tailwindcss(), miaodaOutputPlugin(), sparkJsonPlugin()],
   // 生产构建：JS/CSS 引用带 CDN 前缀（无 CDN 时退回 base path）；dev 恒为 /
@@ -114,5 +184,11 @@ export default defineConfig(({ command }) => ({
   },
   build: {
     outDir: 'dist/client',
+    // Vite 8/rolldown：output.manualChunks 等价于 codeSplitting 分组（保持稳定 vendor 命名）。
+    rolldownOptions: {
+      output: {
+        manualChunks,
+      },
+    },
   },
 }));

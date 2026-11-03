@@ -102,7 +102,7 @@ func (s *GenerationBatchService) Find(ctx context.Context, teamID, batchID int64
 }
 
 const (
-	DefaultGenerationBatchLimit = 50
+	DefaultGenerationBatchLimit = 20
 	MaxGenerationBatchLimit     = 100
 )
 
@@ -117,6 +117,27 @@ func (s *GenerationBatchService) ListByTarget(ctx context.Context, teamID, targe
 		return nil, errors.New("generation batch limit must be between 1 and 100")
 	}
 	return s.batches.ListByTarget(ctx, teamID, targetID, limit)
+}
+
+// ListByTargetPage returns one stable id-descending page of batches. beforeID
+// is the previous page's last id (0 = first page); the default limit is 20.
+func (s *GenerationBatchService) ListByTargetPage(ctx context.Context, teamID, targetID, beforeID int64, limit int) (*domain.GenerationBatchPage, error) {
+	if s == nil || s.batches == nil {
+		return nil, errors.New("generation batch repository is required")
+	}
+	if teamID <= 0 || targetID <= 0 {
+		return nil, errors.New("generation batch list requires tenant and target")
+	}
+	if beforeID < 0 {
+		return nil, errors.New("generation batch cursor must be a positive id")
+	}
+	if limit <= 0 {
+		limit = DefaultGenerationBatchLimit
+	}
+	if limit > MaxGenerationBatchLimit {
+		return nil, errors.New("generation batch limit must be between 1 and 100")
+	}
+	return s.batches.ListByTargetPage(ctx, teamID, targetID, beforeID, limit)
 }
 
 func (s *GenerationBatchService) SetReviewPorts(signals GenerationSignalPort, audit GenerationAuditPort) {

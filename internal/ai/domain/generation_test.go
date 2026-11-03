@@ -67,6 +67,10 @@ func (contextRepositoryProbe) ListByTarget(context.Context, int64, int64, int) (
 	return nil, nil
 }
 
+func (contextRepositoryProbe) ListByTargetPage(context.Context, int64, int64, int64, int) (*GenerationBatchPage, error) {
+	return nil, nil
+}
+
 func (contextRepositoryProbe) FindLatestApprovedByScope(context.Context, int64, int64, int64, int64) (*GenerationBatch, error) {
 	return nil, ErrGenerationNotFound
 }

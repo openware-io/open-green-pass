@@ -92,6 +92,32 @@ func (r *MemoryGenerationBatchRepository) ListByTarget(_ context.Context, teamID
 	return result, nil
 }
 
+func (r *MemoryGenerationBatchRepository) ListByTargetPage(_ context.Context, teamID, targetID, beforeID int64, limit int) (*domain.GenerationBatchPage, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	result := make([]*domain.GenerationBatch, 0)
+	for _, batch := range r.byID {
+		if batch.TeamID != teamID || batch.TargetID != targetID {
+			continue
+		}
+		if beforeID > 0 && batch.ID >= beforeID {
+			continue
+		}
+		result = append(result, cloneGenerationBatch(batch))
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ID > result[j].ID })
+	page := &domain.GenerationBatchPage{Batches: result}
+	if len(result) > limit {
+		page.Batches = result[:limit]
+		cursor := page.Batches[len(page.Batches)-1].ID
+		page.NextCursor = &cursor
+	}
+	return page, nil
+}
+
 func (r *MemoryGenerationBatchRepository) FindLatestApprovedByScope(_ context.Context, teamID, targetID, repoID, serviceID int64) (*domain.GenerationBatch, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

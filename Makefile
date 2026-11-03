@@ -34,11 +34,11 @@ api-contract:
 check: validate lint test build vuln migcheck api-contract
 
 tools:
-	go install mvdan.cc/gofumpt@latest
-	go install golang.org/x/tools/cmd/goimports@latest
+	go install mvdan.cc/gofumpt@v0.12.0
+	go install golang.org/x/tools/cmd/goimports@v0.50.0
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 	go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
-	go install honnef.co/go/tools/cmd/staticcheck@latest
+	go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
 
 # Windows 本地清理：仅删除文档规范中列出的可重建产物。
 clean:

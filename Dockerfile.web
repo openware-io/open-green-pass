@@ -1,4 +1,4 @@
-FROM node:24-alpine AS build
+FROM node:24-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS build
 WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -11,7 +11,7 @@ ENV VITE_GP_TEAM_ID=$VITE_GP_TEAM_ID
 ENV VITE_GP_USER_ID=$VITE_GP_USER_ID
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.29-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.29-alpine@sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6 AS runtime
 # The repository's Vite plugin emits the application shell to dist/output and
 # its browser assets to dist/output_resource. Merge both produced directories
 # into nginx's static root; copying only the shell leaves /assets requests

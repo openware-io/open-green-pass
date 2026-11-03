@@ -22,6 +22,11 @@ type batchListRow struct {
 	State    domain.GenerationBatchState `json:"state"`
 }
 
+type batchListPage struct {
+	Batches    []batchListRow `json:"batches"`
+	NextCursor *string        `json:"next_cursor"`
+}
+
 func seedBatchListRepository(t *testing.T) *infra.MemoryGenerationBatchRepository {
 	t.Helper()
 	repo := infra.NewMemoryGenerationBatchRepository()
@@ -31,7 +36,6 @@ func seedBatchListRepository(t *testing.T) *infra.MemoryGenerationBatchRepositor
 			t.Fatal(err)
 		}
 		if i == 1 {
-			// Creation time takes precedence over ID.
 			batch.CreatedAt = batch.CreatedAt.Add(time.Second)
 			batch.State = domain.GenerationApproved
 		}
@@ -48,7 +52,7 @@ func seedBatchListRepository(t *testing.T) *infra.MemoryGenerationBatchRepositor
 	return repo
 }
 
-func getBatchList(t *testing.T, mux *http.ServeMux, query string, teamID int64) []batchListRow {
+func getBatchList(t *testing.T, mux *http.ServeMux, query string, teamID int64) batchListPage {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, "/generation/batches?"+query, nil)
 	req = req.WithContext(rls.WithTenant(req.Context(), teamID))
@@ -57,49 +61,63 @@ func getBatchList(t *testing.T, mux *http.ServeMux, query string, teamID int64) 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	var result []batchListRow
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+	var page batchListPage
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
 		t.Fatal(err)
 	}
-	return result
+	return page
 }
 
 func TestGenerationBatchListScopesOrdersAndLimitsResults(t *testing.T) {
 	repo := seedBatchListRepository(t)
 	mux := http.NewServeMux()
 	RegisterGeneration(mux, application.NewGenerationBatchService(repo), nil, nil)
-	result := getBatchList(t, mux, "target_id=20", 10)
-	if len(result) != 50 || result[0].ID != 1 || result[1].ID != 51 || result[49].ID != 3 || result[0].State != domain.GenerationApproved {
-		t.Fatalf("unexpected default ordered results: %#v", result)
+	page := getBatchList(t, mux, "target_id=20", 10)
+	if len(page.Batches) != 20 || page.Batches[0].ID != 51 || page.Batches[19].ID != 32 {
+		t.Fatalf("unexpected default page: %#v", page)
 	}
-	for _, batch := range result {
+	if page.NextCursor == nil || *page.NextCursor != "32" {
+		t.Fatalf("default next_cursor = %v, want 32", page.NextCursor)
+	}
+	for _, batch := range page.Batches {
 		if batch.TeamID != 10 || batch.TargetID != 20 {
 			t.Fatalf("cross-tenant/project batch: %#v", batch)
 		}
 	}
 }
 
-func TestGenerationBatchListLimitsAndScopes(t *testing.T) {
+func TestGenerationBatchListCursorPagination(t *testing.T) {
 	repo := seedBatchListRepository(t)
 	mux := http.NewServeMux()
 	RegisterGeneration(mux, application.NewGenerationBatchService(repo), nil, nil)
-	if result := getBatchList(t, mux, "target_id=20&limit=2", 10); len(result) != 2 || result[0].ID != 1 || result[1].ID != 51 {
-		t.Fatalf("unexpected bounded results: %#v", result)
+	first := getBatchList(t, mux, "target_id=20&limit=2", 10)
+	if len(first.Batches) != 2 || first.Batches[0].ID != 51 || first.Batches[1].ID != 50 {
+		t.Fatalf("first page = %#v", first)
 	}
-	if result := getBatchList(t, mux, "target_id=20", 11); len(result) != 1 || result[0].ID != 53 {
-		t.Fatalf("unexpected other tenant results: %#v", result)
+	if first.NextCursor == nil || *first.NextCursor != "50" {
+		t.Fatalf("first next_cursor = %v", first.NextCursor)
 	}
-	if result := getBatchList(t, mux, "target_id=21", 10); len(result) != 1 || result[0].ID != 52 {
-		t.Fatalf("unexpected other project results: %#v", result)
+	second := getBatchList(t, mux, "target_id=20&limit=2&cursor="+*first.NextCursor, 10)
+	if len(second.Batches) != 2 || second.Batches[0].ID != 49 || second.Batches[1].ID != 48 {
+		t.Fatalf("second page = %#v", second)
+	}
+	if second.NextCursor == nil || *second.NextCursor != "48" {
+		t.Fatalf("second next_cursor = %v", second.NextCursor)
+	}
+	// A project with a single batch has no older page: next_cursor is null.
+	only := getBatchList(t, mux, "target_id=21&limit=2", 10)
+	if len(only.Batches) != 1 || only.Batches[0].ID != 52 || only.NextCursor != nil {
+		t.Fatalf("single-page result = %#v", only)
 	}
 }
 
-func TestGenerationBatchListEmptyProjectReturnsArray(t *testing.T) {
+func TestGenerationBatchListEmptyProjectReturnsObject(t *testing.T) {
 	repo := seedBatchListRepository(t)
 	mux := http.NewServeMux()
 	RegisterGeneration(mux, application.NewGenerationBatchService(repo), nil, nil)
-	if result := getBatchList(t, mux, "target_id=999", 10); result == nil || len(result) != 0 {
-		t.Fatalf("empty project should return a JSON array: %#v", result)
+	page := getBatchList(t, mux, "target_id=999", 10)
+	if page.Batches == nil || len(page.Batches) != 0 || page.NextCursor != nil {
+		t.Fatalf("empty project page = %#v", page)
 	}
 }
 
@@ -123,6 +141,9 @@ func TestGenerationBatchListRejectsInvalidScopeAndLimit(t *testing.T) {
 		{"target_id=1&limit=101", 10},
 		{"target_id=1&limit=abc", 10},
 		{"target_id=1&limit=", 10},
+		{"target_id=1&cursor=abc", 10},
+		{"target_id=1&cursor=0", 10},
+		{"target_id=1&cursor=-5", 10},
 	} {
 		t.Run(fmt.Sprintf("%d/%s", tc.team, tc.query), func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/generation/batches?"+tc.query, nil)
