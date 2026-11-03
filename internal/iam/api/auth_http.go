@@ -16,6 +16,24 @@ type loginRequest struct {
 	Password string `json:"password"`
 }
 
+// sessionCookie centralizes session cookie attributes. Secure defaults to true
+// and is overridden only by the explicit local-HTTP setting; HttpOnly and
+// SameSite are always enforced.
+func sessionCookie(value string, secure bool, expires time.Time, maxAge int) *http.Cookie {
+	cookie := &http.Cookie{
+		Name:     iaminfra.SessionCookie,
+		Value:    value,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  expires,
+		MaxAge:   maxAge,
+	}
+	cookie.Secure = secure
+	return cookie
+}
+
 func RegisterAuth(mux *http.ServeMux, store *iaminfra.AuthStore, secureCookie bool) {
 	mux.HandleFunc("POST /auth/login", func(w http.ResponseWriter, r *http.Request) {
 		var in loginRequest
@@ -29,7 +47,7 @@ func RegisterAuth(mux *http.ServeMux, store *iaminfra.AuthStore, secureCookie bo
 			httpx.WriteJSON(w, 401, map[string]string{"error": "invalid_credentials"})
 			return
 		}
-		http.SetCookie(w, &http.Cookie{Name: iaminfra.SessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: secureCookie, SameSite: http.SameSiteLaxMode, Expires: expires, MaxAge: int(time.Until(expires).Seconds())}) //nolint:gosec // G124: Secure is env-controlled for local HTTP; HttpOnly and SameSite are fixed
+		http.SetCookie(w, sessionCookie(token, secureCookie, expires, int(time.Until(expires).Seconds())))
 		httpx.WriteJSON(w, 200, map[string]any{"user": u, "expires_at": expires})
 	})
 	mux.HandleFunc("GET /auth/me", func(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +68,7 @@ func RegisterAuth(mux *http.ServeMux, store *iaminfra.AuthStore, secureCookie bo
 		if c != nil {
 			_ = store.Logout(r.Context(), c.Value)
 		}
-		http.SetCookie(w, &http.Cookie{Name: iaminfra.SessionCookie, Value: "", Path: "/", HttpOnly: true, Secure: secureCookie, SameSite: http.SameSiteLaxMode, MaxAge: -1}) //nolint:gosec // G124: Secure is env-controlled for local HTTP; HttpOnly and SameSite are fixed
+		http.SetCookie(w, sessionCookie("", secureCookie, time.Time{}, -1))
 		w.WriteHeader(http.StatusNoContent)
 	})
 }

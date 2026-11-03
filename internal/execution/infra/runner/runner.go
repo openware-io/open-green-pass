@@ -11,8 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -107,21 +105,13 @@ type CommandExecutor interface {
 	Execute(context.Context, Plan) (string, error)
 }
 
-// LocalCommandExecutor is a development fallback. Production deployments
-// should use a sandbox executor instead of running commands in the server pod.
-type LocalCommandExecutor struct{}
+// unavailableCommandExecutor is the safe default: executing arbitrary plans in
+// the server/worker process is disabled. Production wires a sandbox executor;
+// local development must inject an explicit executor as well.
+type unavailableCommandExecutor struct{}
 
-func (LocalCommandExecutor) Execute(ctx context.Context, p Plan) (string, error) {
-	if len(p.Command) == 0 {
-		return "", errors.New("execution plan has no command")
-	}
-	cmd := exec.CommandContext(ctx, p.Command[0], p.Command[1:]...) //nolint:gosec // G204: this dev fallback executes the reviewed execution plan by design; production uses a sandbox executor
-	cmd.Env = append(os.Environ(), p.Environment...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return string(out), fmt.Errorf("%s: %w", p.Command[0], err)
-	}
-	return string(out), nil
+func (unavailableCommandExecutor) Execute(context.Context, Plan) (string, error) {
+	return "", errors.New("local command execution is disabled; configure a sandbox executor")
 }
 
 // ScenarioRunner turns adapter plans into the existing domain RunnerPort.
@@ -136,7 +126,7 @@ func NewScenarioRunner(gen *id.Generator, registry *Registry, executor CommandEx
 		registry = DefaultRegistry()
 	}
 	if executor == nil {
-		executor = LocalCommandExecutor{}
+		executor = unavailableCommandExecutor{}
 	}
 	return &ScenarioRunner{gen: gen, registry: registry, exec: executor}
 }

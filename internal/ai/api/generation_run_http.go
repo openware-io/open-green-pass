@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/openware-io/open-green-pass/internal/ai/application"
@@ -452,7 +453,7 @@ func (s *runEventStream) writeFrame(seq int64, eventType string, snapshot *domai
 		return err
 	}
 	frame := fmt.Sprintf("id: %d\nevent: run\ndata: %s\n\n", seq, payload)
-	if _, err := io.WriteString(s.w, frame); err != nil { //nolint:gosec // G705: payload is JSON-encoded SSE event data, not HTML
+	if _, err := io.Copy(s.w, strings.NewReader(frame)); err != nil {
 		return err
 	}
 	s.flusher.Flush()

@@ -249,7 +249,7 @@ func (h *wechatHandlers) completeLogin(w http.ResponseWriter, r *http.Request, s
 		redirectWechatError(w, r, "session_failed")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: iaminfra.SessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: h.secureCookie, SameSite: http.SameSiteLaxMode, Expires: expires, MaxAge: int(time.Until(expires).Seconds())}) //nolint:gosec // G124: Secure is env-controlled for local HTTP; HttpOnly and SameSite are fixed
+	http.SetCookie(w, sessionCookie(token, h.secureCookie, expires, int(time.Until(expires).Seconds())))
 	http.Redirect(w, r, "/#/scenarios", http.StatusFound)
 }
 
