@@ -170,49 +170,83 @@ func (q *Queue) DeadLetter(ctx context.Context, reason string, jobs ...domain.Cl
 // replaying the original payload would create an endless poison-message loop.
 // The original dead-letter entry remains immutable and a replay audit event is
 // appended to a separate Redis stream.
-//
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (q *Queue) ReplayDeadLetter(ctx context.Context, deliveryID string, correctedPayload []byte) error {
 	if deliveryID == "" || len(correctedPayload) == 0 {
 		return domain.ErrInvalidScheduleJob
 	}
-	entries, err := q.client.XRange(ctx, q.deadLetter(), deliveryID, deliveryID).Result()
+	entry, err := q.deadLetterEntry(ctx, deliveryID)
 	if err != nil {
 		return err
 	}
-	if len(entries) != 1 {
-		return fmt.Errorf("dead-letter delivery %s not found", deliveryID)
-	}
-	entry := entries[0]
-	stringValue := func(key string) string { return fmt.Sprint(entry.Values[key]) }
-	id, teamRaw, weightRaw, createdRaw := stringValue("id"), stringValue("team"), stringValue("weight"), stringValue("created")
-	teamID, err := strconv.ParseInt(teamRaw, 10, 64)
-	if err != nil || id == "" || teamID <= 0 {
-		return fmt.Errorf("decode dead-letter %s: %w", deliveryID, domain.ErrInvalidScheduleJob)
-	}
-	weight, err := strconv.Atoi(weightRaw)
-	if err != nil || weight <= 0 {
-		return fmt.Errorf("dead-letter %s has no replayable weight: %w", deliveryID, domain.ErrInvalidScheduleJob)
-	}
-	createdAt, err := strconv.ParseInt(createdRaw, 10, 64)
+	job, err := decodeDeadLetterEntry(entry, deliveryID)
 	if err != nil {
-		return fmt.Errorf("decode dead-letter %s created time: %w", deliveryID, err)
+		return err
 	}
+	if err := validateCorrectedPayload(correctedPayload, job.id, job.teamID); err != nil {
+		return err
+	}
+	score := float64(time.Now().UnixMilli()) + 1/float64(job.weight)
+	result, err := q.client.Eval(ctx, replayScript, []string{q.state(job.id), q.job(job.id), q.wfq(), q.replayAudit()},
+		job.id, job.teamID, job.weight, correctedPayload, job.createdAt, score, deliveryID, time.Now().UTC().Format(time.RFC3339Nano)).Text()
+	if err != nil {
+		return err
+	}
+	if result != "replayed" {
+		return fmt.Errorf("dead-letter %s cannot be replayed from state %q", deliveryID, result)
+	}
+	return nil
+}
+
+// deadLetterJob is the decoded immutable dead-letter envelope needed for a
+// replay; the original payload is intentionally never reused.
+type deadLetterJob struct {
+	id        string
+	teamID    int64
+	weight    int
+	createdAt int64
+}
+
+func (q *Queue) deadLetterEntry(ctx context.Context, deliveryID string) (redis.XMessage, error) {
+	entries, err := q.client.XRange(ctx, q.deadLetter(), deliveryID, deliveryID).Result()
+	if err != nil {
+		return redis.XMessage{}, err
+	}
+	if len(entries) != 1 {
+		return redis.XMessage{}, fmt.Errorf("dead-letter delivery %s not found", deliveryID)
+	}
+	return entries[0], nil
+}
+
+func decodeDeadLetterEntry(entry redis.XMessage, deliveryID string) (deadLetterJob, error) {
+	stringValue := func(key string) string { return fmt.Sprint(entry.Values[key]) }
+	job := deadLetterJob{id: stringValue("id")}
+	teamID, err := strconv.ParseInt(stringValue("team"), 10, 64)
+	if err != nil || job.id == "" || teamID <= 0 {
+		return deadLetterJob{}, fmt.Errorf("decode dead-letter %s: %w", deliveryID, domain.ErrInvalidScheduleJob)
+	}
+	job.teamID = teamID
+	weight, err := strconv.Atoi(stringValue("weight"))
+	if err != nil || weight <= 0 {
+		return deadLetterJob{}, fmt.Errorf("dead-letter %s has no replayable weight: %w", deliveryID, domain.ErrInvalidScheduleJob)
+	}
+	job.weight = weight
+	createdAt, err := strconv.ParseInt(stringValue("created"), 10, 64)
+	if err != nil {
+		return deadLetterJob{}, fmt.Errorf("decode dead-letter %s created time: %w", deliveryID, err)
+	}
+	job.createdAt = createdAt
+	return job, nil
+}
+
+// validateCorrectedPayload requires the operator-supplied payload to match the
+// dead-lettered run/team; otherwise a replay could route a different job.
+func validateCorrectedPayload(correctedPayload []byte, id string, teamID int64) error {
 	var payload struct {
 		RunID  int64 `json:"run_id"`
 		TeamID int64 `json:"team_id"`
 	}
 	if err := json.Unmarshal(correctedPayload, &payload); err != nil || payload.RunID <= 0 || payload.TeamID <= 0 || strconv.FormatInt(payload.RunID, 10) != id || payload.TeamID != teamID {
 		return fmt.Errorf("corrected payload must match dead-letter run and team: %w", domain.ErrInvalidScheduleJob)
-	}
-	score := float64(time.Now().UnixMilli()) + 1/float64(weight)
-	result, err := q.client.Eval(ctx, replayScript, []string{q.state(id), q.job(id), q.wfq(), q.replayAudit()},
-		id, teamID, weight, correctedPayload, createdAt, score, deliveryID, time.Now().UTC().Format(time.RFC3339Nano)).Text()
-	if err != nil {
-		return err
-	}
-	if result != "replayed" {
-		return fmt.Errorf("dead-letter %s cannot be replayed from state %q", deliveryID, result)
 	}
 	return nil
 }

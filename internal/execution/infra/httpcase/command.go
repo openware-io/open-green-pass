@@ -13,8 +13,6 @@ import (
 // invocation. The host can only come from the operator-configured runtime;
 // model output is limited to a relative path, safe method, small JSON body,
 // allow-listed headers, and deterministic assertions.
-//
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func BuildCommand(script any, baseURL string) ([]string, error) {
 	root, ok := script.(map[string]any)
 	if !ok {
@@ -24,19 +22,15 @@ func BuildCommand(script any, baseURL string) ([]string, error) {
 	if !ok {
 		return nil, errors.New("generated API case request is missing")
 	}
-	u, err := url.Parse(baseURL)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
-		return nil, errors.New("registered environment URL is not a valid origin")
+	if err := validateOrigin(baseURL); err != nil {
+		return nil, err
 	}
-	method, _ := request["method"].(string)
-	method = strings.ToUpper(strings.TrimSpace(method))
-	switch method {
-	case "GET", "POST", "PUT", "PATCH", "DELETE":
-	default:
-		return nil, errors.New("generated API case uses a disallowed HTTP method")
+	method, err := normalizedMethod(request)
+	if err != nil {
+		return nil, err
 	}
-	apiPath, _ := request["path"].(string)
-	if err := validatePath(apiPath); err != nil {
+	apiPath, err := scriptPath(request)
+	if err != nil {
 		return nil, err
 	}
 	headers, err := readHeaders(request["headers"])
@@ -47,18 +41,64 @@ func BuildCommand(script any, baseURL string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	bodyArg, hasBody, err := requestBodyArg(request["body"])
+	if err != nil {
+		return nil, err
+	}
+	args := buildCurlArgs(baseURL, method, apiPath, headers, bodyArg, hasBody)
+	return []string{"sh", "-c", buildCurlScript(args, assertions)}, nil
+}
+
+func validateOrigin(baseURL string) error {
+	u, err := url.Parse(baseURL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+		return errors.New("registered environment URL is not a valid origin")
+	}
+	return nil
+}
+
+func normalizedMethod(request map[string]any) (string, error) {
+	method, _ := request["method"].(string)
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case "GET", "POST", "PUT", "PATCH", "DELETE":
+		return strings.ToUpper(strings.TrimSpace(method)), nil
+	default:
+		return "", errors.New("generated API case uses a disallowed HTTP method")
+	}
+}
+
+func scriptPath(request map[string]any) (string, error) {
+	apiPath, _ := request["path"].(string)
+	if err := validatePath(apiPath); err != nil {
+		return "", err
+	}
+	return apiPath, nil
+}
+
+func requestBodyArg(body any) (string, bool, error) {
+	if body == nil {
+		return "", false, nil
+	}
+	encoded, err := json.Marshal(body)
+	if err != nil || len(encoded) > 16*1024 {
+		return "", false, errors.New("generated API request body is invalid or too large")
+	}
+	return string(encoded), true, nil
+}
+
+func buildCurlArgs(baseURL, method, apiPath string, headers map[string]string, body string, hasBody bool) []string {
 	args := []string{"curl", "--silent", "--show-error", "--max-time", "60", "--request", method}
 	for name, value := range headers {
 		args = append(args, "--header", name+": "+value)
 	}
-	if body := request["body"]; body != nil {
-		encoded, err := json.Marshal(body)
-		if err != nil || len(encoded) > 16*1024 {
-			return nil, errors.New("generated API request body is invalid or too large")
-		}
-		args = append(args, "--data-binary", string(encoded))
+	if hasBody {
+		args = append(args, "--data-binary", body)
 	}
 	args = append(args, "--write-out", `\n%{http_code}`, strings.TrimRight(baseURL, "/")+apiPath)
+	return args
+}
+
+func buildCurlScript(args []string, assertions []assertion) string {
 	quoted := make([]string, len(args))
 	for i := range args {
 		quoted[i] = shellQuote(args[i])
@@ -76,7 +116,7 @@ func BuildCommand(script any, baseURL string) ([]string, error) {
 		}
 	}
 	scriptBody += "printf 'http_status=%s assertions=passed\\n' \"$status\"\n"
-	return []string{"sh", "-c", scriptBody}, nil
+	return scriptBody
 }
 
 type assertion struct {

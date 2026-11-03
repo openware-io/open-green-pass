@@ -102,7 +102,6 @@ var highRiskModules = map[string]bool{
 	"openPlatform": true, "clientRelease": true, "execution": true,
 }
 
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (s *CoverageGateService) evaluateRisk(ctx context.Context, projectID int64, module string) (*CoverageGateResult, error) {
 	summary, p0, p1, err := s.load(ctx, projectID, module)
 	if err != nil {
@@ -117,6 +116,22 @@ func (s *CoverageGateService) evaluateRisk(ctx context.Context, projectID int64,
 	if summary.TotalRequired == 0 {
 		result.Blockers = append(result.Blockers, "no required coverage cells")
 	}
+	stats := moduleCoverageStats(cells)
+	for _, name := range sortedModuleNames(stats) {
+		row := stats[name]
+		row.DesignCoverage = ratio(row.Mapped, row.Required)
+		row.ExecutionCoverage = ratio(row.Mapped, row.Required)
+		result.Modules = append(result.Modules, *row)
+		result.Blockers = append(result.Blockers, moduleBlockers(name, row)...)
+	}
+	if p0 > 0 || p1 > 0 {
+		result.Blockers = append(result.Blockers, fmt.Sprintf("open P0/P1 findings: %d/%d", p0, p1))
+	}
+	result.PassedGate = len(result.Blockers) == 0
+	return result, nil
+}
+
+func moduleCoverageStats(cells []domain.CoverageCell) map[string]*CoverageGateModule {
 	now := time.Now().UTC()
 	stats := map[string]*CoverageGateModule{}
 	for _, cell := range cells {
@@ -136,33 +151,33 @@ func (s *CoverageGateService) evaluateRisk(ctx context.Context, projectID int64,
 			row.Passed++
 		}
 	}
+	return stats
+}
+
+func sortedModuleNames(stats map[string]*CoverageGateModule) []string {
 	names := make([]string, 0, len(stats))
 	for name := range stats {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	for _, name := range names {
-		row := stats[name]
-		row.DesignCoverage = ratio(row.Mapped, row.Required)
-		row.ExecutionCoverage = ratio(row.Mapped, row.Required)
-		result.Modules = append(result.Modules, *row)
-		if row.Passed == 0 {
-			result.Blockers = append(result.Blockers, fmt.Sprintf("module %s smoke: no passed cells", name))
-		}
-		if highRiskModules[name] {
-			if row.DesignCoverage < 0.9 {
-				result.Blockers = append(result.Blockers, fmt.Sprintf("high-risk module %s design coverage %.1f%% < 90%%", name, row.DesignCoverage*100))
-			}
-			if row.ExecutionCoverage < 0.9 {
-				result.Blockers = append(result.Blockers, fmt.Sprintf("high-risk module %s execution coverage %.1f%% < 90%%", name, row.ExecutionCoverage*100))
-			}
-		}
+	return names
+}
+
+func moduleBlockers(name string, row *CoverageGateModule) []string {
+	var blockers []string
+	if row.Passed == 0 {
+		blockers = append(blockers, fmt.Sprintf("module %s smoke: no passed cells", name))
 	}
-	if p0 > 0 || p1 > 0 {
-		result.Blockers = append(result.Blockers, fmt.Sprintf("open P0/P1 findings: %d/%d", p0, p1))
+	if !highRiskModules[name] {
+		return blockers
 	}
-	result.PassedGate = len(result.Blockers) == 0
-	return result, nil
+	if row.DesignCoverage < 0.9 {
+		blockers = append(blockers, fmt.Sprintf("high-risk module %s design coverage %.1f%% < 90%%", name, row.DesignCoverage*100))
+	}
+	if row.ExecutionCoverage < 0.9 {
+		blockers = append(blockers, fmt.Sprintf("high-risk module %s execution coverage %.1f%% < 90%%", name, row.ExecutionCoverage*100))
+	}
+	return blockers
 }
 
 func (s *CoverageGateService) load(ctx context.Context, projectID int64, module string) (domain.CoverageSummary, int, int, error) {

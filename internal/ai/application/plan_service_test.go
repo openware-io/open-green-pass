@@ -239,7 +239,15 @@ func TestGenerationPlanPreflightReportsInvalidReasons(t *testing.T) {
 	}
 }
 
-//nolint:gocyclo // Scenario fixture intentionally covers estimate fallback/price matrix.
+func assertNoPriceMissingRisk(t *testing.T, plan *domain.GenerationPlan) {
+	t.Helper()
+	for _, risk := range plan.Risks {
+		if risk.Code == "price_missing" {
+			t.Fatalf("price_missing despite configured dsh price: %v", plan.Risks)
+		}
+	}
+}
+
 func TestGenerationPlanEstimateUsesApprovedHistoryAndPrice(t *testing.T) {
 	catalog := newFakePlanCatalog()
 	addPlanScope(catalog, 50, 30)
@@ -261,13 +269,7 @@ func TestGenerationPlanEstimateUsesApprovedHistoryAndPrice(t *testing.T) {
 	if len(price.models) == 0 || price.models[0] != "dsh/deepseek-flash" {
 		t.Fatalf("preflight did not use the DSH billing key first: %v", price.models)
 	}
-	if len(plan.Risks) != 0 {
-		for _, risk := range plan.Risks {
-			if risk.Code == "price_missing" {
-				t.Fatalf("price_missing despite configured dsh price: %v", plan.Risks)
-			}
-		}
-	}
+	assertNoPriceMissingRisk(t, plan)
 	estimate := plan.Estimate
 	if estimate.Unknown || estimate.TokensIn != 3000 || estimate.TokensOut != 3500 || estimate.DurationSeconds != 90 {
 		t.Fatalf("estimate = %+v", estimate)

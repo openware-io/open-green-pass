@@ -243,8 +243,6 @@ func (s *RunService) MarkFailed(ctx context.Context, runID int64) error {
 }
 
 // ExecuteRun 执行当次用例（scheduled→running→collect→gate→report→done）；重跑 attempt_seq 递增。
-//
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.Run, results []*domain.CaseResult, err error) {
 	teamID, ok := rls.TenantFrom(ctx)
 	if !ok {
@@ -258,117 +256,37 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 	if run.State == domain.RunCancelled {
 		return run, nil, nil
 	}
-	ownerID, ok := rls.UserFrom(ctx)
-	if !ok {
-		// Temporal activities created before owner propagation use the immutable
-		// run ID as an isolated owner scope. HTTP requests carry the real user ID.
-		ownerID = run.ID
-	}
-	quotaRequest := domain.ResourceRequest{TeamID: teamID, TargetID: run.TargetID, OwnerID: ownerID, Type: "run", Units: 1}
-	if err := s.quota.Acquire(ctx, quotaRequest); err != nil {
-		return nil, nil, err
-	}
-	defer func() {
-		if releaseErr := s.quota.Release(context.Background(), quotaRequest); err == nil && releaseErr != nil {
-			err = releaseErr
-		}
-	}()
-	// GP2-04 reference boundary: the target is exclusive by default. A shared
-	// implementation can use a finer resource scope without changing the
-	// application service contract.
-	claimToken, err := s.conflict.Acquire(ctx, domain.ResourceClaim{
-		TeamID: teamID, TargetID: run.TargetID, ResourceType: "target", PoolID: "default", OwnerID: run.ID, Exclusive: true,
-	})
-	if err != nil {
-		if !errors.Is(err, domain.ErrResourceConflict) {
-			return nil, nil, err
-		}
-		if err := s.recordResourceConflict(ctx, run, err); err != nil {
-			return nil, nil, err
-		}
-		return nil, nil, fmt.Errorf("%w: %v", ErrResourceConflict, err)
-	}
-	defer func() {
-		if claimToken == "" {
-			return
-		}
-		if releaseErr := s.conflict.Release(context.Background(), claimToken); err == nil && releaseErr != nil {
-			err = releaseErr
-		}
-	}()
-	// 首次：scheduled→running；重跑（done/failed 终态）：重置为 running，attempt 递增
-	switch run.State {
-	case domain.RunDone, domain.RunFailed:
-		run.State = domain.RunRunning
-	case domain.RunPaused:
-		if err := run.Resume(); err != nil {
-			return nil, nil, err
-		}
-	default:
-		if err := run.Schedule(); err != nil {
-			return nil, nil, err
-		}
-	}
-
-	// 装配用例执行规格（勾选范围 + 服务级截图开关策略）
-	shot, err := s.policy.Get(ctx, teamID, run.TargetID, run.ScenarioID)
+	quotaRequest, err := s.acquireRunQuota(ctx, teamID, run)
 	if err != nil {
 		return nil, nil, err
 	}
-	spec := make([]*domain.CaseSpec, 0, len(run.SelectedCases))
-	for _, caseID := range run.SelectedCases {
-		var version int
-		var script any
-		var err error
-		if scoped, ok := s.cases.(domain.TargetScopedCasePort); ok {
-			version, script, err = scoped.FetchScriptForTarget(ctx, teamID, run.TargetID, caseID)
-		} else {
-			version, script, err = s.cases.FetchScript(ctx, teamID, caseID)
-		}
-		if err != nil {
-			return nil, nil, err
-		}
-		baseURL := ""
-		requiresSandbox := hasDeclarativeHTTPRequest(script)
-		if requiresSandbox {
-			if s.envSvc == nil {
-				return nil, nil, fmt.Errorf("environment runtime service is required to execute generated API cases")
-			}
-			baseURL, err = s.envSvc.ExecutionBaseURL(ctx, run.TargetID, run.Env)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-		spec = append(spec, &domain.CaseSpec{
-			CaseID: caseID, CaseVersion: version, TargetID: run.TargetID, Env: run.Env, BaseURL: baseURL, RequiresSandbox: requiresSandbox,
-			Scenario: scenarioFromScript(script), Script: script, ScreenshotEnabled: shot.ScreenshotEnabled,
-		})
-	}
+	defer s.releaseRunQuota(&err, quotaRequest)
 
+	claimToken, err := s.claimRunTarget(ctx, teamID, run)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer s.releaseRunClaim(&err, claimToken)
+
+	if err := advanceRunToRunning(run); err != nil {
+		return nil, nil, err
+	}
+	spec, err := s.buildCaseSpecs(ctx, teamID, run)
+	if err != nil {
+		return nil, nil, err
+	}
 	poolLeases, err := s.reserveExecutionPools(ctx, spec)
 	if err != nil {
 		return nil, nil, err
 	}
-	defer func() {
-		for i := len(poolLeases) - 1; i >= 0; i-- {
-			if releaseErr := s.pool.Release(context.Background(), poolLeases[i]); err == nil && releaseErr != nil {
-				err = releaseErr
-			}
-		}
-	}()
+	defer s.releasePoolLeases(&err, poolLeases)
 
 	// Keep shared resource leases alive while a real runner is executing. A
 	// stale fencing generation cancels the runner instead of allowing an old
 	// worker to continue using capacity after takeover.
 	results, err = s.executeWithLeaseRenewal(ctx, spec, poolLeases)
 	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			// User cancelled while the runner was executing. The run row is
-			// already cancelled; do not append gate/report side effects.
-			return run, results, ctxErr
-		}
-		s.log.Error("execute cases failed", "run_id", runID, "error", err)
-		return nil, nil, err
+		return s.handleExecuteFailure(ctx, runID, run, results, err)
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return run, results, ctxErr
@@ -378,72 +296,210 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 	if fresh, freshErr := s.repo.Find(ctx, teamID, runID); freshErr == nil && fresh.State == domain.RunCancelled {
 		return fresh, results, nil
 	}
-
-	// 落库：同 run 同 case 重跑 attempt_seq 递增
-	for _, c := range results {
-		attempt, err := s.repo.MaxAttempt(ctx, teamID, runID, c.CaseID)
-		if err != nil {
-			return nil, nil, err
-		}
-		now := time.Now().UTC()
-		ended := now
-		c.TeamID = teamID
-		c.RunID = runID
-		c.AttemptSeq = attempt + 1
-		c.StartedAt = now
-		c.EndedAt = &ended
-		if err := s.repo.SaveCaseResult(ctx, c); err != nil {
-			s.log.Error("save case result failed", "run_id", runID, "case_id", c.CaseID, "error", err)
-			return nil, nil, err
-		}
-		if err := s.cost.Record(ctx, domain.CostRecord{
-			RequestID: executionCostRequestID(runID, c.CaseID, c.AttemptSeq),
-			TargetID:  run.TargetID,
-			RunID:     runID,
-			CaseID:    c.CaseID,
-			Attempt:   c.AttemptSeq,
-			Model:     "k8s-api-runner",
-			TokensIn:  c.AITokensIn,
-			TokensOut: c.AITokensOut,
-		}); err != nil {
-			return nil, nil, fmt.Errorf("record execution cost: %w", err)
-		}
-	}
-
-	// Gate and report are trusted-domain side effects. A non-pass gate is a
-	// quality outcome, not an execution infrastructure failure: the Run still
-	// reaches done and the generated report carries the authoritative decision.
-	if err := run.StartCollect(); err != nil {
+	if results, err = s.saveCaseResults(ctx, teamID, runID, run, results); err != nil {
 		return nil, nil, err
 	}
-	if err := s.saveRun(ctx, run); err != nil {
-		return nil, nil, err
-	}
-	if err := run.StartGate(); err != nil {
-		return nil, nil, err
-	}
-	if err := s.saveRun(ctx, run); err != nil {
-		return nil, nil, err
-	}
-	if _, err := s.gate.Evaluate(ctx, runID); err != nil {
-		return nil, nil, fmt.Errorf("evaluate gate: %w", err)
-	}
-	if err := run.StartReport(); err != nil {
-		return nil, nil, err
-	}
-	if err := s.saveRun(ctx, run); err != nil {
-		return nil, nil, err
-	}
-	if err := s.report.Generate(ctx, runID); err != nil {
-		return nil, nil, fmt.Errorf("generate report: %w", err)
-	}
-	if err := run.Finish(); err != nil {
-		return nil, nil, err
-	}
-	if err := s.saveRun(ctx, run); err != nil {
+	if err := s.finishRun(ctx, run); err != nil {
 		return nil, nil, err
 	}
 	return run, results, nil
+}
+
+// acquireRunQuota reserves one run slot before any runner work starts.
+func (s *RunService) acquireRunQuota(ctx context.Context, teamID int64, run *domain.Run) (domain.ResourceRequest, error) {
+	ownerID, ok := rls.UserFrom(ctx)
+	if !ok {
+		// Temporal activities created before owner propagation use the immutable
+		// run ID as an isolated owner scope. HTTP requests carry the real user ID.
+		ownerID = run.ID
+	}
+	request := domain.ResourceRequest{TeamID: teamID, TargetID: run.TargetID, OwnerID: ownerID, Type: "run", Units: 1}
+	if err := s.quota.Acquire(ctx, request); err != nil {
+		return domain.ResourceRequest{}, err
+	}
+	return request, nil
+}
+
+func (s *RunService) releaseRunQuota(err *error, request domain.ResourceRequest) {
+	if releaseErr := s.quota.Release(context.Background(), request); *err == nil && releaseErr != nil {
+		*err = releaseErr
+	}
+}
+
+// claimRunTarget takes the exclusive target claim. GP2-04 reference boundary:
+// the target is exclusive by default. A shared implementation can use a finer
+// resource scope without changing the application service contract.
+func (s *RunService) claimRunTarget(ctx context.Context, teamID int64, run *domain.Run) (string, error) {
+	claimToken, err := s.conflict.Acquire(ctx, domain.ResourceClaim{
+		TeamID: teamID, TargetID: run.TargetID, ResourceType: "target", PoolID: "default", OwnerID: run.ID, Exclusive: true,
+	})
+	if err == nil {
+		return claimToken, nil
+	}
+	if !errors.Is(err, domain.ErrResourceConflict) {
+		return "", err
+	}
+	if err := s.recordResourceConflict(ctx, run, err); err != nil {
+		return "", err
+	}
+	return "", fmt.Errorf("%w: %v", ErrResourceConflict, err)
+}
+
+func (s *RunService) releaseRunClaim(err *error, claimToken string) {
+	if claimToken == "" {
+		return
+	}
+	if releaseErr := s.conflict.Release(context.Background(), claimToken); *err == nil && releaseErr != nil {
+		*err = releaseErr
+	}
+}
+
+// advanceRunToRunning implements 首次：scheduled→running；重跑（done/failed
+// 终态）：重置为 running，attempt 递增；paused 通过 Resume 继续。
+func advanceRunToRunning(run *domain.Run) error {
+	switch run.State {
+	case domain.RunDone, domain.RunFailed:
+		run.State = domain.RunRunning
+	case domain.RunPaused:
+		return run.Resume()
+	default:
+		return run.Schedule()
+	}
+	return nil
+}
+
+// buildCaseSpecs 装配用例执行规格（勾选范围 + 服务级截图开关策略）。
+func (s *RunService) buildCaseSpecs(ctx context.Context, teamID int64, run *domain.Run) ([]*domain.CaseSpec, error) {
+	shot, err := s.policy.Get(ctx, teamID, run.TargetID, run.ScenarioID)
+	if err != nil {
+		return nil, err
+	}
+	spec := make([]*domain.CaseSpec, 0, len(run.SelectedCases))
+	for _, caseID := range run.SelectedCases {
+		caseSpec, err := s.buildCaseSpec(ctx, teamID, run, shot, caseID)
+		if err != nil {
+			return nil, err
+		}
+		spec = append(spec, caseSpec)
+	}
+	return spec, nil
+}
+
+func (s *RunService) buildCaseSpec(ctx context.Context, teamID int64, run *domain.Run, shot *domain.ScreenshotPolicy, caseID int64) (*domain.CaseSpec, error) {
+	version, script, err := s.fetchCaseScript(ctx, teamID, run.TargetID, caseID)
+	if err != nil {
+		return nil, err
+	}
+	requiresSandbox := hasDeclarativeHTTPRequest(script)
+	baseURL := ""
+	if requiresSandbox {
+		if s.envSvc == nil {
+			return nil, fmt.Errorf("environment runtime service is required to execute generated API cases")
+		}
+		if baseURL, err = s.envSvc.ExecutionBaseURL(ctx, run.TargetID, run.Env); err != nil {
+			return nil, err
+		}
+	}
+	return &domain.CaseSpec{
+		CaseID: caseID, CaseVersion: version, TargetID: run.TargetID, Env: run.Env, BaseURL: baseURL, RequiresSandbox: requiresSandbox,
+		Scenario: scenarioFromScript(script), Script: script, ScreenshotEnabled: shot.ScreenshotEnabled,
+	}, nil
+}
+
+func (s *RunService) fetchCaseScript(ctx context.Context, teamID, targetID, caseID int64) (int, any, error) {
+	if scoped, ok := s.cases.(domain.TargetScopedCasePort); ok {
+		return scoped.FetchScriptForTarget(ctx, teamID, targetID, caseID)
+	}
+	return s.cases.FetchScript(ctx, teamID, caseID)
+}
+
+func (s *RunService) releasePoolLeases(err *error, leases []domain.ExecutionPoolLease) {
+	for i := len(leases) - 1; i >= 0; i-- {
+		if releaseErr := s.pool.Release(context.Background(), leases[i]); *err == nil && releaseErr != nil {
+			*err = releaseErr
+		}
+	}
+}
+
+func (s *RunService) handleExecuteFailure(ctx context.Context, runID int64, run *domain.Run, results []*domain.CaseResult, err error) (*domain.Run, []*domain.CaseResult, error) {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		// User cancelled while the runner was executing. The run row is
+		// already cancelled; do not append gate/report side effects.
+		return run, results, ctxErr
+	}
+	s.log.Error("execute cases failed", "run_id", runID, "error", err)
+	return nil, nil, err
+}
+
+// saveCaseResults 落库：同 run 同 case 重跑 attempt_seq 递增。
+func (s *RunService) saveCaseResults(ctx context.Context, teamID, runID int64, run *domain.Run, results []*domain.CaseResult) ([]*domain.CaseResult, error) {
+	for _, c := range results {
+		if err := s.saveCaseResult(ctx, teamID, runID, run, c); err != nil {
+			return nil, err
+		}
+	}
+	return results, nil
+}
+
+func (s *RunService) saveCaseResult(ctx context.Context, teamID, runID int64, run *domain.Run, c *domain.CaseResult) error {
+	attempt, err := s.repo.MaxAttempt(ctx, teamID, runID, c.CaseID)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	ended := now
+	c.TeamID = teamID
+	c.RunID = runID
+	c.AttemptSeq = attempt + 1
+	c.StartedAt = now
+	c.EndedAt = &ended
+	if err := s.repo.SaveCaseResult(ctx, c); err != nil {
+		s.log.Error("save case result failed", "run_id", runID, "case_id", c.CaseID, "error", err)
+		return err
+	}
+	if err := s.cost.Record(ctx, domain.CostRecord{
+		RequestID: executionCostRequestID(runID, c.CaseID, c.AttemptSeq),
+		TargetID:  run.TargetID,
+		RunID:     runID,
+		CaseID:    c.CaseID,
+		Attempt:   c.AttemptSeq,
+		Model:     "k8s-api-runner",
+		TokensIn:  c.AITokensIn,
+		TokensOut: c.AITokensOut,
+	}); err != nil {
+		return fmt.Errorf("record execution cost: %w", err)
+	}
+	return nil
+}
+
+// finishRun advances the run through its terminal collect/gate/report states.
+// Gate and report are trusted-domain side effects. A non-pass gate is a quality
+// outcome, not an execution infrastructure failure: the Run still reaches done
+// and the generated report carries the authoritative decision.
+func (s *RunService) finishRun(ctx context.Context, run *domain.Run) error {
+	if err := s.advanceRunState(ctx, run, run.StartCollect); err != nil {
+		return err
+	}
+	if err := s.advanceRunState(ctx, run, run.StartGate); err != nil {
+		return err
+	}
+	if _, err := s.gate.Evaluate(ctx, run.ID); err != nil {
+		return fmt.Errorf("evaluate gate: %w", err)
+	}
+	if err := s.advanceRunState(ctx, run, run.StartReport); err != nil {
+		return err
+	}
+	if err := s.report.Generate(ctx, run.ID); err != nil {
+		return fmt.Errorf("generate report: %w", err)
+	}
+	return s.advanceRunState(ctx, run, run.Finish)
+}
+
+func (s *RunService) advanceRunState(ctx context.Context, run *domain.Run, transition func() error) error {
+	if err := transition(); err != nil {
+		return err
+	}
+	return s.saveRun(ctx, run)
 }
 
 func hasDeclarativeHTTPRequest(script any) bool {

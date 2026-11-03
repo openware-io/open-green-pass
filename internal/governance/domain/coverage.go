@@ -127,30 +127,45 @@ func normalizePath(path string) string {
 	return strings.TrimSuffix(p, "/")
 }
 
+// statePathKeywords 是触发 state archetype 的路径关键字。
+var statePathKeywords = []string{
+	"submit", "approve", "reject", "revoke", "rollout",
+	"pause", "resume", "withdraw", "archive",
+}
+
 // Archetype 端点类型。
-//
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func Archetype(ep Endpoint) string {
 	path := strings.ToLower(ep.Path)
+	if archetype := pathArchetype(path); archetype != "" {
+		return archetype
+	}
+	return methodArchetype(ep.Method, ep.Path)
+}
+
+func pathArchetype(path string) string {
 	if strings.HasPrefix(path, "/auth") || strings.Contains(path, "/auth/") {
 		return "auth"
 	}
 	if strings.Contains(path, "upload") || strings.Contains(path, "artifact") || strings.Contains(path, "media") {
 		return "upload"
 	}
-	if strings.Contains(path, "submit") || strings.Contains(path, "approve") || strings.Contains(path, "reject") ||
-		strings.Contains(path, "revoke") || strings.Contains(path, "rollout") || strings.Contains(path, "pause") ||
-		strings.Contains(path, "resume") || strings.Contains(path, "withdraw") || strings.Contains(path, "archive") {
-		return "state"
+	for _, keyword := range statePathKeywords {
+		if strings.Contains(path, keyword) {
+			return "state"
+		}
 	}
-	switch strings.ToUpper(ep.Method) {
+	return ""
+}
+
+func methodArchetype(method, path string) string {
+	switch strings.ToUpper(method) {
 	case "GET":
-		if strings.Contains(ep.Path, "{") {
+		if strings.Contains(path, "{") {
 			return "detail"
 		}
 		return "list"
 	case "POST":
-		if strings.Contains(ep.Path, "{") {
+		if strings.Contains(path, "{") {
 			return "action"
 		}
 		return "create"

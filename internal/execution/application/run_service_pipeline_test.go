@@ -115,7 +115,6 @@ func (c *pipelineCost) Record(_ context.Context, record domain.CostRecord) error
 	return nil
 }
 
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func TestExecuteRunInvokesTrustedGateAndReportBeforeDone(t *testing.T) {
 	gen, err := id.New(1, nil)
 	if err != nil {
@@ -123,6 +122,18 @@ func TestExecuteRunInvokesTrustedGateAndReportBeforeDone(t *testing.T) {
 	}
 	run := domain.NewRun(9, 100, 1, 1003, "test", "v1", "main", "manual", []int64{4001})
 	run.State = domain.RunScheduled
+	svc, repo, gate, report, cost := newPipelineService(t, gen, run)
+
+	completed, _, err := svc.ExecuteRun(rls.WithTenant(context.Background(), 100), run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertPipelineExecution(t, completed, run.ID, gate, report, cost)
+	assertPipelineStates(t, repo.saves)
+}
+
+func newPipelineService(t *testing.T, gen *id.Generator, run *domain.Run) (*RunService, *pipelineRepo, *pipelineGate, *pipelineReport, *pipelineCost) {
+	t.Helper()
 	repo := &pipelineRepo{run: run}
 	gate := &pipelineGate{}
 	report := &pipelineReport{}
@@ -131,22 +142,35 @@ func TestExecuteRunInvokesTrustedGateAndReportBeforeDone(t *testing.T) {
 	svc.SetGatePort(gate)
 	svc.SetReportPort(report)
 	svc.SetCostPort(cost)
+	return svc, repo, gate, report, cost
+}
 
-	completed, _, err := svc.ExecuteRun(rls.WithTenant(context.Background(), 100), run.ID)
-	if err != nil {
-		t.Fatal(err)
+func assertPipelineExecution(t *testing.T, completed *domain.Run, runID int64, gate *pipelineGate, report *pipelineReport, cost *pipelineCost) {
+	t.Helper()
+	if completed.State != domain.RunDone {
+		t.Fatalf("run state=%s, want done", completed.State)
 	}
-	if completed.State != domain.RunDone || len(gate.calls) != 1 || len(report.calls) != 1 || len(cost.records) != 1 || gate.calls[0] != run.ID || report.calls[0] != run.ID {
-		t.Fatalf("run=%s gate=%v report=%v cost=%v", completed.State, gate.calls, report.calls, cost.records)
+	if len(gate.calls) != 1 || gate.calls[0] != runID {
+		t.Fatalf("gate=%v, want one call for run %d", gate.calls, runID)
+	}
+	if len(report.calls) != 1 || report.calls[0] != runID {
+		t.Fatalf("report=%v, want one call for run %d", report.calls, runID)
+	}
+	if len(cost.records) != 1 {
+		t.Fatalf("cost=%v, want one record", cost.records)
 	}
 	if got := cost.records[0]; got.RequestID != "run:9:case:4001:attempt:1" || got.Model != "k8s-api-runner" || got.TokensIn != 0 || got.TokensOut != 0 {
 		t.Fatalf("cost=%+v", got)
 	}
+}
+
+func assertPipelineStates(t *testing.T, saves []domain.RunState) {
+	t.Helper()
 	want := []domain.RunState{domain.RunCollect, domain.RunGate, domain.RunReport, domain.RunDone}
-	if len(repo.saves) < len(want) {
-		t.Fatalf("states=%v", repo.saves)
+	if len(saves) < len(want) {
+		t.Fatalf("states=%v", saves)
 	}
-	got := repo.saves[len(repo.saves)-len(want):]
+	got := saves[len(saves)-len(want):]
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("states=%v want=%v", got, want)

@@ -553,8 +553,13 @@ func TestGenerationRunEventsNotifierWakeDeliversNewEvent(t *testing.T) {
 	}
 }
 
-//nolint:gocyclo // Cursor contract test intentionally covers page boundaries and filters.
-func TestGenerationRunsListCursorPagination(t *testing.T) {
+type generationRunPageResponse struct {
+	Runs       []map[string]any `json:"runs"`
+	NextCursor *string          `json:"next_cursor"`
+}
+
+func newCursorPaginationAPI(t *testing.T) *http.ServeMux {
+	t.Helper()
 	mux, runRepo, _, _ := newRunAPI(t, &testGenerationAuthorizer{allowed: true})
 	now := time.Now().UTC()
 	states := map[int64]domain.GenerationRunState{
@@ -571,55 +576,65 @@ func TestGenerationRunsListCursorPagination(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	type pageResponse struct {
-		Runs       []map[string]any `json:"runs"`
-		NextCursor *string          `json:"next_cursor"`
-	}
-	getPage := func(query string) pageResponse {
-		t.Helper()
-		rec := generationRequest(t, mux, http.MethodGet, "/generation/runs?"+query, "", 10, true)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("list status = %d body=%s", rec.Code, rec.Body.String())
-		}
-		var page pageResponse
-		if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
-			t.Fatal(err)
-		}
-		return page
-	}
-	ids := func(page pageResponse) []int64 {
-		out := make([]int64, 0, len(page.Runs))
-		for _, run := range page.Runs {
-			out = append(out, int64(run["id"].(float64)))
-		}
-		return out
-	}
+	return mux
+}
 
-	first := getPage("project_id=20&limit=2")
-	if got := ids(first); len(got) != 2 || got[0] != 5 || got[1] != 4 {
+func getGenerationRunPage(t *testing.T, mux *http.ServeMux, query string) generationRunPageResponse {
+	t.Helper()
+	rec := generationRequest(t, mux, http.MethodGet, "/generation/runs?"+query, "", 10, true)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var page generationRunPageResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	return page
+}
+
+func generationRunPageIDs(page generationRunPageResponse) []int64 {
+	out := make([]int64, 0, len(page.Runs))
+	for _, run := range page.Runs {
+		out = append(out, int64(run["id"].(float64)))
+	}
+	return out
+}
+
+func TestGenerationRunsListCursorPagination(t *testing.T) {
+	mux := newCursorPaginationAPI(t)
+	first := getGenerationRunPage(t, mux, "project_id=20&limit=2")
+	if got := generationRunPageIDs(first); len(got) != 2 || got[0] != 5 || got[1] != 4 {
 		t.Fatalf("first page ids = %v", got)
 	}
 	if first.NextCursor == nil || *first.NextCursor != "4" {
 		t.Fatalf("first next_cursor = %v", first.NextCursor)
 	}
-	second := getPage("project_id=20&limit=2&cursor=" + *first.NextCursor)
-	if got := ids(second); len(got) != 2 || got[0] != 3 || got[1] != 2 {
+	second := getGenerationRunPage(t, mux, "project_id=20&limit=2&cursor="+*first.NextCursor)
+	if got := generationRunPageIDs(second); len(got) != 2 || got[0] != 3 || got[1] != 2 {
 		t.Fatalf("second page ids = %v", got)
 	}
 	if second.NextCursor == nil || *second.NextCursor != "2" {
 		t.Fatalf("second next_cursor = %v", second.NextCursor)
 	}
-	last := getPage("project_id=20&limit=2&cursor=" + *second.NextCursor)
-	if got := ids(last); len(got) != 1 || got[0] != 1 {
+	last := getGenerationRunPage(t, mux, "project_id=20&limit=2&cursor="+*second.NextCursor)
+	if got := generationRunPageIDs(last); len(got) != 1 || got[0] != 1 {
 		t.Fatalf("last page ids = %v", got)
 	}
 	if last.NextCursor != nil {
 		t.Fatalf("last next_cursor = %v, want null", *last.NextCursor)
 	}
-	filtered := getPage("project_id=20&limit=10&state=succeeded")
-	if got := ids(filtered); len(got) != 3 || got[0] != 5 || got[2] != 1 {
+}
+
+func TestGenerationRunsListStateFilter(t *testing.T) {
+	mux := newCursorPaginationAPI(t)
+	filtered := getGenerationRunPage(t, mux, "project_id=20&limit=10&state=succeeded")
+	if got := generationRunPageIDs(filtered); len(got) != 3 || got[0] != 5 || got[2] != 1 {
 		t.Fatalf("filtered ids = %v", got)
 	}
+}
+
+func TestGenerationRunsListRejectsInvalidQueries(t *testing.T) {
+	mux := newCursorPaginationAPI(t)
 	for _, query := range []string{"project_id=20&cursor=abc", "project_id=20&cursor=0", "project_id=20&state=unknown", "project_id=20&limit=0"} {
 		if rec := generationRequest(t, mux, http.MethodGet, "/generation/runs?"+query, "", 10, true); rec.Code != http.StatusBadRequest {
 			t.Fatalf("query %q status = %d", query, rec.Code)

@@ -131,7 +131,6 @@ func (s *GenerationBatchService) SetScopePort(scope GenerationScopePort) {
 	s.scope = scope
 }
 
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (s *GenerationBatchService) validateScope(ctx context.Context, cmd CreateGenerationBatchCommand) (string, error) {
 	if cmd.TeamID <= 0 || cmd.TargetID <= 0 || cmd.RepoID <= 0 || cmd.ServiceID == nil || *cmd.ServiceID <= 0 {
 		return "", errors.New("请选择当前项目中已确认的目录服务后生成用例")
@@ -143,24 +142,36 @@ func (s *GenerationBatchService) validateScope(ctx context.Context, cmd CreateGe
 	if err != nil || scope == nil {
 		return "", errors.New("当前项目中不存在该目录服务或仓库")
 	}
+	if err := validateScopeBinding(scope, cmd); err != nil {
+		return "", err
+	}
+	return canonicalScopePath(scope, cmd)
+}
+
+func validateScopeBinding(scope *domain.GenerationScope, cmd CreateGenerationBatchCommand) error {
 	if scope.TeamID != cmd.TeamID || scope.TargetID != cmd.TargetID || scope.ServiceID != *cmd.ServiceID || scope.RepoID != cmd.RepoID {
-		return "", errors.New("目录服务不属于所选项目和仓库")
+		return errors.New("目录服务不属于所选项目和仓库")
 	}
 	if scope.Status != "active" || scope.GenerationStatus != "confirmed" || scope.ProfileStatus != "confirmed" {
-		return "", errors.New("请先启用目录服务并确认技术画像与用例生成范围")
+		return errors.New("请先启用目录服务并确认技术画像与用例生成范围")
 	}
 	if strings.TrimSpace(scope.Language) == "" || strings.TrimSpace(scope.Framework) == "" {
-		return "", errors.New("目录服务的技术画像不完整，请补充语言和框架后重试")
+		return errors.New("目录服务的技术画像不完整，请补充语言和框架后重试")
 	}
+	return nil
+}
+
+func canonicalScopePath(scope *domain.GenerationScope, cmd CreateGenerationBatchCommand) (string, error) {
 	canonical, err := generationSourcePath(scope.SourcePath)
 	if err != nil {
 		return "", errors.New("目录服务的源码目录无效，请先修正目录登记")
 	}
-	if strings.TrimSpace(cmd.SourcePath) != "" {
-		requested, err := generationSourcePath(cmd.SourcePath)
-		if err != nil || requested != canonical {
-			return "", errors.New("请求的源码目录与已确认的目录服务不一致")
-		}
+	if strings.TrimSpace(cmd.SourcePath) == "" {
+		return canonical, nil
+	}
+	requested, err := generationSourcePath(cmd.SourcePath)
+	if err != nil || requested != canonical {
+		return "", errors.New("请求的源码目录与已确认的目录服务不一致")
 	}
 	return canonical, nil
 }
@@ -195,8 +206,6 @@ func sameGenerationRequest(batch *domain.GenerationBatch, cmd CreateGenerationBa
 // Create returns the existing batch for a repeated tenant-scoped idempotency
 // key. Repository implementations must enforce the same uniqueness in durable
 // storage to preserve this guarantee across processes.
-//
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (s *GenerationBatchService) Create(ctx context.Context, cmd CreateGenerationBatchCommand) (*domain.GenerationBatch, bool, error) {
 	if s == nil || s.batches == nil {
 		return nil, false, errors.New("generation batch repository is required")
@@ -206,53 +215,22 @@ func (s *GenerationBatchService) Create(ctx context.Context, cmd CreateGeneratio
 		return nil, false, err
 	}
 	cmd.SourcePath = canonicalPath
-	if cmd.RefType == "" {
-		cmd.RefType = "branch"
-	}
-	if cmd.RefType != "branch" && cmd.RefType != "tag" {
-		return nil, false, errors.New("代码引用类型必须是 branch 或 tag")
+	if err := normalizeBatchRefType(&cmd); err != nil {
+		return nil, false, err
 	}
 	existing, err := s.batches.FindByIdempotencyKey(ctx, cmd.TeamID, cmd.IdempotencyKey)
 	if err == nil {
-		if !sameGenerationRequest(existing, cmd) {
-			return nil, false, errors.New("idempotency key is already used for a different generation scope")
-		}
-		if s.workflow != nil && existing.State == domain.GenerationEnqueued {
-			if startErr := s.workflow.Start(ctx, existing.ID, existing.TeamID); startErr != nil {
-				return nil, false, fmt.Errorf("start generation workflow: %w", startErr)
-			}
-		}
-		return existing, false, nil
+		return s.reuseExistingBatch(ctx, cmd, existing)
 	}
 	if !errors.Is(err, domain.ErrGenerationNotFound) {
 		return nil, false, err
 	}
-	batch, err := domain.NewGenerationBatch(cmd.ID, cmd.TeamID, cmd.TargetID, cmd.RepoID, cmd.ActorID, cmd.Branch, cmd.RequestedVersion, cmd.IdempotencyKey, s.now())
+	batch, err := s.buildPendingBatch(ctx, cmd)
 	if err != nil {
 		return nil, false, err
 	}
-	batch.ServiceID = cmd.ServiceID
-	batch.SourcePath = cmd.SourcePath
-	batch.RefType = cmd.RefType
-	// The baseline is system-owned. Only an already approved batch is effective
-	// and therefore eligible; drafts, failed runs, and user input never affect
-	// the iteration chain.
-	base, baseErr := s.batches.FindLatestApprovedByScope(ctx, cmd.TeamID, cmd.TargetID, cmd.RepoID, *cmd.ServiceID)
-	if baseErr == nil {
-		batch.BaseBatchID = &base.ID
-	} else if !errors.Is(baseErr, domain.ErrGenerationNotFound) {
-		return nil, false, fmt.Errorf("find effective generation baseline: %w", baseErr)
-	}
 	if err := s.batches.Create(ctx, batch); err != nil {
-		// A competing create may have won. Re-read instead of leaking a
-		// duplicate-key error as a failed idempotent request.
-		if got, findErr := s.batches.FindByIdempotencyKey(ctx, cmd.TeamID, cmd.IdempotencyKey); findErr == nil {
-			if !sameGenerationRequest(got, cmd) {
-				return nil, false, errors.New("idempotency key is already used for a different generation scope")
-			}
-			return got, false, nil
-		}
-		return nil, false, err
+		return s.recoverBatchCreateRace(ctx, cmd, err)
 	}
 	if err := s.appendLifecycleAudit(ctx, batch, "generation.batch.created"); err != nil {
 		return nil, false, fmt.Errorf("append generation creation audit: %w", err)
@@ -263,6 +241,63 @@ func (s *GenerationBatchService) Create(ctx context.Context, cmd CreateGeneratio
 		}
 	}
 	return batch, true, nil
+}
+
+func normalizeBatchRefType(cmd *CreateGenerationBatchCommand) error {
+	if cmd.RefType == "" {
+		cmd.RefType = "branch"
+	}
+	if cmd.RefType != "branch" && cmd.RefType != "tag" {
+		return errors.New("代码引用类型必须是 branch 或 tag")
+	}
+	return nil
+}
+
+func (s *GenerationBatchService) reuseExistingBatch(ctx context.Context, cmd CreateGenerationBatchCommand, existing *domain.GenerationBatch) (*domain.GenerationBatch, bool, error) {
+	if !sameGenerationRequest(existing, cmd) {
+		return nil, false, errors.New("idempotency key is already used for a different generation scope")
+	}
+	if s.workflow != nil && existing.State == domain.GenerationEnqueued {
+		if startErr := s.workflow.Start(ctx, existing.ID, existing.TeamID); startErr != nil {
+			return nil, false, fmt.Errorf("start generation workflow: %w", startErr)
+		}
+	}
+	return existing, false, nil
+}
+
+func (s *GenerationBatchService) buildPendingBatch(ctx context.Context, cmd CreateGenerationBatchCommand) (*domain.GenerationBatch, error) {
+	batch, err := domain.NewGenerationBatch(cmd.ID, cmd.TeamID, cmd.TargetID, cmd.RepoID, cmd.ActorID, cmd.Branch, cmd.RequestedVersion, cmd.IdempotencyKey, s.now())
+	if err != nil {
+		return nil, err
+	}
+	batch.ServiceID = cmd.ServiceID
+	batch.SourcePath = cmd.SourcePath
+	batch.RefType = cmd.RefType
+	// The baseline is system-owned. Only an already approved batch is effective
+	// and therefore eligible; drafts, failed runs, and user input never affect
+	// the iteration chain.
+	base, baseErr := s.batches.FindLatestApprovedByScope(ctx, cmd.TeamID, cmd.TargetID, cmd.RepoID, *cmd.ServiceID)
+	if baseErr == nil {
+		batch.BaseBatchID = &base.ID
+		return batch, nil
+	}
+	if !errors.Is(baseErr, domain.ErrGenerationNotFound) {
+		return nil, fmt.Errorf("find effective generation baseline: %w", baseErr)
+	}
+	return batch, nil
+}
+
+// recoverBatchCreateRace re-reads after a competing create won, preserving the
+// idempotent-request contract instead of leaking a duplicate-key error.
+func (s *GenerationBatchService) recoverBatchCreateRace(ctx context.Context, cmd CreateGenerationBatchCommand, createErr error) (*domain.GenerationBatch, bool, error) {
+	got, findErr := s.batches.FindByIdempotencyKey(ctx, cmd.TeamID, cmd.IdempotencyKey)
+	if findErr != nil {
+		return nil, false, createErr
+	}
+	if !sameGenerationRequest(got, cmd) {
+		return nil, false, errors.New("idempotency key is already used for a different generation scope")
+	}
+	return got, false, nil
 }
 
 func (s *GenerationBatchService) Transition(ctx context.Context, teamID, batchID, expectedVersion int64, next domain.GenerationBatchState) (*domain.GenerationBatch, error) {

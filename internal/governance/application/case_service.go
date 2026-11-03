@@ -77,8 +77,6 @@ func (s *CaseService) CreateCase(ctx context.Context, c domain.Case, script json
 }
 
 // UpdateCaseMetadata updates taxonomy without creating a script version.
-//
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (s *CaseService) UpdateCaseMetadata(ctx context.Context, caseID int64, patch domain.Case) (*domain.Case, error) {
 	teamID, ok := rls.TenantFrom(ctx)
 	if !ok {
@@ -88,18 +86,58 @@ func (s *CaseService) UpdateCaseMetadata(ctx context.Context, caseID int64, patc
 	if err != nil {
 		return nil, err
 	}
-	if patch.Priority != "" && patch.Priority != "P0" && patch.Priority != "P1" && patch.Priority != "P2" && patch.Priority != "P3" {
-		return nil, ErrInvalidCaseTaxonomy
+	if err := validateCaseTaxonomy(patch); err != nil {
+		return nil, err
 	}
-	if patch.CaseType != "" && patch.CaseType != "functional" && patch.CaseType != "api" && patch.CaseType != "security" && patch.CaseType != "performance" && patch.CaseType != "compatibility" {
-		return nil, ErrInvalidCaseTaxonomy
+	applyCaseTaxonomy(c, patch)
+	if err := s.repo.SaveCase(ctx, c); err != nil {
+		return nil, err
 	}
-	if patch.Automation != "" && patch.Automation != "automated" && patch.Automation != "manual" {
-		return nil, ErrInvalidCaseTaxonomy
+	return c, nil
+}
+
+var (
+	casePriorities   = stringSet("P0", "P1", "P2", "P3")
+	caseTypes        = stringSet("functional", "api", "security", "performance", "compatibility")
+	caseAutomations  = stringSet("automated", "manual")
+	caseReviewStates = stringSet("draft", "pending", "approved", "rejected")
+)
+
+func stringSet(values ...string) map[string]struct{} {
+	set := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		set[value] = struct{}{}
 	}
-	if patch.ReviewStatus != "" && patch.ReviewStatus != "draft" && patch.ReviewStatus != "pending" && patch.ReviewStatus != "approved" && patch.ReviewStatus != "rejected" {
-		return nil, ErrInvalidCaseTaxonomy
+	return set
+}
+
+func validateCaseTaxonomy(patch domain.Case) error {
+	if patch.Priority != "" {
+		if _, ok := casePriorities[patch.Priority]; !ok {
+			return ErrInvalidCaseTaxonomy
+		}
 	}
+	if patch.CaseType != "" {
+		if _, ok := caseTypes[patch.CaseType]; !ok {
+			return ErrInvalidCaseTaxonomy
+		}
+	}
+	if patch.Automation != "" {
+		if _, ok := caseAutomations[patch.Automation]; !ok {
+			return ErrInvalidCaseTaxonomy
+		}
+	}
+	if patch.ReviewStatus != "" {
+		if _, ok := caseReviewStates[patch.ReviewStatus]; !ok {
+			return ErrInvalidCaseTaxonomy
+		}
+	}
+	return nil
+}
+
+// applyCaseTaxonomy copies only the explicitly supplied nullable fields, so an
+// empty patch value never clears existing metadata.
+func applyCaseTaxonomy(c *domain.Case, patch domain.Case) {
 	if patch.BusinessDomain != "" {
 		c.BusinessDomain = patch.BusinessDomain
 	}
@@ -133,10 +171,6 @@ func (s *CaseService) UpdateCaseMetadata(ctx context.Context, caseID int64, patc
 	if patch.ReviewComment != "" {
 		c.ReviewComment = patch.ReviewComment
 	}
-	if err := s.repo.SaveCase(ctx, c); err != nil {
-		return nil, err
-	}
-	return c, nil
 }
 
 // CreateVersion 为用例新增版本（内容更新，change=updated；版本号=历史最大+1）。

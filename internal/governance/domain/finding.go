@@ -196,47 +196,14 @@ func (c Confidence) Valid() bool {
 }
 
 // Transition 执行状态流转；返回 from/to，非法流转返回领域错误。
-//
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (f *Finding) Transition(action FindingAction, actor int64, reason string) (FindingStatus, FindingStatus, error) {
 	from := f.Status
 	if from == "" {
 		from = FindingCandidate
 	}
-	var to FindingStatus
-	switch action {
-	case ActionTriage:
-		if from != FindingCandidate {
-			return from, from, NewErr("only candidate can be triaged")
-		}
-		to = FindingTriaged
-	case ActionConfirm:
-		if from != FindingCandidate && from != FindingTriaged {
-			return from, from, NewErr("only candidate/triaged can be confirmed")
-		}
-		to = FindingConfirmed
-	case ActionFalsePositive:
-		if from == FindingClosed {
-			return from, from, NewErr("closed finding cannot be marked false positive")
-		}
-		to = FindingFalsePositive
-	case ActionPendingRegression:
-		if from != FindingConfirmed && from != FindingFixing {
-			return from, from, NewErr("only confirmed/fixing can pending regression")
-		}
-		to = FindingPendingRegression
-	case ActionClose:
-		if from != FindingPendingRegression {
-			return from, from, NewErr("only pending_regression can be closed")
-		}
-		to = FindingClosed
-	case ActionReopen:
-		if from != FindingClosed && from != FindingFalsePositive {
-			return from, from, NewErr("only closed/false_positive can be reopened")
-		}
-		to = FindingConfirmed
-	default:
-		return from, from, NewErr("unknown finding action")
+	to, err := resolveFindingTransition(action, from)
+	if err != nil {
+		return from, from, err
 	}
 	f.Status = to
 	f.UpdatedAt = time.Now().UTC()
@@ -245,6 +212,31 @@ func (f *Finding) Transition(action FindingAction, actor int64, reason string) (
 	}
 	_ = reason
 	return from, to, nil
+}
+
+// findingTransitionRules 是状态机权威表：动作 → (目标状态, 是否允许该起始状态, 拒绝原因)。
+var findingTransitionRules = map[FindingAction]struct {
+	to      FindingStatus
+	allowed func(FindingStatus) bool
+	reason  string
+}{
+	ActionTriage:            {FindingTriaged, func(from FindingStatus) bool { return from == FindingCandidate }, "only candidate can be triaged"},
+	ActionConfirm:           {FindingConfirmed, func(from FindingStatus) bool { return from == FindingCandidate || from == FindingTriaged }, "only candidate/triaged can be confirmed"},
+	ActionFalsePositive:     {FindingFalsePositive, func(from FindingStatus) bool { return from != FindingClosed }, "closed finding cannot be marked false positive"},
+	ActionPendingRegression: {FindingPendingRegression, func(from FindingStatus) bool { return from == FindingConfirmed || from == FindingFixing }, "only confirmed/fixing can pending regression"},
+	ActionClose:             {FindingClosed, func(from FindingStatus) bool { return from == FindingPendingRegression }, "only pending_regression can be closed"},
+	ActionReopen:            {FindingConfirmed, func(from FindingStatus) bool { return from == FindingClosed || from == FindingFalsePositive }, "only closed/false_positive can be reopened"},
+}
+
+func resolveFindingTransition(action FindingAction, from FindingStatus) (FindingStatus, error) {
+	rule, ok := findingTransitionRules[action]
+	if !ok {
+		return "", NewErr("unknown finding action")
+	}
+	if !rule.allowed(from) {
+		return "", NewErr(rule.reason)
+	}
+	return rule.to, nil
 }
 
 // ComputeFindingDedupeHash 计算稳定去重键；不包含 run/时间/证据。

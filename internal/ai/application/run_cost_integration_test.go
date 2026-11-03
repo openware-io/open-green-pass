@@ -27,8 +27,27 @@ import (
 //
 // It is skipped unless GP_TEST_DB_DSN points at a scratch database with all
 // migrations applied (same convention as the plan-cost integration test).
-//
-//nolint:gocyclo // Integration fixture covers new batch_id plus legacy fallback rows.
+func seedRunCostFixture(t *testing.T, exec func(string, ...any) error, teamID, projectID, repoID, serviceID, batchID, runID, unitID, priceID int64) {
+	t.Helper()
+	if err := exec(`INSERT INTO gen_run(id,team_id,project_id,scope_type,scope_id,state,total_units,completed_units,failed_units,waiting_review_units,idempotency_key,created_by)
+		VALUES ($1,$2,$3,'project',0,'running',1,0,0,0,'cost-batch-run',40)`, runID, teamID, projectID); err != nil {
+		t.Fatalf("insert run: %v", err)
+	}
+	if err := exec(`INSERT INTO gen_batch(id,team_id,target_id,repo_id,service_id,source_path,ref_type,branch,state,state_version,idempotency_key,created_by,tokens_in,tokens_out)
+		VALUES ($1,$2,$3,$4,NULL,'services/svc','branch','main','approved',1,'cost-batch-batch',40,1000,2000)`,
+		batchID, teamID, projectID, repoID); err != nil {
+		t.Fatalf("insert batch: %v", err)
+	}
+	if err := exec(`INSERT INTO gen_run_unit(id,team_id,run_id,service_id,repo_id,batch_id,state,batch_state,stage)
+		VALUES ($1,$2,$3,$4,$5,$6,'succeeded','approved','approved')`, unitID, teamID, runID, serviceID, repoID, batchID); err != nil {
+		t.Fatalf("insert run unit: %v", err)
+	}
+	if err := exec(`INSERT INTO cost_price(id,team_id,model_key,input_per_1k,output_per_1k,cache_read_per_1k,currency,effective_from,status,created_by)
+		VALUES ($1,$2,'dsh/test-model',0.01,0.02,0,'CNY',now()-interval '1 hour','active',40)`, priceID, teamID); err != nil {
+		t.Fatalf("insert cost price: %v", err)
+	}
+}
+
 func TestGenerationRunCostUsesBatchID(t *testing.T) {
 	dsn := os.Getenv("GP_TEST_DB_DSN")
 	if dsn == "" {
@@ -73,23 +92,7 @@ func TestGenerationRunCostUsesBatchID(t *testing.T) {
 	}
 	t.Cleanup(cleanup)
 
-	if err := exec(`INSERT INTO gen_run(id,team_id,project_id,scope_type,scope_id,state,total_units,completed_units,failed_units,waiting_review_units,idempotency_key,created_by)
-		VALUES ($1,$2,$3,'project',0,'running',1,0,0,0,'cost-batch-run',40)`, runID, teamID, projectID); err != nil {
-		t.Fatalf("insert run: %v", err)
-	}
-	if err := exec(`INSERT INTO gen_batch(id,team_id,target_id,repo_id,service_id,source_path,ref_type,branch,state,state_version,idempotency_key,created_by,tokens_in,tokens_out)
-		VALUES ($1,$2,$3,$4,NULL,'services/svc','branch','main','approved',1,'cost-batch-batch',40,1000,2000)`,
-		batchID, teamID, projectID, repoID); err != nil {
-		t.Fatalf("insert batch: %v", err)
-	}
-	if err := exec(`INSERT INTO gen_run_unit(id,team_id,run_id,service_id,repo_id,batch_id,state,batch_state,stage)
-		VALUES ($1,$2,$3,$4,$5,$6,'succeeded','approved','approved')`, unitID, teamID, runID, serviceID, repoID, batchID); err != nil {
-		t.Fatalf("insert run unit: %v", err)
-	}
-	if err := exec(`INSERT INTO cost_price(id,team_id,model_key,input_per_1k,output_per_1k,cache_read_per_1k,currency,effective_from,status,created_by)
-		VALUES ($1,$2,'dsh/test-model',0.01,0.02,0,'CNY',now()-interval '1 hour','active',40)`, priceID, teamID); err != nil {
-		t.Fatalf("insert cost price: %v", err)
-	}
+	seedRunCostFixture(t, exec, teamID, projectID, repoID, serviceID, batchID, runID, unitID, priceID)
 
 	costStore := trustedinfra.NewCostStore(database, gen)
 	auditSvc := trustedapp.NewAuditService(trustedinfra.NewAuditStore(database, gen), gen)

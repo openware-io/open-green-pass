@@ -53,99 +53,163 @@ func (r *HTTPRunner) Execute(ctx context.Context, specs []*domain.CaseSpec) ([]*
 	return results, nil
 }
 
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (r *HTTPRunner) executeOne(ctx context.Context, spec *domain.CaseSpec) *domain.CaseResult {
 	now := time.Now().UTC()
 	result := &domain.CaseResult{
 		ID: r.gen.Next(), CaseID: spec.CaseID, CaseVersion: spec.CaseVersion,
 		StartedAt: now, EndedAt: &now, Evidence: &domain.EvidenceRef{},
 	}
-	fail := func(message string) *domain.CaseResult {
-		result.Status = domain.CaseFail
-		result.ResultText = message
-		result.Evidence.Logs = []string{message}
-		ended := time.Now().UTC()
-		result.EndedAt = &ended
-		return result
-	}
 	root, ok := spec.Script.(map[string]any)
 	if !ok {
-		return fail("case script is not a JSON object")
+		return failCaseResult(result, "case script is not a JSON object")
 	}
-	if reason, blocked := root["blocked_reason"].(string); blocked && strings.TrimSpace(reason) != "" {
-		result.Status = domain.CaseBlocked
-		result.ResultText = reason
-		result.Evidence.Logs = []string{reason}
-		ended := time.Now().UTC()
-		result.EndedAt = &ended
+	if result, blocked := blockedCaseResult(result, root); blocked {
 		return result
 	}
-	request, ok := root["request"].(map[string]any)
-	if !ok {
-		// Backward compatibility for the first generated case format:
-		// {"path": "...", "method": "GET", "expected_status": 200}.
-		legacyPath, _ := root["path"].(string)
-		legacyMethod, _ := root["method"].(string)
-		if strings.TrimSpace(legacyPath) == "" || strings.TrimSpace(legacyMethod) == "" {
-			return fail("case has no declarative request")
-		}
-		request = normalizeLegacyRequest(root)
+	request, err := declarativeRequest(root)
+	if err != nil {
+		return failCaseResult(result, err.Error())
 	}
-	method, _ := request["method"].(string)
-	method = strings.ToUpper(strings.TrimSpace(method))
-	switch method {
-	case "GET", "POST", "PUT", "PATCH", "DELETE":
-	default:
-		return fail("unsupported HTTP method")
+	method, err := requestMethod(request)
+	if err != nil {
+		return failCaseResult(result, err.Error())
 	}
-	path, _ := request["path"].(string)
-	if !strings.HasPrefix(path, "/") || strings.Contains(path, "://") {
-		return fail("request path must be relative")
+	target, err := requestTarget(spec.BaseURL, request)
+	if err != nil {
+		return failCaseResult(result, err.Error())
 	}
-	target := strings.TrimRight(spec.BaseURL, "/") + path
-	if _, err := url.ParseRequestURI(target); err != nil {
-		return fail("invalid request URL")
-	}
-	var body io.Reader
-	if rawBody, exists := request["body"]; exists {
-		encoded, err := json.Marshal(rawBody)
-		if err != nil || len(encoded) > 16*1024 {
-			return fail("request body invalid or too large")
-		}
-		body = bytes.NewReader(encoded)
+	body, err := requestBody(request)
+	if err != nil {
+		return failCaseResult(result, err.Error())
 	}
 	req, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
-		return fail("build request failed")
+		return failCaseResult(result, "build request failed")
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if headers, ok := request["headers"].(map[string]any); ok {
-		for name, value := range headers {
-			text, ok := value.(string)
-			if !ok || strings.ContainsAny(name, "\r\n") || strings.ContainsAny(text, "\r\n") {
-				return fail("invalid request header")
-			}
-			if strings.HasPrefix(text, "env:") {
-				envName := strings.TrimPrefix(text, "env:")
-				if !strings.HasPrefix(envName, "GP_CASE_") {
-					return fail("header env reference must use GP_CASE_ prefix")
-				}
-				text = os.Getenv(envName)
-				if text == "" {
-					return fail("header env reference is empty")
-				}
-			}
-			req.Header.Set(name, text)
-		}
+	if err := applyRequestHeaders(req, request["headers"]); err != nil {
+		return failCaseResult(result, err.Error())
 	}
 	if r.bearerToken != "" && req.Header.Get("Authorization") == "" {
 		req.Header.Set("Authorization", "Bearer "+r.bearerToken)
 	}
+	return r.executeRequest(req, root, result)
+}
+
+func failCaseResult(result *domain.CaseResult, message string) *domain.CaseResult {
+	result.Status = domain.CaseFail
+	result.ResultText = message
+	result.Evidence.Logs = []string{message}
+	ended := time.Now().UTC()
+	result.EndedAt = &ended
+	return result
+}
+
+// blockedCaseResult returns a blocked result when the case script declares a
+// non-empty blocked_reason (e.g. an unconfirmed environment baseline).
+func blockedCaseResult(result *domain.CaseResult, root map[string]any) (*domain.CaseResult, bool) {
+	reason, blocked := root["blocked_reason"].(string)
+	if !blocked || strings.TrimSpace(reason) == "" {
+		return result, false
+	}
+	result.Status = domain.CaseBlocked
+	result.ResultText = reason
+	result.Evidence.Logs = []string{reason}
+	ended := time.Now().UTC()
+	result.EndedAt = &ended
+	return result, true
+}
+
+func declarativeRequest(root map[string]any) (map[string]any, error) {
+	request, ok := root["request"].(map[string]any)
+	if ok {
+		return request, nil
+	}
+	// Backward compatibility for the first generated case format:
+	// {"path": "...", "method": "GET", "expected_status": 200}.
+	legacyPath, _ := root["path"].(string)
+	legacyMethod, _ := root["method"].(string)
+	if strings.TrimSpace(legacyPath) == "" || strings.TrimSpace(legacyMethod) == "" {
+		return nil, fmt.Errorf("case has no declarative request")
+	}
+	return normalizeLegacyRequest(root), nil
+}
+
+func requestMethod(request map[string]any) (string, error) {
+	method, _ := request["method"].(string)
+	method = strings.ToUpper(strings.TrimSpace(method))
+	switch method {
+	case "GET", "POST", "PUT", "PATCH", "DELETE":
+		return method, nil
+	default:
+		return "", fmt.Errorf("unsupported HTTP method")
+	}
+}
+
+func requestTarget(baseURL string, request map[string]any) (string, error) {
+	path, _ := request["path"].(string)
+	if !strings.HasPrefix(path, "/") || strings.Contains(path, "://") {
+		return "", fmt.Errorf("request path must be relative")
+	}
+	target := strings.TrimRight(baseURL, "/") + path
+	if _, err := url.ParseRequestURI(target); err != nil {
+		return "", fmt.Errorf("invalid request URL")
+	}
+	return target, nil
+}
+
+func requestBody(request map[string]any) (io.Reader, error) {
+	rawBody, exists := request["body"]
+	if !exists {
+		return nil, nil
+	}
+	encoded, err := json.Marshal(rawBody)
+	if err != nil || len(encoded) > 16*1024 {
+		return nil, fmt.Errorf("request body invalid or too large")
+	}
+	return bytes.NewReader(encoded), nil
+}
+
+func applyRequestHeaders(req *http.Request, raw any) error {
+	headers, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	for name, value := range headers {
+		text, ok := value.(string)
+		if !ok || strings.ContainsAny(name, "\r\n") || strings.ContainsAny(text, "\r\n") {
+			return fmt.Errorf("invalid request header")
+		}
+		if strings.HasPrefix(text, "env:") {
+			resolved, err := resolveHeaderEnvReference(text)
+			if err != nil {
+				return err
+			}
+			text = resolved
+		}
+		req.Header.Set(name, text)
+	}
+	return nil
+}
+
+func resolveHeaderEnvReference(value string) (string, error) {
+	envName := strings.TrimPrefix(value, "env:")
+	if !strings.HasPrefix(envName, "GP_CASE_") {
+		return "", fmt.Errorf("header env reference must use GP_CASE_ prefix")
+	}
+	text := os.Getenv(envName)
+	if text == "" {
+		return "", fmt.Errorf("header env reference is empty")
+	}
+	return text, nil
+}
+
+func (r *HTTPRunner) executeRequest(req *http.Request, root map[string]any, result *domain.CaseResult) *domain.CaseResult {
 	response, err := r.client.Do(req)
 	if err != nil {
-		return fail("request failed: " + err.Error())
+		return failCaseResult(result, "request failed: "+err.Error())
 	}
 	defer response.Body.Close()
 	payload, _ := io.ReadAll(io.LimitReader(response.Body, 1<<20))
@@ -153,17 +217,28 @@ func (r *HTTPRunner) executeOne(ctx context.Context, spec *domain.CaseSpec) *dom
 	hash := sha256.Sum256(payload)
 	result.Evidence.Hash = "sha256:" + hex.EncodeToString(hash[:])
 	result.Evidence.Logs = []string{fmt.Sprintf("http_status=%d", response.StatusCode)}
+	if evaluateAssertions(root["assertions"], response.StatusCode, payload) {
+		result.Status = domain.CasePass
+	} else {
+		result.Status = domain.CaseFail
+	}
+	ended := time.Now().UTC()
+	result.EndedAt = &ended
+	return result
+}
+
+func evaluateAssertions(raw any, statusCode int, payload []byte) bool {
 	passed := true
-	assertions, _ := root["assertions"].([]any)
-	for _, raw := range assertions {
-		assertion, ok := raw.(map[string]any)
+	assertions, _ := raw.([]any)
+	for _, rawAssertion := range assertions {
+		assertion, ok := rawAssertion.(map[string]any)
 		if !ok {
 			continue
 		}
 		switch assertion["type"] {
 		case "status":
 			expected, ok := numberToInt(assertion["expected_status"])
-			if !ok || response.StatusCode != expected {
+			if !ok || statusCode != expected {
 				passed = false
 			}
 		case "body_contains":
@@ -173,14 +248,7 @@ func (r *HTTPRunner) executeOne(ctx context.Context, spec *domain.CaseSpec) *dom
 			}
 		}
 	}
-	if passed {
-		result.Status = domain.CasePass
-	} else {
-		result.Status = domain.CaseFail
-	}
-	ended := time.Now().UTC()
-	result.EndedAt = &ended
-	return result
+	return passed
 }
 
 func truncate(value string, maxLen int) string {

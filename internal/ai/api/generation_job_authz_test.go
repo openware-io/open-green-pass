@@ -53,8 +53,7 @@ func newJobAPI(t *testing.T, authorizer iam.AuthorizationPort) (*http.ServeMux, 
 	return mux, svc
 }
 
-//nolint:gocyclo // Authorization matrix test intentionally spans every route.
-func TestGenerationJobRoutesRequireIAM(t *testing.T) {
+func TestGenerationJobCreateRequiresIAM(t *testing.T) {
 	authorizer := &testGenerationAuthorizer{allowed: true}
 	mux, svc := newJobAPI(t, authorizer)
 	body := `{"project_id":20,"prompt":"p","idempotency_key":"k"}`
@@ -72,7 +71,11 @@ func TestGenerationJobRoutesRequireIAM(t *testing.T) {
 	if rec := generationRequest(t, mux, http.MethodPost, "/ai/generation-jobs", body, 10, true); rec.Code != http.StatusAccepted || svc.createCalls != 1 {
 		t.Fatalf("allowed job create status = %d calls=%d body=%s", rec.Code, svc.createCalls, rec.Body.String())
 	}
+}
 
+func TestGenerationJobGetRequiresIAM(t *testing.T) {
+	authorizer := &testGenerationAuthorizer{allowed: true}
+	mux, _ := newJobAPI(t, authorizer)
 	authorizer.allowed = false
 	if rec := generationRequest(t, mux, http.MethodGet, "/ai/generation-jobs/7", "", 10, true); rec.Code != http.StatusForbidden || authorizer.action != "view" {
 		t.Fatalf("denied job get status = %d action=%q", rec.Code, authorizer.action)
@@ -81,7 +84,11 @@ func TestGenerationJobRoutesRequireIAM(t *testing.T) {
 	if rec := generationRequest(t, mux, http.MethodGet, "/ai/generation-jobs/7", "", 10, true); rec.Code != http.StatusOK {
 		t.Fatalf("allowed job get status = %d body=%s", rec.Code, rec.Body.String())
 	}
+}
 
+func TestGenerationJobCancelRequiresIAM(t *testing.T) {
+	authorizer := &testGenerationAuthorizer{allowed: true}
+	mux, svc := newJobAPI(t, authorizer)
 	authorizer.allowed = false
 	if rec := generationRequest(t, mux, http.MethodDelete, "/ai/generation-jobs/7", "", 10, true); rec.Code != http.StatusForbidden || authorizer.action != "edit" {
 		t.Fatalf("denied job cancel status = %d action=%q", rec.Code, authorizer.action)

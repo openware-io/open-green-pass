@@ -24,94 +24,121 @@ type grantUpdate struct {
 	SandboxQuota    int64          `json:"sandbox_quota"`
 }
 
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
+// teamHandlers groups the tenant RBAC endpoints behind one dependency object.
+type teamHandlers struct {
+	store   *iaminfra.TeamStore
+	rbac    *iaminfra.RBACStore
+	members *iamapp.MembershipService
+}
+
 func RegisterTeams(mux *http.ServeMux, store *iaminfra.TeamStore, rbac *iaminfra.RBACStore, members *iamapp.MembershipService) {
-	mux.HandleFunc("GET /teams/current", func(w http.ResponseWriter, r *http.Request) {
-		teamID, _, ok := requestIdentity(w, r)
-		if !ok {
-			return
-		}
-		value, err := store.Summary(r.Context(), teamID)
-		writeIAM(w, value, err)
-	})
-	mux.HandleFunc("GET /teams/current/members", func(w http.ResponseWriter, r *http.Request) {
-		teamID, _, ok := requestIdentity(w, r)
-		if !ok {
-			return
-		}
-		value, err := store.Members(r.Context(), teamID)
-		writeIAM(w, value, err)
-	})
-	mux.HandleFunc("PATCH /teams/current/members/{id}", func(w http.ResponseWriter, r *http.Request) {
-		teamID, _, ok := mutationIdentity(w, r)
-		if !ok {
-			return
-		}
-		memberID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		if err != nil {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_member_id"})
-			return
-		}
-		var input memberUpdate
-		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input) != nil {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_request"})
-			return
-		}
-		if input.Status == "" {
-			input.Status = iam.MemberActive
-		}
-		if err = members.ChangeRole(r.Context(), teamID, memberID, input.Role, input.Status); err != nil {
-			writeIAM(w, nil, err)
-			return
-		}
-		writeIAM(w, map[string]string{"status": "updated"}, nil)
-	})
-	mux.HandleFunc("GET /teams/current/assets", func(w http.ResponseWriter, r *http.Request) {
-		teamID, _, ok := requestIdentity(w, r)
-		if !ok {
-			return
-		}
-		value, err := store.Assets(r.Context(), teamID)
-		writeIAM(w, value, err)
-	})
-	mux.HandleFunc("GET /teams/current/assets/{targetId}/permissions", func(w http.ResponseWriter, r *http.Request) {
-		teamID, _, ok := requestIdentity(w, r)
-		if !ok {
-			return
-		}
-		targetID, err := strconv.ParseInt(r.PathValue("targetId"), 10, 64)
-		if err != nil {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_target_id"})
-			return
-		}
-		value, err := store.AssetGrants(r.Context(), teamID, targetID)
-		writeIAM(w, value, err)
-	})
-	mux.HandleFunc("PUT /teams/current/assets/{targetId}/permissions/{memberId}", func(w http.ResponseWriter, r *http.Request) {
-		teamID, actorID, ok := mutationIdentity(w, r)
-		if !ok {
-			return
-		}
-		targetID, e1 := strconv.ParseInt(r.PathValue("targetId"), 10, 64)
-		memberID, e2 := strconv.ParseInt(r.PathValue("memberId"), 10, 64)
-		if e1 != nil || e2 != nil {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_path"})
-			return
-		}
-		var input grantUpdate
-		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input) != nil {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_request"})
-			return
-		}
-		grant := &iam.AssetPermission{TeamID: teamID, TargetID: targetID, MemberID: memberID, Permission: input.Permission, ConcurrentQuota: input.ConcurrentQuota, SandboxQuota: input.SandboxQuota, CreatedBy: actorID, UpdatedBy: actorID}
-		if input.Permission == iam.PermissionNone {
-			err := rbac.DeleteAssetPermission(r.Context(), teamID, targetID, memberID)
-			writeIAM(w, map[string]string{"status": "updated"}, err)
-			return
-		}
-		err := rbac.SaveAssetPermission(r.Context(), grant)
-		writeIAM(w, grant, err)
-	})
+	h := &teamHandlers{store: store, rbac: rbac, members: members}
+	mux.HandleFunc("GET /teams/current", h.getCurrentTeam)
+	mux.HandleFunc("GET /teams/current/members", h.listMembers)
+	mux.HandleFunc("PATCH /teams/current/members/{id}", h.patchMember)
+	mux.HandleFunc("GET /teams/current/assets", h.listAssets)
+	mux.HandleFunc("GET /teams/current/assets/{targetId}/permissions", h.listAssetPermissions)
+	mux.HandleFunc("PUT /teams/current/assets/{targetId}/permissions/{memberId}", h.putAssetPermission)
+}
+
+func (h *teamHandlers) getCurrentTeam(w http.ResponseWriter, r *http.Request) {
+	teamID, _, ok := requestIdentity(w, r)
+	if !ok {
+		return
+	}
+	value, err := h.store.Summary(r.Context(), teamID)
+	writeIAM(w, value, err)
+}
+
+func (h *teamHandlers) listMembers(w http.ResponseWriter, r *http.Request) {
+	teamID, _, ok := requestIdentity(w, r)
+	if !ok {
+		return
+	}
+	value, err := h.store.Members(r.Context(), teamID)
+	writeIAM(w, value, err)
+}
+
+func (h *teamHandlers) patchMember(w http.ResponseWriter, r *http.Request) {
+	teamID, _, ok := mutationIdentity(w, r)
+	if !ok {
+		return
+	}
+	memberID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_member_id"})
+		return
+	}
+	var input memberUpdate
+	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input) != nil {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_request"})
+		return
+	}
+	if input.Status == "" {
+		input.Status = iam.MemberActive
+	}
+	if err = h.members.ChangeRole(r.Context(), teamID, memberID, input.Role, input.Status); err != nil {
+		writeIAM(w, nil, err)
+		return
+	}
+	writeIAM(w, map[string]string{"status": "updated"}, nil)
+}
+
+func (h *teamHandlers) listAssets(w http.ResponseWriter, r *http.Request) {
+	teamID, _, ok := requestIdentity(w, r)
+	if !ok {
+		return
+	}
+	value, err := h.store.Assets(r.Context(), teamID)
+	writeIAM(w, value, err)
+}
+
+func (h *teamHandlers) listAssetPermissions(w http.ResponseWriter, r *http.Request) {
+	teamID, _, ok := requestIdentity(w, r)
+	if !ok {
+		return
+	}
+	targetID, err := strconv.ParseInt(r.PathValue("targetId"), 10, 64)
+	if err != nil {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_target_id"})
+		return
+	}
+	value, err := h.store.AssetGrants(r.Context(), teamID, targetID)
+	writeIAM(w, value, err)
+}
+
+func (h *teamHandlers) putAssetPermission(w http.ResponseWriter, r *http.Request) {
+	teamID, actorID, ok := mutationIdentity(w, r)
+	if !ok {
+		return
+	}
+	targetID, memberID, ok := assetPermissionIDs(w, r)
+	if !ok {
+		return
+	}
+	var input grantUpdate
+	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&input) != nil {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_request"})
+		return
+	}
+	grant := &iam.AssetPermission{TeamID: teamID, TargetID: targetID, MemberID: memberID, Permission: input.Permission, ConcurrentQuota: input.ConcurrentQuota, SandboxQuota: input.SandboxQuota, CreatedBy: actorID, UpdatedBy: actorID}
+	if input.Permission == iam.PermissionNone {
+		err := h.rbac.DeleteAssetPermission(r.Context(), teamID, targetID, memberID)
+		writeIAM(w, map[string]string{"status": "updated"}, err)
+		return
+	}
+	err := h.rbac.SaveAssetPermission(r.Context(), grant)
+	writeIAM(w, grant, err)
+}
+
+func assetPermissionIDs(w http.ResponseWriter, r *http.Request) (targetID, memberID int64, ok bool) {
+	targetID, targetErr := strconv.ParseInt(r.PathValue("targetId"), 10, 64)
+	memberID, memberErr := strconv.ParseInt(r.PathValue("memberId"), 10, 64)
+	if targetErr != nil || memberErr != nil {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_path"})
+		return 0, 0, false
+	}
+	return targetID, memberID, true
 }
 
 func requestIdentity(w http.ResponseWriter, r *http.Request) (int64, int64, bool) {

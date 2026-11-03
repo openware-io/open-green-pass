@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -47,7 +48,6 @@ import (
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
 
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func main() {
 	cfg := config.Load()
 	log := observability.NewLogger(cfg.Env)
@@ -56,29 +56,17 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, cfg.DBDSN)
-	if err != nil {
-		log.Error("pgxpool init failed", "err", err)
-		os.Exit(1)
-	}
+	mustStart(err, log, "pgxpool init failed", "err")
 	defer pool.Close()
 	trustedDSN, err := cfg.TrustedDSN()
-	if err != nil {
-		log.Error("trusted database configuration", "error", err)
-		os.Exit(1)
-	}
+	mustStart(err, log, "trusted database configuration", "error")
 	trustedPool, err := pgxpool.New(ctx, trustedDSN)
-	if err != nil {
-		log.Error("trusted pgxpool init failed", "err", err)
-		os.Exit(1)
-	}
+	mustStart(err, log, "trusted pgxpool init failed", "err")
 	defer trustedPool.Close()
 
 	// 治理域依赖组装（被测对象树 + 用例版本化）
 	gen, err := id.New(1, nil)
-	if err != nil {
-		log.Error("id generator init failed", "err", err)
-		os.Exit(1)
-	}
+	mustStart(err, log, "id generator init failed", "err")
 	db := infra.NewDB(pool)
 	trustedDB := infra.NewDB(trustedPool)
 	store := infra.NewTargetStore(db, gen)
@@ -147,10 +135,7 @@ func main() {
 			Image:     os.Getenv("GP_RUNNER_IMAGE"),
 			Timeout:   5 * time.Minute,
 		})
-		if err != nil {
-			log.Error("init k8s runner", "error", err)
-			os.Exit(1)
-		}
+		mustStart(err, log, "init k8s runner", "error")
 		runner = k8sRunner
 		log.Info("runner", "type", "k8s")
 	default:
@@ -161,31 +146,19 @@ func main() {
 	fixtureSvc := eapp.NewFixtureService(einfra.NewFixtureStore(db), gen)
 	if os.Getenv("GP_EXECUTION_POOL_ENABLED") == "true" {
 		registry, poolErr := pgpool.New(pool)
-		if poolErr != nil {
-			log.Error("init execution pool registry", "error", poolErr)
-			os.Exit(1)
-		}
+		mustStart(poolErr, log, "init execution pool registry", "error")
 		selector, poolErr := pgpool.NewSelector(registry, pgpool.SelectorConfig{HeartbeatTTL: time.Duration(config.MustInt("GP_EXECUTION_POOL_HEARTBEAT_TTL_SECONDS", 30)) * time.Second, LeaseTTL: time.Duration(config.MustInt("GP_EXECUTION_POOL_LEASE_TTL_SECONDS", 600)) * time.Second})
-		if poolErr != nil {
-			log.Error("init execution pool selector", "error", poolErr)
-			os.Exit(1)
-		}
+		mustStart(poolErr, log, "init execution pool selector", "error")
 		runSvc.SetExecutionPool(selector)
 	}
 	quotaClient, err := gpRedisQuota.NewClient(ctx, gpRedisQuota.ClientOptions{Address: cfg.RedisAddr, Password: os.Getenv("GP_REDIS_PASSWORD")})
-	if err != nil {
-		log.Error("init redis quota client", "error", err)
-		os.Exit(1)
-	}
+	mustStart(err, log, "init redis quota client", "error")
 	defer quotaClient.Close()
 	runQuota, err := gpRedisQuota.New(quotaClient, map[string]gpQuota.Limits{"run": {
 		Global: config.MustInt("GP_QUOTA_RUN_GLOBAL", 50), Team: config.MustInt("GP_QUOTA_RUN_TEAM", 20),
 		Target: config.MustInt("GP_QUOTA_RUN_TARGET", 5), Owner: config.MustInt("GP_QUOTA_RUN_OWNER", 3),
 	}})
-	if err != nil {
-		log.Error("init redis quota", "error", err)
-		os.Exit(1)
-	}
+	mustStart(err, log, "init redis quota", "error")
 	runSvc.SetQuotaPort(runQuota)
 	scheduleClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr, Password: os.Getenv("GP_REDIS_PASSWORD")})
 	defer scheduleClient.Close()
@@ -198,16 +171,10 @@ func main() {
 		log,
 	)
 	scheduleQueue, err := gpRedisQueue.New(ctx, scheduleClient, "gp:execution:schedule", "gp-execution")
-	if err != nil {
-		log.Error("init redis schedule queue", "error", err)
-		os.Exit(1)
-	}
+	mustStart(err, log, "init redis schedule queue", "error")
 	runSvc.SetScheduleQueue(scheduleQueue)
 	temporalClient, err := temporalclient.Dial(temporalclient.Options{HostPort: cfg.TemporalAddr})
-	if err != nil {
-		log.Error("init temporal client", "error", err)
-		os.Exit(1)
-	}
+	mustStart(err, log, "init temporal client", "error")
 	defer temporalClient.Close()
 	// The HTTP cancel endpoint runs in gp-server, so this process must be able
 	// to cancel the Temporal workflow started by the dispatcher. Without this
@@ -216,17 +183,11 @@ func main() {
 	generationController := aiworkflow.NewTemporalController(temporalClient)
 	generationSvc.SetWorkflowPort(generationController)
 	runEventBus, err := gpRedisRunBus.New(ctx, cfg.RedisAddr, os.Getenv("GP_REDIS_PASSWORD"))
-	if err != nil {
-		log.Error("init redis run event bus", "error", err)
-		os.Exit(1)
-	}
+	mustStart(err, log, "init redis run event bus", "error")
 	defer runEventBus.Close()
 	runSvc.SetRunEventBus(runEventBus)
 	conflicts, err := pgconflict.New(pool)
-	if err != nil {
-		log.Error("init postgres conflict registry", "error", err)
-		os.Exit(1)
-	}
+	mustStart(err, log, "init postgres conflict registry", "error")
 	runSvc.SetConflictPort(conflicts)
 
 	// 可信域依赖组装（审计哈希链 + 门禁判定 + 成本明细）
@@ -355,4 +316,15 @@ func main() {
 	if err := srv.ListenAndServe(); err != nil {
 		log.Error("server exited", "err", err)
 	}
+}
+
+// mustStart keeps startup failure handling in one place: log the real cause and
+// exit before serving. It preserves the original log message/key fields.
+func mustStart(err error, log *slog.Logger, message, key string, attrs ...any) {
+	if err == nil {
+		return
+	}
+	args := append(append([]any{}, attrs...), key, err)
+	log.Error(message, args...)
+	os.Exit(1)
 }

@@ -108,25 +108,51 @@ func (s *EnvService) RegisterRuntimeBaseline(ctx context.Context, targetID int64
 	return r, nil
 }
 
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func validateEnvironmentConfirmation(requirements []domain.EnvironmentRequirement, confirmation domain.EnvironmentConfirmation) error {
 	if !confirmation.Confirmed {
 		return fmt.Errorf("environment requirements must be explicitly confirmed")
 	}
-	if len(confirmation.CredentialRef) > 160 || strings.ContainsAny(confirmation.CredentialRef, "\r\n") {
+	if !validCredentialRef(confirmation.CredentialRef) {
 		return fmt.Errorf("credential reference is invalid")
 	}
-	for key, value := range confirmation.Values {
+	if err := validateConfirmationValues(confirmation.Values); err != nil {
+		return err
+	}
+	return validateEnvironmentRequirements(requirements, confirmation)
+}
+
+func validCredentialRef(ref string) bool {
+	return len(ref) <= 160 && !strings.ContainsAny(ref, "\r\n")
+}
+
+func validateConfirmationValues(values map[string]string) error {
+	for key, value := range values {
 		if strings.TrimSpace(key) == "" || len(key) > 80 || len(value) > 500 || strings.ContainsAny(value, "\r\n") {
 			return fmt.Errorf("environment confirmation value is invalid")
 		}
-		lower := strings.ToLower(key)
-		if strings.Contains(lower, "password") || strings.Contains(lower, "token") || strings.Contains(lower, "secret") || strings.Contains(lower, "cookie") {
+		if containsCredentialKeyword(key) {
 			return fmt.Errorf("environment confirmation accepts credential references, not secret values")
 		}
 	}
+	return nil
+}
+
+// credentialKeywords 是确认值中禁止出现的敏感字段关键字。
+var credentialKeywords = []string{"password", "token", "secret", "cookie"}
+
+func containsCredentialKeyword(key string) bool {
+	lower := strings.ToLower(key)
+	for _, keyword := range credentialKeywords {
+		if strings.Contains(lower, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+func validateEnvironmentRequirements(requirements []domain.EnvironmentRequirement, confirmation domain.EnvironmentConfirmation) error {
 	for _, requirement := range requirements {
-		if strings.TrimSpace(requirement.Key) == "" || len(requirement.Key) > 80 || len(requirement.Label) > 120 || len(requirement.Reason) > 500 || len(requirement.Evidence) > 500 {
+		if invalidEnvironmentRequirement(requirement) {
 			return fmt.Errorf("environment requirement is invalid")
 		}
 		if requirement.Required && !requirement.Sensitive && strings.TrimSpace(confirmation.Values[requirement.Key]) == "" {
@@ -137,6 +163,11 @@ func validateEnvironmentConfirmation(requirements []domain.EnvironmentRequiremen
 		}
 	}
 	return nil
+}
+
+func invalidEnvironmentRequirement(requirement domain.EnvironmentRequirement) bool {
+	return strings.TrimSpace(requirement.Key) == "" || len(requirement.Key) > 80 || len(requirement.Label) > 120 ||
+		len(requirement.Reason) > 500 || len(requirement.Evidence) > 500
 }
 
 // CheckVersion 比对目标版本 vs 环境运行版本，写 env_check 并返回结果。

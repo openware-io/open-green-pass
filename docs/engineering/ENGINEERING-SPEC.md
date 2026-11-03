@@ -231,7 +231,7 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 
 - **依赖边界（depguard）**：`domain` 只许 stdlib+pkg+同域；`application` 禁 GORM/HTTP client/Temporal/Redis；`cmd` 之外的包禁自写 `main`。规则进 `golangci.yml` 并纳入 `make check`，不靠自觉。
 - **例外**：任何门禁例外必须有架构决策记录、负责人、到期时间、退出条件；禁止长期全局 `nolint` 掩盖。
-- **存量 gocyclo 债务（2026-11，Go 1.26 / golangci-lint v2 清零）**：39 个既有复杂编排函数逐函数标注 `//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog`（不全局放宽 `min-complexity`）；优先重构了 `canTransition`、run list/create 等小函数，复杂编排（路由注册、Temporal 活动编排、执行器）保留可见债务，按 lint backlog 逐步拆分。新增/修改函数不得复用该清单当免死金牌：能拆则拆，确需保留必须同格式逐函数注释并说明原因。
+- **存量 gocyclo 债务（2026-11，Go 1.26 / golangci-lint v2 清零）**：task-32 曾为 39 个既有复杂编排函数逐函数标注 `//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog`（不全局放宽 `min-complexity`）。task-34 已通过 helper/表驱动/早返回把 `internal/ai/**` 与 `cmd/{server,worker}/main.go` 范围内的 30 处 gocyclo nolint 全部删除（复杂度回到 ≤15，未新增 nolint）；其余域按同一规则并行清理（task-35）。新增/修改函数不得再以清单当免死金牌：能拆则拆。
 - **gosec 合理例外**：G101/G124/G401/G501/G204/G705/G115 的少量逐行 `//nolint` 均带具体理由（测试凭据、运行时 Secure cookie、非加密稳定哈希、测试脚手架执行、JSON SSE 非 HTML、advisory-lock key），禁止用文件/目录级 `nolint` 或全局规则禁用掩盖。
 - `make check` 输出统一落 `.outputs/logs/<date>/`，临时调试日志不得写仓库根。
 

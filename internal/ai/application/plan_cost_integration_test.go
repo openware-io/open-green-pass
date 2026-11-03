@@ -26,8 +26,40 @@ import (
 //
 //	$env:GP_TEST_DB_DSN='postgres://gp:gp@127.0.0.1:55432/gp?sslmode=disable'
 //	go test ./internal/ai/application -run TestGenerationPlanCostWithRealCostPrice -v
-//
-//nolint:gocyclo // Integration fixture intentionally exercises the full price/estimate matrix.
+func seedPlanCostFixture(t *testing.T, exec func(string, ...any) error, teamID, projectID, repoID, serviceID, batchID, priceID, refID, connectionID int64) {
+	t.Helper()
+	if err := exec(`INSERT INTO tgt_target(id,team_id,parent_id,level,name,kind,model_binding,status)
+		VALUES ($1,$2,NULL,0,'cost-replay-project','api_service','{"Provider":"deepseek","Model":"deepseek-flash"}'::jsonb,'active')`, projectID, teamID); err != nil {
+		t.Fatalf("insert target: %v", err)
+	}
+	if err := exec(`INSERT INTO repo_scm_connection(id,team_id,provider,name,secret_ref,credential_status)
+		VALUES ($1,$2,'github','cost-replay-conn','k8s://gp/scm-cost-replay','configured')`, connectionID, teamID); err != nil {
+		t.Fatalf("insert scm connection: %v", err)
+	}
+	if err := exec(`INSERT INTO repo_repo(id,team_id,project_id,kind,url,default_branch,scm_connection_id)
+		VALUES ($1,$2,$3,'git','https://github.com/acme/cost-replay','main',$4)`, repoID, teamID, projectID, connectionID); err != nil {
+		t.Fatalf("insert repo: %v", err)
+	}
+	if err := exec(`INSERT INTO tgt_service(id,team_id,project_id,repo_id,name,source_path,kind,status,generation_status,language,framework,profile_status)
+		VALUES ($1,$2,$3,$4,'cost-replay-service','services/svc','api_service','active','confirmed','Go','net/http','confirmed')`,
+		serviceID, teamID, projectID, repoID); err != nil {
+		t.Fatalf("insert service: %v", err)
+	}
+	if err := exec(`INSERT INTO repo_ref(id,team_id,repo_id,ref_type,name,commit_sha,fetched_at)
+		VALUES ($1,$2,$3,'branch','main','deadbeef',now())`, refID, teamID, repoID); err != nil {
+		t.Fatalf("insert ref: %v", err)
+	}
+	if err := exec(`INSERT INTO cost_price(id,team_id,model_key,input_per_1k,output_per_1k,cache_read_per_1k,currency,effective_from,status,created_by)
+		VALUES ($1,$2,'dsh/deepseek-flash',0.002,0.008,0,'CNY',now()-interval '1 hour','active',40)`, priceID, teamID); err != nil {
+		t.Fatalf("insert cost_price: %v", err)
+	}
+	if err := exec(`INSERT INTO gen_batch(id,team_id,target_id,repo_id,service_id,source_path,ref_type,branch,state,state_version,idempotency_key,created_by,tokens_in,tokens_out,created_at,updated_at)
+		VALUES ($1,$2,$3,$4,$5,'services/svc','branch','main','approved',1,'cost-replay-batch',40,3000,3500,now()-interval '100 seconds',now())`,
+		batchID, teamID, projectID, repoID, serviceID); err != nil {
+		t.Fatalf("insert approved batch: %v", err)
+	}
+}
+
 func TestGenerationPlanCostWithRealCostPrice(t *testing.T) {
 	dsn := os.Getenv("GP_TEST_DB_DSN")
 	if dsn == "" {
@@ -81,36 +113,7 @@ func TestGenerationPlanCostWithRealCostPrice(t *testing.T) {
 
 	// Real production data shape: model_binding uses capitalized JSON keys and
 	// the cost ledger bills the DSH runtime as dsh/<model_key>.
-	if err := exec(`INSERT INTO tgt_target(id,team_id,parent_id,level,name,kind,model_binding,status)
-		VALUES ($1,$2,NULL,0,'cost-replay-project','api_service','{"Provider":"deepseek","Model":"deepseek-flash"}'::jsonb,'active')`, projectID, teamID); err != nil {
-		t.Fatalf("insert target: %v", err)
-	}
-	if err := exec(`INSERT INTO repo_scm_connection(id,team_id,provider,name,secret_ref,credential_status)
-		VALUES ($1,$2,'github','cost-replay-conn','k8s://gp/scm-cost-replay','configured')`, connectionID, teamID); err != nil {
-		t.Fatalf("insert scm connection: %v", err)
-	}
-	if err := exec(`INSERT INTO repo_repo(id,team_id,project_id,kind,url,default_branch,scm_connection_id)
-		VALUES ($1,$2,$3,'git','https://github.com/acme/cost-replay','main',$4)`, repoID, teamID, projectID, connectionID); err != nil {
-		t.Fatalf("insert repo: %v", err)
-	}
-	if err := exec(`INSERT INTO tgt_service(id,team_id,project_id,repo_id,name,source_path,kind,status,generation_status,language,framework,profile_status)
-		VALUES ($1,$2,$3,$4,'cost-replay-service','services/svc','api_service','active','confirmed','Go','net/http','confirmed')`,
-		serviceID, teamID, projectID, repoID); err != nil {
-		t.Fatalf("insert service: %v", err)
-	}
-	if err := exec(`INSERT INTO repo_ref(id,team_id,repo_id,ref_type,name,commit_sha,fetched_at)
-		VALUES ($1,$2,$3,'branch','main','deadbeef',now())`, refID, teamID, repoID); err != nil {
-		t.Fatalf("insert ref: %v", err)
-	}
-	if err := exec(`INSERT INTO cost_price(id,team_id,model_key,input_per_1k,output_per_1k,cache_read_per_1k,currency,effective_from,status,created_by)
-		VALUES ($1,$2,'dsh/deepseek-flash',0.002,0.008,0,'CNY',now()-interval '1 hour','active',40)`, priceID, teamID); err != nil {
-		t.Fatalf("insert cost_price: %v", err)
-	}
-	if err := exec(`INSERT INTO gen_batch(id,team_id,target_id,repo_id,service_id,source_path,ref_type,branch,state,state_version,idempotency_key,created_by,tokens_in,tokens_out,created_at,updated_at)
-		VALUES ($1,$2,$3,$4,$5,'services/svc','branch','main','approved',1,'cost-replay-batch',40,3000,3500,now()-interval '100 seconds',now())`,
-		batchID, teamID, projectID, repoID, serviceID); err != nil {
-		t.Fatalf("insert approved batch: %v", err)
-	}
+	seedPlanCostFixture(t, exec, teamID, projectID, repoID, serviceID, batchID, priceID, refID, connectionID)
 
 	planStore := aiinfra.NewGenerationPlanStore(database)
 	catalog := aiinfra.NewGenerationPlanCatalog(database)
@@ -125,6 +128,11 @@ func TestGenerationPlanCostWithRealCostPrice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("preflight: %v", err)
 	}
+	assertPlanCostReplay(tenantCtx, t, plan, planStore, teamID, batchID)
+}
+
+func assertPlanCostReplay(tenantCtx context.Context, t *testing.T, plan *domain.GenerationPlan, planStore *aiinfra.GenerationPlanStore, teamID, batchID int64) {
+	t.Helper()
 	if plan.Summary.Services != 1 {
 		t.Fatalf("valid services = %d, plan=%+v", plan.Summary.Services, plan.Items)
 	}
@@ -146,7 +154,6 @@ func TestGenerationPlanCostWithRealCostPrice(t *testing.T) {
 	if plan.Estimate.Currency != "CNY" {
 		t.Fatalf("currency = %q", plan.Estimate.Currency)
 	}
-
 	// The single-use CAS must succeed once and then report the plan as stale
 	// even for a different run id (the P0-2 fix is database-enforced).
 	first, err := planStore.Consume(tenantCtx, teamID, plan.ID, batchID, time.Now().UTC())

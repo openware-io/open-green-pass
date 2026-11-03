@@ -128,29 +128,101 @@ func (r *K8sRunner) Execute(ctx context.Context, spec []*domain.CaseSpec) ([]*do
 	return results, nil
 }
 
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (r *K8sRunner) executeOne(ctx context.Context, s *domain.CaseSpec) (*domain.CaseResult, error) {
 	now := time.Now().UTC()
+	image, cmd, err := r.resolveCaseCommand(s)
+	if err != nil {
+		return nil, err
+	}
+	jobName := fmt.Sprintf("gp-run-%d-%d", s.CaseID, time.Now().UnixNano()%1000000)
+	job := r.buildRunnerJob(jobName, image, cmd)
+	if _, err := r.cl.BatchV1().Jobs(r.cfg.Namespace).Create(ctx, job, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return nil, err
+	}
+	defer func() {
+		_ = r.cl.BatchV1().Jobs(r.cfg.Namespace).Delete(context.Background(), jobName,
+			metav1.DeleteOptions{PropagationPolicy: &delProp})
+	}()
+
+	status, logs, err := r.waitForJob(ctx, jobName)
+	if err != nil {
+		return nil, err
+	}
+	ended := time.Now().UTC()
+	hash := sha256.Sum256([]byte(logs))
+	ev := &domain.EvidenceRef{
+		Logs: []string{fmt.Sprintf("job://%s/%s", r.cfg.Namespace, jobName)},
+		Hash: hex.EncodeToString(hash[:]),
+	}
+	// A generic API Job does not capture pixels. ScreenshotEnabled is a policy
+	// request, not evidence: only a browser-capable runner may append actual
+	// screenshot objects after persisting them. Never publish a synthetic URI.
+	return &domain.CaseResult{
+		ID: r.gen.Next(), CaseID: s.CaseID, CaseVersion: s.CaseVersion,
+		Status: status, ResultText: truncateStr(logs, 400), Evidence: ev,
+		AttemptSeq: 1, StartedAt: now, EndedAt: &ended,
+	}, nil
+}
+
+// resolveCaseCommand resolves the sandbox image and argv for one case. A
+// reviewed declarative API request wins over an explicit script command.
+func (r *K8sRunner) resolveCaseCommand(s *domain.CaseSpec) (string, []string, error) {
 	ss := resolveScript(s.Script)
 	image := ss.Image
 	if image == "" {
 		image = r.cfg.Image
 	}
 	cmd := ss.Command
-	var err error
 	if root, ok := s.Script.(map[string]any); ok {
 		if _, hasRequest := root["request"].(map[string]any); hasRequest {
-			cmd, err = httpcase.BuildCommand(s.Script, s.BaseURL)
+			built, err := httpcase.BuildCommand(s.Script, s.BaseURL)
 			if err != nil {
-				return nil, fmt.Errorf("build declarative API case: %w", err)
+				return "", nil, fmt.Errorf("build declarative API case: %w", err)
 			}
+			cmd = built
 		}
 	}
 	if len(cmd) == 0 {
-		return nil, fmt.Errorf("case has no executable script or supported declarative API request")
+		return "", nil, fmt.Errorf("case has no executable script or supported declarative API request")
 	}
-	jobName := fmt.Sprintf("gp-run-%d-%d", s.CaseID, time.Now().UnixNano()%1000000)
-	job := &batchv1.Job{
+	return image, cmd, nil
+}
+
+// waitForJob polls a sandbox Job until it succeeds, fails, disappears, or
+// reaches the configured deadline. A timeout maps to blocked, never to failure.
+func (r *K8sRunner) waitForJob(ctx context.Context, jobName string) (domain.CaseStatus, string, error) {
+	status := domain.CaseFail
+	deadline := time.Now().Add(r.cfg.Timeout)
+	for {
+		if time.Now().After(deadline) {
+			return domain.CaseBlocked, "", nil
+		}
+		cur, err := r.cl.BatchV1().Jobs(r.cfg.Namespace).Get(ctx, jobName, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return status, "", nil
+			}
+			return "", "", err
+		}
+		if cur.Status.Succeeded > 0 {
+			logs, _ := r.podLogs(ctx, jobName)
+			return domain.CasePass, logs, nil
+		}
+		if cur.Status.Failed > 0 {
+			logs, _ := r.podLogs(ctx, jobName)
+			return domain.CaseFail, logs, nil
+		}
+		select {
+		case <-ctx.Done():
+			return "", "", ctx.Err()
+		case <-time.After(800 * time.Millisecond):
+		}
+	}
+}
+
+// buildRunnerJob builds the disposable gp-runner sandbox Job for one case.
+func (r *K8sRunner) buildRunnerJob(jobName, image string, cmd []string) *batchv1.Job {
+	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: r.cfg.Namespace,
@@ -198,61 +270,6 @@ func (r *K8sRunner) executeOne(ctx context.Context, s *domain.CaseSpec) (*domain
 			},
 		},
 	}
-	_, err = r.cl.BatchV1().Jobs(r.cfg.Namespace).Create(ctx, job, metav1.CreateOptions{})
-	if err != nil && !apierrors.IsAlreadyExists(err) {
-		return nil, err
-	}
-	defer func() {
-		_ = r.cl.BatchV1().Jobs(r.cfg.Namespace).Delete(context.Background(), jobName,
-			metav1.DeleteOptions{PropagationPolicy: &delProp})
-	}()
-
-	// 轮询 Job 完成状态
-	status := domain.CaseFail
-	var logs string
-	deadline := time.Now().Add(r.cfg.Timeout)
-	for {
-		if time.Now().After(deadline) {
-			status = domain.CaseBlocked
-			break
-		}
-		cur, err := r.cl.BatchV1().Jobs(r.cfg.Namespace).Get(ctx, jobName, metav1.GetOptions{})
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				break
-			}
-			return nil, err
-		}
-		if cur.Status.Succeeded > 0 {
-			status = domain.CasePass
-			logs, _ = r.podLogs(ctx, jobName)
-			break
-		}
-		if cur.Status.Failed > 0 {
-			status = domain.CaseFail
-			logs, _ = r.podLogs(ctx, jobName)
-			break
-		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(800 * time.Millisecond):
-		}
-	}
-	ended := time.Now().UTC()
-	hash := sha256.Sum256([]byte(logs))
-	ev := &domain.EvidenceRef{
-		Logs: []string{fmt.Sprintf("job://%s/%s", r.cfg.Namespace, jobName)},
-		Hash: hex.EncodeToString(hash[:]),
-	}
-	// A generic API Job does not capture pixels. ScreenshotEnabled is a policy
-	// request, not evidence: only a browser-capable runner may append actual
-	// screenshot objects after persisting them. Never publish a synthetic URI.
-	return &domain.CaseResult{
-		ID: r.gen.Next(), CaseID: s.CaseID, CaseVersion: s.CaseVersion,
-		Status: status, ResultText: truncateStr(logs, 400), Evidence: ev,
-		AttemptSeq: 1, StartedAt: now, EndedAt: &ended,
-	}, nil
 }
 
 var delProp = metav1.DeletePropagationForeground

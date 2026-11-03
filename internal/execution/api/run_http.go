@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -122,8 +123,6 @@ func (h *runHandler) getRun(w http.ResponseWriter, r *http.Request) {
 
 // events emits authoritative snapshots. Redis notifications wake connections
 // across replicas; periodic reads remain as a correctness fallback.
-//
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (h *runHandler) events(w http.ResponseWriter, r *http.Request) {
 	id, ok := runID(w, r)
 	if !ok {
@@ -137,13 +136,8 @@ func (h *runHandler) events(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "streaming responses are not supported", http.StatusInternalServerError)
 		return
 	}
-	initial, err := h.svc.GetRun(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, domain.ErrRunNotFound) {
-			httpx.WriteErr(w, gperr.NotFound("run not found"))
-			return
-		}
-		httpx.WriteErr(w, err)
+	initial, ok := h.eventsInitialRun(w, r, id)
+	if !ok {
 		return
 	}
 	initialPayload, err := json.Marshal(toRunResponse(initial))
@@ -156,22 +150,51 @@ func (h *runHandler) events(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
-
-	last := string(initialPayload)
 	sequence := 1
 	if _, err := fmt.Fprintf(w, "id: %d\nevent: run\ndata: %s\n\n", sequence, initialPayload); err != nil {
 		return
 	}
 	flusher.Flush()
 	teamID, _ := rls.TenantFrom(r.Context())
-	subscription, subscribeErr := h.svc.SubscribeRunEvents(r.Context(), teamID, id)
-	var notifications <-chan struct{}
-	if subscribeErr == nil && subscription != nil {
-		defer subscription.Close()
-		notifications = subscription.Events()
+	stream := h.subscribeRunEvents(r.Context(), teamID, id)
+	if stream.Close != nil {
+		defer func() { _ = stream.Close() }()
 	}
+	h.streamRunUpdates(r.Context(), w, flusher, id, string(initialPayload), sequence, stream.Notifications)
+}
+
+// eventsInitialRun loads the first authoritative snapshot, writing the HTTP
+// error itself when the run cannot be read.
+func (h *runHandler) eventsInitialRun(w http.ResponseWriter, r *http.Request, id int64) (*domain.Run, bool) {
+	initial, err := h.svc.GetRun(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, domain.ErrRunNotFound) {
+			httpx.WriteErr(w, gperr.NotFound("run not found"))
+		} else {
+			httpx.WriteErr(w, err)
+		}
+		return nil, false
+	}
+	return initial, true
+}
+
+// runEventStream is a best-effort cross-replica wakeup subscription.
+type runEventStream struct {
+	Notifications <-chan struct{}
+	Close         func() error
+}
+
+func (h *runHandler) subscribeRunEvents(ctx context.Context, teamID, runID int64) runEventStream {
+	subscription, err := h.svc.SubscribeRunEvents(ctx, teamID, runID)
+	if err != nil || subscription == nil {
+		return runEventStream{}
+	}
+	return runEventStream{Notifications: subscription.Events(), Close: subscription.Close}
+}
+
+func (h *runHandler) streamRunUpdates(ctx context.Context, w http.ResponseWriter, flusher http.Flusher, id int64, last string, sequence int, notifications <-chan struct{}) {
 	send := func() error {
-		run, err := h.svc.GetRun(r.Context(), id)
+		run, err := h.svc.GetRun(ctx, id)
 		if err != nil {
 			return err
 		}
@@ -195,7 +218,7 @@ func (h *runHandler) events(w http.ResponseWriter, r *http.Request) {
 	defer ticker.Stop()
 	for {
 		select {
-		case <-r.Context().Done():
+		case <-ctx.Done():
 			return
 		case _, open := <-notifications:
 			if !open {

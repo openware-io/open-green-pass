@@ -330,26 +330,10 @@ func durationOr(value, fallback time.Duration) time.Duration {
 	return fallback
 }
 
-//nolint:gocyclo,gocognit // replay/notify/fallback/heartbeat/snapshot share one audited writer.
+// stream is a thin orchestration around authorization, replay and the notify
+// loop; each phase is a helper so the audited writer stays reviewable.
 func (h *runEventHandler) stream(w http.ResponseWriter, r *http.Request) {
-	team, ok := generationTenant(w, r)
-	if !ok {
-		return
-	}
-	runID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil || runID <= 0 {
-		writeGenerationError(w, http.StatusBadRequest, "validation_failed", "invalid generation run id")
-		return
-	}
-	run, err := h.svc.Get(r.Context(), team, runID)
-	if err != nil {
-		writeGenerationRunError(w, err)
-		return
-	}
-	if !authorizeGeneration(w, r, h.authorizer, "view", run.ProjectID) {
-		return
-	}
-	after, ok := eventCursor(w, r)
+	team, runID, run, after, ok := h.authorizeStream(w, r)
 	if !ok {
 		return
 	}
@@ -368,15 +352,64 @@ func (h *runEventHandler) stream(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 		_ = h.limiter.Release(releaseCtx, team, leaseID)
 	}()
-	renewLease := func() error {
-		renewCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-		return h.limiter.Renew(renewCtx, team, leaseID)
+	stream, ok := h.newRunEventStream(w, r, team, runID, after, run, leaseID)
+	if !ok {
+		return
 	}
+	defer stream.unsubscribe()
+	if !stream.replay(r.Context()) {
+		return
+	}
+	stream.serve(r.Context())
+}
+
+// authorizeStream validates tenant/run/authorization/cursor before any stream
+// resources are acquired. Authorization errors already write the HTTP response.
+func (h *runEventHandler) authorizeStream(w http.ResponseWriter, r *http.Request) (team, runID int64, run *domain.GenerationRun, after int64, ok bool) {
+	team, ok = generationTenant(w, r)
+	if !ok {
+		return 0, 0, nil, 0, false
+	}
+	runID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || runID <= 0 {
+		writeGenerationError(w, http.StatusBadRequest, "validation_failed", "invalid generation run id")
+		return 0, 0, nil, 0, false
+	}
+	run, err = h.svc.Get(r.Context(), team, runID)
+	if err != nil {
+		writeGenerationRunError(w, err)
+		return 0, 0, nil, 0, false
+	}
+	if !authorizeGeneration(w, r, h.authorizer, "view", run.ProjectID) {
+		return 0, 0, nil, 0, false
+	}
+	after, ok = eventCursor(w, r)
+	if !ok {
+		return 0, 0, nil, 0, false
+	}
+	return team, runID, run, after, true
+}
+
+type runEventStream struct {
+	w             http.ResponseWriter
+	flusher       http.Flusher
+	handler       *runEventHandler
+	team          int64
+	runID         int64
+	leaseID       string
+	run           *domain.GenerationRun
+	lastSent      int64
+	notifications <-chan struct{}
+	unsubscribe   func()
+}
+
+// newRunEventStream flushes SSE headers, subscribes the notifier and builds the
+// frame writer. A missing notifier only means the fallback poll wakes the stream.
+func (h *runEventHandler) newRunEventStream(w http.ResponseWriter, r *http.Request, team, runID, after int64, run *domain.GenerationRun, leaseID string) (*runEventStream, bool) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeGenerationError(w, http.StatusInternalServerError, "internal", "streaming responses are not supported")
-		return
+		return nil, false
 	}
 	// SSE outlives the global server WriteTimeout; clear the per-response write
 	// deadline so long-lived consoles are not cut every 30 seconds.
@@ -389,139 +422,167 @@ func (h *runEventHandler) stream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
 	if _, err := fmt.Fprint(w, "retry: 3000\n\n"); err != nil {
-		return
+		return nil, false
 	}
 	flusher.Flush()
-	writeFrame := func(seq int64, eventType string, snapshot *domain.GenerationRun) error {
-		payload, err := json.Marshal(map[string]any{
-			"seq":  seq,
-			"type": eventType,
-			"run":  toGenerationRunDetail(snapshot),
-		})
-		if err != nil {
-			return err
-		}
-		if _, err := fmt.Fprintf(w, "id: %d\nevent: run\ndata: %s\n\n", seq, payload); err != nil { //nolint:gosec // G705: payload is JSON-encoded event data, not HTML
-			return err
-		}
-		flusher.Flush()
-		return nil
+	stream := &runEventStream{
+		w: w, flusher: flusher, handler: h, team: team, runID: runID,
+		leaseID: leaseID, run: run, lastSent: after, unsubscribe: func() {},
 	}
-	// Subscribe before replay so hints emitted during replay are buffered; a
-	// missing notifier only means the fallback poll does the wake-up.
-	var notifications <-chan struct{}
-	unsubscribe := func() {}
 	if h.notifier != nil {
 		channel, cancel, subscribeErr := h.notifier.Subscribe(r.Context(), runID)
 		if subscribeErr == nil && channel != nil {
-			notifications = channel
+			stream.notifications = channel
 			if cancel != nil {
-				unsubscribe = cancel
+				stream.unsubscribe = cancel
 			}
 		}
 	}
-	defer unsubscribe()
-	replay, err := h.events.ListAfter(r.Context(), team, runID, after, 200)
+	return stream, true
+}
+
+func (s *runEventStream) writeFrame(seq int64, eventType string, snapshot *domain.GenerationRun) error {
+	payload, err := json.Marshal(map[string]any{
+		"seq":  seq,
+		"type": eventType,
+		"run":  toGenerationRunDetail(snapshot),
+	})
 	if err != nil {
-		return
+		return err
 	}
-	lastSent := after
-	if len(replay) > 0 {
-		for _, event := range replay {
-			if err := writeFrame(event.Seq, string(event.Type), run); err != nil {
-				return
+	if _, err := fmt.Fprintf(s.w, "id: %d\nevent: run\ndata: %s\n\n", seq, payload); err != nil { //nolint:gosec // G705: payload is JSON-encoded event data, not HTML
+		return err
+	}
+	s.flusher.Flush()
+	return nil
+}
+
+// replay sends buffered events after the cursor, or a snapshot when there is
+// nothing to replay; it returns false when the stream must close.
+func (s *runEventStream) replay(ctx context.Context) bool {
+	events, err := s.handler.events.ListAfter(ctx, s.team, s.runID, s.lastSent, 200)
+	if err != nil {
+		return false
+	}
+	if len(events) > 0 {
+		for _, event := range events {
+			if err := s.writeFrame(event.Seq, string(event.Type), s.run); err != nil {
+				return false
 			}
-			lastSent = event.Seq
+			s.lastSent = event.Seq
 		}
-	} else {
-		cursor := after
-		if last, lastErr := h.events.LastSeq(r.Context(), team, runID); lastErr == nil && last > cursor {
-			cursor = last
-		}
-		if err := writeFrame(cursor, "run.snapshot", run); err != nil {
-			return
-		}
-		lastSent = cursor
+		return !domain.IsTerminalRunState(s.run.State)
 	}
-	if domain.IsTerminalRunState(run.State) {
-		return
+	cursor := s.lastSent
+	if last, lastErr := s.handler.events.LastSeq(ctx, s.team, s.runID); lastErr == nil && last > cursor {
+		cursor = last
 	}
-	// flushPending reads the authoritative event rows if any hint/fallback
-	// fired. It returns whether frames were sent so the snapshot ticker can skip
-	// a redundant snapshot right after events.
-	flushPending := func() (sent bool, terminal bool, flushErr error) {
-		pending, listErr := h.events.ListAfter(r.Context(), team, runID, lastSent, 200)
-		if listErr != nil {
-			return false, false, listErr
-		}
-		if len(pending) == 0 {
-			return false, domain.IsTerminalRunState(run.State), nil
-		}
-		latest, getErr := h.svc.Get(r.Context(), team, runID)
-		if getErr != nil {
-			return false, false, getErr
-		}
-		run = latest
-		for _, event := range pending {
-			if writeErr := writeFrame(event.Seq, string(event.Type), run); writeErr != nil {
-				return false, false, writeErr
-			}
-			lastSent = event.Seq
-		}
-		return true, domain.IsTerminalRunState(run.State), nil
+	if err := s.writeFrame(cursor, "run.snapshot", s.run); err != nil {
+		return false
 	}
-	fallback := time.NewTicker(durationOr(h.fallbackInterval, 20*time.Second))
+	s.lastSent = cursor
+	return !domain.IsTerminalRunState(s.run.State)
+}
+
+func (s *runEventStream) renewLease(ctx context.Context) error {
+	renewCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	return s.handler.limiter.Renew(renewCtx, s.team, s.leaseID)
+}
+
+// serve runs the notify/fallback/heartbeat/snapshot loop until terminal state,
+// renewal failure or write error.
+func (s *runEventStream) serve(ctx context.Context) {
+	fallback := time.NewTicker(durationOr(s.handler.fallbackInterval, 20*time.Second))
 	defer fallback.Stop()
-	heartbeat := time.NewTicker(durationOr(h.heartbeatInterval, 15*time.Second))
+	heartbeat := time.NewTicker(durationOr(s.handler.heartbeatInterval, 15*time.Second))
 	defer heartbeat.Stop()
-	snapshot := time.NewTicker(durationOr(h.snapshotInterval, 30*time.Second))
+	snapshot := time.NewTicker(durationOr(s.handler.snapshotInterval, 30*time.Second))
 	defer snapshot.Stop()
 	for {
 		select {
-		case <-r.Context().Done():
+		case <-ctx.Done():
 			return
-		case <-notifications:
-			_, terminal, flushErr := flushPending()
-			if flushErr != nil || terminal {
+		case <-s.notifications:
+			if !s.handlePending(ctx) {
 				return
 			}
 		case <-fallback.C:
-			_, terminal, flushErr := flushPending()
-			if flushErr != nil || terminal {
+			if !s.handlePending(ctx) {
 				return
 			}
 		case <-heartbeat.C:
-			if err := renewLease(); err != nil {
+			if !s.handleHeartbeat(ctx) {
 				return
 			}
-			if _, err := fmt.Fprint(w, ": keepalive\n\n"); err != nil {
-				return
-			}
-			flusher.Flush()
 		case <-snapshot.C:
-			if err := renewLease(); err != nil {
-				return
-			}
-			sent, terminal, flushErr := flushPending()
-			if flushErr != nil || terminal {
-				return
-			}
-			if sent {
-				continue
-			}
-			latest, getErr := h.svc.Get(r.Context(), team, runID)
-			if getErr != nil {
-				return
-			}
-			run = latest
-			if err := writeFrame(lastSent, "run.snapshot", run); err != nil {
-				return
-			}
-			if domain.IsTerminalRunState(run.State) {
+			if !s.handleSnapshot(ctx) {
 				return
 			}
 		}
 	}
+}
+
+func (s *runEventStream) handlePending(ctx context.Context) bool {
+	_, terminal, err := s.flushPending(ctx)
+	return err == nil && !terminal
+}
+
+func (s *runEventStream) handleHeartbeat(ctx context.Context) bool {
+	if err := s.renewLease(ctx); err != nil {
+		return false
+	}
+	if _, err := fmt.Fprint(s.w, ": keepalive\n\n"); err != nil {
+		return false
+	}
+	s.flusher.Flush()
+	return true
+}
+
+func (s *runEventStream) handleSnapshot(ctx context.Context) bool {
+	if err := s.renewLease(ctx); err != nil {
+		return false
+	}
+	sent, terminal, err := s.flushPending(ctx)
+	if err != nil || terminal {
+		return false
+	}
+	if sent {
+		return true
+	}
+	latest, getErr := s.handler.svc.Get(ctx, s.team, s.runID)
+	if getErr != nil {
+		return false
+	}
+	s.run = latest
+	if err := s.writeFrame(s.lastSent, "run.snapshot", s.run); err != nil {
+		return false
+	}
+	return !domain.IsTerminalRunState(s.run.State)
+}
+
+// flushPending reads authoritative rows after the last sent cursor. sent lets
+// the snapshot ticker avoid a redundant snapshot right after events.
+func (s *runEventStream) flushPending(ctx context.Context) (sent bool, terminal bool, flushErr error) {
+	pending, listErr := s.handler.events.ListAfter(ctx, s.team, s.runID, s.lastSent, 200)
+	if listErr != nil {
+		return false, false, listErr
+	}
+	if len(pending) == 0 {
+		return false, domain.IsTerminalRunState(s.run.State), nil
+	}
+	latest, getErr := s.handler.svc.Get(ctx, s.team, s.runID)
+	if getErr != nil {
+		return false, false, getErr
+	}
+	s.run = latest
+	for _, event := range pending {
+		if writeErr := s.writeFrame(event.Seq, string(event.Type), s.run); writeErr != nil {
+			return false, false, writeErr
+		}
+		s.lastSent = event.Seq
+	}
+	return true, domain.IsTerminalRunState(s.run.State), nil
 }
 
 func eventCursor(w http.ResponseWriter, r *http.Request) (int64, bool) {

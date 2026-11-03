@@ -15,8 +15,15 @@ import (
 	"github.com/openware-io/open-green-pass/internal/platform/rls"
 )
 
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
-func TestGenerationBatchListScopesOrdersAndLimitsResults(t *testing.T) {
+type batchListRow struct {
+	ID       int64                       `json:"id"`
+	TeamID   int64                       `json:"team_id"`
+	TargetID int64                       `json:"target_id"`
+	State    domain.GenerationBatchState `json:"state"`
+}
+
+func seedBatchListRepository(t *testing.T) *infra.MemoryGenerationBatchRepository {
+	t.Helper()
 	repo := infra.NewMemoryGenerationBatchRepository()
 	for i := int64(1); i <= 53; i++ {
 		batch, err := domain.NewGenerationBatch(i, 10, 20, 30, 40, "main", "", fmt.Sprint(i), time.Unix(100, 0).UTC())
@@ -38,34 +45,30 @@ func TestGenerationBatchListScopesOrdersAndLimitsResults(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	return repo
+}
+
+func getBatchList(t *testing.T, mux *http.ServeMux, query string, teamID int64) []batchListRow {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/generation/batches?"+query, nil)
+	req = req.WithContext(rls.WithTenant(req.Context(), teamID))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var result []batchListRow
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+func TestGenerationBatchListScopesOrdersAndLimitsResults(t *testing.T) {
+	repo := seedBatchListRepository(t)
 	mux := http.NewServeMux()
 	RegisterGeneration(mux, application.NewGenerationBatchService(repo), nil, nil)
-	request := func(query string, teamID int64) []struct {
-		ID       int64                       `json:"id"`
-		TeamID   int64                       `json:"team_id"`
-		TargetID int64                       `json:"target_id"`
-		State    domain.GenerationBatchState `json:"state"`
-	} {
-		t.Helper()
-		req := httptest.NewRequest(http.MethodGet, "/generation/batches?"+query, nil)
-		req = req.WithContext(rls.WithTenant(req.Context(), teamID))
-		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
-		}
-		var result []struct {
-			ID       int64                       `json:"id"`
-			TeamID   int64                       `json:"team_id"`
-			TargetID int64                       `json:"target_id"`
-			State    domain.GenerationBatchState `json:"state"`
-		}
-		if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
-			t.Fatal(err)
-		}
-		return result
-	}
-	result := request("target_id=20", 10)
+	result := getBatchList(t, mux, "target_id=20", 10)
 	if len(result) != 50 || result[0].ID != 1 || result[1].ID != 51 || result[49].ID != 3 || result[0].State != domain.GenerationApproved {
 		t.Fatalf("unexpected default ordered results: %#v", result)
 	}
@@ -74,16 +77,28 @@ func TestGenerationBatchListScopesOrdersAndLimitsResults(t *testing.T) {
 			t.Fatalf("cross-tenant/project batch: %#v", batch)
 		}
 	}
-	if result = request("target_id=20&limit=2", 10); len(result) != 2 || result[0].ID != 1 || result[1].ID != 51 {
+}
+
+func TestGenerationBatchListLimitsAndScopes(t *testing.T) {
+	repo := seedBatchListRepository(t)
+	mux := http.NewServeMux()
+	RegisterGeneration(mux, application.NewGenerationBatchService(repo), nil, nil)
+	if result := getBatchList(t, mux, "target_id=20&limit=2", 10); len(result) != 2 || result[0].ID != 1 || result[1].ID != 51 {
 		t.Fatalf("unexpected bounded results: %#v", result)
 	}
-	if result = request("target_id=20", 11); len(result) != 1 || result[0].ID != 53 {
+	if result := getBatchList(t, mux, "target_id=20", 11); len(result) != 1 || result[0].ID != 53 {
 		t.Fatalf("unexpected other tenant results: %#v", result)
 	}
-	if result = request("target_id=21", 10); len(result) != 1 || result[0].ID != 52 {
+	if result := getBatchList(t, mux, "target_id=21", 10); len(result) != 1 || result[0].ID != 52 {
 		t.Fatalf("unexpected other project results: %#v", result)
 	}
-	if result = request("target_id=999", 10); result == nil || len(result) != 0 {
+}
+
+func TestGenerationBatchListEmptyProjectReturnsArray(t *testing.T) {
+	repo := seedBatchListRepository(t)
+	mux := http.NewServeMux()
+	RegisterGeneration(mux, application.NewGenerationBatchService(repo), nil, nil)
+	if result := getBatchList(t, mux, "target_id=999", 10); result == nil || len(result) != 0 {
 		t.Fatalf("empty project should return a JSON array: %#v", result)
 	}
 }

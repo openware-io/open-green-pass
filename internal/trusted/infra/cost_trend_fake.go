@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/openware-io/open-green-pass/internal/trusted/domain"
 )
@@ -39,7 +40,6 @@ func (s *FakeCostTrendStore) DeleteTeamFacts(_ context.Context, teamID int64) er
 	return nil
 }
 
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (s *FakeCostTrendStore) Trend(_ context.Context, filter domain.CostTrendFilter) ([]domain.CostTrendPoint, error) {
 	duration, err := filter.Bucket.Duration()
 	if err != nil {
@@ -47,39 +47,63 @@ func (s *FakeCostTrendStore) Trend(_ context.Context, filter domain.CostTrendFil
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	type key struct {
-		startNanos int64
-		category   domain.CostCategory
+	points := s.aggregateTrend(filter, duration)
+	out := make([]domain.CostTrendPoint, 0, len(points))
+	for _, point := range points {
+		out = append(out, point)
 	}
-	points := make(map[key]domain.CostTrendPoint)
+	sortTrendPoints(out)
+	return out, nil
+}
+
+type trendKey struct {
+	startNanos int64
+	category   domain.CostCategory
+}
+
+func (s *FakeCostTrendStore) aggregateTrend(filter domain.CostTrendFilter, duration time.Duration) map[trendKey]domain.CostTrendPoint {
+	points := make(map[trendKey]domain.CostTrendPoint)
 	for _, fact := range s.facts {
-		if fact.TeamID != filter.TeamID || fact.OccurredAt.Before(filter.From) || !fact.OccurredAt.Before(filter.To) ||
-			(filter.TargetID != 0 && fact.TargetID != filter.TargetID) || (filter.CaseID != 0 && fact.CaseID != filter.CaseID) ||
-			(filter.Model != "" && fact.Model != filter.Model) || (filter.Category != "" && fact.Category != filter.Category) {
+		if !matchesTrendFilter(fact, filter) {
 			continue
 		}
 		start := fact.OccurredAt.UTC().Truncate(duration)
-		projectionKey := key{startNanos: start.UnixNano(), category: fact.Category}
-		point := points[projectionKey]
+		key := trendKey{startNanos: start.UnixNano(), category: fact.Category}
+		point := points[key]
 		point.BucketStart = start
 		point.Category = fact.Category
 		point.Amount += fact.Amount
 		point.TokensIn += fact.TokensIn
 		point.TokensOut += fact.TokensOut
 		point.CallCount++
-		points[projectionKey] = point
+		points[key] = point
 	}
-	out := make([]domain.CostTrendPoint, 0, len(points))
-	for _, point := range points {
-		out = append(out, point)
+	return points
+}
+
+func matchesTrendFilter(fact domain.CostFact, filter domain.CostTrendFilter) bool {
+	if fact.TeamID != filter.TeamID || fact.OccurredAt.Before(filter.From) || !fact.OccurredAt.Before(filter.To) {
+		return false
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].BucketStart.Equal(out[j].BucketStart) {
-			return out[i].Category < out[j].Category
+	if filter.TargetID != 0 && fact.TargetID != filter.TargetID {
+		return false
+	}
+	if filter.CaseID != 0 && fact.CaseID != filter.CaseID {
+		return false
+	}
+	if filter.Model != "" && fact.Model != filter.Model {
+		return false
+	}
+	return filter.Category == "" || fact.Category == filter.Category
+}
+
+func sortTrendPoints(points []domain.CostTrendPoint) {
+	sort.Slice(points, func(i, j int) bool {
+		if points[i].BucketStart.Equal(points[j].BucketStart) {
+			return points[i].Category < points[j].Category
 		}
-		return out[i].BucketStart.Before(out[j].BucketStart)
+		return points[i].BucketStart.Before(points[j].BucketStart)
 	})
-	return out, nil
 }
 
 var _ domain.CostTrendRepository = (*FakeCostTrendStore)(nil)

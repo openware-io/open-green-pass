@@ -26,7 +26,6 @@ type fakeRedisSSEState struct {
 
 type fakeRedisSSEEvaler struct{ state *fakeRedisSSEState }
 
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (f *fakeRedisSSEEvaler) EvalInt(_ context.Context, script string, keys []string, args ...any) (int64, error) {
 	f.state.mu.Lock()
 	defer f.state.mu.Unlock()
@@ -37,70 +36,81 @@ func (f *fakeRedisSSEEvaler) EvalInt(_ context.Context, script string, keys []st
 	if len(keys) != 1 {
 		return 0, errors.New("expected one key")
 	}
-	key := keys[0]
 	switch script {
 	case acquireGenerationSSELua:
-		now, err := strconv.ParseInt(args[0].(string), 10, 64)
-		if err != nil {
-			return 0, err
-		}
-		ttl, err := strconv.ParseInt(args[1].(string), 10, 64)
-		if err != nil {
-			return 0, err
-		}
-		limit, err := strconv.ParseInt(args[2].(string), 10, 64)
-		if err != nil {
-			return 0, err
-		}
-		leaseID := args[3].(string)
-		members := f.state.scores[key]
-		for member, expiry := range members {
-			if expiry <= now {
-				delete(members, member)
-			}
-		}
-		if int64(len(members)) >= limit {
-			return 0, nil
-		}
-		if members == nil {
-			members = map[string]int64{}
-			f.state.scores[key] = members
-		}
-		members[leaseID] = now + ttl
-		f.state.keyTTL[key] = ttl
-		return 1, nil
+		return f.fakeAcquire(keys[0], args)
 	case renewGenerationSSELua:
-		now, err := strconv.ParseInt(args[0].(string), 10, 64)
-		if err != nil {
-			return 0, err
-		}
-		ttl, err := strconv.ParseInt(args[1].(string), 10, 64)
-		if err != nil {
-			return 0, err
-		}
-		leaseID := args[2].(string)
-		members := f.state.scores[key]
-		if _, exists := members[leaseID]; !exists {
-			return 0, nil
-		}
-		members[leaseID] = now + ttl
-		f.state.keyTTL[key] = ttl
-		return 1, nil
+		return f.fakeRenew(keys[0], args)
 	case releaseGenerationSSELua:
-		leaseID := args[0].(string)
-		members := f.state.scores[key]
-		if _, exists := members[leaseID]; !exists {
-			return 0, nil
-		}
-		delete(members, leaseID)
-		if len(members) == 0 {
-			delete(f.state.scores, key)
-			delete(f.state.keyTTL, key)
-		}
-		return 1, nil
+		return f.fakeRelease(keys[0], args)
 	default:
 		return 0, errors.New("unknown script")
 	}
+}
+
+func (f *fakeRedisSSEEvaler) fakeAcquire(key string, args []any) (int64, error) {
+	now, err := strconv.ParseInt(args[0].(string), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	ttl, err := strconv.ParseInt(args[1].(string), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	limit, err := strconv.ParseInt(args[2].(string), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	leaseID := args[3].(string)
+	members := f.state.scores[key]
+	for member, expiry := range members {
+		if expiry <= now {
+			delete(members, member)
+		}
+	}
+	if int64(len(members)) >= limit {
+		return 0, nil
+	}
+	if members == nil {
+		members = map[string]int64{}
+		f.state.scores[key] = members
+	}
+	members[leaseID] = now + ttl
+	f.state.keyTTL[key] = ttl
+	return 1, nil
+}
+
+func (f *fakeRedisSSEEvaler) fakeRenew(key string, args []any) (int64, error) {
+	now, err := strconv.ParseInt(args[0].(string), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	ttl, err := strconv.ParseInt(args[1].(string), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	leaseID := args[2].(string)
+	members := f.state.scores[key]
+	if _, exists := members[leaseID]; !exists {
+		return 0, nil
+	}
+	members[leaseID] = now + ttl
+	f.state.keyTTL[key] = ttl
+	return 1, nil
+}
+
+func (f *fakeRedisSSEEvaler) fakeRelease(key string, args []any) (int64, error) {
+	leaseID := args[0].(string)
+	members := f.state.scores[key]
+	if _, exists := members[leaseID]; !exists {
+		return 0, nil
+	}
+	delete(members, leaseID)
+	if len(members) == 0 {
+		delete(f.state.scores, key)
+		delete(f.state.keyTTL, key)
+	}
+	return 1, nil
 }
 
 func (f *fakeRedisSSEEvaler) expireLease(teamKey, leaseID string) {
@@ -314,8 +324,6 @@ func TestResilientGenerationSSELimiterMixedOriginsReleaseOnlyTheirSource(t *test
 
 // TestRedisGenerationSSELimiterRealRedis exercises the actual ZSET Lua scripts
 // against a real Redis when GP_TEST_REDIS_ADDR is provided (rehearsal only).
-//
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func TestRedisGenerationSSELimiterRealRedis(t *testing.T) {
 	addr := os.Getenv("GP_TEST_REDIS_ADDR")
 	if addr == "" {
@@ -327,12 +335,22 @@ func TestRedisGenerationSSELimiterRealRedis(t *testing.T) {
 	defer secondClient.Close()
 	first := NewRedisGenerationSSELimiter(firstClient, 2, GenerationSSELeaseTTL)
 	second := NewRedisGenerationSSELimiter(secondClient, 2, GenerationSSELeaseTTL)
+	exerciseRealRedisLimiter(t, firstClient, first, second)
+}
+
+func exerciseRealRedisLimiter(t *testing.T, client *redis.Client, first, second *RedisGenerationSSELimiter) {
+	t.Helper()
 	ctx := context.Background()
 	const teamID = int64(990022)
 	key := generationSSEKeyPrefix + "990022"
-	firstClient.Del(ctx, key)
-	defer firstClient.Del(ctx, key)
+	client.Del(ctx, key)
+	defer client.Del(ctx, key)
+	assertRealRedisSharedLimit(ctx, t, client, first, second, teamID, key)
+	assertRealRedisRenewAndLost(ctx, t, client, first, second, teamID, key)
+}
 
+func assertRealRedisSharedLimit(ctx context.Context, t *testing.T, client *redis.Client, first, second *RedisGenerationSSELimiter, teamID int64, key string) {
+	t.Helper()
 	if ok, err := first.Acquire(ctx, teamID, "lease-a"); err != nil || !ok {
 		t.Fatalf("first acquire = %v, %v", ok, err)
 	}
@@ -344,7 +362,7 @@ func TestRedisGenerationSSELimiterRealRedis(t *testing.T) {
 	}
 	// Simulate a crashed pod lease and confirm the next Acquire purges it.
 	past := time.Now().Add(-time.Minute).UnixMilli()
-	if err := firstClient.ZAdd(ctx, key, redis.Z{Score: float64(past), Member: "crashed-lease"}).Err(); err != nil {
+	if err := client.ZAdd(ctx, key, redis.Z{Score: float64(past), Member: "crashed-lease"}).Err(); err != nil {
 		t.Fatal(err)
 	}
 	if err := second.Release(ctx, teamID, "lease-b"); err != nil {
@@ -353,11 +371,15 @@ func TestRedisGenerationSSELimiterRealRedis(t *testing.T) {
 	if ok, err := second.Acquire(ctx, teamID, "fresh-lease"); err != nil || !ok {
 		t.Fatalf("acquire after crashed lease cleanup = %v, %v", ok, err)
 	}
-	card, err := firstClient.ZCard(ctx, key).Result()
+	card, err := client.ZCard(ctx, key).Result()
 	if err != nil || card != 2 {
 		t.Fatalf("zset cardinality = %d, %v; want 2 (lease-a + fresh-lease)", card, err)
 	}
-	if ttl, err := firstClient.TTL(ctx, key).Result(); err != nil || ttl <= 0 || ttl > GenerationSSELeaseTTL {
+}
+
+func assertRealRedisRenewAndLost(ctx context.Context, t *testing.T, client *redis.Client, first, second *RedisGenerationSSELimiter, teamID int64, key string) {
+	t.Helper()
+	if ttl, err := client.TTL(ctx, key).Result(); err != nil || ttl <= 0 || ttl > GenerationSSELeaseTTL {
 		t.Fatalf("lease ttl = %v, %v", ttl, err)
 	}
 	if err := first.Renew(ctx, teamID, "lease-a"); err != nil {

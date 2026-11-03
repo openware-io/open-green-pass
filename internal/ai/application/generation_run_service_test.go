@@ -215,8 +215,8 @@ func TestGenerationRunGetIsPureRead(t *testing.T) {
 	}
 }
 
-//nolint:gocyclo // Scenario fixture intentionally covers the batch-review projection matrix.
-func TestGenerationRunSyncMapsBatchReviewToWaitingReview(t *testing.T) {
+func newRunAwaitingReview(t *testing.T) (*GenerationRunService, *domain.GenerationRun, int64, *infra.MemoryGenerationRunEventRepository, *GenerationBatchService) {
+	t.Helper()
 	svc, _, batchSvc, eventRepo, _ := newTestRunService(t)
 	run, _, err := svc.Create(context.Background(), testRunCommand(100, "run-1", 50))
 	if err != nil {
@@ -226,7 +226,11 @@ func TestGenerationRunSyncMapsBatchReviewToWaitingReview(t *testing.T) {
 	advanceBatch(t, batchSvc, 10, batchID,
 		domain.GenerationFetching, domain.GenerationParsing, domain.GenerationGenerating,
 		domain.GenerationQualityCheck, domain.GenerationReview)
+	return svc, run, batchID, eventRepo, batchSvc
+}
 
+func TestGenerationRunSyncMapsBatchReviewToWaitingReview(t *testing.T) {
+	svc, run, _, eventRepo, _ := newRunAwaitingReview(t)
 	synced, err := svc.SyncRun(context.Background(), 10, run.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -241,7 +245,13 @@ func TestGenerationRunSyncMapsBatchReviewToWaitingReview(t *testing.T) {
 	if !containsEventType(types, domain.GenerationRunEventUnitReviewRequired) || !containsEventType(types, domain.GenerationRunEventRunWaitingReview) {
 		t.Fatalf("review events missing: %v", types)
 	}
+}
 
+func TestGenerationRunSyncApproveLeadsToSucceeded(t *testing.T) {
+	svc, run, batchID, eventRepo, batchSvc := newRunAwaitingReview(t)
+	if _, err := svc.SyncRun(context.Background(), 10, run.ID); err != nil {
+		t.Fatal(err)
+	}
 	reviewed, err := svc.Review(context.Background(), ReviewGenerationRunCommand{TeamID: 10, RunID: run.ID, ActorID: 40, Decision: "approve", RequestID: "review-1"})
 	if err != nil {
 		t.Fatal(err)
@@ -254,7 +264,6 @@ func TestGenerationRunSyncMapsBatchReviewToWaitingReview(t *testing.T) {
 	if got := countEventType(t, eventRepo, 10, run.ID, domain.GenerationRunEventUnitApproved); got != 0 {
 		t.Fatalf("unit.approved emitted before the batch was approved: %d", got)
 	}
-
 	advanceBatch(t, batchSvc, 10, batchID, domain.GenerationApproved)
 	final, err := svc.SyncRun(context.Background(), 10, run.ID)
 	if err != nil {
@@ -263,7 +272,7 @@ func TestGenerationRunSyncMapsBatchReviewToWaitingReview(t *testing.T) {
 	if final.State != domain.GenerationRunSucceeded || final.CompletedUnits != 1 || final.FinishedAt == nil {
 		t.Fatalf("final run projection = %+v", final)
 	}
-	types = eventTypes(t, eventRepo, 10, run.ID)
+	types := eventTypes(t, eventRepo, 10, run.ID)
 	if !containsEventType(types, domain.GenerationRunEventRunCompleted) {
 		t.Fatalf("run.completed event missing: %v", types)
 	}

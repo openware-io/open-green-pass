@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -75,128 +76,180 @@ type modelConnectionDetailResponse struct {
 	TokenConfigured  bool       `json:"token_configured"`
 }
 
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
+// modelHandlers groups the model catalog/connection endpoints behind a single
+// dependency object so registration stays a flat route table.
+type modelHandlers struct {
+	store     *infra.ModelStore
+	gen       *id.Generator
+	namespace string
+}
+
 func RegisterModels(mux *http.ServeMux, store *infra.ModelStore, gen *id.Generator, namespace string) {
-	mux.HandleFunc("GET /model-catalog", func(w http.ResponseWriter, r *http.Request) {
-		models, err := store.ListModels(r.Context(), tenantID(r))
-		if err != nil {
+	h := &modelHandlers{store: store, gen: gen, namespace: namespace}
+	mux.HandleFunc("GET /model-catalog", h.catalog)
+	mux.HandleFunc("GET /model-connections", h.listConnections)
+	mux.HandleFunc("POST /model-provider-models", h.discoverProviderModels)
+	mux.HandleFunc("POST /model-connections", h.connect)
+}
+
+func (h *modelHandlers) catalog(w http.ResponseWriter, r *http.Request) {
+	models, err := h.store.ListModels(r.Context(), tenantID(r))
+	if err != nil {
+		httpx.WriteJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+	configured := make([]configuredModelResponse, 0, len(models))
+	for _, model := range models {
+		configured = append(configured, configuredModelResponse{ID: model.ID, Provider: model.Provider, ModelKey: model.ModelKey, Status: string(model.Status)})
+	}
+	httpx.WriteJSON(w, 200, map[string]any{"providers": modelProviders, "models": configured})
+}
+
+func (h *modelHandlers) listConnections(w http.ResponseWriter, r *http.Request) {
+	if !catalogEditor(w, r) {
+		return
+	}
+	details, err := h.store.ListConnectionDetails(r.Context(), tenantID(r))
+	if err != nil {
+		httpx.WriteJSON(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+	out := make([]modelConnectionDetailResponse, 0, len(details))
+	for _, item := range details {
+		out = append(out, modelConnectionDetailResponse{
+			ID: item.ID, Provider: item.Provider, ModelKey: item.ModelKey, Protocol: item.Protocol,
+			BaseURL: item.BaseURL, CredentialStatus: item.CredentialStatus, ConfiguredAt: item.ConfiguredAt,
+			TokenConfigured: item.CredentialStatus == "configured" || item.CredentialStatus == "verified",
+		})
+	}
+	httpx.WriteJSON(w, 200, map[string]any{"connections": out})
+}
+
+// discoverProviderModels discovers the provider's official model list without
+// persisting anything. Token may be empty when the provider already has a
+// stored Secret.
+func (h *modelHandlers) discoverProviderModels(w http.ResponseWriter, r *http.Request) {
+	if !catalogEditor(w, r) {
+		return
+	}
+	var in modelDiscoverRequest
+	if httpx.DecodeJSON(r, &in) != nil {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_request"})
+		return
+	}
+	baseURL, ok := resolveProviderBaseURL(in.Provider, in.Protocol, in.BaseURL)
+	if !ok {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_base_url"})
+		return
+	}
+	token, err := h.resolveToken(r, in.Provider, in.Protocol, in.Token)
+	if err != nil {
+		httpx.WriteJSON(w, 400, map[string]string{"error": err.Error()})
+		return
+	}
+	models, err := fetchProviderModels(r.Context(), in.Protocol, baseURL, token)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusBadGateway, map[string]string{"error": "provider_connection_failed"})
+		return
+	}
+	httpx.WriteJSON(w, 200, map[string]any{"models": models})
+}
+
+func (h *modelHandlers) connect(w http.ResponseWriter, r *http.Request) {
+	if !catalogEditor(w, r) {
+		return
+	}
+	var in modelConnectRequest
+	if httpx.DecodeJSON(r, &in) != nil {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_request"})
+		return
+	}
+	baseURL, ok := resolveProviderBaseURL(in.Provider, in.Protocol, in.BaseURL)
+	if !ok || len(in.ModelKeys) == 0 {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_model_selection"})
+		return
+	}
+	token, err := h.resolveToken(r, in.Provider, in.Protocol, in.Token)
+	if err != nil {
+		httpx.WriteJSON(w, 400, map[string]string{"error": err.Error()})
+		return
+	}
+	if err := validateModelSelection(r.Context(), in.Protocol, baseURL, token, in.ModelKeys); err != nil {
+		writeModelSelectionError(w, err)
+		return
+	}
+	if !h.persistConnections(w, r, in, baseURL) {
+		return
+	}
+	httpx.WriteJSON(w, 200, map[string]string{"status": "configured"})
+}
+
+func (h *modelHandlers) resolveToken(r *http.Request, provider, protocol, raw string) (string, error) {
+	secretName := modelSecretName(tenantID(r), provider, protocol)
+	return resolveModelToken(r.Context(), h.namespace, secretName, raw)
+}
+
+func modelSecretName(team int64, provider, protocol string) string {
+	return fmt.Sprintf("gp-model-%d-%s-%s", team, safeName(provider), safeName(protocol))
+}
+
+func (h *modelHandlers) persistConnections(w http.ResponseWriter, r *http.Request, in modelConnectRequest, baseURL string) bool {
+	secretName := modelSecretName(tenantID(r), in.Provider, in.Protocol)
+	if strings.TrimSpace(in.Token) != "" {
+		if err := writeModelSecret(r.Context(), h.namespace, secretName, in.Token); err != nil {
+			httpx.WriteJSON(w, 500, map[string]string{"error": "secret_store_failed"})
+			return false
+		}
+	}
+	principal, _ := iam.PrincipalFromContext(r.Context())
+	ref := "k8s://" + h.namespace + "/" + secretName + "#token"
+	team := tenantID(r)
+	for _, modelKey := range in.ModelKeys {
+		if err := h.store.UpsertConnection(r.Context(), h.gen.Next(), team, parseSubject(principal.Subject), modelKey, in.Provider, modelKey, in.Protocol, baseURL, ref, []string{"code"}); err != nil {
 			httpx.WriteJSON(w, 500, map[string]string{"error": err.Error()})
-			return
+			return false
 		}
-		configured := make([]configuredModelResponse, 0, len(models))
-		for _, model := range models {
-			configured = append(configured, configuredModelResponse{ID: model.ID, Provider: model.Provider, ModelKey: model.ModelKey, Status: string(model.Status)})
+	}
+	return true
+}
+
+var (
+	errModelSelectionInvalid = errors.New("invalid_model_selection")
+	errProviderConnectFailed = errors.New("provider_connection_failed")
+)
+
+// validateModelSelection fails closed before any secret or connection row is
+// written: CC proxies probe the configured model, API providers must return the
+// requested models from their official catalogue.
+func validateModelSelection(ctx context.Context, protocol, baseURL, token string, modelKeys []string) error {
+	if protocol == "cc" {
+		if err := probeModelConnection(ctx, protocol, baseURL, token, modelKeys[0]); err != nil {
+			return errProviderConnectFailed
 		}
-		httpx.WriteJSON(w, 200, map[string]any{"providers": modelProviders, "models": configured})
-	})
-	mux.HandleFunc("GET /model-connections", func(w http.ResponseWriter, r *http.Request) {
-		if !catalogEditor(w, r) {
-			return
+		return nil
+	}
+	official, err := fetchProviderModels(ctx, protocol, baseURL, token)
+	if err != nil {
+		return errProviderConnectFailed
+	}
+	available := make(map[string]bool, len(official))
+	for _, item := range official {
+		available[item.ID] = true
+	}
+	for _, modelKey := range modelKeys {
+		if !available[modelKey] {
+			return errModelSelectionInvalid
 		}
-		details, err := store.ListConnectionDetails(r.Context(), tenantID(r))
-		if err != nil {
-			httpx.WriteJSON(w, 500, map[string]string{"error": err.Error()})
-			return
-		}
-		out := make([]modelConnectionDetailResponse, 0, len(details))
-		for _, item := range details {
-			out = append(out, modelConnectionDetailResponse{
-				ID: item.ID, Provider: item.Provider, ModelKey: item.ModelKey, Protocol: item.Protocol,
-				BaseURL: item.BaseURL, CredentialStatus: item.CredentialStatus, ConfiguredAt: item.ConfiguredAt,
-				TokenConfigured: item.CredentialStatus == "configured" || item.CredentialStatus == "verified",
-			})
-		}
-		httpx.WriteJSON(w, 200, map[string]any{"connections": out})
-	})
-	// Discover the provider's official model list without persisting anything.
-	// Token may be empty when the provider already has a stored Secret.
-	mux.HandleFunc("POST /model-provider-models", func(w http.ResponseWriter, r *http.Request) {
-		if !catalogEditor(w, r) {
-			return
-		}
-		var in modelDiscoverRequest
-		if httpx.DecodeJSON(r, &in) != nil {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_request"})
-			return
-		}
-		baseURL, ok := resolveProviderBaseURL(in.Provider, in.Protocol, in.BaseURL)
-		if !ok {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_base_url"})
-			return
-		}
-		team := tenantID(r)
-		secretName := fmt.Sprintf("gp-model-%d-%s-%s", team, safeName(in.Provider), safeName(in.Protocol))
-		token, err := resolveModelToken(r.Context(), namespace, secretName, in.Token)
-		if err != nil {
-			httpx.WriteJSON(w, 400, map[string]string{"error": err.Error()})
-			return
-		}
-		models, err := fetchProviderModels(r.Context(), in.Protocol, baseURL, token)
-		if err != nil {
-			httpx.WriteJSON(w, http.StatusBadGateway, map[string]string{"error": "provider_connection_failed"})
-			return
-		}
-		httpx.WriteJSON(w, 200, map[string]any{"models": models})
-	})
-	mux.HandleFunc("POST /model-connections", func(w http.ResponseWriter, r *http.Request) {
-		if !catalogEditor(w, r) {
-			return
-		}
-		var in modelConnectRequest
-		if httpx.DecodeJSON(r, &in) != nil {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_request"})
-			return
-		}
-		baseURL, ok := resolveProviderBaseURL(in.Provider, in.Protocol, in.BaseURL)
-		if !ok || len(in.ModelKeys) == 0 {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_model_selection"})
-			return
-		}
-		principal, _ := iam.PrincipalFromContext(r.Context())
-		team := tenantID(r)
-		secretName := fmt.Sprintf("gp-model-%d-%s-%s", team, safeName(in.Provider), safeName(in.Protocol))
-		token, err := resolveModelToken(r.Context(), namespace, secretName, in.Token)
-		if err != nil {
-			httpx.WriteJSON(w, 400, map[string]string{"error": err.Error()})
-			return
-		}
-		if in.Protocol == "cc" {
-			if err := probeModelConnection(r.Context(), in.Protocol, baseURL, token, in.ModelKeys[0]); err != nil {
-				httpx.WriteJSON(w, http.StatusBadGateway, map[string]string{"error": "provider_connection_failed"})
-				return
-			}
-		} else {
-			official, err := fetchProviderModels(r.Context(), in.Protocol, baseURL, token)
-			if err != nil {
-				httpx.WriteJSON(w, http.StatusBadGateway, map[string]string{"error": "provider_connection_failed"})
-				return
-			}
-			available := make(map[string]bool, len(official))
-			for _, item := range official {
-				available[item.ID] = true
-			}
-			for _, modelKey := range in.ModelKeys {
-				if !available[modelKey] {
-					httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_model_selection"})
-					return
-				}
-			}
-		}
-		if strings.TrimSpace(in.Token) != "" {
-			if err := writeModelSecret(r.Context(), namespace, secretName, in.Token); err != nil {
-				httpx.WriteJSON(w, 500, map[string]string{"error": "secret_store_failed"})
-				return
-			}
-		}
-		ref := "k8s://" + namespace + "/" + secretName + "#token"
-		for _, modelKey := range in.ModelKeys {
-			if err := store.UpsertConnection(r.Context(), gen.Next(), team, parseSubject(principal.Subject), modelKey, in.Provider, modelKey, in.Protocol, baseURL, ref, []string{"code"}); err != nil {
-				httpx.WriteJSON(w, 500, map[string]string{"error": err.Error()})
-				return
-			}
-		}
-		httpx.WriteJSON(w, 200, map[string]string{"status": "configured"})
-	})
+	}
+	return nil
+}
+
+func writeModelSelectionError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errModelSelectionInvalid) {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_model_selection"})
+		return
+	}
+	httpx.WriteJSON(w, http.StatusBadGateway, map[string]string{"error": "provider_connection_failed"})
 }
 
 func resolveProviderBaseURL(provider, protocol, raw string) (string, bool) {

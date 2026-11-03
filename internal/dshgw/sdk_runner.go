@@ -36,9 +36,82 @@ type rpcMessage struct {
 
 // Run starts a fresh DSH SDK process, initializes the route, prompts, waits for
 // idle, then shuts down. The process is always killed on return.
-//
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (r SDKRunner) Run(ctx context.Context, job Job) (Result, error) {
+	session, err := r.startSession()
+	if err != nil {
+		return Result{}, err
+	}
+	defer session.Close()
+
+	provider, model, maxTokens := r.defaults()
+	if _, err := session.call(ctx, "initialize", map[string]any{
+		"cwd": session.workspace, "provider": provider, "model": model, "maxTokens": maxTokens,
+	}); err != nil {
+		return Result{}, err
+	}
+	if _, err := session.call(ctx, "session/prompt", map[string]any{
+		"sessionId":     job.ID,
+		"contentBlocks": []map[string]any{{"type": "text", "text": job.Prompt}},
+	}); err != nil {
+		return Result{}, err
+	}
+	if _, err := session.call(ctx, "session/wait", map[string]any{"sessionId": job.ID}); err != nil {
+		return Result{}, err
+	}
+	_, _ = session.call(ctx, "shutdown", nil)
+	return session.result(model), nil
+}
+
+// defaults applies the runner's documented model/provider fallbacks.
+func (r SDKRunner) defaults() (provider, model string, maxTokens int) {
+	maxTokens = r.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = 32768
+	}
+	provider = r.Provider
+	if provider == "" {
+		provider = "deepseek-official"
+	}
+	model = r.Model
+	if model == "" {
+		model = "deepseek-flash"
+	}
+	return provider, model, maxTokens
+}
+
+// rpcSession owns one DSH SDK process together with its request state.
+type rpcSession struct {
+	cmd           *exec.Cmd
+	stdin         io.WriteCloser
+	stderr        *strings.Builder
+	workspace     string
+	home          string
+	msgs          chan rpcMessage
+	readErr       chan error
+	nextID        int
+	notifications []rpcMessage
+}
+
+func (r SDKRunner) startSession() (*rpcSession, error) {
+	workspace, err := os.MkdirTemp("", "gp-dsh-job-*")
+	if err != nil {
+		return nil, err
+	}
+	home, err := os.MkdirTemp("", "gp-dsh-home-*")
+	if err != nil {
+		_ = os.RemoveAll(workspace)
+		return nil, err
+	}
+	session, err := r.startProcess(workspace, home)
+	if err != nil {
+		_ = os.RemoveAll(home)
+		_ = os.RemoveAll(workspace)
+		return nil, err
+	}
+	return session, nil
+}
+
+func (r SDKRunner) startProcess(workspace, home string) (*rpcSession, error) {
 	binary := r.Binary
 	if binary == "" {
 		binary = "dsh"
@@ -47,17 +120,6 @@ func (r SDKRunner) Run(ctx context.Context, job Job) (Result, error) {
 	if profile == "" {
 		profile = "sdk"
 	}
-	workspace, err := os.MkdirTemp("", "gp-dsh-job-*")
-	if err != nil {
-		return Result{}, err
-	}
-	defer os.RemoveAll(workspace)
-	home, err := os.MkdirTemp("", "gp-dsh-home-*")
-	if err != nil {
-		return Result{}, err
-	}
-	defer os.RemoveAll(home)
-
 	cmd := exec.Command(binary, "--profile", profile)
 	cmd.Dir = workspace
 	cmd.Env = append(os.Environ(), "DSH_HOME="+home)
@@ -66,116 +128,108 @@ func (r SDKRunner) Run(ctx context.Context, job Job) (Result, error) {
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return Result{}, err
+		return nil, err
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return Result{}, err
+		return nil, err
 	}
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
+	stderr := &strings.Builder{}
+	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
-		return Result{}, err
+		return nil, err
 	}
-	defer func() {
-		_ = cmd.Process.Kill()
-		_, _ = cmd.Process.Wait()
-	}()
+	session := &rpcSession{
+		cmd:       cmd,
+		stdin:     stdin,
+		stderr:    stderr,
+		workspace: workspace,
+		home:      home,
+		msgs:      make(chan rpcMessage, 64),
+		readErr:   make(chan error, 1),
+		nextID:    1,
+	}
+	go session.readLoop(stdout)
+	return session, nil
+}
 
-	msgs := make(chan rpcMessage, 64)
-	readErr := make(chan error, 1)
-	go func() {
-		reader := bufio.NewReaderSize(stdout, 1<<20)
-		for {
-			line, err := reader.ReadBytes('\n')
-			if len(line) > 0 {
-				var msg rpcMessage
-				if json.Unmarshal(line, &msg) == nil {
-					msgs <- msg
-				}
-			}
-			if err != nil {
-				readErr <- err
-				return
+// Close kills the process (if still alive), reaps it, and removes both
+// disposable directories. The order matches the previous deferred cleanup.
+func (s *rpcSession) Close() {
+	if s.cmd.Process != nil {
+		_ = s.cmd.Process.Kill()
+		_, _ = s.cmd.Process.Wait()
+	}
+	_ = os.RemoveAll(s.home)
+	_ = os.RemoveAll(s.workspace)
+}
+
+func (s *rpcSession) readLoop(stdout io.Reader) {
+	reader := bufio.NewReaderSize(stdout, 1<<20)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if len(line) > 0 {
+			var msg rpcMessage
+			if json.Unmarshal(line, &msg) == nil {
+				s.msgs <- msg
 			}
 		}
-	}()
-
-	nextID := 1
-	var notifications []rpcMessage
-	call := func(method string, params any) (json.RawMessage, error) {
-		id := nextID
-		nextID++
-		rawID, _ := json.Marshal(id)
-		body := map[string]any{"jsonrpc": "2.0", "id": id, "method": method}
-		if params != nil {
-			body["params"] = params
-		}
-		encoded, err := json.Marshal(body)
 		if err != nil {
-			return nil, err
-		}
-		if _, err := io.WriteString(stdin, string(encoded)+"\n"); err != nil {
-			return nil, err
-		}
-		for {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case err := <-readErr:
-				if err == io.EOF {
-					return nil, fmt.Errorf("dsh exited: %s", stderr.String())
-				}
-				return nil, err
-			case msg := <-msgs:
-				if msg.Method != "" {
-					notifications = append(notifications, msg)
-					continue
-				}
-				if string(msg.ID) != string(rawID) {
-					continue
-				}
-				if msg.Error != nil {
-					return nil, fmt.Errorf("dsh %s: %s", method, msg.Error.Message)
-				}
-				return msg.Result, nil
-			}
+			s.readErr <- err
+			return
 		}
 	}
+}
 
-	maxTokens := r.MaxTokens
-	if maxTokens <= 0 {
-		maxTokens = 32768
+// call issues one JSON-RPC request and returns the response matching its ID,
+// buffering notifications for the final assistant output.
+func (s *rpcSession) call(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	id := s.nextID
+	s.nextID++
+	rawID, _ := json.Marshal(id)
+	body := map[string]any{"jsonrpc": "2.0", "id": id, "method": method}
+	if params != nil {
+		body["params"] = params
 	}
-	provider := r.Provider
-	if provider == "" {
-		provider = "deepseek-official"
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
 	}
-	model := r.Model
-	if model == "" {
-		model = "deepseek-flash"
+	if _, err := io.WriteString(s.stdin, string(encoded)+"\n"); err != nil {
+		return nil, err
 	}
-	if _, err := call("initialize", map[string]any{
-		"cwd": workspace, "provider": provider, "model": model, "maxTokens": maxTokens,
-	}); err != nil {
-		return Result{}, err
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case err := <-s.readErr:
+			if err == io.EOF {
+				return nil, fmt.Errorf("dsh exited: %s", s.stderr.String())
+			}
+			return nil, err
+		case msg := <-s.msgs:
+			if msg.Method != "" {
+				s.notifications = append(s.notifications, msg)
+				continue
+			}
+			if string(msg.ID) != string(rawID) {
+				continue
+			}
+			if msg.Error != nil {
+				return nil, fmt.Errorf("dsh %s: %s", method, msg.Error.Message)
+			}
+			return msg.Result, nil
+		}
 	}
-	if _, err := call("session/prompt", map[string]any{
-		"sessionId":     job.ID,
-		"contentBlocks": []map[string]any{{"type": "text", "text": job.Prompt}},
-	}); err != nil {
-		return Result{}, err
-	}
-	if _, err := call("session/wait", map[string]any{"sessionId": job.ID}); err != nil {
-		return Result{}, err
-	}
-	_, _ = call("shutdown", nil)
-	text := assistantText(notifications)
+}
+
+func (s *rpcSession) result(model string) Result {
+	text := assistantText(s.notifications)
 	if text == "" {
-		text = rawNotifications(notifications)
+		text = rawNotifications(s.notifications)
 	}
-	tokensIn, tokensOut, cacheRead := assistantUsage(notifications)
-	return Result{Output: text, TokensIn: tokensIn, TokensOut: tokensOut, CacheReadTokens: cacheRead, Model: model}, nil
+	tokensIn, tokensOut, cacheRead := assistantUsage(s.notifications)
+	return Result{Output: text, TokensIn: tokensIn, TokensOut: tokensOut, CacheReadTokens: cacheRead, Model: model}
 }
 
 func assistantText(notifications []rpcMessage) string {

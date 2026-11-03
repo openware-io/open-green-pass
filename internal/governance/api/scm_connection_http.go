@@ -86,287 +86,349 @@ func (c githubAppConfig) configured() bool {
 		c.PrivateKeyRef != "" && c.OAuthCallbackURL != "" && c.FrontendURL != ""
 }
 
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
+// scmHandlers groups the SCM connection endpoints. Handlers are methods so
+// registration stays a flat route table and every endpoint keeps its own
+// bounded complexity.
+type scmHandlers struct {
+	store     *infra.SCMConnectionStore
+	namespace string
+	githubApp githubAppConfig
+	audit     SCMAuditFunc
+}
+
 func RegisterSCMConnections(mux *http.ServeMux, store *infra.SCMConnectionStore, namespace string, githubApp githubAppConfig, audit SCMAuditFunc) {
-	mux.HandleFunc("GET /scm-connections/github-app", func(w http.ResponseWriter, r *http.Request) {
-		if !catalogEditor(w, r) {
+	h := &scmHandlers{store: store, namespace: namespace, githubApp: githubApp, audit: audit}
+	mux.HandleFunc("GET /scm-connections/github-app", h.getGitHubApp)
+	mux.HandleFunc("POST /scm-connections/github-app/authorize", h.authorizeGitHubApp)
+	mux.HandleFunc("GET /scm-connections", h.listConnections)
+	mux.HandleFunc("POST /scm-connections", h.createConnection)
+	mux.HandleFunc("POST /scm-connections/{id}/verify", h.verifyConnection)
+	mux.HandleFunc("POST /scm-connections/{id}/rotate", h.rotateConnection)
+	mux.HandleFunc("DELETE /scm-connections/{id}", h.deleteConnection)
+	mux.HandleFunc("GET /scm-connections/github-app/callback", h.githubAppInstallCallback)
+	mux.HandleFunc("GET /scm-connections/github-app/oauth-callback", h.githubAppOAuthCallback)
+}
+
+func (h *scmHandlers) getGitHubApp(w http.ResponseWriter, r *http.Request) {
+	if !catalogEditor(w, r) {
+		return
+	}
+	if !h.githubApp.configured() {
+		httpx.WriteJSON(w, 409, map[string]string{"error": "github_app_not_configured", "message": "GitHub App 尚未由平台管理员完成配置"})
+		return
+	}
+	httpx.WriteJSON(w, 200, map[string]any{"configured": true, "app_id": h.githubApp.AppID})
+}
+
+func (h *scmHandlers) authorizeGitHubApp(w http.ResponseWriter, r *http.Request) {
+	if !catalogEditor(w, r) {
+		return
+	}
+	if !h.githubApp.configured() {
+		httpx.WriteJSON(w, http.StatusConflict, map[string]string{"error": "github_app_not_configured"})
+		return
+	}
+	authorizationURL, err := validatedHTTPSURL(h.githubApp.InstallURL)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "github_app_install_url_invalid"})
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"authorization_url": authorizationURL})
+}
+
+func (h *scmHandlers) listConnections(w http.ResponseWriter, r *http.Request) {
+	if !catalogEditor(w, r) {
+		return
+	}
+	items, err := h.store.List(r.Context(), tenantID(r))
+	if err != nil {
+		httpx.WriteJSON(w, 500, map[string]string{"error": "scm_connections_unavailable"})
+		return
+	}
+	httpx.WriteJSON(w, 200, map[string]any{"connections": items})
+}
+
+func (h *scmHandlers) createConnection(w http.ResponseWriter, r *http.Request) {
+	if !catalogEditor(w, r) {
+		return
+	}
+	var in scmConnectionInput
+	if httpx.DecodeJSON(r, &in) != nil || strings.TrimSpace(in.Token) == "" || strings.TrimSpace(in.Name) == "" || in.Provider != "github" {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_scm_connection"})
+		return
+	}
+	if _, err := probeGitHubReadToken(r.Context(), strings.TrimSpace(in.Token), "pat"); err != nil {
+		httpx.WriteJSON(w, 502, map[string]string{"error": "github_connection_failed", "message": "仅支持可读取仓库的 fine-grained 只读 PAT；请勿使用 classic 或带写权限的 Token"})
+		return
+	}
+	team := tenantID(r)
+	connectionID := h.store.NextID()
+	secretName := fmt.Sprintf("gp-scm-%d-%d", team, connectionID)
+	if err := writeSCMSecret(r.Context(), h.namespace, secretName, in.Token, true); err != nil {
+		slog.Error("create scm secret failed", "connection_id", connectionID, "error", err)
+		httpx.WriteJSON(w, 500, map[string]string{"error": "secret_store_failed"})
+		return
+	}
+	principal, _ := iam.PrincipalFromContext(r.Context())
+	now := time.Now()
+	item := infra.SCMConnection{ID: connectionID, Provider: "github", Name: strings.TrimSpace(in.Name), CredentialStatus: "verified", VerifiedAt: &now, TokenConfigured: true, AuthType: "pat"}
+	if err := h.store.Create(r.Context(), item, "k8s://"+h.namespace+"/"+secretName+"#token", actorIDFromSubject(principal.Subject)); err != nil {
+		// Never leave a credential behind if the metadata write failed.
+		_ = deleteSCMSecret(r.Context(), h.namespace, secretName)
+		if isUniqueViolation(err) {
+			httpx.WriteJSON(w, 409, map[string]string{"error": "scm_connection_name_conflict"})
 			return
 		}
-		if !githubApp.configured() {
-			httpx.WriteJSON(w, 409, map[string]string{"error": "github_app_not_configured", "message": "GitHub App 尚未由平台管理员完成配置"})
-			return
-		}
-		httpx.WriteJSON(w, 200, map[string]any{"configured": true, "app_id": githubApp.AppID})
+		slog.Error("create scm connection failed", "connection_id", connectionID, "error", err)
+		httpx.WriteJSON(w, 500, map[string]string{"error": "scm_connection_create_failed"})
+		return
+	}
+	emitSCMAudit(r.Context(), h.audit, principal, "scm.connection.created", "scm_connection", item.ID, map[string]any{
+		"name": item.Name, "provider": item.Provider, "auth_type": item.AuthType, "credential_status": item.CredentialStatus,
 	})
-	mux.HandleFunc("POST /scm-connections/github-app/authorize", func(w http.ResponseWriter, r *http.Request) {
-		if !catalogEditor(w, r) {
-			return
-		}
-		if !githubApp.configured() {
-			httpx.WriteJSON(w, http.StatusConflict, map[string]string{"error": "github_app_not_configured"})
-			return
-		}
-		authorizationURL, err := validatedHTTPSURL(githubApp.InstallURL)
-		if err != nil {
-			httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "github_app_install_url_invalid"})
-			return
-		}
-		httpx.WriteJSON(w, http.StatusOK, map[string]string{"authorization_url": authorizationURL})
-	})
-	mux.HandleFunc("GET /scm-connections", func(w http.ResponseWriter, r *http.Request) {
-		if !catalogEditor(w, r) {
-			return
-		}
-		items, err := store.List(r.Context(), tenantID(r))
-		if err != nil {
-			httpx.WriteJSON(w, 500, map[string]string{"error": "scm_connections_unavailable"})
-			return
-		}
-		httpx.WriteJSON(w, 200, map[string]any{"connections": items})
-	})
-	mux.HandleFunc("POST /scm-connections", func(w http.ResponseWriter, r *http.Request) {
-		if !catalogEditor(w, r) {
-			return
-		}
-		var in scmConnectionInput
-		if httpx.DecodeJSON(r, &in) != nil || strings.TrimSpace(in.Token) == "" || strings.TrimSpace(in.Name) == "" || in.Provider != "github" {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_scm_connection"})
-			return
-		}
-		if _, err := probeGitHubReadToken(r.Context(), strings.TrimSpace(in.Token), "pat"); err != nil {
-			httpx.WriteJSON(w, 502, map[string]string{"error": "github_connection_failed", "message": "仅支持可读取仓库的 fine-grained 只读 PAT；请勿使用 classic 或带写权限的 Token"})
-			return
-		}
-		team := tenantID(r)
-		connectionID := store.NextID()
-		secretName := fmt.Sprintf("gp-scm-%d-%d", team, connectionID)
-		if err := writeSCMSecret(r.Context(), namespace, secretName, in.Token, true); err != nil {
-			slog.Error("create scm secret failed", "connection_id", connectionID, "error", err)
-			httpx.WriteJSON(w, 500, map[string]string{"error": "secret_store_failed"})
-			return
-		}
-		principal, _ := iam.PrincipalFromContext(r.Context())
-		now := time.Now()
-		item := infra.SCMConnection{ID: connectionID, Provider: "github", Name: strings.TrimSpace(in.Name), CredentialStatus: "verified", VerifiedAt: &now, TokenConfigured: true, AuthType: "pat"}
-		if err := store.Create(r.Context(), item, "k8s://"+namespace+"/"+secretName+"#token", actorIDFromSubject(principal.Subject)); err != nil {
-			// Never leave a credential behind if the metadata write failed.
-			_ = deleteSCMSecret(r.Context(), namespace, secretName)
-			if isUniqueViolation(err) {
-				httpx.WriteJSON(w, 409, map[string]string{"error": "scm_connection_name_conflict"})
-				return
-			}
-			slog.Error("create scm connection failed", "connection_id", connectionID, "error", err)
-			httpx.WriteJSON(w, 500, map[string]string{"error": "scm_connection_create_failed"})
-			return
-		}
-		emitSCMAudit(r.Context(), audit, principal, "scm.connection.created", "scm_connection", item.ID, map[string]any{
-			"name": item.Name, "provider": item.Provider, "auth_type": item.AuthType, "credential_status": item.CredentialStatus,
-		})
-		httpx.WriteJSON(w, 201, item)
-	})
-	mux.HandleFunc("POST /scm-connections/{id}/verify", func(w http.ResponseWriter, r *http.Request) {
-		if !catalogEditor(w, r) {
-			return
-		}
-		connectionID, ok := parseConnectionID(r)
-		if !ok {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_scm_connection"})
-			return
-		}
-		provider, authType, ref, appID, installationID, err := store.CredentialRef(r.Context(), tenantID(r), connectionID)
-		if err != nil || provider != "github" {
-			httpx.WriteJSON(w, 404, map[string]string{"error": "scm_connection_not_found"})
-			return
-		}
-		token, err := resolveSCMConnectionToken(r.Context(), authType, ref, appID, installationID)
-		boundRepos := make([]string, 0)
-		if err == nil {
-			_, err = probeGitHubReadToken(r.Context(), token, authType)
-		}
-		if err == nil {
-			boundRepos, err = store.BoundRepositoryURLs(r.Context(), tenantID(r), connectionID)
-		}
-		if err == nil {
-			for _, repoURL := range boundRepos {
-				if validateErr := aiinfra.ValidateGitHubRepository(r.Context(), token, repoURL); validateErr != nil {
-					err = fmt.Errorf("repository %s: %w", repoURL, validateErr)
-					break
-				}
-			}
-		}
-		principal, _ := iam.PrincipalFromContext(r.Context())
-		if err != nil {
-			_ = store.MarkVerification(r.Context(), tenantID(r), connectionID, "failed", "无法验证 GitHub 只读凭据或绑定仓库的 Contents 权限")
-			emitSCMAudit(r.Context(), audit, principal, "scm.connection.verify_failed", "scm_connection", connectionID, map[string]any{
-				"provider": provider, "auth_type": authType, "bound_repository_count": len(boundRepos),
-			})
-			httpx.WriteJSON(w, 502, map[string]string{"error": "github_connection_failed", "message": "Token 或已绑定仓库的读取权限验证失败"})
-			return
-		}
-		if err = store.MarkVerification(r.Context(), tenantID(r), connectionID, "verified", ""); err != nil {
-			httpx.WriteJSON(w, 500, map[string]string{"error": "scm_connection_update_failed"})
-			return
-		}
-		emitSCMAudit(r.Context(), audit, principal, "scm.connection.verified", "scm_connection", connectionID, map[string]any{
+	httpx.WriteJSON(w, 201, item)
+}
+
+func (h *scmHandlers) verifyConnection(w http.ResponseWriter, r *http.Request) {
+	if !catalogEditor(w, r) {
+		return
+	}
+	connectionID, ok := parseConnectionID(r)
+	if !ok {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_scm_connection"})
+		return
+	}
+	teamID := tenantID(r)
+	provider, authType, ref, appID, installationID, err := h.store.CredentialRef(r.Context(), teamID, connectionID)
+	if err != nil || provider != "github" {
+		httpx.WriteJSON(w, 404, map[string]string{"error": "scm_connection_not_found"})
+		return
+	}
+	boundRepos, err := h.verifyConnectionCredential(r.Context(), teamID, connectionID, authType, ref, appID, installationID)
+	principal, _ := iam.PrincipalFromContext(r.Context())
+	if err != nil {
+		_ = h.store.MarkVerification(r.Context(), teamID, connectionID, "failed", "无法验证 GitHub 只读凭据或绑定仓库的 Contents 权限")
+		emitSCMAudit(r.Context(), h.audit, principal, "scm.connection.verify_failed", "scm_connection", connectionID, map[string]any{
 			"provider": provider, "auth_type": authType, "bound_repository_count": len(boundRepos),
 		})
-		httpx.WriteJSON(w, 200, map[string]string{"status": "verified"})
+		httpx.WriteJSON(w, 502, map[string]string{"error": "github_connection_failed", "message": "Token 或已绑定仓库的读取权限验证失败"})
+		return
+	}
+	if err = h.store.MarkVerification(r.Context(), teamID, connectionID, "verified", ""); err != nil {
+		httpx.WriteJSON(w, 500, map[string]string{"error": "scm_connection_update_failed"})
+		return
+	}
+	emitSCMAudit(r.Context(), h.audit, principal, "scm.connection.verified", "scm_connection", connectionID, map[string]any{
+		"provider": provider, "auth_type": authType, "bound_repository_count": len(boundRepos),
 	})
-	mux.HandleFunc("POST /scm-connections/{id}/rotate", func(w http.ResponseWriter, r *http.Request) {
-		if !catalogEditor(w, r) {
-			return
+	httpx.WriteJSON(w, 200, map[string]string{"status": "verified"})
+}
+
+// verifyConnectionCredential resolves the stored credential, probes GitHub with
+// it, then proves every bound repository is readable.
+func (h *scmHandlers) verifyConnectionCredential(ctx context.Context, teamID, connectionID int64, authType, ref, appID string, installationID *int64) ([]string, error) {
+	token, err := resolveSCMConnectionToken(ctx, authType, ref, appID, installationID)
+	boundRepos := make([]string, 0)
+	if err == nil {
+		_, err = probeGitHubReadToken(ctx, token, authType)
+	}
+	if err == nil {
+		boundRepos, err = h.store.BoundRepositoryURLs(ctx, teamID, connectionID)
+	}
+	if err != nil {
+		return boundRepos, err
+	}
+	for _, repoURL := range boundRepos {
+		if validateErr := aiinfra.ValidateGitHubRepository(ctx, token, repoURL); validateErr != nil {
+			return boundRepos, fmt.Errorf("repository %s: %w", repoURL, validateErr)
 		}
-		connectionID, ok := parseConnectionID(r)
-		if !ok {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_scm_connection"})
-			return
-		}
-		var in scmConnectionRotateInput
-		if httpx.DecodeJSON(r, &in) != nil || strings.TrimSpace(in.Token) == "" {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_scm_connection"})
-			return
-		}
-		provider, authType, ref, _, _, err := store.CredentialRef(r.Context(), tenantID(r), connectionID)
-		if err != nil || provider != "github" {
-			httpx.WriteJSON(w, 404, map[string]string{"error": "scm_connection_not_found"})
-			return
-		}
-		if authType != "pat" {
-			httpx.WriteJSON(w, 409, map[string]string{"error": "github_app_rotation_not_supported", "message": "GitHub App 连接通过平台私钥轮换，不支持在连接上直接替换 Token"})
-			return
-		}
-		if _, err := probeGitHubReadToken(r.Context(), strings.TrimSpace(in.Token), "pat"); err != nil {
-			httpx.WriteJSON(w, 502, map[string]string{"error": "github_connection_failed", "message": "新 Token 未通过只读验证"})
-			return
-		}
-		if err := updateSCMSecret(r.Context(), ref, in.Token); err != nil {
-			slog.Error("rotate scm secret failed", "connection_id", connectionID, "error", err)
-			httpx.WriteJSON(w, 500, map[string]string{"error": "secret_store_failed"})
-			return
-		}
-		if err := store.MarkVerification(r.Context(), tenantID(r), connectionID, "verified", ""); err != nil {
-			httpx.WriteJSON(w, 500, map[string]string{"error": "scm_connection_update_failed"})
-			return
-		}
-		principal, _ := iam.PrincipalFromContext(r.Context())
-		emitSCMAudit(r.Context(), audit, principal, "scm.connection.rotated", "scm_connection", connectionID, map[string]any{
-			"provider": provider, "auth_type": authType,
-		})
-		httpx.WriteJSON(w, 200, map[string]string{"status": "rotated"})
+	}
+	return boundRepos, nil
+}
+
+func (h *scmHandlers) rotateConnection(w http.ResponseWriter, r *http.Request) {
+	if !catalogEditor(w, r) {
+		return
+	}
+	connectionID, ok := parseConnectionID(r)
+	if !ok {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_scm_connection"})
+		return
+	}
+	var in scmConnectionRotateInput
+	if httpx.DecodeJSON(r, &in) != nil || strings.TrimSpace(in.Token) == "" {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_scm_connection"})
+		return
+	}
+	provider, authType, ref, _, _, err := h.store.CredentialRef(r.Context(), tenantID(r), connectionID)
+	if err != nil || provider != "github" {
+		httpx.WriteJSON(w, 404, map[string]string{"error": "scm_connection_not_found"})
+		return
+	}
+	if authType != "pat" {
+		httpx.WriteJSON(w, 409, map[string]string{"error": "github_app_rotation_not_supported", "message": "GitHub App 连接通过平台私钥轮换，不支持在连接上直接替换 Token"})
+		return
+	}
+	if _, err := probeGitHubReadToken(r.Context(), strings.TrimSpace(in.Token), "pat"); err != nil {
+		httpx.WriteJSON(w, 502, map[string]string{"error": "github_connection_failed", "message": "新 Token 未通过只读验证"})
+		return
+	}
+	if err := updateSCMSecret(r.Context(), ref, in.Token); err != nil {
+		slog.Error("rotate scm secret failed", "connection_id", connectionID, "error", err)
+		httpx.WriteJSON(w, 500, map[string]string{"error": "secret_store_failed"})
+		return
+	}
+	if err := h.store.MarkVerification(r.Context(), tenantID(r), connectionID, "verified", ""); err != nil {
+		httpx.WriteJSON(w, 500, map[string]string{"error": "scm_connection_update_failed"})
+		return
+	}
+	principal, _ := iam.PrincipalFromContext(r.Context())
+	emitSCMAudit(r.Context(), h.audit, principal, "scm.connection.rotated", "scm_connection", connectionID, map[string]any{
+		"provider": provider, "auth_type": authType,
 	})
-	mux.HandleFunc("DELETE /scm-connections/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if !catalogEditor(w, r) {
-			return
-		}
-		connectionID, ok := parseConnectionID(r)
-		if !ok {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_scm_connection"})
-			return
-		}
-		item, secretRef, err := store.Delete(r.Context(), tenantID(r), connectionID)
-		if errors.Is(err, infra.ErrSCMConnectionNotFound) {
-			httpx.WriteJSON(w, 404, map[string]string{"error": "scm_connection_not_found"})
-			return
-		}
-		if err != nil {
-			slog.Error("delete scm connection failed", "connection_id", connectionID, "error", err)
-			httpx.WriteJSON(w, 500, map[string]string{"error": "scm_connection_delete_failed"})
-			return
-		}
-		// PAT secrets are owned by exactly one connection. GitHub App
-		// connections share the platform private-key Secret, so never delete it.
-		if item.AuthType == "pat" && secretRef != "" {
-			if ns, name, _, ok := parseKubernetesSecretRef(secretRef); ok {
-				if err := deleteSCMSecret(r.Context(), ns, name); err != nil {
-					slog.Error("delete scm secret failed", "connection_id", connectionID, "error", err)
-				}
-			}
-		}
-		principal, _ := iam.PrincipalFromContext(r.Context())
-		emitSCMAudit(r.Context(), audit, principal, "scm.connection.deleted", "scm_connection", connectionID, map[string]any{
-			"name": item.Name, "provider": item.Provider, "auth_type": item.AuthType,
-		})
-		w.WriteHeader(http.StatusNoContent)
+	httpx.WriteJSON(w, 200, map[string]string{"status": "rotated"})
+}
+
+func (h *scmHandlers) deleteConnection(w http.ResponseWriter, r *http.Request) {
+	if !catalogEditor(w, r) {
+		return
+	}
+	connectionID, ok := parseConnectionID(r)
+	if !ok {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_scm_connection"})
+		return
+	}
+	item, secretRef, err := h.store.Delete(r.Context(), tenantID(r), connectionID)
+	if errors.Is(err, infra.ErrSCMConnectionNotFound) {
+		httpx.WriteJSON(w, 404, map[string]string{"error": "scm_connection_not_found"})
+		return
+	}
+	if err != nil {
+		slog.Error("delete scm connection failed", "connection_id", connectionID, "error", err)
+		httpx.WriteJSON(w, 500, map[string]string{"error": "scm_connection_delete_failed"})
+		return
+	}
+	// PAT secrets are owned by exactly one connection. GitHub App
+	// connections share the platform private-key Secret, so never delete it.
+	if item.AuthType == "pat" && secretRef != "" {
+		h.deleteCredentialSecret(r.Context(), connectionID, secretRef)
+	}
+	principal, _ := iam.PrincipalFromContext(r.Context())
+	emitSCMAudit(r.Context(), h.audit, principal, "scm.connection.deleted", "scm_connection", connectionID, map[string]any{
+		"name": item.Name, "provider": item.Provider, "auth_type": item.AuthType,
 	})
-	mux.HandleFunc("GET /scm-connections/github-app/callback", func(w http.ResponseWriter, r *http.Request) {
-		if !catalogEditor(w, r) {
-			return
-		}
-		installationID, err := parsePositiveID(r.URL.Query().Get("installation_id"))
-		principal, ok := iam.PrincipalFromContext(r.Context())
-		actorID := actorIDFromSubject(principal.Subject)
-		if err != nil || actorID <= 0 || !ok || !githubApp.configured() {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_github_installation"})
-			return
-		}
-		state, err := newGitHubAppAuthorizationState()
-		if err != nil {
-			httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "authorization_state_create_failed"})
-			return
-		}
-		if err = store.CreateAuthorizationState(r.Context(), tenantID(r), actorID, installationID, state); err != nil {
-			httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "authorization_state_store_failed"})
-			return
-		}
-		authorizationURL, err := gitHubUserAuthorizationURL(githubApp.ClientID, githubApp.OAuthCallbackURL, state)
-		if err != nil {
-			httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "github_app_oauth_url_invalid"})
-			return
-		}
-		http.Redirect(w, r, authorizationURL, http.StatusSeeOther)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *scmHandlers) deleteCredentialSecret(ctx context.Context, connectionID int64, secretRef string) {
+	namespace, name, _, ok := parseKubernetesSecretRef(secretRef)
+	if !ok {
+		return
+	}
+	if err := deleteSCMSecret(ctx, namespace, name); err != nil {
+		slog.Error("delete scm secret failed", "connection_id", connectionID, "error", err)
+	}
+}
+
+func (h *scmHandlers) githubAppInstallCallback(w http.ResponseWriter, r *http.Request) {
+	if !catalogEditor(w, r) {
+		return
+	}
+	installationID, err := parsePositiveID(r.URL.Query().Get("installation_id"))
+	principal, ok := iam.PrincipalFromContext(r.Context())
+	actorID := actorIDFromSubject(principal.Subject)
+	if err != nil || actorID <= 0 || !ok || !h.githubApp.configured() {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "invalid_github_installation"})
+		return
+	}
+	state, err := newGitHubAppAuthorizationState()
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "authorization_state_create_failed"})
+		return
+	}
+	if err = h.store.CreateAuthorizationState(r.Context(), tenantID(r), actorID, installationID, state); err != nil {
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "authorization_state_store_failed"})
+		return
+	}
+	authorizationURL, err := gitHubUserAuthorizationURL(h.githubApp.ClientID, h.githubApp.OAuthCallbackURL, state)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "github_app_oauth_url_invalid"})
+		return
+	}
+	http.Redirect(w, r, authorizationURL, http.StatusSeeOther)
+}
+
+func (h *scmHandlers) githubAppOAuthCallback(w http.ResponseWriter, r *http.Request) {
+	if !catalogEditor(w, r) {
+		return
+	}
+	principal, actorID, state, code, ok := h.oauthCallbackParams(r)
+	if !ok {
+		httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_github_authorization_callback"})
+		return
+	}
+	installationID, err := h.store.ConsumeAuthorizationState(r.Context(), tenantID(r), actorID, state)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusForbidden, map[string]string{"error": "invalid_github_authorization_state"})
+		return
+	}
+	userToken, err := githubapp.ExchangeUserAuthorizationCode(r.Context(), h.githubApp.ClientID, h.githubApp.ClientSecret, code)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusBadGateway, map[string]string{"error": "github_user_authorization_failed"})
+		return
+	}
+	if !h.userOwnsInstallation(r.Context(), userToken, installationID) {
+		httpx.WriteJSON(w, http.StatusForbidden, map[string]string{"error": "github_installation_not_authorized_for_user"})
+		return
+	}
+	privateKey, err := h.installationPrivateKey(r.Context(), installationID)
+	if err != nil {
+		httpx.WriteJSON(w, http.StatusBadGateway, map[string]string{"error": "github_installation_verification_failed"})
+		return
+	}
+	installationLogin, _ := githubapp.InstallationAccountLogin(r.Context(), h.githubApp.AppID, privateKey, installationID)
+	now := time.Now()
+	item := infra.SCMConnection{ID: h.store.NextID(), Provider: "github", Name: fmt.Sprintf("GitHub App 安装 #%d", installationID), CredentialStatus: "verified", VerifiedAt: &now, TokenConfigured: true, AuthType: "github_app", GitHubAppID: h.githubApp.AppID, InstallationID: &installationID, InstallationLogin: installationLogin}
+	if err := h.store.Create(r.Context(), item, h.githubApp.PrivateKeyRef, actorID); err != nil {
+		httpx.WriteJSON(w, 409, map[string]string{"error": "github_installation_already_connected"})
+		return
+	}
+	emitSCMAudit(r.Context(), h.audit, principal, "scm.connection.created", "scm_connection", item.ID, map[string]any{
+		"name": item.Name, "provider": item.Provider, "auth_type": item.AuthType, "credential_status": item.CredentialStatus,
+		"github_installation_id": installationID,
 	})
-	mux.HandleFunc("GET /scm-connections/github-app/oauth-callback", func(w http.ResponseWriter, r *http.Request) {
-		if !catalogEditor(w, r) {
-			return
-		}
-		principal, ok := iam.PrincipalFromContext(r.Context())
-		actorID := actorIDFromSubject(principal.Subject)
-		state := strings.TrimSpace(r.URL.Query().Get("state"))
-		code := strings.TrimSpace(r.URL.Query().Get("code"))
-		if !ok || actorID <= 0 || state == "" || code == "" || !githubApp.configured() {
-			httpx.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_github_authorization_callback"})
-			return
-		}
-		installationID, err := store.ConsumeAuthorizationState(r.Context(), tenantID(r), actorID, state)
-		if err != nil {
-			httpx.WriteJSON(w, http.StatusForbidden, map[string]string{"error": "invalid_github_authorization_state"})
-			return
-		}
-		userToken, err := githubapp.ExchangeUserAuthorizationCode(r.Context(), githubApp.ClientID, githubApp.ClientSecret, code)
-		if err != nil {
-			httpx.WriteJSON(w, http.StatusBadGateway, map[string]string{"error": "github_user_authorization_failed"})
-			return
-		}
-		ownsInstallation, err := githubapp.UserOwnsInstallation(r.Context(), userToken, githubApp.AppID, installationID)
-		if err != nil || !ownsInstallation {
-			httpx.WriteJSON(w, http.StatusForbidden, map[string]string{"error": "github_installation_not_authorized_for_user"})
-			return
-		}
-		privateKey, err := readSCMSecret(r.Context(), githubApp.PrivateKeyRef)
-		if err == nil {
-			_, err = githubapp.InstallationToken(r.Context(), githubApp.AppID, privateKey, installationID)
-		}
-		if err != nil {
-			httpx.WriteJSON(w, http.StatusBadGateway, map[string]string{"error": "github_installation_verification_failed"})
-			return
-		}
-		installationLogin, _ := githubapp.InstallationAccountLogin(r.Context(), githubApp.AppID, privateKey, installationID)
-		now := time.Now()
-		item := infra.SCMConnection{ID: store.NextID(), Provider: "github", Name: fmt.Sprintf("GitHub App 安装 #%d", installationID), CredentialStatus: "verified", VerifiedAt: &now, TokenConfigured: true, AuthType: "github_app", GitHubAppID: githubApp.AppID, InstallationID: &installationID, InstallationLogin: installationLogin}
-		if err := store.Create(r.Context(), item, githubApp.PrivateKeyRef, actorID); err != nil {
-			httpx.WriteJSON(w, 409, map[string]string{"error": "github_installation_already_connected"})
-			return
-		}
-		emitSCMAudit(r.Context(), audit, principal, "scm.connection.created", "scm_connection", item.ID, map[string]any{
-			"name": item.Name, "provider": item.Provider, "auth_type": item.AuthType, "credential_status": item.CredentialStatus,
-			"github_installation_id": installationID,
-		})
-		if githubApp.FrontendURL != "" {
-			http.Redirect(w, r, githubApp.FrontendURL+"/#/target?github_app=connected", http.StatusSeeOther)
-			return
-		}
-		httpx.WriteJSON(w, 201, item)
-	})
+	if h.githubApp.FrontendURL != "" {
+		http.Redirect(w, r, h.githubApp.FrontendURL+"/#/target?github_app=connected", http.StatusSeeOther)
+		return
+	}
+	httpx.WriteJSON(w, 201, item)
+}
+
+func (h *scmHandlers) oauthCallbackParams(r *http.Request) (iam.Principal, int64, string, string, bool) {
+	principal, ok := iam.PrincipalFromContext(r.Context())
+	actorID := actorIDFromSubject(principal.Subject)
+	state := strings.TrimSpace(r.URL.Query().Get("state"))
+	code := strings.TrimSpace(r.URL.Query().Get("code"))
+	if !ok || actorID <= 0 || state == "" || code == "" || !h.githubApp.configured() {
+		return principal, 0, "", "", false
+	}
+	return principal, actorID, state, code, true
+}
+
+func (h *scmHandlers) userOwnsInstallation(ctx context.Context, userToken string, installationID int64) bool {
+	ownsInstallation, err := githubapp.UserOwnsInstallation(ctx, userToken, h.githubApp.AppID, installationID)
+	return err == nil && ownsInstallation
+}
+
+func (h *scmHandlers) installationPrivateKey(ctx context.Context, installationID int64) (string, error) {
+	privateKey, err := readSCMSecret(ctx, h.githubApp.PrivateKeyRef)
+	if err != nil {
+		return "", err
+	}
+	if _, err := githubapp.InstallationToken(ctx, h.githubApp.AppID, privateKey, installationID); err != nil {
+		return "", err
+	}
+	return privateKey, nil
 }
 
 func parseConnectionID(r *http.Request) (int64, bool) {

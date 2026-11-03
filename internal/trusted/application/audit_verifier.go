@@ -33,65 +33,80 @@ func VerifyAuditChain(events []domain.AuditEvent) AuditVerification {
 // VerifyAuditChainFromAnchor verifies an exported range against an internal
 // read-only checkpoint. The anchor is not written or refreshed by verification.
 // A nil anchor requires the range to begin at the zero chain head.
-//
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func VerifyAuditChainFromAnchor(events []domain.AuditEvent, anchor *domain.AuditAnchor) AuditVerification {
 	result := AuditVerification{Valid: true}
 	if len(events) == 0 {
 		return result
 	}
-
 	teamID := events[0].TeamID
 	if teamID == 0 {
 		return invalidAuditVerification(result, events[0].ID, "team_id is required")
 	}
-
-	expectedPrev := zeroChainHead
-	if anchor != nil {
-		if anchor.TeamID == 0 || anchor.EventID == 0 || !isSHA256Hex(anchor.Hash) || anchor.CreatedAt.IsZero() {
-			return invalidAuditVerification(result, 0, "invalid audit anchor")
-		}
-		if anchor.TeamID != teamID {
-			return invalidAuditVerification(result, events[0].ID, "anchor team_id does not match export")
-		}
-		expectedPrev = anchor.Hash
+	expectedPrev, eventID, reason := auditChainHead(anchor, teamID, events[0].ID)
+	if reason != "" {
+		return invalidAuditVerification(result, eventID, reason)
 	}
 	seenIDs := make(map[int64]struct{}, len(events))
 	for _, event := range events {
 		result.CheckedCount++
-		if event.ID == 0 {
-			return invalidAuditVerification(result, event.ID, "event id is required")
+		next, reason := verifyAuditEvent(event, expectedPrev, teamID, anchor, seenIDs)
+		if reason != "" {
+			return invalidAuditVerification(result, event.ID, reason)
 		}
-		if anchor != nil && event.ID <= anchor.EventID {
-			return invalidAuditVerification(result, event.ID, "event precedes or duplicates audit anchor")
-		}
-		if _, duplicate := seenIDs[event.ID]; duplicate {
-			return invalidAuditVerification(result, event.ID, "duplicate event id")
-		}
-		seenIDs[event.ID] = struct{}{}
-		if event.TeamID != teamID {
-			return invalidAuditVerification(result, event.ID, "mixed team_id values")
-		}
-		if event.Ts.IsZero() {
-			return invalidAuditVerification(result, event.ID, "timestamp is required")
-		}
-		if !isSHA256Hex(event.PrevHash) {
-			return invalidAuditVerification(result, event.ID, "prev_hash is not a lowercase sha256 digest")
-		}
-		if !isSHA256Hex(event.Hash) {
-			return invalidAuditVerification(result, event.ID, "hash is not a lowercase sha256 digest")
-		}
-		if event.PrevHash != expectedPrev {
-			return invalidAuditVerification(result, event.ID, "prev_hash does not match the preceding event")
-		}
-		expectedHash := ComputeAuditHash(event.PrevHash, event.Op, event.Asset, event.AssetID, event.Payload, event.Ts)
-		if event.Hash != expectedHash {
-			return invalidAuditVerification(result, event.ID, "hash does not match canonical event content")
-		}
-		expectedPrev = event.Hash
+		expectedPrev = next
 	}
 	result.LastHash = expectedPrev
 	return result
+}
+
+// auditChainHead resolves the expected prev_hash before the first event. It
+// returns the event ID to report when validation fails (0 for anchor defects).
+func auditChainHead(anchor *domain.AuditAnchor, teamID, firstEventID int64) (prev string, eventID int64, reason string) {
+	if anchor == nil {
+		return zeroChainHead, 0, ""
+	}
+	if anchor.TeamID == 0 || anchor.EventID == 0 || !isSHA256Hex(anchor.Hash) || anchor.CreatedAt.IsZero() {
+		return "", 0, "invalid audit anchor"
+	}
+	if anchor.TeamID != teamID {
+		return "", firstEventID, "anchor team_id does not match export"
+	}
+	return anchor.Hash, 0, ""
+}
+
+// verifyAuditEvent validates one event against its expected predecessor and the
+// accumulated chain state, returning the next expected prev_hash or a reason.
+func verifyAuditEvent(event domain.AuditEvent, expectedPrev string, teamID int64, anchor *domain.AuditAnchor, seenIDs map[int64]struct{}) (string, string) {
+	if event.ID == 0 {
+		return "", "event id is required"
+	}
+	if anchor != nil && event.ID <= anchor.EventID {
+		return "", "event precedes or duplicates audit anchor"
+	}
+	if _, duplicate := seenIDs[event.ID]; duplicate {
+		return "", "duplicate event id"
+	}
+	seenIDs[event.ID] = struct{}{}
+	if event.TeamID != teamID {
+		return "", "mixed team_id values"
+	}
+	if event.Ts.IsZero() {
+		return "", "timestamp is required"
+	}
+	if !isSHA256Hex(event.PrevHash) {
+		return "", "prev_hash is not a lowercase sha256 digest"
+	}
+	if !isSHA256Hex(event.Hash) {
+		return "", "hash is not a lowercase sha256 digest"
+	}
+	if event.PrevHash != expectedPrev {
+		return "", "prev_hash does not match the preceding event"
+	}
+	expectedHash := ComputeAuditHash(event.PrevHash, event.Op, event.Asset, event.AssetID, event.Payload, event.Ts)
+	if event.Hash != expectedHash {
+		return "", "hash does not match canonical event content"
+	}
+	return event.Hash, ""
 }
 
 func invalidAuditVerification(result AuditVerification, eventID int64, reason string) AuditVerification {

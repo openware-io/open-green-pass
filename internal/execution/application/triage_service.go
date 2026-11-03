@@ -71,8 +71,6 @@ type TriageInput struct {
 }
 
 // Triage converts a failed result into a finding and links it back.
-//
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (s *RunService) Triage(ctx context.Context, runID int64, in TriageInput) (*domain.CaseResult, error) {
 	teamID, ok := rls.TenantFrom(ctx)
 	if !ok {
@@ -81,19 +79,9 @@ func (s *RunService) Triage(ctx context.Context, runID int64, in TriageInput) (*
 	if s.finding == nil {
 		return nil, gperr.Validation("finding port not configured")
 	}
-	results, err := s.repo.CaseResults(ctx, teamID, runID)
+	result, err := s.findCaseResult(ctx, teamID, runID, in.CaseResultID)
 	if err != nil {
 		return nil, err
-	}
-	var result *domain.CaseResult
-	for _, candidate := range results {
-		if candidate.ID == in.CaseResultID {
-			result = candidate
-			break
-		}
-	}
-	if result == nil {
-		return nil, gperr.NotFound("case result not found")
 	}
 	if result.FindingID != nil {
 		return result, nil
@@ -101,9 +89,37 @@ func (s *RunService) Triage(ctx context.Context, runID int64, in TriageInput) (*
 	if result.Status != domain.CaseFail && result.Status != domain.CaseBlocked {
 		return nil, gperr.Conflict("only failed/blocked results can be triaged")
 	}
-	if strings.TrimSpace(in.RepoURL) == "" || strings.TrimSpace(in.CommitSHA) == "" {
-		return nil, gperr.Validation("repo_url and commit_sha required")
+	in = normalizeTriageInput(in)
+	if err := validateTriageInput(in); err != nil {
+		return nil, err
 	}
+	findingID, err := s.finding.CreateFinding(ctx, buildFindingDraft(in, result, runID))
+	if err != nil {
+		return nil, err
+	}
+	if err := s.markResultFinding(ctx, teamID, result, findingID); err != nil {
+		return nil, err
+	}
+	result.FindingID = &findingID
+	result.FailureClass = "product"
+	return result, nil
+}
+
+func (s *RunService) findCaseResult(ctx context.Context, teamID, runID, caseResultID int64) (*domain.CaseResult, error) {
+	results, err := s.repo.CaseResults(ctx, teamID, runID)
+	if err != nil {
+		return nil, err
+	}
+	for _, candidate := range results {
+		if candidate.ID == caseResultID {
+			return candidate, nil
+		}
+	}
+	return nil, gperr.NotFound("case result not found")
+}
+
+// normalizeTriageInput applies the default triage taxonomy for omitted fields.
+func normalizeTriageInput(in TriageInput) TriageInput {
 	if strings.TrimSpace(in.Title) == "" {
 		in.Title = "执行失败待归因"
 	}
@@ -113,7 +129,18 @@ func (s *RunService) Triage(ctx context.Context, runID int64, in TriageInput) (*
 	if in.Confidence == "" {
 		in.Confidence = "medium"
 	}
-	draft := FindingDraft{
+	return in
+}
+
+func validateTriageInput(in TriageInput) error {
+	if strings.TrimSpace(in.RepoURL) == "" || strings.TrimSpace(in.CommitSHA) == "" {
+		return gperr.Validation("repo_url and commit_sha required")
+	}
+	return nil
+}
+
+func buildFindingDraft(in TriageInput, result *domain.CaseResult, runID int64) FindingDraft {
+	return FindingDraft{
 		ProjectID: in.ProjectID, TargetID: in.TargetID, RepoName: in.RepoName, RepoURL: in.RepoURL,
 		Branch: in.Branch, CommitSHA: in.CommitSHA, Module: in.Module, Endpoint: in.Endpoint,
 		Title: in.Title, Severity: in.Severity, Category: "product", Expected: in.Expected,
@@ -122,19 +149,16 @@ func (s *RunService) Triage(ctx context.Context, runID int64, in TriageInput) (*
 		Request: requestFromResult(result), Response: result.ResultText, Log: logsFromResult(result),
 		LinkedRunID: runID, LinkedCaseID: result.CaseID,
 	}
-	findingID, err := s.finding.CreateFinding(ctx, draft)
-	if err != nil {
-		return nil, err
-	}
+}
+
+func (s *RunService) markResultFinding(ctx context.Context, teamID int64, result *domain.CaseResult, findingID int64) error {
 	if err := s.repo.MarkCaseResultFinding(ctx, teamID, result.ID, findingID, "product"); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, gperr.NotFound("case result not found")
+			return gperr.NotFound("case result not found")
 		}
-		return nil, err
+		return err
 	}
-	result.FindingID = &findingID
-	result.FailureClass = "product"
-	return result, nil
+	return nil
 }
 
 func requestFromResult(result *domain.CaseResult) string {

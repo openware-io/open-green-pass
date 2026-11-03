@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -42,160 +43,214 @@ type wechatProfile struct {
 	ErrMsg     string `json:"errmsg"`
 }
 
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
+// wechatHandlers groups the WeChat login/binding endpoints behind one
+// dependency object.
+type wechatHandlers struct {
+	store        *iaminfra.WechatStore
+	auth         *iaminfra.AuthStore
+	namespace    string
+	secureCookie bool
+}
+
 func RegisterWechat(mux *http.ServeMux, store *iaminfra.WechatStore, auth *iaminfra.AuthStore, namespace string, secureCookie bool) {
-	mux.HandleFunc("GET /auth/wechat/status", func(w http.ResponseWriter, r *http.Request) {
-		teamID, _ := strconv.ParseInt(r.URL.Query().Get("team_id"), 10, 64)
-		cfg, err := store.PublicConfig(r.Context(), teamID)
-		if err == pgx.ErrNoRows {
-			httpx.WriteJSON(w, 200, map[string]any{"configured": false, "enabled": false})
-			return
-		}
-		if err != nil {
-			httpx.WriteJSON(w, 500, map[string]string{"error": "config_read_failed"})
-			return
-		}
-		httpx.WriteJSON(w, 200, map[string]any{"configured": cfg.AppID != "" && cfg.CallbackURI != "" && cfg.SecretRef != "", "enabled": cfg.Enabled})
-	})
-	mux.HandleFunc("GET /settings/auth/wechat", func(w http.ResponseWriter, r *http.Request) {
-		teamID, _, ok := mutationIdentity(w, r)
-		if !ok {
-			return
-		}
-		cfg, err := store.Config(r.Context(), teamID)
-		if err == pgx.ErrNoRows {
-			httpx.WriteJSON(w, 200, map[string]any{"team_id": teamID, "enabled": false, "app_id": "", "callback_uri": "", "secret_configured": false})
-			return
-		}
-		if err != nil {
-			writeIAM(w, nil, err)
-			return
-		}
-		httpx.WriteJSON(w, 200, map[string]any{"team_id": cfg.TeamID, "enabled": cfg.Enabled, "app_id": cfg.AppID, "callback_uri": cfg.CallbackURI, "secret_configured": cfg.SecretRef != "", "updated_at": cfg.UpdatedAt})
-	})
-	mux.HandleFunc("PUT /settings/auth/wechat", func(w http.ResponseWriter, r *http.Request) {
-		teamID, actorID, ok := mutationIdentity(w, r)
-		if !ok {
-			return
-		}
-		var in wechatConfigInput
-		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&in) != nil || strings.TrimSpace(in.AppID) == "" || strings.TrimSpace(in.CallbackURI) == "" {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "app_id_and_callback_required"})
-			return
-		}
-		callback, err := url.ParseRequestURI(in.CallbackURI)
-		if err != nil || (callback.Scheme != "https" && callback.Hostname() != "greenpass.localhost") || callback.Hostname() == "" {
-			httpx.WriteJSON(w, 400, map[string]string{"error": "https_callback_required"})
-			return
-		}
-		secretName := fmt.Sprintf("gp-auth-wechat-%d", teamID)
-		secretRef := "k8s://" + namespace + "/" + secretName + "#app-secret"
-		current, _ := store.Config(r.Context(), teamID)
-		if strings.TrimSpace(in.AppSecret) != "" {
-			if err = writeWechatSecret(r.Context(), namespace, secretName, in.AppSecret); err != nil {
-				httpx.WriteJSON(w, 500, map[string]string{"error": "secret_store_failed"})
-				return
-			}
-		} else if current.SecretRef == "" {
+	h := &wechatHandlers{store: store, auth: auth, namespace: namespace, secureCookie: secureCookie}
+	mux.HandleFunc("GET /auth/wechat/status", h.status)
+	mux.HandleFunc("GET /settings/auth/wechat", h.getSettings)
+	mux.HandleFunc("PUT /settings/auth/wechat", h.putSettings)
+	mux.HandleFunc("GET /auth/wechat/start", h.loginStart)
+	mux.HandleFunc("GET /account/wechat/start", h.bindStart)
+	mux.HandleFunc("GET /account/wechat", h.getAccount)
+	mux.HandleFunc("DELETE /account/wechat", h.deleteAccount)
+	mux.HandleFunc("GET /auth/wechat/callback", h.callback)
+}
+
+func (h *wechatHandlers) status(w http.ResponseWriter, r *http.Request) {
+	teamID, _ := strconv.ParseInt(r.URL.Query().Get("team_id"), 10, 64)
+	cfg, err := h.store.PublicConfig(r.Context(), teamID)
+	if err == pgx.ErrNoRows {
+		httpx.WriteJSON(w, 200, map[string]any{"configured": false, "enabled": false})
+		return
+	}
+	if err != nil {
+		httpx.WriteJSON(w, 500, map[string]string{"error": "config_read_failed"})
+		return
+	}
+	httpx.WriteJSON(w, 200, map[string]any{"configured": cfg.AppID != "" && cfg.CallbackURI != "" && cfg.SecretRef != "", "enabled": cfg.Enabled})
+}
+
+func (h *wechatHandlers) getSettings(w http.ResponseWriter, r *http.Request) {
+	teamID, _, ok := mutationIdentity(w, r)
+	if !ok {
+		return
+	}
+	cfg, err := h.store.Config(r.Context(), teamID)
+	if err == pgx.ErrNoRows {
+		httpx.WriteJSON(w, 200, map[string]any{"team_id": teamID, "enabled": false, "app_id": "", "callback_uri": "", "secret_configured": false})
+		return
+	}
+	if err != nil {
+		writeIAM(w, nil, err)
+		return
+	}
+	httpx.WriteJSON(w, 200, map[string]any{"team_id": cfg.TeamID, "enabled": cfg.Enabled, "app_id": cfg.AppID, "callback_uri": cfg.CallbackURI, "secret_configured": cfg.SecretRef != "", "updated_at": cfg.UpdatedAt})
+}
+
+func (h *wechatHandlers) putSettings(w http.ResponseWriter, r *http.Request) {
+	teamID, actorID, ok := mutationIdentity(w, r)
+	if !ok {
+		return
+	}
+	var in wechatConfigInput
+	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&in) != nil || strings.TrimSpace(in.AppID) == "" || strings.TrimSpace(in.CallbackURI) == "" {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "app_id_and_callback_required"})
+		return
+	}
+	if err := validateWechatCallback(in.CallbackURI); err != nil {
+		httpx.WriteJSON(w, 400, map[string]string{"error": "https_callback_required"})
+		return
+	}
+	current, _ := h.store.Config(r.Context(), teamID)
+	secretRef, err := h.resolveSecretRef(r.Context(), teamID, current.SecretRef, in.AppSecret)
+	if err != nil {
+		if errors.Is(err, errWechatSecretRequired) {
 			httpx.WriteJSON(w, 400, map[string]string{"error": "app_secret_required"})
-			return
+		} else {
+			httpx.WriteJSON(w, 500, map[string]string{"error": "secret_store_failed"})
 		}
-		if current.SecretRef != "" {
-			secretRef = current.SecretRef
+		return
+	}
+	cfg := iaminfra.WechatConfig{TeamID: teamID, Enabled: in.Enabled, AppID: strings.TrimSpace(in.AppID), CallbackURI: strings.TrimSpace(in.CallbackURI), SecretRef: secretRef}
+	if err = h.store.SaveConfig(r.Context(), cfg, actorID); err != nil {
+		writeIAM(w, nil, err)
+		return
+	}
+	httpx.WriteJSON(w, 200, map[string]any{"status": "configured", "secret_configured": true})
+}
+
+var errWechatSecretRequired = errors.New("app_secret_required")
+
+func validateWechatCallback(raw string) error {
+	callback, err := url.ParseRequestURI(raw)
+	if err != nil || (callback.Scheme != "https" && callback.Hostname() != "greenpass.localhost") || callback.Hostname() == "" {
+		return fmt.Errorf("https callback is required")
+	}
+	return nil
+}
+
+// resolveSecretRef persists a supplied app secret (if any) and resolves the
+// stable Kubernetes Secret reference for the tenant configuration.
+func (h *wechatHandlers) resolveSecretRef(ctx context.Context, teamID int64, currentRef, appSecret string) (string, error) {
+	secretName := fmt.Sprintf("gp-auth-wechat-%d", teamID)
+	if strings.TrimSpace(appSecret) != "" {
+		if err := writeWechatSecret(ctx, h.namespace, secretName, appSecret); err != nil {
+			return "", err
 		}
-		cfg := iaminfra.WechatConfig{TeamID: teamID, Enabled: in.Enabled, AppID: strings.TrimSpace(in.AppID), CallbackURI: strings.TrimSpace(in.CallbackURI), SecretRef: secretRef}
-		if err = store.SaveConfig(r.Context(), cfg, actorID); err != nil {
-			writeIAM(w, nil, err)
-			return
-		}
-		httpx.WriteJSON(w, 200, map[string]any{"status": "configured", "secret_configured": true})
-	})
-	mux.HandleFunc("GET /auth/wechat/start", func(w http.ResponseWriter, r *http.Request) {
-		teamID, _ := strconv.ParseInt(r.URL.Query().Get("team_id"), 10, 64)
-		startWechat(w, r, store, teamID, 0, "login")
-	})
-	mux.HandleFunc("GET /account/wechat/start", func(w http.ResponseWriter, r *http.Request) {
-		teamID, userID, ok := requestIdentity(w, r)
-		if !ok {
-			return
-		}
-		startWechat(w, r, store, teamID, userID, "bind")
-	})
-	mux.HandleFunc("GET /account/wechat", func(w http.ResponseWriter, r *http.Request) {
-		_, userID, ok := requestIdentity(w, r)
-		if !ok {
-			return
-		}
-		identity, err := store.IdentityForUser(r.Context(), userID)
-		if err == pgx.ErrNoRows {
-			httpx.WriteJSON(w, 200, map[string]any{"bound": false})
-			return
-		}
-		if err != nil {
-			writeIAM(w, nil, err)
-			return
-		}
-		httpx.WriteJSON(w, 200, map[string]any{"bound": true, "display_name": identity.DisplayName, "avatar_url": identity.AvatarURL})
-	})
-	mux.HandleFunc("DELETE /account/wechat", func(w http.ResponseWriter, r *http.Request) {
-		_, userID, ok := requestIdentity(w, r)
-		if !ok {
-			return
-		}
-		err := store.Unbind(r.Context(), userID)
-		if err == pgx.ErrNoRows {
-			w.WriteHeader(204)
-			return
-		}
-		if err != nil {
-			writeIAM(w, nil, err)
-			return
-		}
+	} else if currentRef == "" {
+		return "", errWechatSecretRequired
+	}
+	if currentRef != "" {
+		return currentRef, nil
+	}
+	return "k8s://" + h.namespace + "/" + secretName + "#app-secret", nil
+}
+
+func (h *wechatHandlers) loginStart(w http.ResponseWriter, r *http.Request) {
+	teamID, _ := strconv.ParseInt(r.URL.Query().Get("team_id"), 10, 64)
+	startWechat(w, r, h.store, teamID, 0, "login")
+}
+
+func (h *wechatHandlers) bindStart(w http.ResponseWriter, r *http.Request) {
+	teamID, userID, ok := requestIdentity(w, r)
+	if !ok {
+		return
+	}
+	startWechat(w, r, h.store, teamID, userID, "bind")
+}
+
+func (h *wechatHandlers) getAccount(w http.ResponseWriter, r *http.Request) {
+	_, userID, ok := requestIdentity(w, r)
+	if !ok {
+		return
+	}
+	identity, err := h.store.IdentityForUser(r.Context(), userID)
+	if err == pgx.ErrNoRows {
+		httpx.WriteJSON(w, 200, map[string]any{"bound": false})
+		return
+	}
+	if err != nil {
+		writeIAM(w, nil, err)
+		return
+	}
+	httpx.WriteJSON(w, 200, map[string]any{"bound": true, "display_name": identity.DisplayName, "avatar_url": identity.AvatarURL})
+}
+
+func (h *wechatHandlers) deleteAccount(w http.ResponseWriter, r *http.Request) {
+	_, userID, ok := requestIdentity(w, r)
+	if !ok {
+		return
+	}
+	err := h.store.Unbind(r.Context(), userID)
+	if err == pgx.ErrNoRows {
 		w.WriteHeader(204)
-	})
-	mux.HandleFunc("GET /auth/wechat/callback", func(w http.ResponseWriter, r *http.Request) {
-		state, err := store.ConsumeState(r.Context(), r.URL.Query().Get("state"))
-		if err != nil {
-			redirectWechatError(w, r, "invalid_state")
-			return
-		}
-		cfg, err := store.PublicConfig(r.Context(), state.TeamID)
-		if err != nil || !cfg.Enabled {
-			redirectWechatError(w, r, "not_configured")
-			return
-		}
-		secret, err := readWechatSecret(r.Context(), cfg.SecretRef)
-		if err != nil {
-			redirectWechatError(w, r, "secret_unavailable")
-			return
-		}
-		profile, err := wechatExchange(r.Context(), cfg.AppID, secret, r.URL.Query().Get("code"))
-		if err != nil {
-			redirectWechatError(w, r, "provider_exchange_failed")
-			return
-		}
-		if state.Purpose == "bind" {
-			profile.UserID = state.UserID
-			if err = store.Bind(r.Context(), profile); err != nil {
-				redirectWechatError(w, r, "bind_failed")
-				return
-			}
-			http.Redirect(w, r, "/#/settings?wechat=bound", http.StatusFound)
-			return
-		}
-		userID, err := store.UserForIdentity(r.Context(), profile.OpenID)
-		if err != nil {
-			redirectWechatError(w, r, "account_not_bound")
-			return
-		}
-		_, token, expires, err := auth.CreateSession(r.Context(), userID, state.TeamID)
-		if err != nil {
-			redirectWechatError(w, r, "session_failed")
-			return
-		}
-		http.SetCookie(w, &http.Cookie{Name: iaminfra.SessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: secureCookie, SameSite: http.SameSiteLaxMode, Expires: expires, MaxAge: int(time.Until(expires).Seconds())}) //nolint:gosec // G124: Secure is env-controlled for local HTTP; HttpOnly and SameSite are fixed
-		http.Redirect(w, r, "/#/scenarios", http.StatusFound)
-	})
+		return
+	}
+	if err != nil {
+		writeIAM(w, nil, err)
+		return
+	}
+	w.WriteHeader(204)
+}
+
+func (h *wechatHandlers) callback(w http.ResponseWriter, r *http.Request) {
+	state, err := h.store.ConsumeState(r.Context(), r.URL.Query().Get("state"))
+	if err != nil {
+		redirectWechatError(w, r, "invalid_state")
+		return
+	}
+	cfg, err := h.store.PublicConfig(r.Context(), state.TeamID)
+	if err != nil || !cfg.Enabled {
+		redirectWechatError(w, r, "not_configured")
+		return
+	}
+	secret, err := readWechatSecret(r.Context(), cfg.SecretRef)
+	if err != nil {
+		redirectWechatError(w, r, "secret_unavailable")
+		return
+	}
+	profile, err := wechatExchange(r.Context(), cfg.AppID, secret, r.URL.Query().Get("code"))
+	if err != nil {
+		redirectWechatError(w, r, "provider_exchange_failed")
+		return
+	}
+	h.completeFlow(w, r, state, profile)
+}
+
+func (h *wechatHandlers) completeFlow(w http.ResponseWriter, r *http.Request, state iaminfra.OAuthState, profile iaminfra.WechatIdentity) {
+	if state.Purpose != "bind" {
+		h.completeLogin(w, r, state, profile)
+		return
+	}
+	profile.UserID = state.UserID
+	if err := h.store.Bind(r.Context(), profile); err != nil {
+		redirectWechatError(w, r, "bind_failed")
+		return
+	}
+	http.Redirect(w, r, "/#/settings?wechat=bound", http.StatusFound)
+}
+
+func (h *wechatHandlers) completeLogin(w http.ResponseWriter, r *http.Request, state iaminfra.OAuthState, profile iaminfra.WechatIdentity) {
+	userID, err := h.store.UserForIdentity(r.Context(), profile.OpenID)
+	if err != nil {
+		redirectWechatError(w, r, "account_not_bound")
+		return
+	}
+	_, token, expires, err := h.auth.CreateSession(r.Context(), userID, state.TeamID)
+	if err != nil {
+		redirectWechatError(w, r, "session_failed")
+		return
+	}
+	http.SetCookie(w, &http.Cookie{Name: iaminfra.SessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: h.secureCookie, SameSite: http.SameSiteLaxMode, Expires: expires, MaxAge: int(time.Until(expires).Seconds())}) //nolint:gosec // G124: Secure is env-controlled for local HTTP; HttpOnly and SameSite are fixed
+	http.Redirect(w, r, "/#/scenarios", http.StatusFound)
 }
 
 func startWechat(w http.ResponseWriter, r *http.Request, store *iaminfra.WechatStore, teamID, userID int64, purpose string) {

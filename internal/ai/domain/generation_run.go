@@ -216,13 +216,26 @@ func IsTerminalUnitState(state GenerationUnitState) bool { return unitTerminal(s
 
 // FoldGenerationRunState derives the aggregate run state and counters from the
 // persisted unit states. The caller persists the result; GET must never write.
-//
-//nolint:gocyclo // State folding is intentionally exhaustive over unit/batch states.
 func FoldGenerationRunState(cancelled bool, units []*GenerationUnit) (state GenerationRunState, completed, failed, waiting int) {
-	total := 0
-	terminal := 0
-	running := 0
-	cancelledUnits := 0
+	total, terminal, running, cancelledUnits, completed, failed, waiting := foldUnitCounts(units)
+	if total == 0 {
+		return GenerationRunQueued, completed, failed, waiting
+	}
+	if waiting > 0 {
+		// A human decision is required before the aggregate can finish.
+		return GenerationRunWaitingReview, completed, failed, waiting
+	}
+	if terminal == total {
+		return foldTerminalRunState(cancelled, cancelledUnits == total, completed == total, completed == 0), completed, failed, waiting
+	}
+	if running > 0 || completed+failed+cancelledUnits > 0 {
+		return GenerationRunRunning, completed, failed, waiting
+	}
+	return GenerationRunQueued, completed, failed, waiting
+}
+
+// foldUnitCounts accumulates the per-unit projection used by the run fold.
+func foldUnitCounts(units []*GenerationUnit) (total, terminal, running, cancelledUnits, completed, failed, waiting int) {
 	for _, unit := range units {
 		if unit == nil {
 			continue
@@ -244,29 +257,21 @@ func FoldGenerationRunState(cancelled bool, units []*GenerationUnit) (state Gene
 			terminal++
 		}
 	}
-	if total == 0 {
-		return GenerationRunQueued, completed, failed, waiting
+	return total, terminal, running, cancelledUnits, completed, failed, waiting
+}
+
+// foldTerminalRunState maps a fully terminal unit set to the aggregate run state.
+func foldTerminalRunState(cancelled, allCancelled, allCompleted, noneCompleted bool) GenerationRunState {
+	switch {
+	case cancelled || allCancelled:
+		return GenerationRunCancelled
+	case allCompleted:
+		return GenerationRunSucceeded
+	case noneCompleted:
+		return GenerationRunFailed
+	default:
+		return GenerationRunPartialFailed
 	}
-	if waiting > 0 {
-		// A human decision is required before the aggregate can finish.
-		return GenerationRunWaitingReview, completed, failed, waiting
-	}
-	if terminal == total {
-		switch {
-		case cancelled || cancelledUnits == total:
-			return GenerationRunCancelled, completed, failed, waiting
-		case completed == total:
-			return GenerationRunSucceeded, completed, failed, waiting
-		case completed == 0:
-			return GenerationRunFailed, completed, failed, waiting
-		default:
-			return GenerationRunPartialFailed, completed, failed, waiting
-		}
-	}
-	if running > 0 || completed+failed+cancelledUnits > 0 {
-		return GenerationRunRunning, completed, failed, waiting
-	}
-	return GenerationRunQueued, completed, failed, waiting
 }
 
 // IsTerminalRunState reports whether a run state stops all reconciliation.

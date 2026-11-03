@@ -73,8 +73,6 @@ type reportView struct {
 }
 
 // Generate 由运行聚合生成测试报告并落库。
-//
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (s *ReportService) Generate(ctx context.Context, req GenerateRequest) (*domain.Report, error) {
 	teamID, ok := rls.TenantFrom(ctx)
 	if !ok {
@@ -83,28 +81,83 @@ func (s *ReportService) Generate(ctx context.Context, req GenerateRequest) (*dom
 	if req.RunID == 0 {
 		return nil, ErrTenantRequired
 	}
-	kind := req.Kind
-	if kind == "" {
-		kind = "service"
+	kind := reportKind(req.Kind)
+	existing, found, err := s.findExistingReport(ctx, teamID, req.RunID, kind)
+	if err != nil {
+		return nil, err
 	}
-	if existing, err := s.reports.FindByRunKind(ctx, teamID, req.RunID, kind); err == nil {
+	if found {
 		return existing, nil
-	} else if err != domain.ErrReportNotFound {
-		return nil, err
 	}
-	head, err := s.stats.RunHead(ctx, teamID, req.RunID)
+	head, cases, gates, err := s.loadAggregates(ctx, teamID, req.RunID)
 	if err != nil {
 		return nil, err
 	}
-	cases, err := s.stats.CaseResults(ctx, teamID, req.RunID)
-	if err != nil {
+	view := buildReportView(req.RunID, kind, head, cases, gates)
+	var buf bytes.Buffer
+	if err := s.tmpl.Execute(&buf, view); err != nil {
 		return nil, err
 	}
-	gates, err := s.gates.ResultsByRun(ctx, teamID, req.RunID)
-	if err != nil {
+	rep := &domain.Report{
+		ID: s.gen.Next(), TeamID: teamID, RunID: req.RunID, TargetID: head.TargetID,
+		Kind: kind, Title: view.Title, Version: head.Version, Branch: head.Branch,
+		Scenario: itoa3(head.ScenarioID), Status: view.Status,
+		Summary: map[string]any{
+			"total": view.Summary.Total, "pass": view.Summary.Pass, "fail": view.Summary.Fail,
+			"cost_total": view.Summary.CostTotal, "tokens": view.Summary.Tokens,
+		},
+		HTML: buf.String(), CreatedAt: view.CreatedAt,
+	}
+	if err := s.reports.Save(ctx, rep); err != nil {
 		return nil, err
 	}
-	// 汇总
+	return rep, nil
+}
+
+func reportKind(kind string) string {
+	if kind == "" {
+		return "service"
+	}
+	return kind
+}
+
+func (s *ReportService) findExistingReport(ctx context.Context, teamID, runID int64, kind string) (*domain.Report, bool, error) {
+	existing, err := s.reports.FindByRunKind(ctx, teamID, runID, kind)
+	if err == nil {
+		return existing, true, nil
+	}
+	if err != domain.ErrReportNotFound {
+		return nil, false, err
+	}
+	return nil, false, nil
+}
+
+func (s *ReportService) loadAggregates(ctx context.Context, teamID, runID int64) (*domain.RunHead, []*domain.CaseResult, []*domain.GateResult, error) {
+	head, err := s.stats.RunHead(ctx, teamID, runID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	cases, err := s.stats.CaseResults(ctx, teamID, runID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	gates, err := s.gates.ResultsByRun(ctx, teamID, runID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return head, cases, gates, nil
+}
+
+func buildReportView(runID int64, kind string, head *domain.RunHead, cases []*domain.CaseResult, gates []*domain.GateResult) reportView {
+	summary := summarizeCases(cases)
+	return reportView{
+		Title: "软件工程测试治理平台 · 测试报告", Kind: kind, Status: reportStatus(summary, gates),
+		RunID: runID, Head: head, CreatedAt: time.Now().UTC(),
+		Summary: summary, Gates: gateViews(gates), Cases: caseViews(cases),
+	}
+}
+
+func summarizeCases(cases []*domain.CaseResult) reportSummary {
 	summary := reportSummary{Total: int64(len(cases))}
 	for _, c := range cases {
 		summary.Tokens += c.TokensIn + c.TokensOut
@@ -116,64 +169,54 @@ func (s *ReportService) Generate(ctx context.Context, req GenerateRequest) (*dom
 			summary.Fail++
 		}
 	}
-	status := "pass"
-	if summary.Fail > 0 {
-		status = "fail"
-	}
+	return summary
+}
+
+func reportStatus(summary reportSummary, gates []*domain.GateResult) string {
 	if len(gates) > 0 {
-		status = string(gates[len(gates)-1].Result)
+		return string(gates[len(gates)-1].Result)
 	}
-	// 门禁视图
-	var gv []gateView
+	if summary.Fail > 0 {
+		return "fail"
+	}
+	return "pass"
+}
+
+func gateViews(gates []*domain.GateResult) []gateView {
+	var views []gateView
 	for _, g := range gates {
-		d, _ := json.Marshal(g.Detail)
-		gv = append(gv, gateView{
+		detail, _ := json.Marshal(g.Detail)
+		views = append(views, gateView{
 			Result: string(g.Result), RuleID: itoa3(g.RuleID),
-			DecidedAt: g.DecidedAt, DetailJSON: string(d),
+			DecidedAt: g.DecidedAt, DetailJSON: string(detail),
 		})
 	}
-	// 用例视图
-	var cv []caseView
+	return views
+}
+
+func caseViews(cases []*domain.CaseResult) []caseView {
+	var views []caseView
 	for _, c := range cases {
-		note := ""
-		if c.Evidence != nil {
-			if u, ok2 := c.Evidence["url"].(string); ok2 && u != "" {
-				note = "证据✓"
-			} else if h, ok2 := c.Evidence["hash"].(string); ok2 && h != "" {
-				note = "哈希✓"
-			} else {
-				note = "证据记录"
-			}
-		}
-		cv = append(cv, caseView{
+		views = append(views, caseView{
 			CaseID: c.CaseID, Attempt: int64(c.Attempt),
 			CaseCode: c.CaseCode, Kind: c.Kind, Status: c.Status,
-			Tokens: c.TokensIn + c.TokensOut, Cost: c.Cost, EvidenceNote: note,
+			Tokens: c.TokensIn + c.TokensOut, Cost: c.Cost, EvidenceNote: evidenceNote(c),
 		})
 	}
-	view := reportView{
-		Title: "软件工程测试治理平台 · 测试报告", Kind: kind, Status: status,
-		RunID: req.RunID, Head: head, CreatedAt: time.Now().UTC(),
-		Summary: summary, Gates: gv, Cases: cv,
+	return views
+}
+
+func evidenceNote(c *domain.CaseResult) string {
+	if c.Evidence == nil {
+		return ""
 	}
-	var buf bytes.Buffer
-	if err := s.tmpl.Execute(&buf, view); err != nil {
-		return nil, err
+	if url, ok := c.Evidence["url"].(string); ok && url != "" {
+		return "证据✓"
 	}
-	rep := &domain.Report{
-		ID: s.gen.Next(), TeamID: teamID, RunID: req.RunID, TargetID: head.TargetID,
-		Kind: kind, Title: view.Title, Version: head.Version, Branch: head.Branch,
-		Scenario: itoa3(head.ScenarioID), Status: status,
-		Summary: map[string]any{
-			"total": summary.Total, "pass": summary.Pass, "fail": summary.Fail,
-			"cost_total": summary.CostTotal, "tokens": summary.Tokens,
-		},
-		HTML: buf.String(), CreatedAt: view.CreatedAt,
+	if hash, ok := c.Evidence["hash"].(string); ok && hash != "" {
+		return "哈希✓"
 	}
-	if err := s.reports.Save(ctx, rep); err != nil {
-		return nil, err
-	}
-	return rep, nil
+	return "证据记录"
 }
 
 // Export 取回报告（含渲染 HTML）。

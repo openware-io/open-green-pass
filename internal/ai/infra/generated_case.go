@@ -86,8 +86,20 @@ func decodeGeneratedCases(raw string) ([]generatedCase, error) {
 	return envelope.Cases, nil
 }
 
-//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func validateGeneratedCase(candidate generatedCase) error {
+	if err := validateGeneratedCaseIdentity(candidate); err != nil {
+		return err
+	}
+	if err := validateGeneratedCaseRequest(candidate.Request); err != nil {
+		return err
+	}
+	if err := validateGeneratedCaseAssertions(candidate.Assertions); err != nil {
+		return err
+	}
+	return validateGeneratedCaseDescription(candidate)
+}
+
+func validateGeneratedCaseIdentity(candidate generatedCase) error {
 	if strings.TrimSpace(candidate.Title) == "" || len([]rune(candidate.Title)) > 200 {
 		return fmt.Errorf("title is required and must be at most 200 characters")
 	}
@@ -103,19 +115,36 @@ func validateGeneratedCase(candidate generatedCase) error {
 	if candidate.Scenario != "api" {
 		return fmt.Errorf("only api scenario is executable in the first generation slice")
 	}
-	method := strings.ToUpper(strings.TrimSpace(candidate.Request.Method))
+	return nil
+}
+
+func validateGeneratedCaseRequest(request generatedRequest) error {
+	method := strings.ToUpper(strings.TrimSpace(request.Method))
 	switch method {
 	case "GET", "POST", "PUT", "PATCH", "DELETE":
 	default:
 		return fmt.Errorf("request method is not allowed")
 	}
-	if err := validateRelativeAPIPath(candidate.Request.Path); err != nil {
+	if err := validateRelativeAPIPath(request.Path); err != nil {
 		return err
 	}
-	if len(candidate.Request.Headers) > 8 {
+	if len(request.Headers) > 8 {
 		return fmt.Errorf("too many request headers")
 	}
-	for key, value := range candidate.Request.Headers {
+	if err := validateGeneratedCaseHeaders(request.Headers); err != nil {
+		return err
+	}
+	if request.Body != nil {
+		raw, err := json.Marshal(request.Body)
+		if err != nil || len(raw) > 16*1024 {
+			return fmt.Errorf("request body is too large or invalid")
+		}
+	}
+	return nil
+}
+
+func validateGeneratedCaseHeaders(headers map[string]string) error {
+	for key, value := range headers {
 		if !safeHTTPHeader.MatchString(key) || (!strings.EqualFold(key, "Accept") && !strings.EqualFold(key, "Content-Type") && !strings.EqualFold(key, "X-API-Version")) {
 			return fmt.Errorf("request header %q is not allowed", key)
 		}
@@ -123,14 +152,12 @@ func validateGeneratedCase(candidate generatedCase) error {
 			return fmt.Errorf("request header %q is invalid", key)
 		}
 	}
-	if candidate.Request.Body != nil {
-		raw, err := json.Marshal(candidate.Request.Body)
-		if err != nil || len(raw) > 16*1024 {
-			return fmt.Errorf("request body is too large or invalid")
-		}
-	}
+	return nil
+}
+
+func validateGeneratedCaseAssertions(assertions []generatedAssert) error {
 	statusCount := 0
-	for _, assertion := range candidate.Assertions {
+	for _, assertion := range assertions {
 		switch assertion.Type {
 		case "status":
 			statusCount++
@@ -148,6 +175,10 @@ func validateGeneratedCase(candidate generatedCase) error {
 	if statusCount != 1 {
 		return fmt.Errorf("exactly one status assertion is required")
 	}
+	return nil
+}
+
+func validateGeneratedCaseDescription(candidate generatedCase) error {
 	if len(candidate.Steps) == 0 || len(candidate.Steps) > 20 || strings.TrimSpace(candidate.Expected) == "" {
 		return fmt.Errorf("steps and expected result are required")
 	}
@@ -157,7 +188,14 @@ func validateGeneratedCase(candidate generatedCase) error {
 	if len(candidate.Preconditions) > 20 || len(candidate.Expected) > 2000 {
 		return fmt.Errorf("preconditions or expected result exceed the configured size limit")
 	}
-	for _, step := range candidate.Steps {
+	if err := validateGeneratedCaseSteps(candidate.Steps); err != nil {
+		return err
+	}
+	return validateGeneratedCasePreconditions(candidate.Preconditions)
+}
+
+func validateGeneratedCaseSteps(steps []string) error {
+	for _, step := range steps {
 		if strings.TrimSpace(step) == "" || len(step) > 1000 {
 			return fmt.Errorf("steps must be non-empty and at most 1000 characters")
 		}
@@ -165,7 +203,11 @@ func validateGeneratedCase(candidate generatedCase) error {
 			return fmt.Errorf("steps must use the configured Simplified Chinese description language")
 		}
 	}
-	for _, precondition := range candidate.Preconditions {
+	return nil
+}
+
+func validateGeneratedCasePreconditions(preconditions []string) error {
+	for _, precondition := range preconditions {
 		if strings.TrimSpace(precondition) == "" || len(precondition) > 1000 {
 			return fmt.Errorf("preconditions must be non-empty and at most 1000 characters")
 		}
