@@ -4,7 +4,7 @@
 set -euo pipefail
 MIG_DIR="${1:-migrations}"
 # ENGINEERING-SPEC §8 登记前缀
-prefixes="tgt_ cas_ ctr_ rpt_ tnt_ iam_ mdl_ repo_ def_ cov_ run_ res_ env_ gen_ gate_ cost_ aud_ evd_ ts_ svc_ cicd_"
+prefixes="tgt_ cas_ ctr_ rpt_ tnt_ iam_ mdl_ repo_ def_ cov_ run_ res_ env_ gen_ gate_ cost_ aud_ evd_ ts_ svc_ cicd_ auth_ assistant_"
 err=0
 declare -A up down
 
@@ -15,8 +15,9 @@ for f in "$MIG_DIR"/*.sql; do
   if [[ ! "$base" =~ ^[0-9]{6}_.+\.(up|down)\.sql$ ]]; then
     echo "migcheck: 非法迁移文件名: $base (期望 000NNN_name.up.sql / .down.sql)"; err=1; continue
   fi
-  num=${base%%_*}
-  kind=${base##*.}
+  stem=${base%.sql}
+  num=${stem%%_*}
+  kind=${stem##*.}
   if [ "$kind" = "up" ]; then up[$num]=1; else down[$num]=1; fi
 done
 

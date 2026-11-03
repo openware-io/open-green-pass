@@ -279,6 +279,8 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 | Trusted | 成本归因 | `cost_` | `cost_line_item`、`cost_price` |
 | Trusted | 审计哈希链 | `aud_` | `aud_event`（append-only） |
 | Trusted | 测试证据 | `evd_` | `evd_evidence`（元数据，文件在 S3） |
+| IAM | 登录会话/外部身份 | `auth_` | `auth_user`、`auth_session`、`auth_external_identity` |
+| Assistant | AI 协作会话 | `assistant_` | `assistant_session`、`assistant_turn`、`assistant_artifact` |
 | — | 时序（趋势） | `ts_` | `ts_cost_trend`（hypertable） |
 | Platform | CI 连接与投递 | `cicd_` | `cicd_outbox`、`cicd_delivery` |
 
