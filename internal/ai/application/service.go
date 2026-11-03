@@ -4,6 +4,7 @@ package application
 
 import (
 	"context"
+
 	"github.com/openware-io/open-green-pass/internal/ai/domain"
 )
 

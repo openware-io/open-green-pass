@@ -73,16 +73,36 @@ docs/
 
 ### 本地 kind 初始化与发布
 
-本地测试环境唯一入口是 `scripts/dev/init-kind.ps1`（或 `make kind-init`）。未指定集群时：没有 kind 集群就按 [`deploy/kind/cluster.yaml`](./deploy/kind/cluster.yaml) 创建 `open-im-local`；只有一个已有集群时直接复用；存在多个时优先选择已部署 GP 的唯一集群，其次选择承载 `open-im-local` 测试对象的唯一集群；仍无法唯一判断时要求显式传入 `-KindCluster`，不会另建集群或猜选。脚本校验节点和 ingress-nginx、构建并加载 GP 镜像、部署基础依赖和 GP Kubernetes 清单，并核对 `open-im-local` 工作负载未发生变化。GP 不依赖 Helm，应用不通过 `docker run` 或 Compose 启动。
+本地测试环境唯一入口是 `scripts/dev/init-kind.ps1`（或 `make kind-init`）。`-Version` 必填（`X.Y.Z-SNAPSHOT`）；`-ImageSource` 默认 `auto`：先查本地已有的 4 个 GP 镜像，其次查 GHCR，都不可用时直接报错并提示改用 `-ImageSource local-build`（不再尝试注定失败的 pull）。未指定集群时：没有 kind 集群就按 [`deploy/kind/cluster.yaml`](./deploy/kind/cluster.yaml) 创建 `open-im-local`；只有一个已有集群时直接复用；存在多个时优先选择已部署 GP 的唯一集群，其次选择承载 `open-im-local` 测试对象的唯一集群；仍无法唯一判断时要求显式传入 `-KindCluster`，不会另建集群或猜选。脚本校验节点和 ingress-nginx、构建或加载 GP 镜像、**先执行数据库迁移再滚动应用**、部署基础依赖和 GP Kubernetes 清单，并核对 `open-im-local` 工作负载未发生变化。部署默认**不清理本地镜像**，需要清理旧 GP 标签时显式加 `-PruneLocalImages`。每次部署生成 `.outputs/deploy/<version>-<timestamp>/`（`plan.json`、`summary.json`、渲染后的清单；失败时 `failure/` 现场）。GP 不依赖 Helm，应用不通过 `docker run` 或 Compose 启动。
 
 ```powershell
-pwsh -NoProfile -File ./scripts/dev/init-kind.ps1
-# 默认从 GHCR 拉取开发测试镜像（必须是 X.Y.Z-SNAPSHOT）：
-pwsh -NoProfile -File ./scripts/dev/init-kind.ps1 -Version 0.1.25-SNAPSHOT
-# 开发者需要本地构建时显式指定：
-pwsh -NoProfile -File ./scripts/dev/init-kind.ps1 -ImageSource local-build -Version 0.1.25-SNAPSHOT
-# 已有同版本本地镜像时：
-pwsh -NoProfile -File ./scripts/dev/init-kind.ps1 -ImageSource local-cache -Version 0.1.25-SNAPSHOT
+# Version 必填；ImageSource 默认 auto（本地镜像 → GHCR → 报错提示 local-build）
+pwsh -NoProfile -File ./scripts/dev/init-kind.ps1 -Version 0.1.213-SNAPSHOT
+
+# 按当前源码本地构建四个镜像（需要 Go/Node/Docker 与网络）
+pwsh -NoProfile -File ./scripts/dev/init-kind.ps1 -Version 0.1.213-SNAPSHOT -ImageSource local-build
+
+# 复用本地已存在的同版本镜像
+pwsh -NoProfile -File ./scripts/dev/init-kind.ps1 -Version 0.1.213-SNAPSHOT -ImageSource local-cache
+
+# 可选：部署后清理四个 GP 仓库中该版本以外的本地标签（默认不清理）
+pwsh -NoProfile -File ./scripts/dev/init-kind.ps1 -Version 0.1.213-SNAPSHOT -PruneLocalImages
+
+# Makefile 等价入口
+make kind-init VERSION=0.1.213-SNAPSHOT
+```
+
+> 部署证据：`plan.json` 记录 4 个镜像的 tag→imageId/digest、部署前版本漂移与集群信息；`summary.json` 记录迁移版本、冒烟结果、各 deployment 镜像与 IM 隔离核对。失败时脚本把 `kubectl describe/logs/events` 采到 `failure/`，并回滚 4 个 deployment 的镜像与 `GP_VERSION/GP_COMMIT/GP_BUILT_AT`；数据库迁移只前滚，不随回滚降级。需要为 4 个镜像分别指定版本/commit（例如复用旧 web 镜像）时用 `-ImageTagsFile tags.json`；本地校验回滚路径可加 `-RollbackDrill`（部署后故意失败并恢复上一版本，仅用于演练）。
+
+可选 `-ImageTagsFile` 示例（未写的键回退到 `-Version`，`serverCommit` 可省略）：
+
+```json
+{
+  "server": "0.1.213-SNAPSHOT",
+  "web": "0.1.212-SNAPSHOT",
+  "migrate": "0.1.213-SNAPSHOT",
+  "dshGateway": "0.1.213-SNAPSHOT"
+}
 ```
 
 ```bash

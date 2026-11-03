@@ -19,6 +19,7 @@ func (s *Store) CreateSession(ctx context.Context, v application.Session, subjec
 		return e
 	})
 }
+
 func (s *Store) Session(ctx context.Context, id int64) (v application.Session, err error) {
 	err = s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx, `SELECT id,subject,page_context,created_at,updated_at FROM assistant_session WHERE id=$1`, id).Scan(&v.ID, &v.Subject, &v.Page, &v.CreatedAt, &v.UpdatedAt)
@@ -28,6 +29,7 @@ func (s *Store) Session(ctx context.Context, id int64) (v application.Session, e
 	}
 	return
 }
+
 func (s *Store) AddTurns(ctx context.Context, turns []application.Turn) error {
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		for _, v := range turns {
@@ -38,6 +40,7 @@ func (s *Store) AddTurns(ctx context.Context, turns []application.Turn) error {
 		return nil
 	})
 }
+
 func (s *Store) Turns(ctx context.Context, sessionID int64) (out []application.Turn, err error) {
 	out = []application.Turn{}
 	err = s.db.WithTenant(ctx, func(tx pgx.Tx) error {
@@ -57,6 +60,7 @@ func (s *Store) Turns(ctx context.Context, sessionID int64) (out []application.T
 	})
 	return
 }
+
 func (s *Store) CreateArtifact(ctx context.Context, v application.Artifact) error {
 	evidence, _ := json.Marshal(v.Evidence)
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
@@ -64,6 +68,7 @@ func (s *Store) CreateArtifact(ctx context.Context, v application.Artifact) erro
 		return e
 	})
 }
+
 func (s *Store) Artifacts(ctx context.Context) (out []application.Artifact, err error) {
 	out = []application.Artifact{}
 	err = s.db.WithTenant(ctx, func(tx pgx.Tx) error {
@@ -85,6 +90,7 @@ func (s *Store) Artifacts(ctx context.Context) (out []application.Artifact, err 
 	})
 	return
 }
+
 func (s *Store) CreateAction(ctx context.Context, sessionID int64, v application.UIAction, status string) (out application.ActionRecord, err error) {
 	err = s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		values, _ := json.Marshal(v.Values)
@@ -92,6 +98,7 @@ func (s *Store) CreateAction(ctx context.Context, sessionID int64, v application
 	})
 	return
 }
+
 func (s *Store) Actions(ctx context.Context, sessionID int64) (out []application.ActionRecord, err error) {
 	out = []application.ActionRecord{}
 	err = s.db.WithTenant(ctx, func(tx pgx.Tx) error {

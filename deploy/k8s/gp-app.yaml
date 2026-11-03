@@ -1,4 +1,6 @@
-# GreenPass application resources. VERSION is substituted by scripts/dev/deploy-kind.ps1.
+# GreenPass application resources. The deployment script renders the
+# SERVER_VERSION / WEB_VERSION / COMMIT / BUILT_AT tokens; do not commit
+# resolved versions into this file.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -71,7 +73,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: server
-          image: IMAGE_REGISTRY/open-green-pass:VERSION
+          image: IMAGE_REGISTRY/open-green-pass:SERVER_VERSION
           imagePullPolicy: IMAGE_PULL_POLICY
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
           ports: [{ name: http, containerPort: 8080 }]
@@ -79,7 +81,10 @@ spec:
             - { name: GP_ADDR, value: ":8080" }
             - { name: GP_ENV, value: dev }
             - { name: GP_ALLOW_HEADER_AUTH, value: "true" }
-            - { name: GP_BUILD_REVISION, value: "VERSION" }
+            - { name: GP_BUILD_REVISION, value: "SERVER_VERSION" }
+            - { name: GP_VERSION, value: "SERVER_VERSION" }
+            - { name: GP_COMMIT, value: "COMMIT" }
+            - { name: GP_BUILT_AT, value: "BUILT_AT" }
             - { name: GP_RUNNER_TYPE, value: http }
             - { name: GP_EXECUTION_BEARER_TOKEN, valueFrom: { secretKeyRef: { name: gp-im-token, key: token, optional: true } } }
             - { name: GP_CASE_NONADMIN_TOKEN, valueFrom: { secretKeyRef: { name: gp-case-auth, key: token, optional: true } } }
@@ -122,14 +127,19 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: worker
-          image: IMAGE_REGISTRY/open-green-pass:VERSION
+          image: IMAGE_REGISTRY/open-green-pass:SERVER_VERSION
           imagePullPolicy: IMAGE_PULL_POLICY
           command: ["/usr/local/bin/gp-worker"]
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          ports: [{ name: metrics, containerPort: 9090 }]
           env:
             - { name: GP_ENV, value: dev }
+            - { name: GP_WORKER_METRICS_ADDR, value: ":9090" }
             - { name: GP_ALLOW_HEADER_AUTH, value: "true" }
-            - { name: GP_BUILD_REVISION, value: "VERSION" }
+            - { name: GP_BUILD_REVISION, value: "SERVER_VERSION" }
+            - { name: GP_VERSION, value: "SERVER_VERSION" }
+            - { name: GP_COMMIT, value: "COMMIT" }
+            - { name: GP_BUILT_AT, value: "BUILT_AT" }
             - { name: GP_RUNNER_TYPE, value: http }
             - { name: GP_EXECUTION_BEARER_TOKEN, valueFrom: { secretKeyRef: { name: gp-im-token, key: token, optional: true } } }
             - { name: GP_CASE_NONADMIN_TOKEN, valueFrom: { secretKeyRef: { name: gp-case-auth, key: token, optional: true } } }
@@ -142,6 +152,13 @@ spec:
             - { name: GP_CICD_CLAIM_TIMEOUT_SECONDS, value: "120" }
           envFrom: [{ secretRef: { name: gp-app-config } }]
           resources: { requests: { cpu: 100m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: gp-worker-metrics, namespace: gp, labels: { app.kubernetes.io/part-of: greenpass } }
+spec:
+  selector: { app.kubernetes.io/name: gp, app.kubernetes.io/component: worker }
+  ports: [{ name: metrics, port: 9090, targetPort: metrics }]
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -156,7 +173,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: web
-          image: IMAGE_REGISTRY/open-green-pass-web:VERSION
+          image: IMAGE_REGISTRY/open-green-pass-web:WEB_VERSION
           imagePullPolicy: IMAGE_PULL_POLICY
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
           ports: [{ name: http, containerPort: 8080 }]

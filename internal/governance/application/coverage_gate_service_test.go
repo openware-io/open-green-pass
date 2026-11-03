@@ -22,21 +22,27 @@ type gateFindingsStub struct{}
 func (gateFindingsStub) Create(context.Context, *domain.Finding, *domain.FindingEvent) (bool, error) {
 	return false, nil
 }
+
 func (gateFindingsStub) Find(context.Context, int64, int64) (*domain.Finding, error) {
 	return nil, nil
 }
+
 func (gateFindingsStub) FindByDedupe(context.Context, int64, string) (*domain.Finding, error) {
 	return nil, nil
 }
+
 func (gateFindingsStub) List(context.Context, int64, domain.FindingFilter) ([]*domain.Finding, error) {
 	return nil, nil
 }
+
 func (gateFindingsStub) UpdateStatus(context.Context, *domain.Finding, *domain.FindingEvent) error {
 	return nil
 }
+
 func (gateFindingsStub) Events(context.Context, int64, int64) ([]domain.FindingEvent, error) {
 	return nil, nil
 }
+
 func (gateFindingsStub) CountOpen(context.Context, int64, int64, string) (int, int, error) {
 	return 0, 0, nil
 }

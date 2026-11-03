@@ -77,6 +77,8 @@ func (s *CaseService) CreateCase(ctx context.Context, c domain.Case, script json
 }
 
 // UpdateCaseMetadata updates taxonomy without creating a script version.
+//
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (s *CaseService) UpdateCaseMetadata(ctx context.Context, caseID int64, patch domain.Case) (*domain.Case, error) {
 	teamID, ok := rls.TenantFrom(ctx)
 	if !ok {

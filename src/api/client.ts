@@ -27,9 +27,103 @@ export type WechatBinding = { bound:boolean; display_name?:string; avatar_url?:s
 export type GenerationBatch = components['schemas']['GenerationBatch'] & { service_id?: number | null; source_path?: string };
 export type CreateGenerationBatchInput = components['schemas']['GenerationBatchCreate'] & { service_id?: number; source_path?: string };
 export type RepositoryRef = components['schemas']['RepositoryRef'];
-export type GenerationRunUnit = { id:number; service_id:number; repo_id:number; batch_id?:number|null; state:'queued'|'running'|'succeeded'|'failed'|'cancelled'; error?:string };
-export type GenerationRun = { id:number; team_id:number; project_id:number; scope_type:'project'|'repo'|'service'; scope_id:number; state:'queued'|'running'|'succeeded'|'partial_failed'|'failed'|'cancelled'; total_units:number; completed_units:number; failed_units:number; tokens_in:number; tokens_out:number; cost_amount:number; units:GenerationRunUnit[]; created_at?:string; updated_at?:string };
-export type CreateGenerationRunInput = { project_id:number; scope_type:'project'|'repo'|'service'; scope_id:number; idempotency_key:string; units:Array<{service_id:number;repo_id:number;source_path?:string;ref_type:'branch'|'tag';ref_name:string}> };
+/* ------------------------------------------------------------------ *
+ * Generation S1 contract types (frozen: .outputs/generation-refactor/CONTRACT.md)
+ * Local types are used until the Lead regenerates src/api/generated.ts from the
+ * updated api/openapi.yaml. They mirror the contract field names exactly.
+ * ------------------------------------------------------------------ */
+export type GenerationScopeType = 'project' | 'repo' | 'service';
+export type GenerationRefType = 'branch' | 'tag';
+export type GenerationRunState = 'queued' | 'running' | 'waiting_review' | 'partial_failed' | 'succeeded' | 'failed' | 'cancelled';
+export type GenerationRunUnitState = 'queued' | 'running' | 'waiting_review' | 'succeeded' | 'failed' | 'rejected' | 'cancelled';
+
+export type GenerationPlanRequestUnit = { service_id:number; repo_id:number; source_path?:string; ref_type:GenerationRefType; ref_name:string };
+export type GenerationPlanRequest = { project_id:number; scope_type:GenerationScopeType; scope_id?:number; units:GenerationPlanRequestUnit[] };
+export type GenerationPlanUnit = { service_id:number; repo_id:number; repo_url?:string; source_path?:string; ref_type:GenerationRefType; ref_name:string; commit_sha?:string; valid:boolean; error?:string };
+export type GenerationPlanInvalid = { service_id:number; code:string; message:string };
+export type GenerationPlanSummary = { services:number; repos:number; batches:number; candidates_min:number; candidates_max:number };
+export type GenerationPlanEstimate = { tokens_in:number; tokens_out:number; cost_amount:number; currency:string; duration_seconds:number; unknown:boolean };
+export type GenerationPlanRisk = { code:string; message:string; severity:'info'|'warning'|'error'|string };
+export type GenerationPlan = { plan_id:number; plan_hash:string; expires_at:string; units:GenerationPlanUnit[]; invalid:GenerationPlanInvalid[]; summary:GenerationPlanSummary; estimate:GenerationPlanEstimate; risks:GenerationPlanRisk[] };
+
+export type GenerationRunUnitDetail = {
+  id:number;
+  service_id:number;
+  service_name?:string;
+  repo_id:number;
+  repo_url?:string;
+  source_path?:string;
+  ref_type:GenerationRefType;
+  ref_name:string;
+  commit_sha?:string;
+  batch_id?:number|null;
+  batch_state?:string;
+  /** Pipeline stage projected by the backend (task-20; may be absent on older builds). */
+  stage?:string;
+  /** True when the backend expects manual review for this unit. */
+  review_required?:boolean;
+  state:GenerationRunUnitState;
+  error?:string;
+};
+/** Aggregated list shape (GET /generation/runs). */
+export type GenerationRunSummary = {
+  id:number;
+  team_id?:number;
+  project_id:number;
+  scope_type:GenerationScopeType;
+  scope_id:number;
+  plan_id?:number;
+  state:GenerationRunState;
+  total_units:number;
+  completed_units:number;
+  failed_units:number;
+  review_units?:number;
+  progress_percent?:number;
+  tokens_in:number;
+  tokens_out:number;
+  cost_amount:number;
+  units?:GenerationRunUnitDetail[];
+  created_at?:string;
+  updated_at?:string;
+};
+/**
+ * Aggregated detail shape (GET detail, SSE snapshot, create/cancel/review).
+ * As of the R1 backend fix this mirrors the list/summary fields
+ * (team/project/scope/plan/timestamps) and adds `units`.
+ */
+export type GenerationRunDetail = Omit<GenerationRunSummary, 'units'> & {
+  units:GenerationRunUnitDetail[];
+};
+export type GenerationRunEvent = { seq:number; type:string; run:GenerationRunDetail; created_at?:string };
+
+/** Cursor-paginated history page (GET /generation/runs?limit&cursor&state). */
+export type GenerationRunPage = {
+  runs:GenerationRunSummary[];
+  /** Cursor for the next page; null/undefined means the list is exhausted. */
+  nextCursor:string | null;
+  /**
+   * True when the server returned the legacy bare-array payload (no cursor
+   * metadata yet, e.g. a build before task-22). Callers may apply local
+   * filtering on this single page as a transitional fallback only.
+   */
+  legacy:boolean;
+};
+
+export type CreateGenerationRunInput = {
+  project_id:number;
+  scope_type:GenerationScopeType;
+  scope_id:number;
+  idempotency_key:string;
+  plan_id?:number;
+  plan_hash?:string;
+  /** Required only when creating without a plan (legacy request). */
+  units?:GenerationPlanRequestUnit[];
+};
+
+/** @deprecated Use GenerationRunDetail. Kept for callers that only need the snapshot. */
+export type GenerationRun = GenerationRunDetail;
+/** @deprecated Use GenerationRunUnitDetail. */
+export type GenerationRunUnit = GenerationRunUnitDetail;
 export type AssistantSession = components['schemas']['AssistantSession'];
 export type AssistantTurn = components['schemas']['AssistantTurn'];
 export type AssistantArtifact = components['schemas']['AssistantArtifact'];
@@ -61,10 +155,91 @@ export type CreateRunInput = paths['/runs']['post']['requestBody']['content']['a
 export type CheckVersionInput = paths['/targets/{id}/version-check']['post']['requestBody']['content']['application/json'];
 
 export class GreenPassApiError extends Error {
-  constructor(public readonly status: number, message: string) {
+  constructor(
+    public readonly status: number,
+    message: string,
+    /** Machine-readable error code from the server envelope, e.g. plan_stale. */
+    public readonly code?: string,
+  ) {
     super(message);
     this.name = 'GreenPassApiError';
   }
+}
+
+type ApiErrorPayload = {
+  code?: string;
+  message?: string;
+  msg?: string;
+  error?: string | { code?: string; message?: string };
+};
+
+function parseApiErrorPayload(body: ApiErrorPayload): { message?: string; code?: string } {
+  const nested = typeof body.error === 'object' && body.error !== null ? body.error : undefined;
+  const message = body.message ?? nested?.message ?? (typeof body.error === 'string' ? body.error : undefined) ?? body.msg;
+  // The generation API uses {"error":"<machine_code>","message":"<human text>"};
+  // only treat a snake_case error string as the code, never as prose.
+  const legacyCode = typeof body.error === 'string' && /^[a-z0-9_]+$/.test(body.error) ? body.error : undefined;
+  const code = body.code ?? nested?.code ?? legacyCode;
+  return {
+    message: typeof message === 'string' && message ? message : undefined,
+    code: typeof code === 'string' && code ? code : undefined,
+  };
+}
+
+/** Parses one SSE block (comment/heartbeat blocks return null). */
+function parseGenerationEventBlock(block: string): GenerationRunEvent | null {
+  let id = '';
+  let data = '';
+  for (const line of block.split('\n')) {
+    const clean = line.endsWith('\r') ? line.slice(0, -1) : line;
+    if (!clean || clean.startsWith(':')) continue;
+    const colon = clean.indexOf(':');
+    const field = colon < 0 ? clean : clean.slice(0, colon);
+    const rawValue = colon < 0 ? '' : clean.slice(colon + 1);
+    const value = rawValue.startsWith(' ') ? rawValue.slice(1) : rawValue;
+    if (field === 'id') id = value;
+    else if (field === 'data') data = data ? `${data}\n${value}` : value;
+  }
+  if (!data) return null;
+  try {
+    const parsed = JSON.parse(data) as Partial<GenerationRunEvent> & { run?: GenerationRunDetail };
+    if (!parsed || typeof parsed !== 'object' || !parsed.run || typeof parsed.run !== 'object') return null;
+    const seq = typeof parsed.seq === 'number' ? parsed.seq : Number(id);
+    return {
+      seq: Number.isFinite(seq) ? seq : 0,
+      type: typeof parsed.type === 'string' ? parsed.type : 'run.updated',
+      run: parsed.run,
+      created_at: parsed.created_at,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isRunSummaryList(value: unknown): value is GenerationRunSummary[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'object' && item !== null && typeof (item as { id?: unknown }).id === 'number');
+}
+
+/**
+ * Normalizes the cursor-page response defensively so the UI works both with
+ * the new `{runs, next_cursor}` payload and with the legacy bare array.
+ */
+export function normalizeGenerationRunPage(payload: unknown): GenerationRunPage {
+  if (Array.isArray(payload)) {
+    return { runs: isRunSummaryList(payload) ? payload : [], nextCursor: null, legacy: true };
+  }
+  if (payload && typeof payload === 'object') {
+    const record = payload as Record<string, unknown>;
+    const list = record.runs ?? record.items ?? record.data;
+    const rawCursor = record.next_cursor ?? record.nextCursor ?? record.next;
+    const nextCursor = typeof rawCursor === 'string' && rawCursor ? rawCursor : null;
+    return {
+      runs: isRunSummaryList(list) ? list : [],
+      nextCursor,
+      legacy: false,
+    };
+  }
+  return { runs: [], nextCursor: null, legacy: false };
 }
 
 export interface GreenPassClientOptions {
@@ -104,13 +279,15 @@ export class GreenPassClient {
     const response = await this.fetcher(`${this.baseUrl}${path}`, { ...init, credentials: 'same-origin', headers });
     if (!response.ok) {
       let message = response.statusText;
+      let code: string | undefined;
       try {
-        const body = await response.json() as { message?: string; error?: string; msg?: string };
-        message = body.message ?? body.error ?? body.msg ?? message;
+        const parsed = parseApiErrorPayload(await response.json() as ApiErrorPayload);
+        if (parsed.message) message = parsed.message;
+        code = parsed.code;
       } catch {
         // Keep the HTTP status text when the server did not return JSON.
       }
-      throw new GreenPassApiError(response.status, message);
+      throw new GreenPassApiError(response.status, message, code);
     }
     if (response.status === 204) return undefined as T;
     return response.json() as Promise<T>;
@@ -230,11 +407,76 @@ export class GreenPassClient {
   listGenerationBatches(targetId:number): JsonResponse<GenerationBatch[]> { return this.request(`/generation/batches?target_id=${targetId}`); }
   reviewGenerationBatch(batchId:number,input: paths['/generation/batches/{id}/review']['post']['requestBody']['content']['application/json']): JsonResponse<GenerationBatch> { return this.request(`/generation/batches/${batchId}/review`,{method:'POST',body:JSON.stringify(input)}); }
   cancelGenerationBatch(batchId:number,input:{expected_state_version:number;request_id:string}): JsonResponse<GenerationBatch> { return this.request(`/generation/batches/${batchId}/cancel`,{method:'POST',body:JSON.stringify(input)}); }
-  createGenerationRun(input: CreateGenerationRunInput): JsonResponse<GenerationRun> { return this.request('/generation/runs',{method:'POST',body:JSON.stringify(input)}); }
-  getGenerationRun(runId:number): JsonResponse<GenerationRun> { return this.request(`/generation/runs/${runId}`); }
-  listGenerationRuns(projectId:number): JsonResponse<GenerationRun[]> { return this.request(`/generation/runs?project_id=${projectId}`); }
-  cancelGenerationRun(runId:number): JsonResponse<GenerationRun> { return this.request(`/generation/runs/${runId}/cancel`,{method:'POST'}); }
-  reviewGenerationRun(runId:number,input:{decision:'approve'|'reject';request_id:string}): JsonResponse<GenerationRun> { return this.request(`/generation/runs/${runId}/review`,{method:'POST',body:JSON.stringify(input)}); }
+  preflightGenerationPlan(input: GenerationPlanRequest, signal?: AbortSignal): JsonResponse<GenerationPlan> {
+    return this.request('/generation/plans', { method: 'POST', body: JSON.stringify(input), signal });
+  }
+  createGenerationRun(input: CreateGenerationRunInput): JsonResponse<GenerationRunDetail> { return this.request('/generation/runs',{method:'POST',body:JSON.stringify(input)}); }
+  getGenerationRun(runId:number, signal?: AbortSignal): JsonResponse<GenerationRunDetail> { return this.request(`/generation/runs/${runId}`, { signal }); }
+  /** @deprecated Prefer listGenerationRunPage (cursor pagination). Kept for legacy callers. */
+  listGenerationRuns(projectId:number): JsonResponse<GenerationRunSummary[]> { return this.request(`/generation/runs?project_id=${projectId}`); }
+  /**
+   * Cursor-paginated history list. Contract (backend task-22):
+   * `{ runs: GenerationRunSummary[], next_cursor: string|null }`, run.id DESC,
+   * cursor = last run id of the previous page, optional server-side `state`.
+   */
+  async listGenerationRunPage(params: { projectId:number; limit?:number; cursor?:string | null; state?:GenerationRunState }): Promise<GenerationRunPage> {
+    const query = new URLSearchParams({ project_id: String(params.projectId) });
+    if (params.limit) query.set('limit', String(params.limit));
+    if (params.cursor) query.set('cursor', params.cursor);
+    if (params.state) query.set('state', params.state);
+    const payload = await this.request<unknown>(`/generation/runs?${query}`);
+    return normalizeGenerationRunPage(payload);
+  }
+  cancelGenerationRun(runId:number): JsonResponse<GenerationRunDetail> { return this.request(`/generation/runs/${runId}/cancel`,{method:'POST'}); }
+  reviewGenerationRun(runId:number,input:{decision:'approve'|'reject';request_id:string;expected_versions?:Record<string,number>}): JsonResponse<GenerationRunDetail> { return this.request(`/generation/runs/${runId}/review`,{method:'POST',body:JSON.stringify(input)}); }
+  /**
+   * Subscribes to the append-only run event stream (SSE).
+   * Supports resume via after_seq / Last-Event-ID; resolves when the server
+   * closes the stream or the caller aborts. No polling is performed here.
+   */
+  async streamGenerationRunEvents(runId: number, handlers: {
+    afterSeq?: number;
+    signal?: AbortSignal;
+    onEvent: (event: GenerationRunEvent) => void;
+    onOpen?: () => void;
+  }): Promise<void> {
+    const headers = new Headers({ Accept: 'text/event-stream', 'x-gp-team-id': String(this.teamId) });
+    if (this.userId) headers.set('x-gp-user-id', String(this.userId));
+    const query = new URLSearchParams();
+    if (handlers.afterSeq && handlers.afterSeq > 0) {
+      query.set('after_seq', String(handlers.afterSeq));
+      headers.set('Last-Event-ID', String(handlers.afterSeq));
+    }
+    const response = await this.fetcher(`${this.baseUrl}/generation/runs/${runId}/events${query.size ? `?${query}` : ''}`, {
+      headers,
+      signal: handlers.signal,
+      credentials: 'same-origin',
+    });
+    if (!response.ok) throw new GreenPassApiError(response.status, response.statusText || '生成事件流不可用');
+    handlers.onOpen?.();
+    if (!response.body) throw new GreenPassApiError(response.status, '生成事件流不可用');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    try {
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        buffer += decoder.decode(chunk.value, { stream: true });
+        for (;;) {
+          const boundary = buffer.search(/\r?\n\r?\n/);
+          if (boundary < 0) break;
+          const separator = buffer.slice(boundary).match(/^\r?\n\r?\n/)?.[0] ?? '\n\n';
+          const block = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + separator.length);
+          const event = parseGenerationEventBlock(block);
+          if (event) handlers.onEvent(event);
+        }
+      }
+    } finally {
+      try { await reader.cancel(); } catch { /* stream already closed */ }
+    }
+  }
   listGenerationSeeds(batchId:number): JsonResponse<Array<{id:number;batch_id:number;case_id?:number|null;source_locator:string;normalized_spec:Record<string,unknown>;quality_state:string;approval_state:string;dedupe_hash?:string}>> { return this.request(`/generation/batches/${batchId}/seeds`); }
   modelCatalog():JsonResponse<{providers:Array<{Provider:string;Name:string;Protocol:string;BaseURL:string}>;models:Array<{id:number;provider:string;model_key:string;status:string}>}>{return this.request('/model-catalog');}
   modelConnections():JsonResponse<{connections:Array<{id:number;provider:string;model_key:string;protocol:'api'|'cc';base_url:string;credential_status:string;configured_at?:string;token_configured:boolean}>}>{return this.request('/model-connections');}
@@ -317,6 +559,7 @@ export class GreenPassClient {
   }
   pauseRun(runId: number): JsonResponse<Run> { return this.request(`/runs/${runId}/pause`, { method: 'POST' }); }
   resumeRun(runId: number): JsonResponse<Run> { return this.request(`/runs/${runId}/resume`, { method: 'POST' }); }
+  cancelRun(runId: number, reason = '用户手动停止'): JsonResponse<Run> { return this.request(`/runs/${runId}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }); }
   caseResults(runId: number): JsonResponse<CaseResult[]> { return this.request(`/runs/${runId}/case-results`); }
   triageRunResult(runId: number, input: TriageRequest): JsonResponse<CaseResult> {
     return this.request(`/runs/${runId}/triage`, { method: 'POST', body: JSON.stringify(input) });

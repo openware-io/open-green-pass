@@ -17,7 +17,7 @@ func Current() Info {
 		Version:    value("GP_VERSION", value("GP_BUILD_REVISION", "dev")),
 		Commit:     value("GP_COMMIT", "unknown"),
 		BuiltAt:    value("GP_BUILT_AT", "unknown"),
-		APIVersion: value("GP_API_VERSION", "0.1.0"),
+		APIVersion: value("GP_API_VERSION", "0.2.0"),
 	}
 }
 

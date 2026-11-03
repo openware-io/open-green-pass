@@ -52,7 +52,7 @@ func TestGenerationBatchRejectAndRollbackPaths(t *testing.T) {
 	}
 }
 
-func TestGenerationBatchRepositoryContractIsContextBound(t *testing.T) {
+func TestGenerationBatchRepositoryContractIsContextBound(_ *testing.T) {
 	var _ GenerationBatchRepository = contextRepositoryProbe{}
 }
 
@@ -62,18 +62,23 @@ func (contextRepositoryProbe) Create(context.Context, *GenerationBatch) error { 
 func (contextRepositoryProbe) Find(context.Context, int64, int64) (*GenerationBatch, error) {
 	return nil, ErrGenerationNotFound
 }
+
 func (contextRepositoryProbe) ListByTarget(context.Context, int64, int64, int) ([]*GenerationBatch, error) {
 	return nil, nil
 }
+
 func (contextRepositoryProbe) FindLatestApprovedByScope(context.Context, int64, int64, int64, int64) (*GenerationBatch, error) {
 	return nil, ErrGenerationNotFound
 }
+
 func (contextRepositoryProbe) FindByIdempotencyKey(context.Context, int64, string) (*GenerationBatch, error) {
 	return nil, ErrGenerationNotFound
 }
+
 func (contextRepositoryProbe) CompareAndSwap(context.Context, *GenerationBatch, int64) error {
 	return nil
 }
+
 func (contextRepositoryProbe) CleanupBatch(context.Context, int64, int64) error {
 	return nil
 }

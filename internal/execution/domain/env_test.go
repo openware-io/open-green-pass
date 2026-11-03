@@ -12,7 +12,7 @@ func TestValidateRuntimeBaseURLAcceptsOnlyAnHTTPOrigin(t *testing.T) {
 		{name: "https origin", in: " https://qa.example.test/ ", want: "https://qa.example.test", ok: true},
 		{name: "http origin", in: "http://sut.internal", want: "http://sut.internal", ok: true},
 		{name: "missing scheme", in: "qa.example.test", ok: false},
-		{name: "credentials", in: "https://user:pass@qa.example.test", ok: false},
+		{name: "credentials", in: "https://user:pass@qa.example.test", ok: false}, //nolint:gosec // G101: test fixture credential rejection case
 		{name: "path", in: "https://qa.example.test/api", ok: false},
 		{name: "query", in: "https://qa.example.test?debug=1", ok: false},
 		{name: "fragment", in: "https://qa.example.test#section", ok: false},

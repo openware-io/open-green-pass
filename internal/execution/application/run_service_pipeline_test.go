@@ -21,7 +21,9 @@ func (r *pipelineRepo) Save(_ context.Context, run *domain.Run) error {
 	r.saves = append(r.saves, run.State)
 	return nil
 }
+
 func (r *pipelineRepo) Find(context.Context, int64, int64) (*domain.Run, error) { return r.run, nil }
+
 func (r *pipelineRepo) List(context.Context, int64, *int64, string, int) ([]*domain.Run, error) {
 	return nil, nil
 }
@@ -29,7 +31,9 @@ func (r *pipelineRepo) SaveCaseResult(context.Context, *domain.CaseResult) error
 func (r *pipelineRepo) CaseResults(context.Context, int64, int64) ([]*domain.CaseResult, error) {
 	return nil, nil
 }
+
 func (r *pipelineRepo) MaxAttempt(context.Context, int64, int64, int64) (int, error) { return 0, nil }
+
 func (r *pipelineRepo) MarkCaseResultFinding(context.Context, int64, int64, int64, string) error {
 	return nil
 }
@@ -39,6 +43,7 @@ type pipelineCases struct{}
 func (pipelineCases) ListIDsByTarget(context.Context, int64, int64) ([]int64, error) {
 	return []int64{4001}, nil
 }
+
 func (pipelineCases) FetchScript(context.Context, int64, int64) (int, any, error) {
 	return 1, map[string]any{"scenario": "api"}, nil
 }
@@ -110,6 +115,7 @@ func (c *pipelineCost) Record(_ context.Context, record domain.CostRecord) error
 	return nil
 }
 
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func TestExecuteRunInvokesTrustedGateAndReportBeforeDone(t *testing.T) {
 	gen, err := id.New(1, nil)
 	if err != nil {

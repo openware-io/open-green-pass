@@ -238,12 +238,12 @@ func (t *Target) ResolveVersionChain() (*RepoBranch, error) {
 var ErrNoRepoBound = NewErr("target has no bound repo/branch")
 
 // NewErr 构造带消息的领域错误（供零三方依赖使用）。
-func NewErr(msg string) *DomainErr { return &DomainErr{msg: msg} }
+func NewErr(msg string) *Err { return &Err{msg: msg} }
 
-// DomainErr 领域层错误。
-type DomainErr struct{ msg string }
+// Err 领域层错误。
+type Err struct{ msg string }
 
-func (e *DomainErr) Error() string { return e.msg }
+func (e *Err) Error() string { return e.msg }
 
 // TargetFilter 被测对象树查询筛选（层级维度 + 被测对象维度）。
 type TargetFilter struct {
@@ -281,28 +281,28 @@ const (
 
 // Case 测试用例（版本化主体，cas_case）。
 type Case struct {
-	ID             int64
-	TeamID         int64
-	TargetID       int64  // 归属被测对象节点（服务/模块）
-	RepoID         *int64 // 归属代码仓库；可为空
+	ID               int64
+	TeamID           int64
+	TargetID         int64  // 归属被测对象节点（服务/模块）
+	RepoID           *int64 // 归属代码仓库；可为空
 	ExecutionSurface string // api / browser / android / ios
-	Code           string // 用例编号（按树命名空间稳定，如 im-saas-gw-001）
-	Title          string
-	Kind           string // 场景族：api/web/ui/contract/perf/mobile/weaknet/ai...
-	BusinessDomain string // 业务域：登录、消息、群组、安全...
-	Feature        string // 功能：群组管理、敏感词...
-	Module         string // 模块：group、security...
-	Operation      string // 操作：创建、查询、删除...
-	CaseType       string // 测试类型：functional/api/security/performance/compatibility
-	Priority       string // P0-P3
-	Automation     string // automated/manual
-	RequirementRef string // 需求/用户故事引用
-	DefectRef      string // 关联缺陷引用
-	ReviewStatus   string // draft/pending/approved/rejected
-	ReviewComment  string // 评审意见
-	CurrentVersion int    // 当前生效版本号
-	Status         string // active / archived / deleted
-	CreatedBy      int64  // 创建人（操作审计）
+	Code             string // 用例编号（按树命名空间稳定，如 im-saas-gw-001）
+	Title            string
+	Kind             string // 场景族：api/web/ui/contract/perf/mobile/weaknet/ai...
+	BusinessDomain   string // 业务域：登录、消息、群组、安全...
+	Feature          string // 功能：群组管理、敏感词...
+	Module           string // 模块：group、security...
+	Operation        string // 操作：创建、查询、删除...
+	CaseType         string // 测试类型：functional/api/security/performance/compatibility
+	Priority         string // P0-P3
+	Automation       string // automated/manual
+	RequirementRef   string // 需求/用户故事引用
+	DefectRef        string // 关联缺陷引用
+	ReviewStatus     string // draft/pending/approved/rejected
+	ReviewComment    string // 评审意见
+	CurrentVersion   int    // 当前生效版本号
+	Status           string // active / archived / deleted
+	CreatedBy        int64  // 创建人（操作审计）
 }
 
 // CaseVersion 用例版本（只增不改；回退=新增指向旧内容的新版本）。
@@ -323,17 +323,17 @@ type CaseVersion struct {
 
 // CaseFilter 用例查询筛选。
 type CaseFilter struct {
-	TargetID       *int64 // 按被测对象节点
+	TargetID         *int64 // 按被测对象节点
 	ExecutionSurface string // 按执行面
-	Kind           string // 按场景族
-	Code           string // 按编号模糊
-	Status         string // 按状态
-	BusinessDomain string // 按业务域
-	Feature        string // 按功能
-	Module         string // 按模块
-	Operation      string // 按操作
-	Priority       string // 按优先级
-	ReviewStatus   string // 按评审状态
+	Kind             string // 按场景族
+	Code             string // 按编号模糊
+	Status           string // 按状态
+	BusinessDomain   string // 按业务域
+	Feature          string // 按功能
+	Module           string // 按模块
+	Operation        string // 按操作
+	Priority         string // 按优先级
+	ReviewStatus     string // 按评审状态
 }
 
 // CaseRepository 用例仓储端口（实现位于 infra，RLS 由实现注入租户）。

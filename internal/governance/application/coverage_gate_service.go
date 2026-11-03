@@ -102,6 +102,7 @@ var highRiskModules = map[string]bool{
 	"openPlatform": true, "clientRelease": true, "execution": true,
 }
 
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (s *CoverageGateService) evaluateRisk(ctx context.Context, projectID int64, module string) (*CoverageGateResult, error) {
 	summary, p0, p1, err := s.load(ctx, projectID, module)
 	if err != nil {

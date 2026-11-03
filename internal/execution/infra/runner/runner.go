@@ -115,7 +115,7 @@ func (LocalCommandExecutor) Execute(ctx context.Context, p Plan) (string, error)
 	if len(p.Command) == 0 {
 		return "", errors.New("execution plan has no command")
 	}
-	cmd := exec.CommandContext(ctx, p.Command[0], p.Command[1:]...)
+	cmd := exec.CommandContext(ctx, p.Command[0], p.Command[1:]...) //nolint:gosec // G204: this dev fallback executes the reviewed execution plan by design; production uses a sandbox executor
 	cmd.Env = append(os.Environ(), p.Environment...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -182,6 +182,7 @@ func scriptString(m map[string]any, key string) string {
 	}
 	return ""
 }
+
 func scriptCommand(m map[string]any) []string {
 	if v, ok := m["command"].([]string); ok {
 		return append([]string(nil), v...)

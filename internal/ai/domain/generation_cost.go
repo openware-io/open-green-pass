@@ -20,3 +20,12 @@ type GenerationCost struct {
 type GenerationCostPort interface {
 	RecordGenerationCost(context.Context, GenerationCost) error
 }
+
+// GenerationCostReadPort is the AI-side read boundary for generation cost
+// aggregation. The trusted domain owns cost_line_item, so AI run reads ask for
+// per-batch totals instead of joining a trusted table (one batched query, no
+// N+1). Implementations must include the legacy request-id association for rows
+// written before batch ids existed.
+type GenerationCostReadPort interface {
+	BatchCosts(ctx context.Context, teamID int64, batchIDs []int64) (map[int64]float64, error)
+}

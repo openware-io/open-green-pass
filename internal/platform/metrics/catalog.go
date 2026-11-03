@@ -11,18 +11,26 @@ var ErrSensitiveLabel = errors.New("metrics: sensitive or unbounded label")
 
 // Names are intentionally domain-level; adapters map them to Prometheus or OTEL.
 const (
-	HTTPRequests      = "gp_http_requests_total"
-	HTTPDuration      = "gp_http_request_duration_seconds"
-	RunTransitions    = "gp_run_transitions_total"
-	QueueWait         = "gp_queue_wait_seconds"
-	WorkerActivities  = "gp_worker_activities_total"
-	PoolCapacity      = "gp_pool_capacity"
-	DependencyErrors  = "gp_dependency_errors_total"
+	HTTPRequests     = "gp_http_requests_total"
+	HTTPDuration     = "gp_http_request_duration_seconds"
+	RunTransitions   = "gp_run_transitions_total"
+	QueueWait        = "gp_queue_wait_seconds"
+	WorkerActivities = "gp_worker_activities_total"
+	PoolCapacity     = "gp_pool_capacity"
+	DependencyErrors = "gp_dependency_errors_total"
+
+	// Generation plan GC is a background sweep: counters are intentionally
+	// low-cardinality (no tenant/team labels) so a large tenant registry cannot
+	// explode the metric series.
+	GenerationPlanGCExpired  = "gp_generation_plan_gc_expired_total"
+	GenerationPlanGCFailed   = "gp_generation_plan_gc_failed_total"
+	GenerationPlanGCSweeps   = "gp_generation_plan_gc_sweeps_total"
+	GenerationPlanGCDuration = "gp_generation_plan_gc_duration_seconds"
 )
 
 var allowedLabels = map[string]struct{}{
 	"method": {}, "route": {}, "status": {}, "component": {}, "dependency": {},
-		"state": {}, "resource_type": {}, "result": {},
+	"state": {}, "resource_type": {}, "result": {},
 }
 
 var dynamicPath = regexp.MustCompile(`/[0-9a-fA-F-]{3,}`)
@@ -38,9 +46,9 @@ func ValidateLabels(labels map[string]string) error {
 }
 
 func AllowedLabels() map[string]struct{} {
-	copy := make(map[string]struct{}, len(allowedLabels))
+	clone := make(map[string]struct{}, len(allowedLabels))
 	for key := range allowedLabels {
-		copy[key] = struct{}{}
+		clone[key] = struct{}{}
 	}
-	return copy
+	return clone
 }

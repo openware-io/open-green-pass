@@ -31,6 +31,18 @@ func (c *TemporalController) Signal(ctx context.Context, runID, _ int64, signal 
 	return c.client.SignalWorkflow(ctx, workflowID(runID), "", signal, struct{}{})
 }
 
+// Cancel asks Temporal to cancel the run workflow. The run row is already
+// marked cancelled by the application service; a missing workflow (not started
+// yet or already closed) is treated as success.
+func (c *TemporalController) Cancel(ctx context.Context, runID, _ int64) error {
+	err := c.client.CancelWorkflow(ctx, workflowID(runID), "")
+	var notFound *serviceerror.NotFound
+	if errors.As(err, &notFound) {
+		return nil
+	}
+	return err
+}
+
 // Start creates the stable workflow for a queued run. Duplicate deliveries are
 // successful when the same workflow ID already exists.
 func (c *TemporalController) Start(ctx context.Context, runID, teamID int64) error {
@@ -91,7 +103,9 @@ func ActivityRunVersionCheck(ctx context.Context, teamID, runID int64) (*Version
 
 // ActivityExecuteRun 执行（collect→gate→report→done）。
 func ActivityExecuteRun(ctx context.Context, teamID, runID int64) (*ExecuteResult, error) {
-	actCtx := rls.WithTenant(context.Background(), teamID)
+	actCtx, cancel := cancellationOnlyContext(ctx)
+	defer cancel()
+	actCtx = rls.WithTenant(actCtx, teamID)
 	run, results, err := deps.runSvc.ExecuteRun(actCtx, runID)
 	if err != nil {
 		return nil, err
@@ -105,6 +119,21 @@ func ActivityExecuteRun(ctx context.Context, teamID, runID int64) (*ExecuteResul
 	return &ExecuteResult{State: run.State, PassCount: pass, TotalCount: len(results)}, nil
 }
 
-func ActivityMarkRunFailed(ctx context.Context, teamID, runID int64) error {
+// cancellationOnlyContext keeps Temporal activity cancellation (user stop) while
+// dropping the activity deadline, so a long DB transaction is not truncated by
+// ScheduleToClose but the runner still observes an explicit cancel.
+func cancellationOnlyContext(parent context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		select {
+		case <-parent.Done():
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, cancel
+}
+
+func ActivityMarkRunFailed(_ context.Context, teamID, runID int64) error {
 	return deps.runSvc.MarkFailed(rls.WithTenant(context.Background(), teamID), runID)
 }

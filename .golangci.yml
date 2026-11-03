@@ -1,43 +1,55 @@
-# GreenPass 后端 golangci-lint 配置
-# 核心：depguard 强制依赖边界（domain 零三方依赖 / application 禁 ORM+Temporal）
-# 兼容 golangci-lint v1.64（v1 配置格式）
-
-run:
-  timeout: 3m
-
-issues:
-  exclude-dirs:
-    - node_modules
-    - dist
-    - design
-    - public
-
+version: "2"
 linters:
   enable:
     - depguard
-    - revive
-    - errcheck
     - gocyclo
+    - gosec
+    - revive
+  settings:
+    depguard:
+      rules:
+        application-no-orm:
+          files:
+            - '**/internal/*/application/**'
+          deny:
+            - pkg: gorm.io/gorm
+              desc: application 禁 ORM（领域无 ORM）
+            - pkg: go.temporal.io/sdk
+              desc: application 禁 Temporal SDK（工作流只在 infra/workflow）
+        domain-zero-thirdparty:
+          files:
+            - '**/internal/*/domain/**'
+          allow:
+            - $gostd
+            - github.com/openware-io/open-green-pass/pkg
+    gocyclo:
+      min-complexity: 15
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - node_modules
+      - dist
+      - design
+      - public
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
     - gofumpt
     - goimports
-    - gosec
-
-linters-settings:
-  depguard:
-    rules:
-      domain-zero-thirdparty:
-        files:
-          - "**/internal/*/domain/**"
-        allow:
-          - "$gostd"
-          - "github.com/openware-io/open-green-pass/pkg"
-      application-no-orm:
-        files:
-          - "**/internal/*/application/**"
-        deny:
-          - pkg: "gorm.io/gorm"
-            desc: "application 禁 ORM（领域无 ORM）"
-          - pkg: "go.temporal.io/sdk"
-            desc: "application 禁 Temporal SDK（工作流只在 infra/workflow）"
-  gocyclo:
-    min-complexity: 15
+  exclusions:
+    generated: lax
+    paths:
+      - node_modules
+      - dist
+      - design
+      - public
+      - third_party$
+      - builtin$
+      - examples$

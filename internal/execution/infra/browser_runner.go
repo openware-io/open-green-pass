@@ -48,7 +48,13 @@ func NewBrowserRunner(gen *id.Generator, endpoint string) *BrowserRunner {
 func (r *BrowserRunner) Execute(ctx context.Context, specs []*domain.CaseSpec) ([]*domain.CaseResult, error) {
 	results := make([]*domain.CaseResult, 0, len(specs))
 	for _, spec := range specs {
+		if err := ctx.Err(); err != nil {
+			return results, err
+		}
 		results = append(results, r.executeOne(ctx, spec))
+		if err := ctx.Err(); err != nil {
+			return results, err
+		}
 	}
 	return results, nil
 }

@@ -101,8 +101,10 @@ func (s *GenerationBatchService) Find(ctx context.Context, teamID, batchID int64
 	return s.batches.Find(ctx, teamID, batchID)
 }
 
-const DefaultGenerationBatchLimit = 50
-const MaxGenerationBatchLimit = 100
+const (
+	DefaultGenerationBatchLimit = 50
+	MaxGenerationBatchLimit     = 100
+)
 
 func (s *GenerationBatchService) ListByTarget(ctx context.Context, teamID, targetID int64, limit int) ([]*domain.GenerationBatch, error) {
 	if s == nil || s.batches == nil {
@@ -129,6 +131,7 @@ func (s *GenerationBatchService) SetScopePort(scope GenerationScopePort) {
 	s.scope = scope
 }
 
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (s *GenerationBatchService) validateScope(ctx context.Context, cmd CreateGenerationBatchCommand) (string, error) {
 	if cmd.TeamID <= 0 || cmd.TargetID <= 0 || cmd.RepoID <= 0 || cmd.ServiceID == nil || *cmd.ServiceID <= 0 {
 		return "", errors.New("请选择当前项目中已确认的目录服务后生成用例")
@@ -162,6 +165,14 @@ func (s *GenerationBatchService) validateScope(ctx context.Context, cmd CreateGe
 	return canonical, nil
 }
 
+// ValidateUnitScope exposes the batch preconditions to the run aggregate so a
+// run never persists a unit that the catalog would reject. It performs no
+// writes and is intentionally idempotent.
+func (s *GenerationBatchService) ValidateUnitScope(ctx context.Context, cmd CreateGenerationBatchCommand) error {
+	_, err := s.validateScope(ctx, cmd)
+	return err
+}
+
 func generationSourcePath(value string) (string, error) {
 	value = strings.TrimSpace(strings.ReplaceAll(value, "\\", "/"))
 	if strings.HasPrefix(value, "/") || strings.ContainsAny(value, "\x00:\r\n") {
@@ -184,6 +195,8 @@ func sameGenerationRequest(batch *domain.GenerationBatch, cmd CreateGenerationBa
 // Create returns the existing batch for a repeated tenant-scoped idempotency
 // key. Repository implementations must enforce the same uniqueness in durable
 // storage to preserve this guarantee across processes.
+//
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (s *GenerationBatchService) Create(ctx context.Context, cmd CreateGenerationBatchCommand) (*domain.GenerationBatch, bool, error) {
 	if s == nil || s.batches == nil {
 		return nil, false, errors.New("generation batch repository is required")

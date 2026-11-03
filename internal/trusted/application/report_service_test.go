@@ -14,9 +14,11 @@ type existingReportRepo struct{ report *domain.Report }
 func (r *existingReportRepo) Save(context.Context, *domain.Report) error {
 	panic("Save must not be called")
 }
+
 func (r *existingReportRepo) Find(context.Context, int64, int64) (*domain.Report, error) {
 	return nil, domain.ErrReportNotFound
 }
+
 func (r *existingReportRepo) FindByRunKind(_ context.Context, teamID, runID int64, kind string) (*domain.Report, error) {
 	if r.report != nil && r.report.TeamID == teamID && r.report.RunID == runID && r.report.Kind == kind {
 		return r.report, nil

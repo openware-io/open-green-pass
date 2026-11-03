@@ -42,7 +42,7 @@ func TestRedisQuotaAcrossIndependentClients(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := domain.ResourceRequest{TeamID: 9001, TargetID: 9002, OwnerID: 9003, Type: resourceType, Units: 1}
-	defer firstQuota.Release(context.Background(), request)
+	defer func() { _ = firstQuota.Release(context.Background(), request) }()
 
 	start := make(chan struct{})
 	results := make(chan error, 2)

@@ -31,8 +31,6 @@ type waiverResponse struct {
 	CreatedAt time.Time       `json:"created_at"`
 }
 
-type jsonRawMessage = []byte
-
 func toWaiverResponse(w domain.CoverageWaiver) waiverResponse {
 	return waiverResponse{ID: w.ID, CellID: w.CellID, Reason: w.Reason, OwnerID: w.OwnerID, ExpiresAt: w.ExpiresAt, Evidence: w.Evidence, CreatedAt: w.CreatedAt}
 }

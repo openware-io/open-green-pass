@@ -10,9 +10,11 @@ import (
 	"time"
 )
 
-var ErrPoolNotFound = errors.New("execution pool not found")
-var ErrPoolUnavailable = errors.New("execution pool unavailable")
-var ErrInvalidHeartbeat = errors.New("invalid pool heartbeat")
+var (
+	ErrPoolNotFound     = errors.New("execution pool not found")
+	ErrPoolUnavailable  = errors.New("execution pool unavailable")
+	ErrInvalidHeartbeat = errors.New("invalid pool heartbeat")
+)
 
 type Registration struct {
 	ID            string
@@ -162,6 +164,7 @@ func contains(xs []string, want string) bool {
 	}
 	return false
 }
+
 func clone(p Registration) Registration {
 	p.Resources = append([]string(nil), p.Resources...)
 	return p

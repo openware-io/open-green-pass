@@ -52,7 +52,7 @@ func (s *ReportStore) FindByRunKind(ctx context.Context, teamID, runID int64, ki
 	return s.find(ctx, teamID, `WHERE team_id=$1 AND run_id=$2 AND kind=$3 ORDER BY created_at, id LIMIT 1`, teamID, runID, kind)
 }
 
-func (s *ReportStore) find(ctx context.Context, teamID int64, clause string, args ...any) (*domain.Report, error) {
+func (s *ReportStore) find(ctx context.Context, _ int64, clause string, args ...any) (*domain.Report, error) {
 	var r domain.Report
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		var sm, ev []byte
@@ -111,5 +111,7 @@ func (s *ReportStore) FindMany(ctx context.Context, teamID int64, ids []int64) (
 	return out, err
 }
 
-var _ domain.ReportRepository = (*ReportStore)(nil)
-var _ domain.ReportBundlePort = (*ReportStore)(nil)
+var (
+	_ domain.ReportRepository = (*ReportStore)(nil)
+	_ domain.ReportBundlePort = (*ReportStore)(nil)
+)

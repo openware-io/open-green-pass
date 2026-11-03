@@ -503,8 +503,8 @@ export function Layout() {
         </header>
         <div className="flex h-full min-h-0 flex-1 overflow-hidden">
           <main className="min-w-0 flex-1 overflow-y-auto p-6">
-            {!isPlatform && location.pathname !== '/target' && (PREP_ROUTES.includes(location.pathname)
-              ? <PrepStepBar asset={selectedAsset} current={location.pathname} real={catalog.enabled} definitionReady={definitionReady} />
+            {!isPlatform && location.pathname !== '/target' && (PREP_ROUTES.includes(location.pathname.startsWith('/generation') ? '/generation' : location.pathname)
+              ? <PrepStepBar asset={selectedAsset} current={location.pathname.startsWith('/generation') ? '/generation' : location.pathname} real={catalog.enabled} definitionReady={definitionReady} />
               : <ObjectStageBar asset={selectedAsset} current={location.pathname} real={catalog.enabled} />)}
             <Outlet context={{ selectedAsset, setSelectedAsset }} />
           </main>

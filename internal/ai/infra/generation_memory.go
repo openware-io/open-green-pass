@@ -17,11 +17,13 @@ type MemoryGenerationBatchRepository struct {
 	byRequest map[generationRequestKey]int64
 }
 
-type generationBatchKey struct{ teamID, batchID int64 }
-type generationRequestKey struct {
-	teamID int64
-	key    string
-}
+type (
+	generationBatchKey   struct{ teamID, batchID int64 }
+	generationRequestKey struct {
+		teamID int64
+		key    string
+	}
+)
 
 func NewMemoryGenerationBatchRepository() *MemoryGenerationBatchRepository {
 	return &MemoryGenerationBatchRepository{

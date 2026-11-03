@@ -23,7 +23,7 @@ func NewCoverageService(repo domain.CoverageRepository) *CoverageService {
 }
 
 // Plan 保存端点并生成 Coverage Cell，返回 Cell + 汇总。
-func (s *CoverageService) Plan(ctx context.Context, projectID int64, serviceID *int64, module string, endpoints []domain.Endpoint) ([]domain.CoverageCell, domain.CoverageSummary, error) {
+func (s *CoverageService) Plan(ctx context.Context, projectID int64, _ *int64, module string, endpoints []domain.Endpoint) ([]domain.CoverageCell, domain.CoverageSummary, error) {
 	teamID, ok := rls.TenantFrom(ctx)
 	if !ok {
 		return nil, domain.CoverageSummary{}, gperr.Unauthorized("tenant required")

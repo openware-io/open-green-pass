@@ -30,6 +30,7 @@ import (
 	gpRedisQuota "github.com/openware-io/open-green-pass/internal/execution/infra/redisquota"
 	gpRedisRunBus "github.com/openware-io/open-green-pass/internal/execution/infra/redisrunbus"
 	gpRunner "github.com/openware-io/open-green-pass/internal/execution/infra/runner"
+	eworkflow "github.com/openware-io/open-green-pass/internal/execution/workflow"
 	"github.com/openware-io/open-green-pass/internal/gateway"
 	"github.com/openware-io/open-green-pass/internal/gateway/middleware"
 	gapi "github.com/openware-io/open-green-pass/internal/governance/api"
@@ -46,6 +47,7 @@ import (
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
 
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func main() {
 	cfg := config.Load()
 	log := observability.NewLogger(cfg.Env)
@@ -88,6 +90,18 @@ func main() {
 	generationRunStore := aiinfra.NewGenerationRunStore(db)
 	generationRunSvc := aiapp.NewGenerationRunService(generationRunStore, generationSvc, gen)
 	generationRunSvc.SetScopePort(generationRunStore)
+	generationRunEventStore := aiinfra.NewGenerationRunEventStore(db)
+	// One LISTEN connection per server process wakes SSE subscribers when a new
+	// gen_run_event row commits (the worker also appends events); subscribers
+	// keep a low-frequency DB fallback so a dropped hint only delays delivery.
+	generationRunNotifier := aiinfra.NewRunEventNotifier(pool, log)
+	notifierCtx, notifierCancel := context.WithCancel(context.Background())
+	defer notifierCancel()
+	go generationRunNotifier.Start(notifierCtx)
+	generationPlanStore := aiinfra.NewGenerationPlanStore(db)
+	generationPlanSvc := aiapp.NewGenerationPlanService(generationPlanStore, aiinfra.NewGenerationPlanCatalog(db), generationRunStore, gen)
+	generationRunSvc.SetPlanPort(generationPlanStore)
+	generationRunSvc.SetEventPort(generationRunEventStore)
 	modelStore := infra.NewModelStore(db)
 	scmConnectionStore := infra.NewSCMConnectionStore(db, gen)
 	// GP3-05 reference policy is intentionally empty until the persistent
@@ -175,6 +189,14 @@ func main() {
 	runSvc.SetQuotaPort(runQuota)
 	scheduleClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr, Password: os.Getenv("GP_REDIS_PASSWORD")})
 	defer scheduleClient.Close()
+	// Global SSE budget: all gp-server replicas share the tenant counter through
+	// the same server Redis; an in-process limiter is the logged degradation path.
+	generationSSEMax := config.MustInt("GP_GENERATION_SSE_MAX_PER_TEAM", 8)
+	generationSSELimiter := aiinfra.NewResilientGenerationSSELimiter(
+		aiinfra.NewRedisGenerationSSELimiter(scheduleClient, generationSSEMax, aiinfra.GenerationSSELeaseTTL),
+		aiapi.NewMemoryGenerationSSELimiter(generationSSEMax),
+		log,
+	)
 	scheduleQueue, err := gpRedisQueue.New(ctx, scheduleClient, "gp:execution:schedule", "gp-execution")
 	if err != nil {
 		log.Error("init redis schedule queue", "error", err)
@@ -187,6 +209,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer temporalClient.Close()
+	// The HTTP cancel endpoint runs in gp-server, so this process must be able
+	// to cancel the Temporal workflow started by the dispatcher. Without this
+	// wiring CancelRun only marks the DB row and the runner keeps executing.
+	runSvc.SetWorkflowController(eworkflow.NewTemporalController(temporalClient))
 	generationController := aiworkflow.NewTemporalController(temporalClient)
 	generationSvc.SetWorkflowPort(generationController)
 	runEventBus, err := gpRedisRunBus.New(ctx, cfg.RedisAddr, os.Getenv("GP_REDIS_PASSWORD"))
@@ -238,7 +264,9 @@ func main() {
 	costSvc := tapp.NewCostService(costStore, auditSvc, gen)
 	costPriceStore := tinfra.NewCostPriceStore(db)
 	costPriceSvc := tapp.NewCostPriceService(costPriceStore, auditSvc, gen)
+	generationRunStore.SetCostReadPort(aiinfra.NewGenerationCostReadAdapter(costSvc))
 	generationStore.SetCostPort(aiinfra.NewGenerationCostAdapter(costSvc, costPriceSvc))
+	generationPlanSvc.SetPricePort(aiinfra.NewGenerationPriceAdapter(costPriceSvc))
 	reportStore := tinfra.NewReportStore(db, gen)
 	reportSvc, err := tapp.NewReportService(statReader, costStore, gateStore, reportStore, gen)
 	if err != nil {
@@ -286,9 +314,16 @@ func main() {
 		func(mux *http.ServeMux) {
 			gapi.RegisterSCMConnections(mux, scmConnectionStore, os.Getenv("GP_SCM_SECRET_NAMESPACE"), gapi.GitHubAppConfigFromEnv(), scmAudit)
 		},
-		func(mux *http.ServeMux) { aiapi.RegisterGeneration(mux, generationSvc, gen, generationStore) },
-		func(mux *http.ServeMux) { aiapi.RegisterGenerationJobs(mux, generationJobSvc) },
-		func(mux *http.ServeMux) { aiapi.RegisterGenerationRuns(mux, generationRunSvc, gen) },
+		func(mux *http.ServeMux) {
+			aiapi.RegisterGenerationAuthorized(mux, generationSvc, gen, generationStore, iamAuthorizer)
+		},
+		func(mux *http.ServeMux) {
+			aiapi.RegisterGenerationJobsAuthorized(mux, generationJobSvc, iamAuthorizer)
+		},
+		func(mux *http.ServeMux) { aiapi.RegisterGenerationPlans(mux, generationPlanSvc, iamAuthorizer) },
+		func(mux *http.ServeMux) {
+			aiapi.RegisterGenerationRunsAuthorizedWithWiring(mux, generationRunSvc, gen, generationRunEventStore, generationRunNotifier, generationSSELimiter, iamAuthorizer)
+		},
 		func(mux *http.ServeMux) {
 			gapi.RegisterModels(mux, modelStore, gen, os.Getenv("GP_MODEL_SECRET_NAMESPACE"))
 		},
@@ -297,7 +332,7 @@ func main() {
 		func(mux *http.ServeMux) { gapi.RegisterCoverage(mux, coverageSvc) },
 		func(mux *http.ServeMux) { gapi.RegisterCoverageWaivers(mux, waiverSvc) },
 		func(mux *http.ServeMux) { gapi.RegisterCoverageGate(mux, coverageGateSvc) },
-		func(mux *http.ServeMux) { gapi.RegisterCaseImport(mux, caseImportSvc) },
+		func(mux *http.ServeMux) { gapi.RegisterCaseImportAuthorized(mux, caseImportSvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { eapi.RegisterAuthorized(mux, envSvc, runSvc, policySvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { eapi.RegisterFixtures(mux, fixtureSvc, runSvc, iamAuthorizer) },
 		func(mux *http.ServeMux) { tapi.Register(mux, gateSvc, auditSvc, costSvc, reportSvc) },
@@ -310,8 +345,11 @@ func main() {
 		Handler:           middleware.CORS(cfg.CORSAllowedOrigins)(middleware.Metrics(metricsRecorder)(handler)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		// SSE streams clear their own per-response write deadline via
+		// http.ResponseController (the middleware preserves Unwrap), so the
+		// global write timeout stays in place for every other route.
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 	log.Info("greenpass server starting", "addr", addr)
 	if err := srv.ListenAndServe(); err != nil {

@@ -27,13 +27,13 @@ func (s *CostStore) Insert(ctx context.Context, c *domain.CostLineItem) (bool, e
 	inserted := false
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
-			INSERT INTO cost_line_item(id, request_id, idempotency_key, team_id, target_id, run_id, case_id,
+			INSERT INTO cost_line_item(id, request_id, idempotency_key, team_id, target_id, run_id, batch_id, case_id,
 				biz_category, biz_point, model, tokens_in, tokens_out, cache_read_tokens,
 				unit_price, input_unit_price, output_unit_price, cache_read_unit_price, price_id, price_missing,
 				amount, occurred_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
 			ON CONFLICT (idempotency_key) DO NOTHING`,
-			c.ID, c.RequestID, c.IdempotencyKey, c.TeamID, c.TargetID, c.RunID, c.CaseID,
+			c.ID, c.RequestID, c.IdempotencyKey, c.TeamID, c.TargetID, c.RunID, nullableID(c.BatchID), c.CaseID,
 			string(c.Category), c.BizPoint, c.Model, c.TokensIn, c.TokensOut, c.CacheReadTokens,
 			c.UnitPrice, c.InputUnitPrice, c.OutputUnitPrice, c.CacheReadUnitPrice, c.PriceID, c.PriceMissing,
 			c.Amount, c.OccurredAt)
@@ -100,7 +100,7 @@ func (s *CostStore) Overview(ctx context.Context, teamID int64) (*domain.CostOve
 func (s *CostStore) Items(ctx context.Context, teamID int64, category, point string, limit int) ([]*domain.CostLineItem, error) {
 	var out []*domain.CostLineItem
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
-		q := `SELECT id, request_id, team_id, target_id, run_id, case_id, biz_category, biz_point,
+		q := `SELECT id, request_id, COALESCE(idempotency_key,''), team_id, target_id, run_id, COALESCE(batch_id,0), case_id, biz_category, biz_point,
 			 model, tokens_in, tokens_out, cache_read_tokens, unit_price, input_unit_price,
 			 output_unit_price, cache_read_unit_price, price_id, price_missing, amount, occurred_at
 			FROM cost_line_item WHERE team_id=$1`
@@ -126,7 +126,7 @@ func (s *CostStore) Items(ctx context.Context, teamID int64, category, point str
 		for rows.Next() {
 			var c domain.CostLineItem
 			var cat string
-			if err := rows.Scan(&c.ID, &c.RequestID, &c.TeamID, &c.TargetID, &c.RunID, &c.CaseID,
+			if err := rows.Scan(&c.ID, &c.RequestID, &c.IdempotencyKey, &c.TeamID, &c.TargetID, &c.RunID, &c.BatchID, &c.CaseID,
 				&cat, &c.BizPoint, &c.Model, &c.TokensIn, &c.TokensOut, &c.CacheReadTokens, &c.UnitPrice,
 				&c.InputUnitPrice, &c.OutputUnitPrice, &c.CacheReadUnitPrice, &c.PriceID, &c.PriceMissing,
 				&c.Amount, &c.OccurredAt); err != nil {
@@ -145,7 +145,7 @@ func (s *CostStore) CompareHistory(ctx context.Context, teamID, caseID int64) ([
 	var out []*domain.CostLineItem
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
-			SELECT id, request_id, team_id, target_id, run_id, case_id, biz_category, biz_point,
+			SELECT id, request_id, COALESCE(idempotency_key,''), team_id, target_id, run_id, COALESCE(batch_id,0), case_id, biz_category, biz_point,
 			 model, tokens_in, tokens_out, cache_read_tokens, unit_price, input_unit_price,
 			 output_unit_price, cache_read_unit_price, price_id, price_missing, amount, occurred_at
 			FROM cost_line_item WHERE team_id=$1 AND case_id=$2 ORDER BY occurred_at`,
@@ -157,7 +157,7 @@ func (s *CostStore) CompareHistory(ctx context.Context, teamID, caseID int64) ([
 		for rows.Next() {
 			var c domain.CostLineItem
 			var cat string
-			if err := rows.Scan(&c.ID, &c.RequestID, &c.TeamID, &c.TargetID, &c.RunID, &c.CaseID,
+			if err := rows.Scan(&c.ID, &c.RequestID, &c.IdempotencyKey, &c.TeamID, &c.TargetID, &c.RunID, &c.BatchID, &c.CaseID,
 				&cat, &c.BizPoint, &c.Model, &c.TokensIn, &c.TokensOut, &c.CacheReadTokens, &c.UnitPrice,
 				&c.InputUnitPrice, &c.OutputUnitPrice, &c.CacheReadUnitPrice, &c.PriceID, &c.PriceMissing,
 				&c.Amount, &c.OccurredAt); err != nil {
@@ -169,6 +169,43 @@ func (s *CostStore) CompareHistory(ctx context.Context, teamID, caseID int64) ([
 		return rows.Err()
 	})
 	return out, err
+}
+
+// BatchCosts 按 batch_id 精确汇总 case_generate 成本，供 AI 生成 run 成本读取。
+// COST-CLEANUP 已删除历史 batch_id IS NULL 的 generation 行，因此这里**不再**用
+// request_id LIKE 兜底；只允许 batch_id 精确匹配，避免跨域猜测关联。
+func (s *CostStore) BatchCosts(ctx context.Context, teamID int64, batchIDs []int64) (map[int64]float64, error) {
+	out := make(map[int64]float64, len(batchIDs))
+	if len(batchIDs) == 0 {
+		return out, nil
+	}
+	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT b.batch_id, COALESCE(SUM(c.amount),0)::float8
+			FROM unnest($2::bigint[]) AS b(batch_id)
+			JOIN cost_line_item c
+			  ON c.team_id=$1
+			 AND c.biz_point='case_generate'
+			 AND c.batch_id=b.batch_id
+			GROUP BY b.batch_id`, teamID, batchIDs)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var batchID int64
+			var amount float64
+			if err := rows.Scan(&batchID, &amount); err != nil {
+				return err
+			}
+			out[batchID] = amount
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func itoa64(n int) string {
@@ -184,3 +221,12 @@ func itoa64(n int) string {
 }
 
 var _ domain.CostRepository = (*CostStore)(nil)
+
+// nullableID stores zero ids as SQL NULL so cost rows that are not bound to a
+// generation batch remain compatible with the pre-000065 schema shape.
+func nullableID(value int64) any {
+	if value <= 0 {
+		return nil
+	}
+	return value
+}

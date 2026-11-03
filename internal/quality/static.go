@@ -48,7 +48,7 @@ type AnalysisResult struct {
 	MutationScore *float64
 }
 
-type QualityEvent struct{ Kind, AnalysisID, Status, EvidenceHash string }
+type Event struct{ Kind, AnalysisID, Status, EvidenceHash string }
 
 // DefaultRules are intentionally syntax/provider independent textual safeguards.
 var DefaultRules = []Rule{

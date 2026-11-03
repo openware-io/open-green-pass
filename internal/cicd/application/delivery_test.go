@@ -1,9 +1,10 @@
 package application
 
 import (
-	"github.com/openware-io/open-green-pass/internal/cicd/domain"
 	"testing"
 	"time"
+
+	"github.com/openware-io/open-green-pass/internal/cicd/domain"
 )
 
 func TestMemoryInboxDeduplicatesProviderDelivery(t *testing.T) {
@@ -16,6 +17,7 @@ func TestMemoryInboxDeduplicatesProviderDelivery(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
 func TestRetryPolicyExponentialBackoff(t *testing.T) {
 	p := RetryPolicy{MaxAttempts: 3, BaseDelay: time.Second}
 	now := time.Unix(0, 0)

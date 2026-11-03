@@ -41,6 +41,18 @@ type K8sRunner struct {
 	cfg K8sRunnerConfig
 }
 
+func defaultKubeconfigPath() (string, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", false
+	}
+	path := filepath.Join(home, ".kube", "config")
+	if _, err := os.Stat(path); err != nil {
+		return "", false
+	}
+	return path, true
+}
+
 // NewK8sRunner 创建 K8s Job 执行器。
 func NewK8sRunner(gen *id.Generator, cfg K8sRunnerConfig) (*K8sRunner, error) {
 	if cfg.Namespace == "" {
@@ -61,8 +73,8 @@ func NewK8sRunner(gen *id.Generator, cfg K8sRunnerConfig) (*K8sRunner, error) {
 		rc, err = clientcmd.BuildConfigFromFlags("", cfg.Kubeconfig)
 	} else if kc := os.Getenv("KUBECONFIG"); kc != "" {
 		rc, err = clientcmd.BuildConfigFromFlags("", kc)
-	} else if _, e := os.Stat(filepath.Join(os.Getenv("HOME"), ".kube", "config")); e == nil {
-		rc, err = clientcmd.BuildConfigFromFlags("", filepath.Join(os.Getenv("HOME"), ".kube", "config"))
+	} else if path, ok := defaultKubeconfigPath(); ok {
+		rc, err = clientcmd.BuildConfigFromFlags("", path)
 	} else {
 		rc, err = rest.InClusterConfig()
 	}
@@ -104,6 +116,9 @@ func resolveScript(s any) scriptSpec {
 func (r *K8sRunner) Execute(ctx context.Context, spec []*domain.CaseSpec) ([]*domain.CaseResult, error) {
 	results := make([]*domain.CaseResult, 0, len(spec))
 	for _, s := range spec {
+		if err := ctx.Err(); err != nil {
+			return results, err
+		}
 		res, err := r.executeOne(ctx, s)
 		if err != nil {
 			return results, fmt.Errorf("case %d: %w", s.CaseID, err)
@@ -113,6 +128,7 @@ func (r *K8sRunner) Execute(ctx context.Context, spec []*domain.CaseSpec) ([]*do
 	return results, nil
 }
 
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (r *K8sRunner) executeOne(ctx context.Context, s *domain.CaseSpec) (*domain.CaseResult, error) {
 	now := time.Now().UTC()
 	ss := resolveScript(s.Script)

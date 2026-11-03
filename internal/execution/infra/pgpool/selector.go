@@ -28,6 +28,7 @@ func NewSelector(registry *Registry, config SelectorConfig) (*Selector, error) {
 	}
 	return &Selector{registry: registry, config: config, now: time.Now}, nil
 }
+
 func (s *Selector) Reserve(ctx context.Context, request domain.ExecutionPoolRequest) (domain.ExecutionPoolLease, error) {
 	lease, err := s.registry.Reserve(ctx, request.Resource, request.Units, s.now().UTC(), s.config.HeartbeatTTL, s.config.LeaseTTL)
 	if err != nil {
@@ -35,6 +36,7 @@ func (s *Selector) Reserve(ctx context.Context, request domain.ExecutionPoolRequ
 	}
 	return domain.ExecutionPoolLease{Token: lease.Token, PoolID: lease.PoolID, Units: lease.Units, FencingToken: lease.FencingToken}, nil
 }
+
 func (s *Selector) Release(ctx context.Context, lease domain.ExecutionPoolLease) error {
 	return s.registry.Release(ctx, Lease{Token: lease.Token, PoolID: lease.PoolID, Units: lease.Units, FencingToken: lease.FencingToken})
 }

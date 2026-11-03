@@ -13,6 +13,7 @@ type conflictRunRepo struct{ run *domain.Run }
 
 func (r *conflictRunRepo) Save(context.Context, *domain.Run) error                 { return nil }
 func (r *conflictRunRepo) Find(context.Context, int64, int64) (*domain.Run, error) { return r.run, nil }
+
 func (r *conflictRunRepo) List(context.Context, int64, *int64, string, int) ([]*domain.Run, error) {
 	return nil, nil
 }
@@ -20,9 +21,11 @@ func (r *conflictRunRepo) SaveCaseResult(context.Context, *domain.CaseResult) er
 func (r *conflictRunRepo) CaseResults(context.Context, int64, int64) ([]*domain.CaseResult, error) {
 	return nil, nil
 }
+
 func (r *conflictRunRepo) MaxAttempt(context.Context, int64, int64, int64) (int, error) {
 	return 0, nil
 }
+
 func (r *conflictRunRepo) MarkCaseResultFinding(context.Context, int64, int64, int64, string) error {
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/openware-io/open-green-pass/internal/execution/domain"
@@ -116,6 +117,9 @@ func integerResult(value any) (int64, bool) {
 	case int32:
 		return int64(v), true
 	case uint64:
+		if v > math.MaxInt64 {
+			return 0, false
+		}
 		return int64(v), true
 	case string:
 		n, err := strconv.ParseInt(v, 10, 64)

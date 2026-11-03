@@ -15,18 +15,23 @@ type fakeRBAC struct {
 
 type recordingAudit struct{ event AuditEvent }
 
-func (a *recordingAudit) Append(_ context.Context, event AuditEvent) error { a.event = event; return nil }
+func (a *recordingAudit) Append(_ context.Context, event AuditEvent) error {
+	a.event = event
+	return nil
+}
 
 func (f fakeRBAC) SaveMember(context.Context, *iam.Member) error { return nil }
 func (f fakeRBAC) FindMember(context.Context, int64, int64) (*iam.Member, error) {
 	return f.member, nil
 }
+
 func (f fakeRBAC) FindMemberByPrincipal(context.Context, int64, string) (*iam.Member, error) {
 	if f.member == nil {
 		return nil, errors.New("missing")
 	}
 	return f.member, nil
 }
+
 func (f fakeRBAC) ListMembers(context.Context, int64, iam.MemberStatus) ([]*iam.Member, error) {
 	return nil, nil
 }
@@ -41,6 +46,7 @@ func (f fakeRBAC) FindAssetPermission(context.Context, int64, int64, int64) (*ia
 	}
 	return f.grant, nil
 }
+
 func (f fakeRBAC) ListAssetPermissions(context.Context, int64, int64) ([]*iam.AssetPermission, error) {
 	return nil, nil
 }

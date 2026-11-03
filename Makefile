@@ -37,7 +37,7 @@ tools:
 	go install mvdan.cc/gofumpt@latest
 	go install golang.org/x/tools/cmd/goimports@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	go install golang.org/x/vuln/cmd/govulncheck@latest
+	go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
 	go install honnef.co/go/tools/cmd/staticcheck@latest
 
 # Windows 本地清理：仅删除文档规范中列出的可重建产物。
@@ -45,5 +45,6 @@ clean:
 	pwsh -NoProfile -File ./scripts/dev/clean-local.ps1
 
 # 唯一的本地 kind 初始化/发布入口；Docker 仅用于构建和 kind load。
+# 用法：make kind-init VERSION=0.1.213-SNAPSHOT
 kind-init:
-	pwsh -NoProfile -File ./scripts/dev/init-kind.ps1
+	pwsh -NoProfile -File ./scripts/dev/init-kind.ps1 -Version "$(VERSION)"

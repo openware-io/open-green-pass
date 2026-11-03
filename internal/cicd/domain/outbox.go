@@ -6,8 +6,10 @@ import (
 	"time"
 )
 
-var ErrInvalidDelivery = errors.New("cicd: invalid delivery")
-var ErrDuplicateDelivery = errors.New("cicd: duplicate delivery")
+var (
+	ErrInvalidDelivery   = errors.New("cicd: invalid delivery")
+	ErrDuplicateDelivery = errors.New("cicd: duplicate delivery")
+)
 
 type DeliveryStatus string
 
@@ -45,6 +47,7 @@ func (d InboxDelivery) Validate() error {
 	}
 	return nil
 }
+
 func (d OutboxDelivery) Validate() error {
 	if d.TeamID <= 0 || d.EventID == "" || d.DeliveryKey == "" || d.Provider == "" || d.Attempt < 0 {
 		return ErrInvalidDelivery
@@ -56,14 +59,16 @@ func (d OutboxDelivery) Validate() error {
 	return ErrInvalidDelivery
 }
 
-type InboxPort interface{ Accept(InboxDelivery) error }
-type OutboxPort interface {
-	Enqueue(context.Context, OutboxDelivery) error
-	Claim(context.Context, time.Time) (*OutboxDelivery, error)
-	MarkDelivered(context.Context, string) error
-	MarkFailed(context.Context, string, string, time.Time) error
-	ReclaimStale(context.Context, time.Time, time.Duration) error
-}
+type (
+	InboxPort  interface{ Accept(InboxDelivery) error }
+	OutboxPort interface {
+		Enqueue(context.Context, OutboxDelivery) error
+		Claim(context.Context, time.Time) (*OutboxDelivery, error)
+		MarkDelivered(context.Context, string) error
+		MarkFailed(context.Context, string, string, time.Time) error
+		ReclaimStale(context.Context, time.Time, time.Duration) error
+	}
+)
 
 // SignatureVerifier authenticates the raw provider payload before decoding it.
 // Implementations must not log the payload or credential.

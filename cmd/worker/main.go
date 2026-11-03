@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -40,9 +41,24 @@ import (
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
 
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func main() {
 	cfg := config.Load()
 	log := observability.NewLogger(cfg.Env)
+	// Background workers record the same low-cardinality metrics contract as the
+	// API process; plan GC counters are emitted from GenerationPlanStore.SweepOnce.
+	metricsRecorder := observability.NewRecorder()
+	if metricsAddr := os.Getenv("GP_WORKER_METRICS_ADDR"); metricsAddr != "" {
+		// Optional scrape endpoint for background-worker metrics (disabled unless
+		// explicitly configured, so existing deployments are unchanged).
+		go func() {
+			server := &http.Server{Addr: metricsAddr, Handler: metricsRecorder.Handler(), ReadHeaderTimeout: 5 * time.Second}
+			log.Info("worker metrics server listening", "addr", metricsAddr)
+			if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Error("worker metrics server stopped", "error", err)
+			}
+		}()
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -180,6 +196,24 @@ func main() {
 	generationController := aiworkflow.NewTemporalController(c)
 	generationSvc.SetReviewPorts(generationController, aiaudit.New(auditSvc))
 	aiworkflow.SetGenerationDeps(generationSvc, generationStore, gen)
+
+	// Run aggregation: the worker owns the 5s batch->unit/run reconciler so GET
+	// stays a pure read. The reconciler scans non-terminal runs across tenants
+	// through a bounded definer function and writes each projection inside its
+	// own tenant transaction.
+	generationRunStore := aiinfra.NewGenerationRunStore(dbb)
+	generationRunStore.SetCostReadPort(aiinfra.NewGenerationCostReadAdapter(costSvc))
+	generationRunEventStore := aiinfra.NewGenerationRunEventStore(dbb)
+	generationPlanStore := aiinfra.NewGenerationPlanStore(dbb)
+	generationPlanStore.SetMetricsRecorder(metricsRecorder)
+	generationRunSvc := aiapp.NewGenerationRunService(generationRunStore, generationSvc, gen)
+	generationRunSvc.SetPlanPort(generationPlanStore)
+	generationRunSvc.SetEventPort(generationRunEventStore)
+	generationReconciler := aiapp.NewGenerationRunReconciler(
+		generationRunStore, generationRunSvc,
+		time.Duration(config.MustInt("GP_GENERATION_RECONCILE_INTERVAL_SECONDS", 5))*time.Second,
+		log,
+	)
 	temporalController := workflow.NewTemporalController(c)
 	runSvc.SetWorkflowController(temporalController)
 
@@ -235,6 +269,12 @@ func main() {
 	}
 	workerCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	go generationReconciler.Run(workerCtx)
+	go generationPlanStore.RunGC(
+		workerCtx,
+		time.Duration(config.MustInt("GP_GENERATION_PLAN_GC_INTERVAL_SECONDS", 600))*time.Second,
+		log,
+	)
 	go func() {
 		if err := dispatcher.Run(workerCtx); err != nil {
 			log.Error("schedule dispatcher stopped", "error", err)

@@ -34,11 +34,17 @@ func Verify(b Block) bool {
 // VerifyChain 从 genesis 逐块校验整链连续性与完整性。
 // 首个块 PrevHash 应等于 genesisHash（外部校验锚点），此处校验 i>0 块与前一哈希衔接。
 func VerifyChain(blocks []Block) bool {
-	for i, b := range blocks {
-		if !Verify(b) {
+	if len(blocks) == 0 {
+		return true
+	}
+	if !Verify(blocks[0]) {
+		return false
+	}
+	for i := 1; i < len(blocks); i++ {
+		if !Verify(blocks[i]) {
 			return false
 		}
-		if i > 0 && b.PrevHash != blocks[i-1].Hash {
+		if blocks[i].PrevHash != blocks[i-1].Hash {
 			return false
 		}
 	}

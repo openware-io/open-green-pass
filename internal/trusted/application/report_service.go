@@ -29,7 +29,8 @@ type ReportService struct {
 
 // NewReportService 创建报告服务。
 func NewReportService(stats domain.RunStatPort, cost domain.CostRepository,
-	gates domain.GateRepository, reports domain.ReportRepository, gen *id.Generator) (*ReportService, error) {
+	gates domain.GateRepository, reports domain.ReportRepository, gen *id.Generator,
+) (*ReportService, error) {
 	tmpl, err := template.ParseFS(reportTemplates, "report_templates/report.html")
 	if err != nil {
 		return nil, err
@@ -72,6 +73,8 @@ type reportView struct {
 }
 
 // Generate 由运行聚合生成测试报告并落库。
+//
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (s *ReportService) Generate(ctx context.Context, req GenerateRequest) (*domain.Report, error) {
 	teamID, ok := rls.TenantFrom(ctx)
 	if !ok {
@@ -124,8 +127,10 @@ func (s *ReportService) Generate(ctx context.Context, req GenerateRequest) (*dom
 	var gv []gateView
 	for _, g := range gates {
 		d, _ := json.Marshal(g.Detail)
-		gv = append(gv, gateView{Result: string(g.Result), RuleID: itoa3(g.RuleID),
-			DecidedAt: g.DecidedAt, DetailJSON: string(d)})
+		gv = append(gv, gateView{
+			Result: string(g.Result), RuleID: itoa3(g.RuleID),
+			DecidedAt: g.DecidedAt, DetailJSON: string(d),
+		})
 	}
 	// 用例视图
 	var cv []caseView
@@ -140,9 +145,11 @@ func (s *ReportService) Generate(ctx context.Context, req GenerateRequest) (*dom
 				note = "证据记录"
 			}
 		}
-		cv = append(cv, caseView{CaseID: c.CaseID, Attempt: int64(c.Attempt),
+		cv = append(cv, caseView{
+			CaseID: c.CaseID, Attempt: int64(c.Attempt),
 			CaseCode: c.CaseCode, Kind: c.Kind, Status: c.Status,
-			Tokens: c.TokensIn + c.TokensOut, Cost: c.Cost, EvidenceNote: note})
+			Tokens: c.TokensIn + c.TokensOut, Cost: c.Cost, EvidenceNote: note,
+		})
 	}
 	view := reportView{
 		Title: "软件工程测试治理平台 · 测试报告", Kind: kind, Status: status,

@@ -75,7 +75,7 @@ func (r *Recorder) Observe(name string, v float64) { r.ObserveLabels(name, nil, 
 // IncrLabels records a counter with bounded labels. Invalid labels are
 // ignored: telemetry must never make a real request fail.
 func (r *Recorder) IncrLabels(name string, labels map[string]string, n int64) {
-	if r == nil || n == 0 || metrics.ValidateLabels(labels) != nil {
+	if r == nil || metrics.ValidateLabels(labels) != nil {
 		return
 	}
 	r.mu.Lock()

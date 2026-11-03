@@ -5,39 +5,100 @@ info:
     测试质量管控平台后端契约（P1）。
     租户隔离：所有业务请求必须携带 `x-gp-team-id` 与可选 `x-gp-user-id` 头，经 RLS 过滤。
     审计哈希链 / 成本明细 / 门禁判定由 trusted 域统一写（口径单点）。
-  version: 0.1.0
+  version: 0.2.0
 servers:
   - url: http://localhost:8080
 paths:
+  /generation/plans:
+    post:
+      summary: 预检生成计划（只读校验 + 估算 + 持久化，30 分钟有效）
+      operationId: createGenerationPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GenerationPlanRequest' }
+      responses:
+        '200': { description: 预检结果；invalid 非空时仍 200，但前端禁止创建, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationPlan' } } } }
+        '400': { description: 请求级校验失败或空 scope, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationError' } } } }
+        '401': { description: 未认证 }
+        '403': { description: 无项目 edit 权限 }
+  /generation/plans/{id}:
+    get:
+      summary: 读取已持久化的生成计划（审计/回放）
+      operationId: getGenerationPlan
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      responses:
+        '200': { description: 计划, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationPlan' } } } }
+        '404': { description: 计划不存在 }
   /generation/runs:
     get:
-      summary: 查询项目的生成任务
+      summary: 查询项目的生成任务（按 id 倒序 cursor 分页）
       operationId: listGenerationRuns
-      parameters: [ { name: project_id, in: query, required: true, schema: { type: integer } }, { name: limit, in: query, schema: { type: integer } } ]
+      parameters:
+        - { name: project_id, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: cursor, in: query, schema: { type: string, pattern: '^[0-9]+$' }, description: 上一页最后一条 run.id；首页省略 }
+        - { name: state, in: query, schema: { type: string, enum: [ queued, running, waiting_review, succeeded, partial_failed, failed, cancelled ] }, description: 可选状态过滤（服务端过滤） }
       responses:
-        '200': { description: 生成任务列表, content: { application/json: { schema: { type: array, items: { type: object } } } } }
+        '200': { description: 分页结果；next_cursor 为 null 表示无更多, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationRunPage' } } } }
+        '400': { description: cursor/limit/state 非法 }
+        '403': { description: 无项目 view 权限 }
     post:
-      summary: 创建一次生成任务
+      summary: 幂等创建一次生成任务（可绑定预检 plan）
       operationId: createGenerationRun
       requestBody:
         required: true
-        content: { application/json: { schema: { type: object, required: [project_id, scope_type, scope_id, idempotency_key, units], properties: { project_id: { type: integer }, scope_type: { type: string, enum: [project, repo, service] }, scope_id: { type: integer }, idempotency_key: { type: string }, units: { type: array, items: { type: object } } } } } }
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GenerationRunCreate' }
       responses:
-        '202': { description: 已创建, content: { application/json: { schema: { type: object } } } }
+        '202': { description: 已创建, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationRunDetail' } } } }
+        '200': { description: 幂等返回既有 run, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationRunDetail' } } } }
+        '409': { description: 'plan_stale / plan_invalid / idempotency_conflict', content: { application/json: { schema: { $ref: '#/components/schemas/GenerationError' } } } }
   /generation/runs/{id}:
     get:
-      summary: 查询生成任务进度
+      summary: 查询生成任务聚合详情（纯读）
       operationId: getGenerationRun
-      parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
       responses:
-        '200': { description: 生成任务, content: { application/json: { schema: { type: object } } } }
+        '200': { description: 聚合详情, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationRunDetail' } } } }
+        '404': { description: 任务不存在 }
+  /generation/runs/{id}/events:
+    get:
+      summary: 生成任务事件流（SSE；PostgreSQL NOTIFY 唤醒 + 低频兜底 + 30s 快照）
+      operationId: streamGenerationRunEvents
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+        - { name: after_seq, in: query, schema: { type: integer, format: int64, minimum: 0 } }
+        - { name: Last-Event-ID, in: header, schema: { type: string } }
+      responses:
+        '200':
+          description: 'text/event-stream；event: run；data 为 GenerationRunEvent。新事件经 pg NOTIFY 立即唤醒（无通知时 20s 兜底查询），15s 心跳「: keepalive」，无新事件时每 30s 发送 run.snapshot，终态发送后关闭'
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '429': { description: 该租户并发事件流超限（too_many_streams）；生产按租户全局计数（Redis 共享，跨副本） }
   /generation/runs/{id}/cancel:
     post:
-      summary: 取消整个生成任务
+      summary: 取消整个生成任务（幂等，终态返回当前状态）
       operationId: cancelGenerationRun
-      parameters: [ { name: id, in: path, required: true, schema: { type: integer } } ]
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
       responses:
-        '200': { description: 已取消, content: { application/json: { schema: { type: object } } } }
+        '200': { description: 已取消/已终态, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationRunDetail' } } } }
+  /generation/runs/{id}/review:
+    post:
+      summary: 聚合审核当前等待审核的服务
+      operationId: reviewGenerationRun
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GenerationReviewRequest' }
+      responses:
+        '200': { description: 审核后的聚合详情, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationRunDetail' } } } }
+        '409': { description: 审核状态冲突 }
   /generation/batches:
     get:
       summary: 查询当前项目最近的用例生成批次
@@ -745,6 +806,17 @@ paths:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
         '200': { description: 已恢复, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
+  /runs/{id}/cancel:
+    post:
+      summary: 停止运行（用户主动取消，终态 cancelled；幂等）
+      operationId: cancelRun
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: false
+        content: { application/json: { schema: { type: object, properties: { reason: { type: string, maxLength: 512 } } } } }
+      responses:
+        '200': { description: 已停止或已是终态, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
   # ---------- 门禁（trusted，GP1-05） ----------
   /gates/coverage:
     get:
@@ -1151,6 +1223,8 @@ paths:
         '202': { description: 已提交, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationJob' } } } }
         '200': { description: 幂等命中已有 Job, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationJob' } } } }
         '400': { description: 参数校验失败或 gateway 未配置 }
+        '401': { description: 未认证 }
+        '403': { description: 无项目 edit 权限 }
   /ai/generation-jobs/{id}:
     get:
       summary: 查询 DSH 生成 Job
@@ -1158,6 +1232,7 @@ paths:
       parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
       responses:
         '200': { description: Job 状态, content: { application/json: { schema: { $ref: '#/components/schemas/GenerationJob' } } } }
+        '403': { description: 无项目 view 权限 }
         '404': { description: Job 不存在 }
     delete:
       summary: 取消 DSH 生成 Job
@@ -1165,6 +1240,7 @@ paths:
       parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
       responses:
         '202': { description: 已取消 }
+        '403': { description: 无项目 edit 权限 }
         '409': { description: Job 已终态 }
   /generation/jobs/{id}/cases:import:
     post:
@@ -1177,12 +1253,13 @@ paths:
           application/json:
             schema:
               type: object
-              required: [ target_id ]
-              properties: { target_id: { type: integer, format: int64 } }
+              properties: { target_id: { type: integer, format: int64, description: 可省略；提供时必须等于 Job 所属项目 } }
       responses:
         '201': { description: 已导入用例, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TestCase' } } } } }
-        '400': { description: 输出不是合法用例数组 }
-        '409': { description: Job 未成功 }
+        '400': { description: target_id 与 Job 所属项目不一致 }
+        '401': { description: 未认证 }
+        '403': { description: 无 Job 所属项目 edit 权限 }
+        '409': { description: 'Job 未成功或输出非法/空，无可导入输出' }
 components:
   schemas:
     GenerationJobCreate:
@@ -1786,6 +1863,171 @@ components:
         decision: { type: string, enum: [ approve, reject ] }
         expected_state_version: { type: integer, format: int64 }
         request_id: { type: string }
+    GenerationPlanRequest:
+      type: object
+      required: [ project_id, scope_type ]
+      properties:
+        project_id: { type: integer, format: int64 }
+        scope_type: { type: string, enum: [ project, repo, service ] }
+        scope_id: { type: integer, format: int64, default: 0 }
+        units:
+          type: array
+          description: 指定服务时必填；为空时服务端按 scope 使用既有 resolver 展开
+          items: { $ref: '#/components/schemas/GenerationPlanUnitInput' }
+    GenerationPlanUnitInput:
+      type: object
+      required: [ service_id, repo_id, ref_type, ref_name ]
+      properties:
+        service_id: { type: integer, format: int64 }
+        repo_id: { type: integer, format: int64 }
+        source_path: { type: string, description: 服务在仓库中的源码目录；为空时使用目录服务登记值 }
+        ref_type: { type: string, enum: [ branch, tag ], default: branch }
+        ref_name: { type: string }
+    GenerationPlan:
+      type: object
+      required: [ plan_id, plan_hash, expires_at, units, invalid, summary, estimate, risks ]
+      properties:
+        plan_id: { type: integer, format: int64 }
+        plan_hash: { type: string, description: 'sha256:…；覆盖 project/scope 与排序后的 units，与选择顺序无关' }
+        expires_at: { type: string, format: date-time, description: 30 分钟 TTL；过期后创建返回 409 plan_stale }
+        units: { type: array, items: { $ref: '#/components/schemas/GenerationPlanUnit' } }
+        invalid:
+          type: array
+          description: 不可创建的服务与原因；非空时前端禁止创建
+          items: { $ref: '#/components/schemas/GenerationPlanInvalid' }
+        summary: { $ref: '#/components/schemas/GenerationPlanSummary' }
+        estimate: { $ref: '#/components/schemas/GenerationEstimate' }
+        risks: { type: array, items: { $ref: '#/components/schemas/GenerationPlanRisk' } }
+    GenerationPlanUnit:
+      type: object
+      required: [ service_id, repo_id, repo_url, source_path, ref_type, ref_name, commit_sha, valid, error ]
+      properties:
+        service_id: { type: integer, format: int64 }
+        repo_id: { type: integer, format: int64 }
+        repo_url: { type: string }
+        source_path: { type: string }
+        ref_type: { type: string, enum: [ branch, tag ] }
+        ref_name: { type: string }
+        commit_sha: { type: string, description: 服务端引用缓存中冻结的提交；创建后以 batch 冻结值为准 }
+        valid: { type: boolean }
+        error: { type: string, description: '空或 "code: message"' }
+    GenerationPlanInvalid:
+      type: object
+      required: [ service_id, code, message ]
+      properties:
+        service_id: { type: integer, format: int64 }
+        code: { type: string, description: 'service_not_found / service_not_confirmed / profile_incomplete / service_repo_mismatch / invalid_source_path / scope_mismatch / repo_not_found / scm_not_verified / ref_not_found / duplicate_service' }
+        message: { type: string }
+    GenerationPlanSummary:
+      type: object
+      required: [ services, repos, batches, candidates_min, candidates_max ]
+      properties:
+        services: { type: integer }
+        repos: { type: integer }
+        batches: { type: integer, description: 每服务一批，等于 valid services }
+        candidates_min: { type: integer }
+        candidates_max: { type: integer }
+    GenerationEstimate:
+      type: object
+      required: [ tokens_in, tokens_out, cost_amount, currency, duration_seconds, unknown ]
+      properties:
+        tokens_in: { type: integer, format: int64 }
+        tokens_out: { type: integer, format: int64 }
+        cost_amount: { type: number, format: double, description: '无历史数据时连同 unknown=true 展示为未知，不得当作 0 元报价' }
+        currency: { type: string, enum: [ CNY, USD ] }
+        duration_seconds: { type: integer }
+        unknown: { type: boolean, description: 无同服务历史 approved 批时为 true }
+    GenerationPlanRisk:
+      type: object
+      required: [ code, message, severity ]
+      properties:
+        code: { type: string, description: 'review_required / refs_stale / estimate_fallback / estimate_partial / price_missing' }
+        message: { type: string }
+        severity: { type: string, enum: [ info, warning ] }
+    GenerationRunCreate:
+      type: object
+      required: [ project_id, idempotency_key ]
+      properties:
+        project_id: { type: integer, format: int64 }
+        scope_type: { type: string, enum: [ project, repo, service ], description: 旧请求必填；带 plan_id 时可省略，服务端使用 plan 的 scope }
+        scope_id: { type: integer, format: int64, default: 0, description: repo/service scope 必填；带 plan_id 时以 plan 为准 }
+        idempotency_key: { type: string, description: 租户内唯一；重复请求返回既有 run，scope/units 不一致返回 409 idempotency_conflict }
+        plan_id: { type: integer, format: int64, description: 绑定 POST /generation/plans 返回的计划；单次原子消费 }
+        plan_hash: { type: string, description: 必须与计划 hash 一致，否则 409 plan_stale }
+        units:
+          type: array
+          description: 兼容旧请求；带 plan 时以 plan 的 units 为准
+          items: { $ref: '#/components/schemas/GenerationPlanUnitInput' }
+    GenerationRunDetail:
+      type: object
+      required: [ id, team_id, project_id, scope_type, scope_id, state, total_units, completed_units, failed_units, review_units, progress_percent, tokens_in, tokens_out, cost_amount, created_at, updated_at, units ]
+      properties:
+        id: { type: integer, format: int64 }
+        team_id: { type: integer, format: int64 }
+        project_id: { type: integer, format: int64 }
+        scope_type: { type: string, enum: [ project, repo, service ] }
+        scope_id: { type: integer, format: int64 }
+        plan_id: { type: integer, format: int64, nullable: true, description: 绑定的预检计划；旧请求为 null }
+        state: { type: string, enum: [ queued, running, waiting_review, partial_failed, succeeded, failed, cancelled ] }
+        total_units: { type: integer }
+        completed_units: { type: integer }
+        failed_units: { type: integer }
+        review_units: { type: integer, description: 当前等待人工审核的服务数 }
+        progress_percent: { type: integer, minimum: 0, maximum: 100, description: 已完成比例 = (completed_units+failed_units)/total_units；取消单元不计入，故全取消 run 为 0 }
+        tokens_in: { type: integer, format: int64 }
+        tokens_out: { type: integer, format: int64 }
+        cost_amount: { type: number, format: double }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        units: { type: array, items: { $ref: '#/components/schemas/GenerationRunUnit' } }
+    GenerationRunUnit:
+      type: object
+      required: [ id, service_id, service_name, repo_id, repo_url, ref_type, ref_name, commit_sha, batch_id, batch_state, stage, review_required, state, error ]
+      properties:
+        id: { type: integer, format: int64 }
+        service_id: { type: integer, format: int64 }
+        service_name: { type: string }
+        repo_id: { type: integer, format: int64 }
+        repo_url: { type: string }
+        ref_type: { type: string, enum: [ branch, tag ] }
+        ref_name: { type: string }
+        commit_sha: { type: string }
+        batch_id: { type: integer, format: int64, nullable: true }
+        batch_state: { type: string, description: batch 状态机当前状态（执行单元权威） }
+        stage: { type: string, description: 服务当前阶段（与 batch_state 同步；取消后为 cancelled） }
+        review_required: { type: boolean, description: 该服务当前是否需要人工审核 }
+        state: { type: string, enum: [ queued, running, waiting_review, succeeded, failed, rejected, cancelled ] }
+        error: { type: string }
+    GenerationRunSummary:
+      type: object
+      description: 历史列表项；详情以 GET /generation/runs/{id} 为准
+      additionalProperties: true
+    GenerationRunPage:
+      type: object
+      required: [ runs, next_cursor ]
+      properties:
+        runs: { type: array, items: { $ref: '#/components/schemas/GenerationRunSummary' } }
+        next_cursor: { type: string, nullable: true, description: 下一页 cursor（本页最后一条 run.id 的十进制字符串）；null 表示已到末页 }
+    GenerationRunEvent:
+      type: object
+      description: 'SSE data 载荷（event: run）'
+      required: [ seq, type, run ]
+      properties:
+        seq: { type: integer, format: int64, description: 事件序号；同时作为 SSE id 与 after_seq 游标 }
+        type: { type: string, description: 'run.snapshot / run.created / run.progress / run.waiting_review / run.completed / run.partial_failed / run.failed / run.cancelled / unit.*' }
+        run: { $ref: '#/components/schemas/GenerationRunDetail' }
+    GenerationReviewRequest:
+      type: object
+      required: [ decision, request_id ]
+      properties:
+        decision: { type: string, enum: [ approve, reject ] }
+        request_id: { type: string, description: 审核幂等与审计关联 id }
+    GenerationError:
+      type: object
+      required: [ error ]
+      properties:
+        error: { type: string, description: 'tenant_required / unauthorized / forbidden / not_found / plan_stale / plan_invalid / idempotency_conflict / state_conflict / cancel_incomplete / validation_failed / internal' }
+        message: { type: string }
     GenerationSeed:
       type: object
       required: [ id, batch_id, source_locator, normalized_spec, quality_state, approval_state ]
@@ -1911,10 +2153,12 @@ components:
         env_version: { type: string }
         env_check_id: { type: integer, format: int64, nullable: true }
         run_mode: { type: string }
-        state: { type: string, enum: [ queued, version_check, scheduled, running, paused, collect, gate, report, done, failed ] }
+        state: { type: string, enum: [ queued, version_check, scheduled, running, paused, collect, gate, report, done, failed, cancelled ] }
         selected_cases: { type: array, items: { type: integer, format: int64 } }
         started_at: { type: string, format: date-time, nullable: true }
         ended_at: { type: string, format: date-time, nullable: true }
+        cancelled_at: { type: string, format: date-time, nullable: true }
+        cancel_reason: { type: string }
     TriageRequest:
       type: object
       required: [ case_result_id, project_id, repo_url, commit_sha ]
@@ -2032,6 +2276,7 @@ components:
         team_id: { type: integer, format: int64 }
         target_id: { type: integer, format: int64 }
         run_id: { type: integer, format: int64 }
+        batch_id: { type: integer, format: int64, nullable: true, description: 生成批次（case_generate）；历史行为空 }
         case_id: { type: integer, format: int64 }
         category: { type: string }
         biz_point: { type: string }

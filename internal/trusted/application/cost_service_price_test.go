@@ -15,14 +15,21 @@ func (r *capturingCostRepo) Insert(_ context.Context, item *domain.CostLineItem)
 	r.item = item
 	return true, nil
 }
+
 func (r *capturingCostRepo) Overview(context.Context, int64) (*domain.CostOverview, error) {
 	return &domain.CostOverview{}, nil
 }
+
 func (r *capturingCostRepo) Items(context.Context, int64, string, string, int) ([]*domain.CostLineItem, error) {
 	return nil, nil
 }
+
 func (r *capturingCostRepo) CompareHistory(context.Context, int64, int64) ([]*domain.CostLineItem, error) {
 	return nil, nil
+}
+
+func (r *capturingCostRepo) BatchCosts(context.Context, int64, []int64) (map[int64]float64, error) {
+	return map[int64]float64{}, nil
 }
 
 func TestCostServiceUsesSplitTokenPricing(t *testing.T) {

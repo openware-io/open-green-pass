@@ -29,23 +29,29 @@ func (r *fakeFindingRepo) Create(_ context.Context, f *domain.Finding, e *domain
 	r.events = append(r.events, e)
 	return true, nil
 }
+
 func (r *fakeFindingRepo) Find(_ context.Context, _, id int64) (*domain.Finding, error) {
 	return r.findings[id], nil
 }
+
 func (r *fakeFindingRepo) FindByDedupe(_ context.Context, _ int64, hash string) (*domain.Finding, error) {
 	return r.byHash[hash], nil
 }
+
 func (r *fakeFindingRepo) List(context.Context, int64, domain.FindingFilter) ([]*domain.Finding, error) {
 	return nil, nil
 }
+
 func (r *fakeFindingRepo) UpdateStatus(_ context.Context, f *domain.Finding, e *domain.FindingEvent) error {
 	r.findings[f.ID] = f
 	r.events = append(r.events, e)
 	return nil
 }
+
 func (r *fakeFindingRepo) Events(context.Context, int64, int64) ([]domain.FindingEvent, error) {
 	return nil, nil
 }
+
 func (r *fakeFindingRepo) CountOpen(context.Context, int64, int64, string) (int, int, error) {
 	return 0, 0, nil
 }

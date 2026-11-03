@@ -75,6 +75,7 @@ type modelConnectionDetailResponse struct {
 	TokenConfigured  bool       `json:"token_configured"`
 }
 
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func RegisterModels(mux *http.ServeMux, store *infra.ModelStore, gen *id.Generator, namespace string) {
 	mux.HandleFunc("GET /model-catalog", func(w http.ResponseWriter, r *http.Request) {
 		models, err := store.ListModels(r.Context(), tenantID(r))

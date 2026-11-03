@@ -12,8 +12,10 @@ import (
 	"github.com/openware-io/open-green-pass/internal/execution/domain"
 )
 
-var ErrQuotaExceeded = errors.New("execution quota exceeded")
-var ErrInvalidRequest = errors.New("invalid resource request")
+var (
+	ErrQuotaExceeded  = errors.New("execution quota exceeded")
+	ErrInvalidRequest = errors.New("invalid resource request")
+)
 
 type Limits struct {
 	Global int

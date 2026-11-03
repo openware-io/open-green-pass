@@ -224,6 +224,7 @@ func (m *Manager) run(job *Job) {
 	now := time.Now().UTC()
 	job.State = StateRunning
 	job.StartedAt = &now
+	runnerJob := *job
 	m.appendEventLocked(job.ID, Event{Type: "state", State: StateRunning, At: now, Message: "running"})
 	m.mu.Unlock()
 	defer cancel()
@@ -234,7 +235,7 @@ func (m *Manager) run(job *Job) {
 	}
 	done := make(chan outcome, 1)
 	go func() {
-		result, err := m.runner.Run(ctx, *job)
+		result, err := m.runner.Run(ctx, runnerJob)
 		done <- outcome{result: result, err: err}
 	}()
 

@@ -25,6 +25,11 @@ func (w *statusWriter) Flush() {
 	}
 }
 
+// Unwrap lets http.ResponseController reach the underlying connection. SSE
+// handlers use it to clear their per-response write deadline while the server
+// keeps a global WriteTimeout for every other route.
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 // Metrics records bounded HTTP request counters and latency observations.
 // It deliberately uses ServeMux's route pattern instead of the raw URL so
 // resource IDs never become metric labels. If a handler does not expose a

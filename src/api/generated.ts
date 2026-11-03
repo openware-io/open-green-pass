@@ -4,6 +4,40 @@
  */
 
 export interface paths {
+    "/generation/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 预检生成计划（只读校验 + 估算 + 持久化，30 分钟有效） */
+        post: operations["createGenerationPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/generation/plans/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取已持久化的生成计划（审计/回放） */
+        get: operations["getGenerationPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/generation/runs": {
         parameters: {
             query?: never;
@@ -11,10 +45,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 查询项目的生成任务 */
+        /** 查询项目的生成任务（按 id 倒序 cursor 分页） */
         get: operations["listGenerationRuns"];
         put?: never;
-        /** 创建一次生成任务 */
+        /** 幂等创建一次生成任务（可绑定预检 plan） */
         post: operations["createGenerationRun"];
         delete?: never;
         options?: never;
@@ -29,8 +63,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 查询生成任务进度 */
+        /** 查询生成任务聚合详情（纯读） */
         get: operations["getGenerationRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/generation/runs/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 生成任务事件流（SSE；PostgreSQL NOTIFY 唤醒 + 低频兜底 + 30s 快照） */
+        get: operations["streamGenerationRunEvents"];
         put?: never;
         post?: never;
         delete?: never;
@@ -48,8 +99,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 取消整个生成任务 */
+        /** 取消整个生成任务（幂等，终态返回当前状态） */
         post: operations["cancelGenerationRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/generation/runs/{id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 聚合审核当前等待审核的服务 */
+        post: operations["reviewGenerationRun"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1378,6 +1446,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/cases/{id}/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** 更新用例 QA 分类（不改脚本版本） */
+        patch: operations["updateCaseMetadata"];
+        trace?: never;
+    };
     "/cases/{id}/versions": {
         parameters: {
             query?: never;
@@ -1732,6 +1817,23 @@ export interface paths {
         put?: never;
         /** 恢复 */
         post: operations["resumeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 停止运行（用户主动取消，终态 cancelled；幂等） */
+        post: operations["cancelRun"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2239,6 +2341,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/coverage/gaps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 覆盖缺口报告（按模块/维度） */
+        get: operations["getCoverageGaps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/coverage/waivers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询覆盖率豁免 */
+        get: operations["listCoverageWaivers"];
+        put?: never;
+        /** 为 Coverage Cell 创建显式豁免 */
+        post: operations["createCoverageWaivers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/coverage/waivers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 撤销覆盖率豁免 */
+        delete: operations["revokeCoverageWaiver"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ai/generation-jobs": {
         parameters: {
             query?: never;
@@ -2375,6 +2529,56 @@ export interface components {
             /** Format: int64 */
             waiver_id?: number | null;
         };
+        CoverageGapCount: {
+            required?: number;
+            mapped?: number;
+            passed?: number;
+            failed?: number;
+            blocked?: number;
+            unmapped?: number;
+            waived?: number;
+        };
+        CoverageGapModule: components["schemas"]["CoverageGapCount"] & {
+            module?: string;
+        };
+        CoverageGapDimension: components["schemas"]["CoverageGapCount"] & {
+            dimension?: string;
+        };
+        CoverageGapReport: {
+            /** Format: int64 */
+            project_id: number;
+            module?: string;
+            total: components["schemas"]["CoverageGapCount"];
+            modules: components["schemas"]["CoverageGapModule"][];
+            dimensions: components["schemas"]["CoverageGapDimension"][];
+        };
+        CoverageWaiverCreate: {
+            cell_ids: number[];
+            reason: string;
+            /** Format: int64 */
+            owner_id: number;
+            /** Format: date-time */
+            expires_at?: string | null;
+            evidence?: {
+                [key: string]: unknown;
+            };
+        };
+        CoverageWaiver: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            cell_id: number;
+            reason: string;
+            /** Format: int64 */
+            owner_id: number;
+            /** Format: date-time */
+            expires_at?: string | null;
+            evidence?: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            created_at: string;
+        };
         CoverageSummary: {
             total_required: number;
             design_covered: number;
@@ -2391,6 +2595,8 @@ export interface components {
             /** Format: int64 */
             project_id: number;
             module: string;
+            /** @enum {string} */
+            mode?: "strict" | "risk";
             total_required: number;
             design_covered: number;
             executed: number;
@@ -2917,6 +3123,223 @@ export interface components {
             expected_state_version: number;
             request_id: string;
         };
+        GenerationPlanRequest: {
+            /** Format: int64 */
+            project_id: number;
+            /** @enum {string} */
+            scope_type: "project" | "repo" | "service";
+            /**
+             * Format: int64
+             * @default 0
+             */
+            scope_id: number;
+            /** @description 指定服务时必填；为空时服务端按 scope 使用既有 resolver 展开 */
+            units?: components["schemas"]["GenerationPlanUnitInput"][];
+        };
+        GenerationPlanUnitInput: {
+            /** Format: int64 */
+            service_id: number;
+            /** Format: int64 */
+            repo_id: number;
+            /** @description 服务在仓库中的源码目录；为空时使用目录服务登记值 */
+            source_path?: string;
+            /**
+             * @default branch
+             * @enum {string}
+             */
+            ref_type: "branch" | "tag";
+            ref_name: string;
+        };
+        GenerationPlan: {
+            /** Format: int64 */
+            plan_id: number;
+            /** @description sha256:…；覆盖 project/scope 与排序后的 units，与选择顺序无关 */
+            plan_hash: string;
+            /**
+             * Format: date-time
+             * @description 30 分钟 TTL；过期后创建返回 409 plan_stale
+             */
+            expires_at: string;
+            units: components["schemas"]["GenerationPlanUnit"][];
+            /** @description 不可创建的服务与原因；非空时前端禁止创建 */
+            invalid: components["schemas"]["GenerationPlanInvalid"][];
+            summary: components["schemas"]["GenerationPlanSummary"];
+            estimate: components["schemas"]["GenerationEstimate"];
+            risks: components["schemas"]["GenerationPlanRisk"][];
+        };
+        GenerationPlanUnit: {
+            /** Format: int64 */
+            service_id: number;
+            /** Format: int64 */
+            repo_id: number;
+            repo_url: string;
+            source_path: string;
+            /** @enum {string} */
+            ref_type: "branch" | "tag";
+            ref_name: string;
+            /** @description 服务端引用缓存中冻结的提交；创建后以 batch 冻结值为准 */
+            commit_sha: string;
+            valid: boolean;
+            /** @description 空或 "code: message" */
+            error: string;
+        };
+        GenerationPlanInvalid: {
+            /** Format: int64 */
+            service_id: number;
+            /** @description service_not_found / service_not_confirmed / profile_incomplete / service_repo_mismatch / invalid_source_path / scope_mismatch / repo_not_found / scm_not_verified / ref_not_found / duplicate_service */
+            code: string;
+            message: string;
+        };
+        GenerationPlanSummary: {
+            services: number;
+            repos: number;
+            /** @description 每服务一批，等于 valid services */
+            batches: number;
+            candidates_min: number;
+            candidates_max: number;
+        };
+        GenerationEstimate: {
+            /** Format: int64 */
+            tokens_in: number;
+            /** Format: int64 */
+            tokens_out: number;
+            /**
+             * Format: double
+             * @description 无历史数据时连同 unknown=true 展示为未知，不得当作 0 元报价
+             */
+            cost_amount: number;
+            /** @enum {string} */
+            currency: "CNY" | "USD";
+            duration_seconds: number;
+            /** @description 无同服务历史 approved 批时为 true */
+            unknown: boolean;
+        };
+        GenerationPlanRisk: {
+            /** @description review_required / refs_stale / estimate_fallback / estimate_partial / price_missing */
+            code: string;
+            message: string;
+            /** @enum {string} */
+            severity: "info" | "warning";
+        };
+        GenerationRunCreate: {
+            /** Format: int64 */
+            project_id: number;
+            /**
+             * @description 旧请求必填；带 plan_id 时可省略，服务端使用 plan 的 scope
+             * @enum {string}
+             */
+            scope_type?: "project" | "repo" | "service";
+            /**
+             * Format: int64
+             * @description repo/service scope 必填；带 plan_id 时以 plan 为准
+             * @default 0
+             */
+            scope_id: number;
+            /** @description 租户内唯一；重复请求返回既有 run，scope/units 不一致返回 409 idempotency_conflict */
+            idempotency_key: string;
+            /**
+             * Format: int64
+             * @description 绑定 POST /generation/plans 返回的计划；单次原子消费
+             */
+            plan_id?: number;
+            /** @description 必须与计划 hash 一致，否则 409 plan_stale */
+            plan_hash?: string;
+            /** @description 兼容旧请求；带 plan 时以 plan 的 units 为准 */
+            units?: components["schemas"]["GenerationPlanUnitInput"][];
+        };
+        GenerationRunDetail: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            team_id: number;
+            /** Format: int64 */
+            project_id: number;
+            /** @enum {string} */
+            scope_type: "project" | "repo" | "service";
+            /** Format: int64 */
+            scope_id: number;
+            /**
+             * Format: int64
+             * @description 绑定的预检计划；旧请求为 null
+             */
+            plan_id?: number | null;
+            /** @enum {string} */
+            state: "queued" | "running" | "waiting_review" | "partial_failed" | "succeeded" | "failed" | "cancelled";
+            total_units: number;
+            completed_units: number;
+            failed_units: number;
+            /** @description 当前等待人工审核的服务数 */
+            review_units: number;
+            /** @description 已完成比例 = (completed_units+failed_units)/total_units；取消单元不计入，故全取消 run 为 0 */
+            progress_percent: number;
+            /** Format: int64 */
+            tokens_in: number;
+            /** Format: int64 */
+            tokens_out: number;
+            /** Format: double */
+            cost_amount: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            units: components["schemas"]["GenerationRunUnit"][];
+        };
+        GenerationRunUnit: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            service_id: number;
+            service_name: string;
+            /** Format: int64 */
+            repo_id: number;
+            repo_url: string;
+            /** @enum {string} */
+            ref_type: "branch" | "tag";
+            ref_name: string;
+            commit_sha: string;
+            /** Format: int64 */
+            batch_id: number | null;
+            /** @description batch 状态机当前状态（执行单元权威） */
+            batch_state: string;
+            /** @description 服务当前阶段（与 batch_state 同步；取消后为 cancelled） */
+            stage: string;
+            /** @description 该服务当前是否需要人工审核 */
+            review_required: boolean;
+            /** @enum {string} */
+            state: "queued" | "running" | "waiting_review" | "succeeded" | "failed" | "rejected" | "cancelled";
+            error: string;
+        };
+        /** @description 历史列表项；详情以 GET /generation/runs/{id} 为准 */
+        GenerationRunSummary: {
+            [key: string]: unknown;
+        };
+        GenerationRunPage: {
+            runs: components["schemas"]["GenerationRunSummary"][];
+            /** @description 下一页 cursor（本页最后一条 run.id 的十进制字符串）；null 表示已到末页 */
+            next_cursor: string | null;
+        };
+        /** @description SSE data 载荷（event: run） */
+        GenerationRunEvent: {
+            /**
+             * Format: int64
+             * @description 事件序号；同时作为 SSE id 与 after_seq 游标
+             */
+            seq: number;
+            /** @description run.snapshot / run.created / run.progress / run.waiting_review / run.completed / run.partial_failed / run.failed / run.cancelled / unit.* */
+            type: string;
+            run: components["schemas"]["GenerationRunDetail"];
+        };
+        GenerationReviewRequest: {
+            /** @enum {string} */
+            decision: "approve" | "reject";
+            /** @description 审核幂等与审计关联 id */
+            request_id: string;
+        };
+        GenerationError: {
+            /** @description tenant_required / unauthorized / forbidden / not_found / plan_stale / plan_invalid / idempotency_conflict / state_conflict / cancel_incomplete / validation_failed / internal */
+            error: string;
+            message?: string;
+        };
         GenerationSeed: {
             /** Format: int64 */
             id: number;
@@ -3018,6 +3441,16 @@ export interface components {
             code: string;
             title: string;
             kind: string;
+            business_domain?: string;
+            feature?: string;
+            module?: string;
+            operation?: string;
+            /** @enum {string} */
+            case_type?: "functional" | "api" | "security" | "performance" | "compatibility";
+            /** @enum {string} */
+            priority?: "P0" | "P1" | "P2" | "P3";
+            /** @enum {string} */
+            automation_status?: "automated" | "manual";
             current_version: number;
             status: string;
         };
@@ -3057,12 +3490,15 @@ export interface components {
             env_check_id?: number | null;
             run_mode: string;
             /** @enum {string} */
-            state: "queued" | "version_check" | "scheduled" | "running" | "paused" | "collect" | "gate" | "report" | "done" | "failed";
+            state: "queued" | "version_check" | "scheduled" | "running" | "paused" | "collect" | "gate" | "report" | "done" | "failed" | "cancelled";
             selected_cases: number[];
             /** Format: date-time */
             started_at?: string | null;
             /** Format: date-time */
             ended_at?: string | null;
+            /** Format: date-time */
+            cancelled_at?: string | null;
+            cancel_reason?: string;
         };
         TriageRequest: {
             /** Format: int64 */
@@ -3208,6 +3644,11 @@ export interface components {
             target_id: number;
             /** Format: int64 */
             run_id: number;
+            /**
+             * Format: int64
+             * @description 生成批次（case_generate）；历史行为空
+             */
+            batch_id?: number | null;
             /** Format: int64 */
             case_id: number;
             category: string;
@@ -3318,11 +3759,91 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    createGenerationPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerationPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description 预检结果；invalid 非空时仍 200，但前端禁止创建 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationPlan"];
+                };
+            };
+            /** @description 请求级校验失败或空 scope */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationError"];
+                };
+            };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 无项目 edit 权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getGenerationPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 计划 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationPlan"];
+                };
+            };
+            /** @description 计划不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listGenerationRuns: {
         parameters: {
             query: {
                 project_id: number;
                 limit?: number;
+                /** @description 上一页最后一条 run.id；首页省略 */
+                cursor?: string;
+                /** @description 可选状态过滤（服务端过滤） */
+                state?: "queued" | "running" | "waiting_review" | "succeeded" | "partial_failed" | "failed" | "cancelled";
             };
             header?: never;
             path?: never;
@@ -3330,14 +3851,28 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 生成任务列表 */
+            /** @description 分页结果；next_cursor 为 null 表示无更多 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>[];
+                    "application/json": components["schemas"]["GenerationRunPage"];
                 };
+            };
+            /** @description cursor/limit/state 非法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 无项目 view 权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -3350,24 +3885,35 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    project_id: number;
-                    /** @enum {string} */
-                    scope_type: "project" | "repo" | "service";
-                    scope_id: number;
-                    idempotency_key: string;
-                    units: Record<string, never>[];
-                };
+                "application/json": components["schemas"]["GenerationRunCreate"];
             };
         };
         responses: {
+            /** @description 幂等返回既有 run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationRunDetail"];
+                };
+            };
             /** @description 已创建 */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["GenerationRunDetail"];
+                };
+            };
+            /** @description plan_stale / plan_invalid / idempotency_conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationError"];
                 };
             };
         };
@@ -3383,14 +3929,54 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 生成任务 */
+            /** @description 聚合详情 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["GenerationRunDetail"];
                 };
+            };
+            /** @description 任务不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    streamGenerationRunEvents: {
+        parameters: {
+            query?: {
+                after_seq?: number;
+            };
+            header?: {
+                "Last-Event-ID"?: string;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description text/event-stream；event: run；data 为 GenerationRunEvent。新事件经 pg NOTIFY 立即唤醒（无通知时 20s 兜底查询），15s 心跳「: keepalive」，无新事件时每 30s 发送 run.snapshot，终态发送后关闭 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description 该租户并发事件流超限（too_many_streams）；生产按租户全局计数（Redis 共享，跨副本） */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -3405,14 +3991,47 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 已取消 */
+            /** @description 已取消/已终态 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["GenerationRunDetail"];
                 };
+            };
+        };
+    };
+    reviewGenerationRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerationReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description 审核后的聚合详情 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationRunDetail"];
+                };
+            };
+            /** @description 审核状态冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -3938,6 +4557,16 @@ export interface operations {
                     code: string;
                     title: string;
                     kind?: string;
+                    business_domain?: string;
+                    feature?: string;
+                    module?: string;
+                    operation?: string;
+                    /** @enum {string} */
+                    case_type?: "functional" | "api" | "security" | "performance" | "compatibility";
+                    /** @enum {string} */
+                    priority?: "P0" | "P1" | "P2" | "P3";
+                    /** @enum {string} */
+                    automation_status?: "automated" | "manual";
                     /** @description 用例脚本/数据（执行产物来源） */
                     script?: unknown;
                 };
@@ -3946,6 +4575,43 @@ export interface operations {
         responses: {
             /** @description 已创建（含版本） */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestCase"];
+                };
+            };
+        };
+    };
+    updateCaseMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    business_domain?: string;
+                    feature?: string;
+                    module?: string;
+                    operation?: string;
+                    /** @enum {string} */
+                    case_type?: "functional" | "api" | "security" | "performance" | "compatibility";
+                    /** @enum {string} */
+                    priority?: "P0" | "P1" | "P2" | "P3";
+                    /** @enum {string} */
+                    automation_status?: "automated" | "manual";
+                };
+            };
+        };
+        responses: {
+            /** @description 已更新 */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4562,11 +5228,40 @@ export interface operations {
             };
         };
     };
+    cancelRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    reason?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 已停止或已是终态 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+        };
+    };
     evaluateCoverageGate: {
         parameters: {
             query: {
                 project_id: number;
                 module?: string;
+                mode?: "strict" | "risk";
             };
             header?: never;
             path?: never;
@@ -5384,6 +6079,109 @@ export interface operations {
             };
         };
     };
+    getCoverageGaps: {
+        parameters: {
+            query: {
+                project_id: number;
+                module?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 缺口报告 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverageGapReport"];
+                };
+            };
+        };
+    };
+    listCoverageWaivers: {
+        parameters: {
+            query?: {
+                project_id?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 豁免列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverageWaiver"][];
+                };
+            };
+        };
+    };
+    createCoverageWaivers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoverageWaiverCreate"];
+            };
+        };
+        responses: {
+            /** @description 已创建 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverageWaiver"][];
+                };
+            };
+            /** @description 参数校验失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    revokeCoverageWaiver: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已撤销 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 豁免不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     createGenerationJob: {
         parameters: {
             query?: never;
@@ -5422,6 +6220,20 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 无项目 edit 权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getGenerationJob: {
@@ -5443,6 +6255,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["GenerationJob"];
                 };
+            };
+            /** @description 无项目 view 权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Job 不存在 */
             404: {
@@ -5471,6 +6290,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description 无项目 edit 权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Job 已终态 */
             409: {
                 headers: {
@@ -5492,8 +6318,11 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** Format: int64 */
-                    target_id: number;
+                    /**
+                     * Format: int64
+                     * @description 可省略；提供时必须等于 Job 所属项目
+                     */
+                    target_id?: number;
                 };
             };
         };
@@ -5507,14 +6336,28 @@ export interface operations {
                     "application/json": components["schemas"]["TestCase"][];
                 };
             };
-            /** @description 输出不是合法用例数组 */
+            /** @description target_id 与 Job 所属项目不一致 */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Job 未成功 */
+            /** @description 未认证 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 无 Job 所属项目 edit 权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Job 未成功或输出非法/空，无可导入输出 */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -26,6 +26,7 @@ func (a *GenerationCostAdapter) RecordGenerationCost(ctx context.Context, usage 
 		RequestID:       usage.RequestID,
 		BizPoint:        "case_generate",
 		TargetID:        usage.TargetID,
+		BatchID:         usage.BatchID,
 		Model:           usage.Model,
 		TokensIn:        usage.TokensIn,
 		TokensOut:       usage.TokensOut,

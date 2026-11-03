@@ -9,7 +9,7 @@ import (
 )
 
 func TestTenantRejectsHeaderMismatchingVerifiedPrincipal(t *testing.T) {
-	h := Tenant(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	h := Tenant(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.Header.Set("x-gp-team-id", "20")
 	r = r.WithContext(iam.WithPrincipal(r.Context(), iam.Principal{Subject: "u", TenantID: "10"}))
@@ -21,7 +21,7 @@ func TestTenantRejectsHeaderMismatchingVerifiedPrincipal(t *testing.T) {
 }
 
 func TestTenantUsesVerifiedPrincipalTenant(t *testing.T) {
-	h := Tenant(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := Tenant(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	r := httptest.NewRequest(http.MethodGet, "/", nil)

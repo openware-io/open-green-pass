@@ -25,6 +25,7 @@ func Register(mux *http.ServeMux, svc *application.Service) {
 	mux.HandleFunc("POST /assistant/sessions/{id}/actions/{actionId}/complete", h.completeAction)
 	mux.HandleFunc("GET /assistant/artifacts", h.artifacts)
 }
+
 func identity(w http.ResponseWriter, r *http.Request) (int64, string, bool) {
 	p, ok := iam.PrincipalFromContext(r.Context())
 	if !ok || strings.TrimSpace(p.Subject) == "" {
@@ -38,6 +39,7 @@ func identity(w http.ResponseWriter, r *http.Request) (int64, string, bool) {
 	}
 	return actor, p.Subject, true
 }
+
 func sessionID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	v, e := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if e != nil || v <= 0 {
@@ -46,6 +48,7 @@ func sessionID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	}
 	return v, true
 }
+
 func actionID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	v, e := strconv.ParseInt(r.PathValue("actionId"), 10, 64)
 	if e != nil || v <= 0 {
@@ -54,6 +57,7 @@ func actionID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	}
 	return v, true
 }
+
 func writeServiceErr(w http.ResponseWriter, err error) {
 	if errors.Is(err, application.ErrNotFound) {
 		http.Error(w, "not found", http.StatusNotFound)
@@ -89,6 +93,7 @@ func (h *handler) createSession(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusCreated, v)
 }
+
 func (h *handler) turns(w http.ResponseWriter, r *http.Request) {
 	_, subject, ok := identity(w, r)
 	if !ok {
@@ -105,6 +110,7 @@ func (h *handler) turns(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusOK, v)
 }
+
 func (h *handler) addTurn(w http.ResponseWriter, r *http.Request) {
 	actor, subject, ok := identity(w, r)
 	if !ok {
@@ -128,6 +134,7 @@ func (h *handler) addTurn(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"user": user, "assistant": assistant, "artifact": artifact})
 }
+
 func (h *handler) startGuidance(w http.ResponseWriter, r *http.Request) {
 	actor, subject, ok := identity(w, r)
 	if !ok {
@@ -144,6 +151,7 @@ func (h *handler) startGuidance(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusCreated, v)
 }
+
 func (h *handler) actions(w http.ResponseWriter, r *http.Request) {
 	_, subject, ok := identity(w, r)
 	if !ok {
@@ -160,6 +168,7 @@ func (h *handler) actions(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusOK, v)
 }
+
 func (h *handler) completeAction(w http.ResponseWriter, r *http.Request) {
 	actor, subject, ok := identity(w, r)
 	if !ok {
@@ -187,6 +196,7 @@ func (h *handler) completeAction(w http.ResponseWriter, r *http.Request) {
 	}
 	httpx.WriteJSON(w, http.StatusCreated, v)
 }
+
 func (h *handler) artifacts(w http.ResponseWriter, r *http.Request) {
 	if _, _, ok := identity(w, r); !ok {
 		return

@@ -14,7 +14,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.26.10"
           cache: true
 
       - name: 格式化检查 (gofumpt)
@@ -44,7 +44,7 @@ jobs:
 
       - name: 漏洞扫描 (govulncheck)
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
           govulncheck ./cmd/... ./internal/... ./pkg/...
 
       - name: 迁移规范校验 (migcheck)

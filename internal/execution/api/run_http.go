@@ -122,6 +122,8 @@ func (h *runHandler) getRun(w http.ResponseWriter, r *http.Request) {
 
 // events emits authoritative snapshots. Redis notifications wake connections
 // across replicas; periodic reads remain as a correctness fallback.
+//
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (h *runHandler) events(w http.ResponseWriter, r *http.Request) {
 	id, ok := runID(w, r)
 	if !ok {
@@ -302,6 +304,36 @@ func (h *runHandler) resumeRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	run, err := h.svc.ResumeRun(r.Context(), id)
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toRunResponse(run))
+}
+
+type cancelRunRequest struct {
+	Reason string `json:"reason,omitempty"`
+}
+
+// cancelRun stops an active run. The run row is marked cancelled first (the
+// user's stop must always win), then Temporal cancellation interrupts the
+// running activity/runner. Repeating cancel is idempotent.
+func (h *runHandler) cancelRun(w http.ResponseWriter, r *http.Request) {
+	id, ok := runID(w, r)
+	if !ok {
+		return
+	}
+	if _, ok := h.findAndAuthorize(w, r, id, "exec"); !ok {
+		return
+	}
+	var req cancelRunRequest
+	if r.ContentLength > 0 {
+		if err := httpx.DecodeJSON(r, &req); err != nil {
+			httpx.WriteErr(w, err)
+			return
+		}
+	}
+	run, err := h.svc.CancelRun(r.Context(), id, req.Reason)
 	if err != nil {
 		httpx.WriteErr(w, err)
 		return

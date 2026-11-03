@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -9,16 +10,37 @@ import (
 	"github.com/openware-io/open-green-pass/internal/ai/application"
 	aidomain "github.com/openware-io/open-green-pass/internal/ai/domain"
 	"github.com/openware-io/open-green-pass/internal/gateway/httpx"
+	"github.com/openware-io/open-green-pass/internal/iam"
 	gperr "github.com/openware-io/open-green-pass/pkg/errors"
 )
 
-type generationJobHandler struct {
-	svc *application.GenerationJobService
+// GenerationJobServicePort is the DSH job use case consumed by the HTTP
+// adapter, so authorization/transport tests do not need a database.
+type GenerationJobServicePort interface {
+	Create(ctx context.Context, in application.CreateGenerationJobInput) (*aidomain.GenerationJob, bool, error)
+	Get(ctx context.Context, id int64) (*aidomain.GenerationJob, error)
+	Cancel(ctx context.Context, id int64) error
 }
 
-// RegisterGenerationJobs registers the DSH job control-plane routes.
-func RegisterGenerationJobs(mux *http.ServeMux, svc *application.GenerationJobService) {
-	h := &generationJobHandler{svc: svc}
+type generationJobHandler struct {
+	svc        GenerationJobServicePort
+	authorizer iam.AuthorizationPort
+}
+
+// RegisterGenerationJobs registers the DSH job control-plane routes without
+// authorization for embedded/test compositions.
+func RegisterGenerationJobs(mux *http.ServeMux, svc GenerationJobServicePort) {
+	registerGenerationJobs(mux, svc, nil)
+}
+
+// RegisterGenerationJobsAuthorized registers the DSH job routes with
+// project-level authorization: create/cancel require edit, get requires view.
+func RegisterGenerationJobsAuthorized(mux *http.ServeMux, svc GenerationJobServicePort, authorizer iam.AuthorizationPort) {
+	registerGenerationJobs(mux, svc, authorizer)
+}
+
+func registerGenerationJobs(mux *http.ServeMux, svc GenerationJobServicePort, authorizer iam.AuthorizationPort) {
+	h := &generationJobHandler{svc: svc, authorizer: authorizer}
 	mux.HandleFunc("POST /ai/generation-jobs", h.create)
 	mux.HandleFunc("GET /ai/generation-jobs/{id}", h.get)
 	mux.HandleFunc("DELETE /ai/generation-jobs/{id}", h.cancel)
@@ -48,9 +70,19 @@ type generationJobResponse struct {
 }
 
 func (h *generationJobHandler) create(w http.ResponseWriter, r *http.Request) {
+	if _, ok := generationTenant(w, r); !ok {
+		return
+	}
+	if _, ok := generationActor(w, r); !ok {
+		return
+	}
 	var req generationJobRequest
 	if err := httpx.DecodeJSON(r, &req); err != nil {
 		httpx.WriteErr(w, err)
+		return
+	}
+	// Authorize before any side effect; the request project is the asset.
+	if !authorizeGeneration(w, r, h.authorizer, "edit", req.ProjectID) {
 		return
 	}
 	job, created, err := h.svc.Create(r.Context(), application.CreateGenerationJobInput{
@@ -69,6 +101,37 @@ func (h *generationJobHandler) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *generationJobHandler) get(w http.ResponseWriter, r *http.Request) {
+	if _, ok := generationTenant(w, r); !ok {
+		return
+	}
+	if _, ok := generationActor(w, r); !ok {
+		return
+	}
+	id, err := parseGenerationJobID(r)
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	// The job is read tenant-scoped first so a guessed id cannot authorize
+	// against another team, then the project grant is checked.
+	job, err := h.svc.Get(r.Context(), id)
+	if err != nil {
+		httpx.WriteErr(w, err)
+		return
+	}
+	if !authorizeGeneration(w, r, h.authorizer, "view", job.ProjectID) {
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toGenerationJobResponse(job))
+}
+
+func (h *generationJobHandler) cancel(w http.ResponseWriter, r *http.Request) {
+	if _, ok := generationTenant(w, r); !ok {
+		return
+	}
+	if _, ok := generationActor(w, r); !ok {
+		return
+	}
 	id, err := parseGenerationJobID(r)
 	if err != nil {
 		httpx.WriteErr(w, err)
@@ -79,13 +142,7 @@ func (h *generationJobHandler) get(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteErr(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, toGenerationJobResponse(job))
-}
-
-func (h *generationJobHandler) cancel(w http.ResponseWriter, r *http.Request) {
-	id, err := parseGenerationJobID(r)
-	if err != nil {
-		httpx.WriteErr(w, err)
+	if !authorizeGeneration(w, r, h.authorizer, "edit", job.ProjectID) {
 		return
 	}
 	if err := h.svc.Cancel(r.Context(), id); err != nil {

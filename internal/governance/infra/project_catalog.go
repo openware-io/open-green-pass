@@ -71,6 +71,7 @@ func (s *ProjectCatalog) AddRepository(ctx context.Context, projectID int64, url
 	})
 	return out, err
 }
+
 func (s *ProjectCatalog) ListRepositories(ctx context.Context, projectID int64) ([]ProjectRepository, error) {
 	// Keep the HTTP contract array-shaped when a project has no repositories.
 	// A nil slice is encoded as JSON null, while clients consume this as a list.
@@ -107,6 +108,7 @@ func (s *ProjectCatalog) BindSCMConnection(ctx context.Context, projectID, repoI
 		return nil
 	})
 }
+
 func (s *ProjectCatalog) AddService(ctx context.Context, v ProjectService) (ProjectService, error) {
 	v.ID = s.gen.Next()
 	if strings.TrimSpace(v.SourcePath) == "" {
@@ -124,6 +126,7 @@ func (s *ProjectCatalog) AddService(ctx context.Context, v ProjectService) (Proj
 	})
 	return v, err
 }
+
 func (s *ProjectCatalog) ListServices(ctx context.Context, projectID int64) ([]ProjectService, error) {
 	// Keep the HTTP contract array-shaped when a project has no services.
 	// A nil slice is encoded as JSON null, while clients consume this as a list.

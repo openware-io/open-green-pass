@@ -185,7 +185,9 @@ func (s *Service) Turns(ctx context.Context, subject string, sessionID int64) ([
 	}
 	return s.repo.Turns(ctx, sessionID)
 }
+
 func (s *Service) Artifacts(ctx context.Context) ([]Artifact, error) { return s.repo.Artifacts(ctx) }
+
 func (s *Service) Actions(ctx context.Context, subject string, sessionID int64) ([]ActionRecord, error) {
 	if _, err := s.ownedSession(ctx, sessionID, subject); err != nil {
 		return nil, err
@@ -250,12 +252,14 @@ func (s *Service) ownedSession(ctx context.Context, id int64, subject string) (S
 	}
 	return v, nil
 }
+
 func (s *Service) auditEvent(ctx context.Context, actor int64, op, asset string, assetID int64, payload map[string]any) error {
 	if s.audit == nil {
 		return ErrAuditUnavailable
 	}
 	return s.audit.Append(ctx, actor, op, asset, assetID, payload)
 }
+
 func normalizePage(page string) string {
 	switch page {
 	case "/gate", "/cases", "/exec", "/history", "/generation", "/trace", "/target", "/scenarios", "/assistant":
@@ -266,18 +270,20 @@ func normalizePage(page string) string {
 func digest(v string) string   { h := sha256.Sum256([]byte(v)); return hex.EncodeToString(h[:]) }
 func int64Text(n int64) string { return strconv.FormatInt(n, 10) }
 
-func deterministicResponse(page, question string, artifactID int64) (string, *Artifact) {
+func deterministicResponse(page, _ string, artifactID int64) (string, *Artifact) {
 	if page == "/gate" {
 		return "我已把当前问题限定在质量门禁上下文。请先核对门禁规则、最近一次执行结果和证据引用；需要处理时点击“带我操作”，我只会打开页面和预填复测范围，最终提交仍由你确认。", &Artifact{ID: artifactID, Kind: "risk", Priority: "high", Title: "质量门禁需要核对", Summary: "当前对话请求涉及质量门禁；请先核对规则和原始执行证据。", Recommendation: "查看门禁依据后，按需创建复测草稿。", Evidence: []string{"页面上下文：质量门禁", "对话摘要已哈希审计"}, Status: "open", CreatedAt: time.Now().UTC()}
 	}
 	return "我会仅使用当前页面可见、且你有权限访问的事实协助判断。需要进入流程时，请点击“带我操作”；我会给出可见的定位或预填，不会替你提交。", nil
 }
+
 func guidanceForPage(page string, gen *id.Generator) []UIAction {
 	if page == "/gate" {
 		return []UIAction{{ID: gen.Next(), Kind: "navigate", Route: "/gate", Target: "gate.open-rule", Label: "查看门禁规则与证据"}, {ID: gen.Next(), Kind: "navigate", Route: "/cases", Target: "cases.prefill-retest-scope", Label: "前往用例管理并预填复测范围"}, {ID: gen.Next(), Kind: "prefill", Route: "/exec", Target: "exec.open-retest-confirm", Values: map[string]string{"environment": "staging", "scenario": "contract-retest"}, Label: "预填复测草稿（未提交）"}}
 	}
 	return []UIAction{{ID: gen.Next(), Kind: "navigate", Route: page, Target: "page.current", Label: "回到当前页面"}}
 }
+
 func allowed(a UIAction) bool {
 	if a.Kind != "navigate" && a.Kind != "focus" && a.Kind != "prefill" && a.Kind != "open_evidence" {
 		return false

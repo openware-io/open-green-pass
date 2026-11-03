@@ -143,6 +143,9 @@ func (s *GenerationJobService) Cancel(ctx context.Context, id int64) error {
 	}
 	job, err := s.repo.Find(ctx, teamID, id)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return gperr.NotFound("generation job not found")
+		}
 		return err
 	}
 	if job.State.Terminal() {

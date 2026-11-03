@@ -2,8 +2,10 @@ package iam
 
 import "errors"
 
-type Role string
-type Permission string
+type (
+	Role       string
+	Permission string
+)
 
 const (
 	RoleOwner  Role = "owner"
@@ -18,8 +20,10 @@ const (
 	PermissionNone Permission = "none"
 )
 
-var ErrInvalidRole = errors.New("iam: invalid role")
-var ErrInvalidPermission = errors.New("iam: invalid permission")
+var (
+	ErrInvalidRole       = errors.New("iam: invalid role")
+	ErrInvalidPermission = errors.New("iam: invalid permission")
+)
 
 func (r Role) Validate() error {
 	switch r {

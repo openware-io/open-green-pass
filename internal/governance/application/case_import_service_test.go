@@ -20,19 +20,24 @@ func (r *importCaseRepo) SaveCase(_ context.Context, c *domain.Case) error {
 	r.cases = append(r.cases, *c)
 	return nil
 }
+
 func (r *importCaseRepo) SaveVersion(_ context.Context, v *domain.CaseVersion) error {
 	r.versions = append(r.versions, *v)
 	return nil
 }
+
 func (r *importCaseRepo) FindCase(context.Context, int64, int64) (*domain.Case, error) {
 	return nil, nil
 }
+
 func (r *importCaseRepo) FindVersion(context.Context, int64, int64, int) (*domain.CaseVersion, error) {
 	return nil, nil
 }
+
 func (r *importCaseRepo) ListCases(context.Context, int64, domain.CaseFilter) ([]*domain.Case, error) {
 	return nil, nil
 }
+
 func (r *importCaseRepo) History(context.Context, int64, int64) ([]*domain.CaseVersion, error) {
 	return nil, nil
 }
@@ -42,19 +47,24 @@ type importCoverageRepo struct{ assigned []int64 }
 func (r *importCoverageRepo) SaveEndpoints(context.Context, int64, []domain.Endpoint) ([]domain.Endpoint, error) {
 	return nil, nil
 }
+
 func (r *importCoverageRepo) SaveCells(context.Context, int64, []domain.CoverageCell) ([]domain.CoverageCell, error) {
 	return nil, nil
 }
+
 func (r *importCoverageRepo) ListCells(context.Context, int64, domain.CoverageFilter) ([]domain.CoverageCell, error) {
 	return nil, nil
 }
+
 func (r *importCoverageRepo) Summary(context.Context, int64, domain.CoverageFilter) (domain.CoverageSummary, error) {
 	return domain.CoverageSummary{}, nil
 }
+
 func (r *importCoverageRepo) AssignCase(_ context.Context, _ int64, cellIDs []int64, _ int64) error {
 	r.assigned = append(r.assigned, cellIDs...)
 	return nil
 }
+
 func (r *importCoverageRepo) MarkCaseResult(context.Context, int64, int64, string) error {
 	return nil
 }
@@ -65,6 +75,10 @@ type importReader struct {
 
 func (r importReader) ReadOutput(context.Context, int64, int64) (string, string, error) {
 	return r.state, r.output, nil
+}
+
+func (r importReader) ReadJobProject(context.Context, int64, int64) (int64, error) {
+	return 0, nil
 }
 
 func TestImportCasesParsesAndAssignsCoverage(t *testing.T) {

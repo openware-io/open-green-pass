@@ -25,6 +25,7 @@ const (
 	RunReport       RunState = "report"        // 报告生成
 	RunDone         RunState = "done"          // 完成
 	RunFailed       RunState = "failed"        // 失败/阻断（如版本 mismatch）
+	RunCancelled    RunState = "cancelled"     // 用户主动停止（终态，不可重跑）
 )
 
 // CaseStatus 用例执行结果状态。
@@ -81,6 +82,8 @@ type Run struct {
 	SelectedCases []int64 // 当次勾选用例 id；空=全量
 	StartedAt     *time.Time
 	EndedAt       *time.Time
+	CancelledAt   *time.Time
+	CancelReason  string
 }
 
 // NewRun 创建运行（初始 queued）。
@@ -94,14 +97,14 @@ func NewRun(id, teamID, scenarioID, targetID int64, env, targetVersion, targetBr
 
 // validTransitions 状态机合法迁移表。
 var validTransitions = map[RunState][]RunState{
-	RunQueued:       {RunVersionCheck, RunFailed},
-	RunVersionCheck: {RunScheduled, RunFailed},
-	RunScheduled:    {RunRunning, RunFailed},
-	RunRunning:      {RunPaused, RunCollect, RunFailed},
-	RunPaused:       {RunRunning, RunFailed},
-	RunCollect:      {RunGate, RunFailed},
-	RunGate:         {RunReport, RunFailed},
-	RunReport:       {RunDone, RunFailed},
+	RunQueued:       {RunVersionCheck, RunCancelled, RunFailed},
+	RunVersionCheck: {RunScheduled, RunCancelled, RunFailed},
+	RunScheduled:    {RunRunning, RunCancelled, RunFailed},
+	RunRunning:      {RunPaused, RunCollect, RunCancelled, RunFailed},
+	RunPaused:       {RunRunning, RunCancelled, RunFailed},
+	RunCollect:      {RunGate, RunCancelled, RunFailed},
+	RunGate:         {RunReport, RunCancelled, RunFailed},
+	RunReport:       {RunDone, RunCancelled, RunFailed},
 }
 
 // ErrInvalidTransition 非法状态迁移。
@@ -114,7 +117,7 @@ var ErrRunFinished = errors.New("run already finished")
 var ErrRunNotFound = errors.New("run not found")
 
 func (r *Run) transition(next RunState) error {
-	if r.State == RunDone || r.State == RunFailed {
+	if r.State == RunDone || r.State == RunFailed || r.State == RunCancelled {
 		return ErrRunFinished
 	}
 	for _, ok := range validTransitions[r.State] {
@@ -162,6 +165,9 @@ func (r *Run) Finish() error { return r.transition(RunDone) }
 
 // Fail 置为 failed。
 func (r *Run) Fail() error { return r.transition(RunFailed) }
+
+// Cancel 用户主动停止运行（任意未终态均可停止；终态后重复取消返回 ErrRunFinished）。
+func (r *Run) Cancel() error { return r.transition(RunCancelled) }
 
 // RunRepository 运行仓储端口。
 type RunRepository interface {

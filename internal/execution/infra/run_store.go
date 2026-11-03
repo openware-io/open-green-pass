@@ -32,13 +32,15 @@ func (s *RunStore) Save(ctx context.Context, r *domain.Run) error {
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		_, err := tx.Exec(ctx, `
 			INSERT INTO run_run(id, team_id, scenario_id, target_id, env, target_version, target_branch,
-				env_version, env_check_id, run_mode, state, selected_cases, started_at, ended_at, created_by)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+				env_version, env_check_id, run_mode, state, selected_cases, started_at, ended_at, cancelled_at, cancel_reason, created_by)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
 			ON CONFLICT (id) DO UPDATE SET
 				state=EXCLUDED.state, env_version=EXCLUDED.env_version, env_check_id=EXCLUDED.env_check_id,
-				started_at=EXCLUDED.started_at, ended_at=EXCLUDED.ended_at, updated_at=now()`,
+				started_at=EXCLUDED.started_at, ended_at=EXCLUDED.ended_at,
+				cancelled_at=EXCLUDED.cancelled_at, cancel_reason=EXCLUDED.cancel_reason, updated_at=now()`,
 			r.ID, r.TeamID, r.ScenarioID, r.TargetID, r.Env, r.TargetVersion, r.TargetBranch,
-			r.EnvVersion, r.EnvCheckID, r.RunMode, string(r.State), casesJSON, r.StartedAt, r.EndedAt, 0)
+			r.EnvVersion, r.EnvCheckID, r.RunMode, string(r.State), casesJSON, r.StartedAt, r.EndedAt,
+			r.CancelledAt, r.CancelReason, 0)
 		return err
 	})
 }
@@ -51,10 +53,12 @@ func (s *RunStore) Find(ctx context.Context, teamID, runID int64) (*domain.Run, 
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		row := tx.QueryRow(ctx, `
 			SELECT id, team_id, scenario_id, target_id, env, target_version, target_branch,
-				env_version, env_check_id, run_mode, state, selected_cases, started_at, ended_at
+				env_version, env_check_id, run_mode, state, selected_cases, started_at, ended_at,
+				cancelled_at, COALESCE(cancel_reason,'')
 			FROM run_run WHERE team_id=$1 AND id=$2`, teamID, runID)
 		return row.Scan(&r.ID, &r.TeamID, &r.ScenarioID, &r.TargetID, &r.Env, &targetVersion, &targetBranch,
-			&envVersion, &r.EnvCheckID, &runMode, &state, &casesJSON, &r.StartedAt, &r.EndedAt)
+			&envVersion, &r.EnvCheckID, &runMode, &state, &casesJSON, &r.StartedAt, &r.EndedAt,
+			&r.CancelledAt, &r.CancelReason)
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -80,7 +84,8 @@ func (s *RunStore) List(ctx context.Context, teamID int64, targetID *int64, stat
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
 			SELECT id, team_id, scenario_id, target_id, env, target_version, target_branch,
-				env_version, env_check_id, run_mode, state, selected_cases, started_at, ended_at
+				env_version, env_check_id, run_mode, state, selected_cases, started_at, ended_at,
+				cancelled_at, COALESCE(cancel_reason,'')
 			FROM run_run
 			WHERE team_id=$1
 			  AND ($2::bigint IS NULL OR target_id=$2)
@@ -95,7 +100,8 @@ func (s *RunStore) List(ctx context.Context, teamID int64, targetID *int64, stat
 			var stateValue, runMode, targetVersion, targetBranch, envVersion string
 			var casesJSON []byte
 			if err := rows.Scan(&run.ID, &run.TeamID, &run.ScenarioID, &run.TargetID, &run.Env, &targetVersion, &targetBranch,
-				&envVersion, &run.EnvCheckID, &runMode, &stateValue, &casesJSON, &run.StartedAt, &run.EndedAt); err != nil {
+				&envVersion, &run.EnvCheckID, &runMode, &stateValue, &casesJSON, &run.StartedAt, &run.EndedAt,
+				&run.CancelledAt, &run.CancelReason); err != nil {
 				return err
 			}
 			run.TargetVersion, run.TargetBranch, run.EnvVersion = targetVersion, targetBranch, envVersion

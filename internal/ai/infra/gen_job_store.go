@@ -3,12 +3,14 @@ package infra
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/openware-io/open-green-pass/internal/ai/domain"
 	governance "github.com/openware-io/open-green-pass/internal/governance/infra"
+	gperr "github.com/openware-io/open-green-pass/pkg/errors"
 	"github.com/openware-io/open-green-pass/pkg/id"
 )
 
@@ -126,9 +128,28 @@ func (s *GenerationJobStore) Update(ctx context.Context, job *domain.GenerationJ
 func (s *GenerationJobStore) ReadOutput(ctx context.Context, teamID, jobID int64) (string, string, error) {
 	job, err := s.Find(ctx, teamID, jobID)
 	if err != nil {
-		return "", "", err
+		return "", "", generationJobNotFoundError(err)
 	}
 	return string(job.State), job.Output, nil
+}
+
+// ReadJobProject returns the job's project for authorization before an import.
+// It is tenant-scoped, so a guessed job id cannot resolve another tenant.
+func (s *GenerationJobStore) ReadJobProject(ctx context.Context, teamID, jobID int64) (int64, error) {
+	job, err := s.Find(ctx, teamID, jobID)
+	if err != nil {
+		return 0, generationJobNotFoundError(err)
+	}
+	return job.ProjectID, nil
+}
+
+// generationJobNotFoundError maps the repository's no-rows error to the shared
+// 404 kind so the HTTP adapters return not_found instead of 500/400.
+func generationJobNotFoundError(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return gperr.NotFound("generation job not found")
+	}
+	return err
 }
 
 // Events 查询事件。

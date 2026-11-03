@@ -196,6 +196,8 @@ func (c Confidence) Valid() bool {
 }
 
 // Transition 执行状态流转；返回 from/to，非法流转返回领域错误。
+//
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (f *Finding) Transition(action FindingAction, actor int64, reason string) (FindingStatus, FindingStatus, error) {
 	from := f.Status
 	if from == "" {

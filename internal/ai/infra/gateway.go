@@ -11,9 +11,11 @@ import (
 	"github.com/openware-io/open-green-pass/internal/ai/domain"
 )
 
-var ErrNoProvider = errors.New("no AI provider available")
-var ErrRequestIDRequired = errors.New("request id required")
-var ErrInvalidSecretRef = errors.New("secret reference must be an opaque supported URI")
+var (
+	ErrNoProvider        = errors.New("no AI provider available")
+	ErrRequestIDRequired = errors.New("request id required")
+	ErrInvalidSecretRef  = errors.New("secret reference must be an opaque supported URI")
+)
 
 // Gateway routes to the preferred provider, then fallbacks in order. The
 // semaphore limits in-flight calls across all providers in one process.

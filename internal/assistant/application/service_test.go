@@ -18,6 +18,7 @@ type testRepository struct {
 
 func (r *testRepository) CreateSession(context.Context, Session, string) error { return nil }
 func (r *testRepository) Session(context.Context, int64) (Session, error)      { return r.session, nil }
+
 func (r *testRepository) AddTurns(_ context.Context, turns []Turn) error {
 	r.writes++
 	r.turns = append(r.turns, turns...)

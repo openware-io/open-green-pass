@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/jackc/pgx/v5"
 
 	"github.com/openware-io/open-green-pass/internal/governance/domain"
@@ -234,11 +235,4 @@ func levelToNodeType(level int64) domain.TargetNodeType {
 	default:
 		return domain.NodeProject
 	}
-}
-
-func ptrStr(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
 }

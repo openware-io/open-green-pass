@@ -70,6 +70,8 @@ func (p *TrustedCostPort) Record(ctx context.Context, record domain.CostRecord) 
 	return err
 }
 
-var _ domain.GatePort = (*TrustedGatePort)(nil)
-var _ domain.ReportPort = (*TrustedReportPort)(nil)
-var _ domain.CostPort = (*TrustedCostPort)(nil)
+var (
+	_ domain.GatePort   = (*TrustedGatePort)(nil)
+	_ domain.ReportPort = (*TrustedReportPort)(nil)
+	_ domain.CostPort   = (*TrustedCostPort)(nil)
+)

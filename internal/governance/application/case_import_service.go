@@ -16,6 +16,9 @@ import (
 // GenerationOutputReader 读取生成 Job 的终态输出（AI 域实现）。
 type GenerationOutputReader interface {
 	ReadOutput(ctx context.Context, teamID, jobID int64) (state, output string, err error)
+	// ReadJobProject resolves the owning project so the HTTP adapter can
+	// authorize the import against the job (not a client-supplied target).
+	ReadJobProject(ctx context.Context, teamID, jobID int64) (int64, error)
 }
 
 // CaseImportService 导入 DSH 生成用例。
@@ -37,6 +40,19 @@ type GeneratedCase struct {
 	Kind            string          `json:"kind"`
 	Script          json.RawMessage `json:"script"`
 	CoverageCellIDs []int64         `json:"coverage_cell_ids"`
+}
+
+// JobProject resolves the project that owns a generation job. The HTTP adapter
+// uses it for project-level authorization before importing.
+func (s *CaseImportService) JobProject(ctx context.Context, jobID int64) (int64, error) {
+	teamID, ok := rls.TenantFrom(ctx)
+	if !ok {
+		return 0, gperr.Unauthorized("tenant required")
+	}
+	if jobID <= 0 {
+		return 0, gperr.Validation("job_id required")
+	}
+	return s.reader.ReadJobProject(ctx, teamID, jobID)
 }
 
 // Import parses the job output and creates cases; coverage cells are assigned

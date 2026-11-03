@@ -74,11 +74,11 @@ func GenerationPipelineWorkflow(ctx workflow.Context, input GenerationPipelineIn
 	var review ReviewSignalPayload
 	var rollback RollbackSignalPayload
 	approved := false
-	selector.AddReceive(reviewCh, func(channel workflow.ReceiveChannel, more bool) {
+	selector.AddReceive(reviewCh, func(channel workflow.ReceiveChannel, _ bool) {
 		channel.Receive(ctx, &review)
 		approved = review.Decision == "approve"
 	})
-	selector.AddReceive(rollbackCh, func(channel workflow.ReceiveChannel, more bool) {
+	selector.AddReceive(rollbackCh, func(channel workflow.ReceiveChannel, _ bool) {
 		channel.Receive(ctx, &rollback)
 	})
 	selector.Select(ctx)

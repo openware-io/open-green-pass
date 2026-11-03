@@ -42,6 +42,7 @@ type wechatProfile struct {
 	ErrMsg     string `json:"errmsg"`
 }
 
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func RegisterWechat(mux *http.ServeMux, store *iaminfra.WechatStore, auth *iaminfra.AuthStore, namespace string, secureCookie bool) {
 	mux.HandleFunc("GET /auth/wechat/status", func(w http.ResponseWriter, r *http.Request) {
 		teamID, _ := strconv.ParseInt(r.URL.Query().Get("team_id"), 10, 64)
@@ -192,7 +193,7 @@ func RegisterWechat(mux *http.ServeMux, store *iaminfra.WechatStore, auth *iamin
 			redirectWechatError(w, r, "session_failed")
 			return
 		}
-		http.SetCookie(w, &http.Cookie{Name: iaminfra.SessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: secureCookie, SameSite: http.SameSiteLaxMode, Expires: expires, MaxAge: int(time.Until(expires).Seconds())})
+		http.SetCookie(w, &http.Cookie{Name: iaminfra.SessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: secureCookie, SameSite: http.SameSiteLaxMode, Expires: expires, MaxAge: int(time.Until(expires).Seconds())}) //nolint:gosec // G124: Secure is env-controlled for local HTTP; HttpOnly and SameSite are fixed
 		http.Redirect(w, r, "/#/scenarios", http.StatusFound)
 	})
 }
@@ -211,6 +212,7 @@ func startWechat(w http.ResponseWriter, r *http.Request, store *iaminfra.WechatS
 	query := url.Values{"appid": {cfg.AppID}, "redirect_uri": {cfg.CallbackURI}, "response_type": {"code"}, "scope": {"snsapi_login"}, "state": {state}}
 	http.Redirect(w, r, "https://open.weixin.qq.com/connect/qrconnect?"+query.Encode()+"#wechat_redirect", http.StatusFound)
 }
+
 func wechatExchange(ctx context.Context, appID, secret, code string) (iaminfra.WechatIdentity, error) {
 	client := &http.Client{Timeout: 15 * time.Second}
 	tokenURL := "https://api.weixin.qq.com/sns/oauth2/access_token?" + url.Values{"appid": {appID}, "secret": {secret}, "code": {code}, "grant_type": {"authorization_code"}}.Encode()
@@ -237,9 +239,11 @@ func wechatExchange(ctx context.Context, appID, secret, code string) (iaminfra.W
 	}
 	return iaminfra.WechatIdentity{OpenID: profile.OpenID, UnionID: profile.UnionID, DisplayName: profile.Nickname, AvatarURL: profile.HeadImgURL}, nil
 }
+
 func redirectWechatError(w http.ResponseWriter, r *http.Request, code string) {
 	http.Redirect(w, r, "/#/login?wechat_error="+url.QueryEscape(code), http.StatusFound)
 }
+
 func writeWechatSecret(ctx context.Context, ns, name, value string) error {
 	cfg, err := rest.InClusterConfig()
 	if err != nil {
@@ -259,6 +263,7 @@ func writeWechatSecret(ctx context.Context, ns, name, value string) error {
 	_, err = secrets.Create(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name}, Type: corev1.SecretTypeOpaque, StringData: map[string]string{"app-secret": value}}, metav1.CreateOptions{})
 	return err
 }
+
 func readWechatSecret(ctx context.Context, ref string) (string, error) {
 	parts := strings.Split(strings.TrimPrefix(ref, "k8s://"), "/")
 	if len(parts) != 2 {

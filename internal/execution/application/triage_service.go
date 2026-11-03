@@ -71,6 +71,8 @@ type TriageInput struct {
 }
 
 // Triage converts a failed result into a finding and links it back.
+//
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (s *RunService) Triage(ctx context.Context, runID int64, in TriageInput) (*domain.CaseResult, error) {
 	teamID, ok := rls.TenantFrom(ctx)
 	if !ok {

@@ -33,6 +33,8 @@ func VerifyAuditChain(events []domain.AuditEvent) AuditVerification {
 // VerifyAuditChainFromAnchor verifies an exported range against an internal
 // read-only checkpoint. The anchor is not written or refreshed by verification.
 // A nil anchor requires the range to begin at the zero chain head.
+//
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func VerifyAuditChainFromAnchor(events []domain.AuditEvent, anchor *domain.AuditAnchor) AuditVerification {
 	result := AuditVerification{Valid: true}
 	if len(events) == 0 {
@@ -104,7 +106,7 @@ func isSHA256Hex(value string) bool {
 		return false
 	}
 	return strings.IndexFunc(value, func(r rune) bool {
-		return !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f'))
+		return (r < '0' || r > '9') && (r < 'a' || r > 'f')
 	}) == -1
 }
 

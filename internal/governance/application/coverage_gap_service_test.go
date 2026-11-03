@@ -14,12 +14,15 @@ type gapRepoStub struct{ cells []domain.CoverageCell }
 func (s *gapRepoStub) SaveEndpoints(context.Context, int64, []domain.Endpoint) ([]domain.Endpoint, error) {
 	return nil, nil
 }
+
 func (s *gapRepoStub) SaveCells(context.Context, int64, []domain.CoverageCell) ([]domain.CoverageCell, error) {
 	return nil, nil
 }
+
 func (s *gapRepoStub) ListCells(context.Context, int64, domain.CoverageFilter) ([]domain.CoverageCell, error) {
 	return s.cells, nil
 }
+
 func (s *gapRepoStub) Summary(context.Context, int64, domain.CoverageFilter) (domain.CoverageSummary, error) {
 	return domain.CoverageSummary{}, nil
 }

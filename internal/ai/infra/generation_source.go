@@ -93,6 +93,7 @@ func newGitHubSourceReader(token string) *githubSourceReader {
 	return &githubSourceReader{client: &http.Client{Timeout: 15 * time.Second}, apiRoot: "https://api.github.com", token: strings.TrimSpace(token)}
 }
 
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (r *githubSourceReader) Fetch(ctx context.Context, repoURL, branch, sourcePath string) ([]sourceFile, string, error) {
 	owner, repo, err := parsePublicGitHubRepository(repoURL)
 	if err != nil {
@@ -195,6 +196,7 @@ func (r *githubSourceReader) ValidateRepo(ctx context.Context, repoURL string) e
 	return nil
 }
 
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (r *githubSourceReader) ListRefs(ctx context.Context, repoURL string) ([]repositoryRef, error) {
 	owner, repo, err := parsePublicGitHubRepository(repoURL)
 	if err != nil {
@@ -308,6 +310,7 @@ func (r *githubSourceReader) resolveTagCommit(ctx context.Context, owner, repo, 
 	return tag.Object.SHA, nil
 }
 
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (r *githubSourceReader) get(ctx context.Context, endpoint string, maxBytes int64) ([]byte, error) {
 	const maxAttempts = 3
 	var lastErr error

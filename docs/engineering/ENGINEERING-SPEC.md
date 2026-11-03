@@ -231,6 +231,8 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 
 - **依赖边界（depguard）**：`domain` 只许 stdlib+pkg+同域；`application` 禁 GORM/HTTP client/Temporal/Redis；`cmd` 之外的包禁自写 `main`。规则进 `golangci.yml` 并纳入 `make check`，不靠自觉。
 - **例外**：任何门禁例外必须有架构决策记录、负责人、到期时间、退出条件；禁止长期全局 `nolint` 掩盖。
+- **存量 gocyclo 债务（2026-11，Go 1.26 / golangci-lint v2 清零）**：39 个既有复杂编排函数逐函数标注 `//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog`（不全局放宽 `min-complexity`）；优先重构了 `canTransition`、run list/create 等小函数，复杂编排（路由注册、Temporal 活动编排、执行器）保留可见债务，按 lint backlog 逐步拆分。新增/修改函数不得复用该清单当免死金牌：能拆则拆，确需保留必须同格式逐函数注释并说明原因。
+- **gosec 合理例外**：G101/G124/G401/G501/G204/G705/G115 的少量逐行 `//nolint` 均带具体理由（测试凭据、运行时 Secure cookie、非加密稳定哈希、测试脚手架执行、JSON SSE 非 HTML、advisory-lock key），禁止用文件/目录级 `nolint` 或全局规则禁用掩盖。
 - `make check` 输出统一落 `.outputs/logs/<date>/`，临时调试日志不得写仓库根。
 
 ### 7.3 变更最小验证矩阵
@@ -334,11 +336,11 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 
 - `.env` 是版本控制中的共享本地开发基线（映射 im：环境差异用受管环境变量覆盖，生产/共享凭据不入库）；`.env.example` 提供模板。
 - 本地一键调试：GP 组件以 **版本化 Kubernetes 清单和部署脚本部署到 kind 集群内命名空间（ns: gp）**；本地调试 = 直接部署到 kind，或 `go run ./cmd/server` + 依赖经 kind 代理暴露后连接（port-forward / NodePort / ingress-nginx + kind extraPortMappings）。**不使用 docker 部署形态做调试**；`docker-compose` 仅保留给本机 testcontainers（集成测试回退，非首选）。
-- 本地测试部署唯一来源是 `scripts/dev/init-kind.ps1`/`deploy-kind.ps1`：禁止用独立 `docker run`、`docker compose up` 或未审查的手工 `kubectl apply` 替代 GP 应用部署；基础设施和应用必须落在 `gp`/`gp-runner`，不得修改 `open-im-local` 工作负载。
+- 本地测试部署唯一来源是 `scripts/dev/init-kind.ps1`/`deploy-kind.ps1`：禁止用独立 `docker run`、`docker compose up` 或未审查的手工 `kubectl apply` 替代 GP 应用部署；基础设施和应用必须落在 `gp`/`gp-runner`，不得修改 `open-im-local` 工作负载。`-Version` 必填；镜像来源默认 `auto`（本地缓存 → GHCR → 报错提示 `local-build`）；部署默认不清理本地镜像，旧标签清理需显式 `-PruneLocalImages` 且只作用于四个 GP 仓库。
 - 一键初始化唯一入口为 `scripts/dev/init-kind.ps1`（`make kind-init`）：kind 集群不存在时按 `deploy/kind/cluster.yaml` 创建；已有一个集群时复用；有多个时优先复用唯一已部署 GP 的集群，其次复用唯一承载 `open-im-local` 被测对象的集群，仍不能唯一判定时必须显式指定 `-KindCluster`。创建新集群时才安装固定版本 ingress-nginx；复用集群必须已具备就绪的 ingress-nginx 和 `30080 -> 30080` HTTP 入口，否则预检失败且不部署。初始化脚本调用 `deploy-kind.ps1` 完成清单部署，禁止另建平行发布流程。
 - 初始化脚本首次创建 GP Secret 时使用随机本地凭据，重复执行必须保留现有 Secret，不得重置密码或覆盖应用配置。发布后必须验证首页、health/ready、账号密码登录及认证态接口；验收失败时恢复已有 Deployment 的上一组镜像。kind 集群是否新建不改变 IM 工作负载只读快照核对要求。
 - Docker 的本地职责仅限构建 GreenPass 自研镜像和 `kind load docker-image`；GreenPass 自研镜像必须使用正式仓库命名和版本 tag，禁止使用 `latest`、临时镜像名或未记录的本地镜像运行测试。PostgreSQL、Redis、Temporal、SeaweedFS、Nginx 等中间件/第三方组件沿用其官方发布、兼容性和供应链规范，不套用 GreenPass 自研镜像命名规则。
-- 每次本地测试发布必须执行：构建 server/worker/web/migrate 镜像 → 加载 kind 所有节点 → `kubectl apply --dry-run=server` → 应用清单 apply → 版本化迁移 Job → rollout/readiness/关键链路检查 → 失败时恢复上一版本镜像；不得绕过发布脚本直接替换 Pod。
+- 每次本地测试发布必须执行：构建 server/worker/web/migrate 镜像 → 加载 kind 所有节点 → `kubectl apply --dry-run=server` → **迁移 Job（先于应用滚动）** → 应用清单 apply + rollout → readiness/关键链路检查（含 `/api/version` 版本/commit 与 dsh-gateway `/readyz`）→ 失败时恢复上一版本镜像并采集现场；不得绕过发布脚本直接替换 Pod。每次发布在 `.outputs/deploy/<version>-<timestamp>/` 留下 `plan.json`（镜像 tag→imageId/digest、部署前漂移）与 `summary.json`（迁移版本、冒烟结果、IM 隔离核对）作为 evidence。
 - 宿主机透传端口避让同环境既有服务（PG 5433 / Redis 6380 / 对象存储(SeaweedFS) 9100 / Temporal 专属 7233+8080）；`.env` 指向宿主机端口。
 - 调试输出统一 `.outputs/logs/`；禁把临时日志写仓库根。
 - Windows PowerShell 批量改写源码必须显式 UTF-8（禁裸 `Set-Content`/`Out-File` 缺编码）。
@@ -352,7 +354,7 @@ check    : validate + lint + test + build + vuln + migcheck       # 全量，CI 
 - 镜像：多阶段 `Dockerfile`（builder 用固定 toolchain + `CGO_ENABLED=0` 静态二进制 + `go:embed` 打包配置/迁移/前端产物）；私有化可单二进制交付。
 - 部署：GP 不把 Helm 作为运行或部署前置依赖；生产、私有化、本地 kind 均提供 Kubernetes 清单和脚本入口，使用者可自行选择 kubectl、Kustomize 或其他编排工具。Docker 不得作为应用部署运行时，只能用于镜像构建和 kind 导入；密钥经 Secret/受管环境注入，禁入库。
 - 发布制品命名固定为 `ghcr.io/openware-io/open-green-pass:X.Y.Z`、`ghcr.io/openware-io/open-green-pass-web:X.Y.Z`、`ghcr.io/openware-io/open-green-pass-migrate:X.Y.Z`、`ghcr.io/openware-io/open-green-pass-dsh-gateway:X.Y.Z`；镜像 tag 直接使用版本号，不加 `v` 前缀。开发/测试版本必须使用 `X.Y.Z-SNAPSHOT` 后缀（例如 `0.1.7-SNAPSHOT`），除非明确执行正式发布；正式版本才使用纯 `X.Y.Z`。server/worker 必须使用同一后端版本，migration 必须与 schema 版本匹配。
-- kind 发布记录必须包含 Git commit、部署版本、镜像 tag/digest、迁移版本、readiness 结果和 `open-im-local` 不变更核对；缺任一项不得标记发布成功。
+- kind 发布记录必须包含 Git commit、部署版本、镜像 tag/digest、迁移版本、readiness 结果和 `open-im-local` 不变更核对；缺任一项不得标记发布成功。上述记录由 `deploy-kind.ps1` 写入 `.outputs/deploy/<version>-<timestamp>/plan.json` 与 `summary.json`。
 - 发布后验证制品可启动、迁移成功、关键链路可观测；失败制品按策略撤回，不静默覆盖。
 
 ---

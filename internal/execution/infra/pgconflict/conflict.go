@@ -116,7 +116,7 @@ func lockKey(claim domain.ResourceClaim) int64 {
 	identity := strconv.FormatInt(claim.TeamID, 10) + "\x00" +
 		strconv.FormatInt(claim.TargetID, 10) + "\x00" + claim.ResourceType + "\x00" + claim.PoolID
 	sum := sha256.Sum256([]byte(identity))
-	return int64(binary.BigEndian.Uint64(sum[:8]))
+	return int64(binary.BigEndian.Uint64(sum[:8])) //nolint:gosec // G115: advisory-lock key uses the uniform low 63 bits; negative values are valid keys
 }
 
 func newToken() (string, error) {

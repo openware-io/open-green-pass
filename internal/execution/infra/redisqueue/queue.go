@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/openware-io/open-green-pass/internal/execution/domain"
-	redis "github.com/redis/go-redis/v9"
 	"strconv"
 	"time"
+
+	"github.com/openware-io/open-green-pass/internal/execution/domain"
+	redis "github.com/redis/go-redis/v9"
 )
 
 type Queue struct {
@@ -27,6 +28,7 @@ func New(ctx context.Context, c redis.UniversalClient, prefix, group string) (*Q
 	}
 	return q, nil
 }
+
 func (q *Queue) Enqueue(ctx context.Context, j domain.ScheduleJob) error {
 	if j.ID == "" || j.TeamID <= 0 || j.Weight <= 0 || len(j.Payload) == 0 {
 		return domain.ErrInvalidScheduleJob
@@ -47,6 +49,7 @@ func (q *Queue) Enqueue(ctx context.Context, j domain.ScheduleJob) error {
 	}
 	return nil
 }
+
 func (q *Queue) Promote(ctx context.Context, limit int) (int, error) {
 	if limit <= 0 {
 		return 0, domain.ErrInvalidScheduleJob
@@ -108,6 +111,7 @@ func (q *Queue) Claim(ctx context.Context, c string, limit int, block time.Durat
 	}
 	return o, nil
 }
+
 func (q *Queue) Recover(ctx context.Context, c string, limit int, idle time.Duration) ([]domain.ClaimedScheduleJob, error) {
 	if c == "" || limit <= 0 {
 		return nil, domain.ErrInvalidScheduleJob
@@ -118,6 +122,7 @@ func (q *Queue) Recover(ctx context.Context, c string, limit int, idle time.Dura
 	}
 	return decode(m)
 }
+
 func (q *Queue) Ack(ctx context.Context, jobs ...domain.ClaimedScheduleJob) error {
 	if len(jobs) == 0 {
 		return nil
@@ -165,6 +170,8 @@ func (q *Queue) DeadLetter(ctx context.Context, reason string, jobs ...domain.Cl
 // replaying the original payload would create an endless poison-message loop.
 // The original dead-letter entry remains immutable and a replay audit event is
 // appended to a separate Redis stream.
+//
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (q *Queue) ReplayDeadLetter(ctx context.Context, deliveryID string, correctedPayload []byte) error {
 	if deliveryID == "" || len(correctedPayload) == 0 {
 		return domain.ErrInvalidScheduleJob

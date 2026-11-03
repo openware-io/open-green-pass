@@ -39,6 +39,7 @@ func (s *FakeCostTrendStore) DeleteTeamFacts(_ context.Context, teamID int64) er
 	return nil
 }
 
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (s *FakeCostTrendStore) Trend(_ context.Context, filter domain.CostTrendFilter) ([]domain.CostTrendPoint, error) {
 	duration, err := filter.Bucket.Duration()
 	if err != nil {

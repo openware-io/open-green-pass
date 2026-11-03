@@ -19,9 +19,11 @@ func (r *bundleRepo) Save(context.Context, *domain.Report) error { return nil }
 func (r *bundleRepo) Find(context.Context, int64, int64) (*domain.Report, error) {
 	return nil, domain.ErrReportNotFound
 }
+
 func (r *bundleRepo) FindByRunKind(context.Context, int64, int64, string) (*domain.Report, error) {
 	return nil, domain.ErrReportNotFound
 }
+
 func (r *bundleRepo) FindMany(context.Context, int64, []int64) ([]*domain.Report, error) {
 	return r.reports, nil
 }
@@ -47,7 +49,7 @@ func TestBundleRenderersProduceDownloadableArtifacts(t *testing.T) {
 	b := &Bundle{Markdown: "# GreenPass\n\n- pass: 1"}
 	pdf, contentType, extension, err := b.RenderBundle("pdf")
 	if err != nil || contentType != "application/pdf" || extension != "pdf" || !bytes.HasPrefix(pdf, []byte("%PDF-1.4")) {
-		t.Fatalf("pdf type=%s extension=%s err=%v prefix=%q", contentType, extension, err, pdf[:min(8, len(pdf))])
+		t.Fatalf("pdf type=%s extension=%s err=%v prefix=%q", contentType, extension, err, pdf[:minInt(8, len(pdf))])
 	}
 	docx, contentType, extension, err := b.RenderBundle("docx")
 	if err != nil || contentType != "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || extension != "docx" {
@@ -89,7 +91,7 @@ func TestBuildBundleRejectsUnknownFormat(t *testing.T) {
 	}
 }
 
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a < b {
 		return a
 	}

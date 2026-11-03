@@ -13,8 +13,10 @@ import (
 	resourcepool "github.com/openware-io/open-green-pass/internal/execution/infra/pool"
 )
 
-var ErrStaleGeneration = errors.New("stale execution pool generation")
-var ErrStaleLease = errors.New("stale execution pool lease")
+var (
+	ErrStaleGeneration = errors.New("stale execution pool generation")
+	ErrStaleLease      = errors.New("stale execution pool lease")
+)
 
 type Registration struct {
 	resourcepool.Registration

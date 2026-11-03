@@ -25,12 +25,15 @@ func (r *caseAuthzRepo) SaveVersion(context.Context, *domain.CaseVersion) error 
 func (r *caseAuthzRepo) FindCase(_ context.Context, _ int64, caseID int64) (*domain.Case, error) {
 	return r.cases[caseID], nil
 }
+
 func (r *caseAuthzRepo) FindVersion(context.Context, int64, int64, int) (*domain.CaseVersion, error) {
 	return nil, nil
 }
+
 func (r *caseAuthzRepo) ListCases(context.Context, int64, domain.CaseFilter) ([]*domain.Case, error) {
 	return nil, nil
 }
+
 func (r *caseAuthzRepo) History(context.Context, int64, int64) ([]*domain.CaseVersion, error) {
 	return nil, nil
 }

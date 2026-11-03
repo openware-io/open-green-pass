@@ -57,6 +57,8 @@ func (s *PolicyStore) Get(ctx context.Context, teamID, targetID, scenarioID int6
 	return p, err
 }
 
-var _ domain.PolicyRepository = (*PolicyStore)(nil)
-var _ domain.PolicyPort = (*PolicyStore)(nil)
-var _ domain.PolicyWriter = (*PolicyStore)(nil)
+var (
+	_ domain.PolicyRepository = (*PolicyStore)(nil)
+	_ domain.PolicyPort       = (*PolicyStore)(nil)
+	_ domain.PolicyWriter     = (*PolicyStore)(nil)
+)

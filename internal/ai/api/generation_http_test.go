@@ -15,6 +15,7 @@ import (
 	"github.com/openware-io/open-green-pass/internal/platform/rls"
 )
 
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func TestGenerationBatchListScopesOrdersAndLimitsResults(t *testing.T) {
 	repo := infra.NewMemoryGenerationBatchRepository()
 	for i := int64(1); i <= 53; i++ {

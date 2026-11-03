@@ -93,7 +93,7 @@ func TestGitHubSourceListRefsPaginates(t *testing.T) {
 
 func TestGitHubSourceGetRetriesSecondaryRateLimit(t *testing.T) {
 	var calls int32
-	reader := newTestGitHubReader(func(r *http.Request) (*http.Response, error) {
+	reader := newTestGitHubReader(func(_ *http.Request) (*http.Response, error) {
 		if atomic.AddInt32(&calls, 1) == 1 {
 			header := http.Header{}
 			header.Set("Retry-After", "0")
@@ -112,7 +112,7 @@ func TestGitHubSourceGetRetriesSecondaryRateLimit(t *testing.T) {
 
 func TestGitHubSourceGetRetriesRateLimit(t *testing.T) {
 	var calls int32
-	reader := newTestGitHubReader(func(r *http.Request) (*http.Response, error) {
+	reader := newTestGitHubReader(func(_ *http.Request) (*http.Response, error) {
 		if atomic.AddInt32(&calls, 1) == 1 {
 			header := http.Header{}
 			header.Set("Retry-After", "0")

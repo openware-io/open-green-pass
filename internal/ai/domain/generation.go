@@ -111,27 +111,20 @@ func (b *GenerationBatch) Transition(next GenerationBatchState, expectedVersion 
 	return nil
 }
 
+var generationBatchTransitions = map[GenerationBatchState]map[GenerationBatchState]struct{}{
+	GenerationEnqueued:     {GenerationFetching: {}, GenerationCancelled: {}, GenerationFailed: {}},
+	GenerationFetching:     {GenerationParsing: {}, GenerationCancelled: {}, GenerationFailed: {}},
+	GenerationParsing:      {GenerationGenerating: {}, GenerationCancelled: {}, GenerationFailed: {}},
+	GenerationGenerating:   {GenerationQualityCheck: {}, GenerationCancelled: {}, GenerationFailed: {}},
+	GenerationQualityCheck: {GenerationReview: {}, GenerationCancelled: {}, GenerationFailed: {}},
+	GenerationReview:       {GenerationCommitting: {}, GenerationRejected: {}, GenerationCancelled: {}, GenerationFailed: {}},
+	GenerationCommitting:   {GenerationApproved: {}, GenerationFailed: {}},
+	GenerationApproved:     {GenerationRolledBack: {}},
+}
+
 func canTransition(from, to GenerationBatchState) bool {
-	switch from {
-	case GenerationEnqueued:
-		return to == GenerationFetching || to == GenerationCancelled || to == GenerationFailed
-	case GenerationFetching:
-		return to == GenerationParsing || to == GenerationCancelled || to == GenerationFailed
-	case GenerationParsing:
-		return to == GenerationGenerating || to == GenerationCancelled || to == GenerationFailed
-	case GenerationGenerating:
-		return to == GenerationQualityCheck || to == GenerationCancelled || to == GenerationFailed
-	case GenerationQualityCheck:
-		return to == GenerationReview || to == GenerationCancelled || to == GenerationFailed
-	case GenerationReview:
-		return to == GenerationCommitting || to == GenerationRejected || to == GenerationCancelled || to == GenerationFailed
-	case GenerationCommitting:
-		return to == GenerationApproved || to == GenerationFailed
-	case GenerationApproved:
-		return to == GenerationRolledBack
-	default:
-		return false
-	}
+	_, allowed := generationBatchTransitions[from][to]
+	return allowed
 }
 
 // GenerationBatchRepository is the persistence boundary for generation batch

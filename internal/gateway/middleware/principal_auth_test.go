@@ -9,7 +9,7 @@ import (
 )
 
 func TestPrincipalAuthRequiresCredentialWithoutFallback(t *testing.T) {
-	h := PrincipalAuth(iam.StaticProvider{Credential: "ok", Principal: iam.Principal{Subject: "u", TenantID: "t"}}, false)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	h := PrincipalAuth(iam.StaticProvider{Credential: "ok", Principal: iam.Principal{Subject: "u", TenantID: "t"}}, false)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)

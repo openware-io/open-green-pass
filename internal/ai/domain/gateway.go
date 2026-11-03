@@ -5,12 +5,14 @@ import (
 	"errors"
 )
 
-var ErrRetryable = errors.New("ai: retryable provider failure")
-var ErrInvalidRequest = errors.New("ai: invalid request")
-var ErrProviderUnavailable = errors.New("ai: provider unavailable")
-var ErrRateLimited = errors.New("ai: provider rate limited")
-var ErrProviderTimeout = errors.New("ai: provider timeout")
-var ErrProviderAuth = errors.New("ai: provider authentication failed")
+var (
+	ErrRetryable           = errors.New("ai: retryable provider failure")
+	ErrInvalidRequest      = errors.New("ai: invalid request")
+	ErrProviderUnavailable = errors.New("ai: provider unavailable")
+	ErrRateLimited         = errors.New("ai: provider rate limited")
+	ErrProviderTimeout     = errors.New("ai: provider timeout")
+	ErrProviderAuth        = errors.New("ai: provider authentication failed")
+)
 
 // RetryableError marks failures for which a fallback provider may be tried
 // (for example timeout, rate limit, or provider 5xx). Credential, request,

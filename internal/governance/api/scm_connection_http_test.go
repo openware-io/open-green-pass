@@ -64,7 +64,7 @@ func TestParseKubernetesSecretRef(t *testing.T) {
 }
 
 func TestProbeGitHubReadTokenRejectsClassicScopes(t *testing.T) {
-	withGitHubTransport(t, func(r *http.Request) (*http.Response, error) {
+	withGitHubTransport(t, func(_ *http.Request) (*http.Response, error) {
 		header := http.Header{}
 		header.Set("X-OAuth-Scopes", "repo, workflow")
 		return fakeResponse(http.StatusOK, `{"login":"alice"}`, header), nil

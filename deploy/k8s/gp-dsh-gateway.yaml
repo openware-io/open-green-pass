@@ -13,7 +13,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: dsh-gateway
-          image: IMAGE_REGISTRY/open-green-pass-dsh-gateway:VERSION
+          image: IMAGE_REGISTRY/open-green-pass-dsh-gateway:DSH_VERSION
           imagePullPolicy: IMAGE_PULL_POLICY
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
           ports: [{ name: http, containerPort: 8090 }]

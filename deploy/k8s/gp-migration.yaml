@@ -16,7 +16,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: migrate
-          image: IMAGE_REGISTRY/open-green-pass-migrate:VERSION
+          image: IMAGE_REGISTRY/open-green-pass-migrate:MIGRATE_VERSION
           imagePullPolicy: IMAGE_PULL_POLICY
           command: ["/usr/local/bin/gp-migrate"]
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }

@@ -29,7 +29,7 @@ func RegisterAuth(mux *http.ServeMux, store *iaminfra.AuthStore, secureCookie bo
 			httpx.WriteJSON(w, 401, map[string]string{"error": "invalid_credentials"})
 			return
 		}
-		http.SetCookie(w, &http.Cookie{Name: iaminfra.SessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: secureCookie, SameSite: http.SameSiteLaxMode, Expires: expires, MaxAge: int(time.Until(expires).Seconds())})
+		http.SetCookie(w, &http.Cookie{Name: iaminfra.SessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: secureCookie, SameSite: http.SameSiteLaxMode, Expires: expires, MaxAge: int(time.Until(expires).Seconds())}) //nolint:gosec // G124: Secure is env-controlled for local HTTP; HttpOnly and SameSite are fixed
 		httpx.WriteJSON(w, 200, map[string]any{"user": u, "expires_at": expires})
 	})
 	mux.HandleFunc("GET /auth/me", func(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +50,7 @@ func RegisterAuth(mux *http.ServeMux, store *iaminfra.AuthStore, secureCookie bo
 		if c != nil {
 			_ = store.Logout(r.Context(), c.Value)
 		}
-		http.SetCookie(w, &http.Cookie{Name: iaminfra.SessionCookie, Value: "", Path: "/", HttpOnly: true, Secure: secureCookie, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+		http.SetCookie(w, &http.Cookie{Name: iaminfra.SessionCookie, Value: "", Path: "/", HttpOnly: true, Secure: secureCookie, SameSite: http.SameSiteLaxMode, MaxAge: -1}) //nolint:gosec // G124: Secure is env-controlled for local HTTP; HttpOnly and SameSite are fixed
 		w.WriteHeader(http.StatusNoContent)
 	})
 }

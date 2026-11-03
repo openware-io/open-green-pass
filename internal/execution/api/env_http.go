@@ -50,6 +50,7 @@ func register(mux *http.ServeMux, envSvc *application.EnvService, runSvc *applic
 	mux.HandleFunc("POST /runs/{id}/execute", rh.executeRun)
 	mux.HandleFunc("POST /runs/{id}/pause", rh.pauseRun)
 	mux.HandleFunc("POST /runs/{id}/resume", rh.resumeRun)
+	mux.HandleFunc("POST /runs/{id}/cancel", rh.cancelRun)
 }
 
 // authorizeTarget checks the target-level permission of environment and policy

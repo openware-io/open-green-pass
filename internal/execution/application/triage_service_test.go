@@ -20,6 +20,7 @@ func (r *triageRepo) Save(context.Context, *domain.Run) error { return nil }
 func (r *triageRepo) Find(context.Context, int64, int64) (*domain.Run, error) {
 	return nil, nil
 }
+
 func (r *triageRepo) List(context.Context, int64, *int64, string, int) ([]*domain.Run, error) {
 	return nil, nil
 }

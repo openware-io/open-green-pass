@@ -25,7 +25,7 @@ func SetGenerationDeps(svc *application.GenerationBatchService, store *infra.Gen
 	generationDeps = &generationActivities{svc: svc, store: store, gen: gen}
 }
 
-func generationContext(ctx context.Context, input BatchActivityInput) context.Context {
+func generationContext(_ context.Context, input BatchActivityInput) context.Context {
 	return rls.WithTenant(context.Background(), input.TeamID)
 }
 
@@ -103,14 +103,14 @@ func FailGeneration(ctx context.Context, input BatchActivityInput) error {
 	return err
 }
 
-func RecordReview(ctx context.Context, payload ReviewSignalPayload) error {
+func RecordReview(_ context.Context, payload ReviewSignalPayload) error {
 	if generationDeps == nil {
 		return fmt.Errorf("generation dependencies are not configured")
 	}
 	return generationDeps.store.RecordReview(rls.WithTenant(context.Background(), payload.TeamID), payload.TeamID, payload.BatchID, payload.ActorID, payload.StateVersion, payload.Decision, payload.RequestID)
 }
 
-func CommitVersions(ctx context.Context, payload ReviewSignalPayload) error {
+func CommitVersions(_ context.Context, payload ReviewSignalPayload) error {
 	if generationDeps == nil {
 		return fmt.Errorf("generation dependencies are not configured")
 	}
@@ -138,12 +138,13 @@ func CommitVersions(ctx context.Context, payload ReviewSignalPayload) error {
 	return err
 }
 
-func ApplyRollback(ctx context.Context, payload RollbackSignalPayload) error {
+func ApplyRollback(_ context.Context, payload RollbackSignalPayload) error {
 	if generationDeps == nil {
 		return fmt.Errorf("generation dependencies are not configured")
 	}
 	return generationDeps.store.RecordReview(rls.WithTenant(context.Background(), payload.TeamID), payload.TeamID, payload.BatchID, payload.ActorID, payload.StateVersion, "rollback", payload.RequestID)
 }
+
 func EmitAudit(ctx context.Context, payload ReviewSignalPayload) error {
 	activity.GetLogger(ctx).Info("generation batch approved", "batch_id", payload.BatchID)
 	return nil

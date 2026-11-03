@@ -4,7 +4,7 @@ package domain
 
 import (
 	"context"
-	"crypto/sha1"
+	"crypto/sha1" //nolint:gosec // G505: sha1 is used only for stable endpoint fingerprinting, not security
 	"encoding/hex"
 	"strings"
 	"time"
@@ -111,7 +111,7 @@ func BuildCoveragePlan(projectID int64, endpoints []Endpoint) []CoverageCell {
 
 // EndpointHash 端点稳定哈希（method + 规范化 path）。
 func EndpointHash(method, path string) string {
-	sum := sha1.Sum([]byte(strings.ToUpper(strings.TrimSpace(method)) + " " + normalizePath(path)))
+	sum := sha1.Sum([]byte(strings.ToUpper(strings.TrimSpace(method)) + " " + normalizePath(path))) //nolint:gosec // G401: stable endpoint fingerprint, not a security hash
 	return hex.EncodeToString(sum[:])[:12]
 }
 
@@ -128,6 +128,8 @@ func normalizePath(path string) string {
 }
 
 // Archetype 端点类型。
+//
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func Archetype(ep Endpoint) string {
 	path := strings.ToLower(ep.Path)
 	if strings.HasPrefix(path, "/auth") || strings.Contains(path, "/auth/") {

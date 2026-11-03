@@ -12,8 +12,8 @@ import (
 const (
 	// The 53-bit total layout keeps IDs exact in browser JSON clients while
 	// retaining a 8.7-year millisecond clock from the 2024 epoch.
-	nodeBits  uint64 = 3  // 8 nodes
-	seqBits   uint64 = 12 // 每毫秒 4096 序列
+	nodeBits uint64 = 3  // 8 nodes
+	seqBits  uint64 = 12 // 每毫秒 4096 序列
 	// JavaScript clients use IEEE-754 numbers. Keep every externally visible
 	// identifier within Number.MAX_SAFE_INTEGER (2^53-1): 38 timestamp bits +
 	// 3 node bits + 12 sequence bits. With the 2024 epoch this remains valid

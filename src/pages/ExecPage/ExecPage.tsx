@@ -26,6 +26,7 @@ const REAL_STATE_STYLE: Record<Run['state'], { label: string; className: string 
   report: { label: '生成报告', className: 'bg-emerald-50 text-emerald-700' },
   done: { label: '已完成', className: 'bg-emerald-50 text-emerald-700' },
   failed: { label: '已失败/阻断', className: 'bg-red-50 text-red-700' },
+  cancelled: { label: '已停止', className: 'bg-slate-100 text-slate-600' },
 };
 const TRIAGE_CANDIDATES = [
   { id: 'F-1042', severity: 'P0', kind: '产品缺陷', title: '支付回调验签失败仍返回 500', module: 'payment', evidence: '4/4', status: '待确认' },
@@ -205,7 +206,7 @@ function ExecPageContent({ targets, targetID, requestedCaseIDs, onTargetChange }
     const controller = new AbortController();
     void client.streamRunEvents(run.id, (next) => {
       setRun(next);
-      if (next.state === 'done' || next.state === 'failed') {
+      if (next.state === 'done' || next.state === 'failed' || next.state === 'cancelled') {
         void client.caseResults(next.id).then(setResults).catch(() => undefined);
         controller.abort();
       }
@@ -279,16 +280,18 @@ function ExecPageContent({ targets, targetID, requestedCaseIDs, onTargetChange }
     } finally { setBusy(false); }
   };
 
-  const invokeRunAction = async (action: 'pause' | 'resume') => {
+  const invokeRunAction = async (action: 'pause' | 'resume' | 'cancel') => {
     if (!client || !run) return;
+    if (action === 'cancel' && !window.confirm('停止后本次运行进入「已停止」终态，已完成用例的结果会保留；正在执行的请求/Job 会被取消。确定停止？')) return;
     setBusy(true);
     try {
       if (action === 'pause') setRun(await client.pauseRun(run.id));
       if (action === 'resume') setRun(await client.resumeRun(run.id));
+      if (action === 'cancel') setRun(await client.cancelRun(run.id));
       await refreshRun(run.id);
-      toast.success('真实运行状态已刷新');
+      toast.success(action === 'cancel' ? '已停止本次运行' : '真实运行状态已刷新');
     } catch (error) {
-      toast.error('运行操作失败', { description: error instanceof Error ? error.message : '未知错误' });
+      toast.error(action === 'cancel' ? '停止运行失败' : '运行操作失败', { description: error instanceof Error ? error.message : '未知错误' });
     } finally { setBusy(false); }
   };
   const recheck = () => {
@@ -415,6 +418,8 @@ function ExecPageContent({ targets, targetID, requestedCaseIDs, onTargetChange }
                   className="px-3 py-1.5 rounded-lg text-sm border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">暂停</button>
                 <button type="button" onClick={() => run && invokeRunAction('resume')} disabled={!run || busy || run.state !== 'paused'}
                   className="px-3 py-1.5 rounded-lg text-sm border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">恢复</button>
+                <button type="button" onClick={() => run && invokeRunAction('cancel')} disabled={!run || busy || ['done', 'failed', 'cancelled'].includes(run.state)}
+                  className="px-3 py-1.5 rounded-lg text-sm border border-red-200 bg-white text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">停止执行</button>
                 <button type="button" onClick={() => run && refreshRun(run.id).catch((error: unknown) => toast.error('刷新失败', { description: error instanceof Error ? error.message : '未知错误' }))} disabled={!run || busy}
                   className="px-3 py-1.5 rounded-lg text-sm border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">刷新状态</button>
               </div>

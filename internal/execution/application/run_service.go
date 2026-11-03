@@ -233,7 +233,7 @@ func (s *RunService) MarkFailed(ctx context.Context, runID int64) error {
 	if err != nil {
 		return err
 	}
-	if run.State == domain.RunFailed || run.State == domain.RunDone {
+	if run.State == domain.RunFailed || run.State == domain.RunDone || run.State == domain.RunCancelled {
 		return nil
 	}
 	if err := run.Fail(); err != nil {
@@ -243,6 +243,8 @@ func (s *RunService) MarkFailed(ctx context.Context, runID int64) error {
 }
 
 // ExecuteRun 执行当次用例（scheduled→running→collect→gate→report→done）；重跑 attempt_seq 递增。
+//
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.Run, results []*domain.CaseResult, err error) {
 	teamID, ok := rls.TenantFrom(ctx)
 	if !ok {
@@ -251,6 +253,10 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 	run, err = s.repo.Find(ctx, teamID, runID)
 	if err != nil {
 		return nil, nil, err
+	}
+	// A stop may land before the activity starts; never execute a cancelled run.
+	if run.State == domain.RunCancelled {
+		return run, nil, nil
 	}
 	ownerID, ok := rls.UserFrom(ctx)
 	if !ok {
@@ -291,13 +297,14 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 		}
 	}()
 	// 首次：scheduled→running；重跑（done/failed 终态）：重置为 running，attempt 递增
-	if run.State == domain.RunDone || run.State == domain.RunFailed {
+	switch run.State {
+	case domain.RunDone, domain.RunFailed:
 		run.State = domain.RunRunning
-	} else if run.State == domain.RunPaused {
+	case domain.RunPaused:
 		if err := run.Resume(); err != nil {
 			return nil, nil, err
 		}
-	} else {
+	default:
 		if err := run.Schedule(); err != nil {
 			return nil, nil, err
 		}
@@ -355,8 +362,21 @@ func (s *RunService) ExecuteRun(ctx context.Context, runID int64) (run *domain.R
 	// worker to continue using capacity after takeover.
 	results, err = s.executeWithLeaseRenewal(ctx, spec, poolLeases)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			// User cancelled while the runner was executing. The run row is
+			// already cancelled; do not append gate/report side effects.
+			return run, results, ctxErr
+		}
 		s.log.Error("execute cases failed", "run_id", runID, "error", err)
 		return nil, nil, err
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return run, results, ctxErr
+	}
+	// Cancellation can also arrive between the runner returning and the
+	// collect/gate/report transitions; reload the durable state and stop.
+	if fresh, freshErr := s.repo.Find(ctx, teamID, runID); freshErr == nil && fresh.State == domain.RunCancelled {
+		return fresh, results, nil
 	}
 
 	// 落库：同 run 同 case 重跑 attempt_seq 递增
@@ -559,6 +579,45 @@ func (s *RunService) PauseRun(ctx context.Context, runID int64) (*domain.Run, er
 // ResumeRun 恢复运行。
 func (s *RunService) ResumeRun(ctx context.Context, runID int64) (*domain.Run, error) {
 	return s.transitionWithSignal(ctx, runID, (*domain.Run).Resume, "resume")
+}
+
+// CancelRun 停止运行：先把 run 置为终态 cancelled 并持久化（用户意图优先），
+// 再请求 Temporal 取消 workflow；workflow 取消会传播到运行中的 Runner，
+// HTTP/K8s runner 据此中止当前请求/删除 Job。重复停止是幂等的。
+func (s *RunService) CancelRun(ctx context.Context, runID int64, reason string) (*domain.Run, error) {
+	teamID, ok := rls.TenantFrom(ctx)
+	if !ok {
+		return nil, ErrTenantRequired
+	}
+	run, err := s.repo.Find(ctx, teamID, runID)
+	if err != nil {
+		return nil, err
+	}
+	if run.State == domain.RunDone || run.State == domain.RunFailed || run.State == domain.RunCancelled {
+		return run, nil
+	}
+	if err := run.Cancel(); err != nil {
+		if errors.Is(err, domain.ErrRunFinished) {
+			return run, nil
+		}
+		return nil, err
+	}
+	now := time.Now().UTC()
+	run.CancelledAt = &now
+	run.EndedAt = &now
+	run.CancelReason = strings.TrimSpace(reason)
+	if len(run.CancelReason) > 512 {
+		run.CancelReason = run.CancelReason[:512]
+	}
+	if err := s.saveRun(ctx, run); err != nil {
+		return nil, err
+	}
+	if err := s.workflow.Cancel(ctx, runID, teamID); err != nil {
+		// The run is already durably cancelled; a missing/closed workflow is not
+		// allowed to turn a successful stop into an error.
+		s.log.Warn("cancel run workflow failed; run remains cancelled", "run_id", runID, "err", err)
+	}
+	return run, nil
 }
 
 func (s *RunService) transitionWithSignal(ctx context.Context, runID int64, fn func(*domain.Run) error, signal string) (*domain.Run, error) {

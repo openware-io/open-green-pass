@@ -22,6 +22,8 @@ type runResponse struct {
 	SelectedCases []int64    `json:"selected_cases"`
 	StartedAt     *time.Time `json:"started_at,omitempty"`
 	EndedAt       *time.Time `json:"ended_at,omitempty"`
+	CancelledAt   *time.Time `json:"cancelled_at,omitempty"`
+	CancelReason  string     `json:"cancel_reason,omitempty"`
 }
 
 type caseResultResponse struct {
@@ -46,6 +48,7 @@ func toRunResponse(run *domain.Run) runResponse {
 		Env: run.Env, TargetVersion: run.TargetVersion, TargetBranch: run.TargetBranch,
 		EnvVersion: run.EnvVersion, EnvCheckID: run.EnvCheckID, RunMode: run.RunMode,
 		State: string(run.State), SelectedCases: run.SelectedCases, StartedAt: run.StartedAt, EndedAt: run.EndedAt,
+		CancelledAt: run.CancelledAt, CancelReason: run.CancelReason,
 	}
 }
 

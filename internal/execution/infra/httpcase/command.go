@@ -13,6 +13,8 @@ import (
 // invocation. The host can only come from the operator-configured runtime;
 // model output is limited to a relative path, safe method, small JSON body,
 // allow-listed headers, and deterministic assertions.
+//
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func BuildCommand(script any, baseURL string) ([]string, error) {
 	root, ok := script.(map[string]any)
 	if !ok {

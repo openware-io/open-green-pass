@@ -41,12 +41,19 @@ func NewHTTPRunner(gen *id.Generator, bearerToken string) *HTTPRunner {
 func (r *HTTPRunner) Execute(ctx context.Context, specs []*domain.CaseSpec) ([]*domain.CaseResult, error) {
 	results := make([]*domain.CaseResult, 0, len(specs))
 	for _, spec := range specs {
+		if err := ctx.Err(); err != nil {
+			return results, err
+		}
 		result := r.executeOne(ctx, spec)
 		results = append(results, result)
+		if err := ctx.Err(); err != nil {
+			return results, err
+		}
 	}
 	return results, nil
 }
 
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (r *HTTPRunner) executeOne(ctx context.Context, spec *domain.CaseSpec) *domain.CaseResult {
 	now := time.Now().UTC()
 	result := &domain.CaseResult{
@@ -176,11 +183,11 @@ func (r *HTTPRunner) executeOne(ctx context.Context, spec *domain.CaseSpec) *dom
 	return result
 }
 
-func truncate(value string, max int) string {
-	if len(value) <= max {
+func truncate(value string, maxLen int) string {
+	if len(value) <= maxLen {
 		return value
 	}
-	return value[:max] + "..."
+	return value[:maxLen] + "..."
 }
 
 func numberToInt(value any) (int, bool) {

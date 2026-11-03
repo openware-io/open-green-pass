@@ -17,6 +17,7 @@ type TrustedAuditPort struct{ service auditAppender }
 func NewTrustedAuditPort(service *trustedapp.AuditService) *TrustedAuditPort {
 	return &TrustedAuditPort{service: service}
 }
+
 func (p *TrustedAuditPort) Append(ctx context.Context, event application.AuditEvent) error {
 	actor, _ := rls.UserFrom(ctx)
 	_, err := p.service.Append(ctx, actor, event.Op, event.Asset, event.AssetID, event.Payload)

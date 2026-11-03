@@ -45,8 +45,8 @@ func (o *MemoryOutbox) Claim(_ context.Context, now time.Time) (*domain.OutboxDe
 		item.Attempt++
 		item.Status = domain.DeliveryDispatching
 		o.items[key] = item
-		copy := item
-		return &copy, nil
+		cloned := item
+		return &cloned, nil
 	}
 	return nil, nil
 }

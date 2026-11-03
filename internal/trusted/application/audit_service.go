@@ -24,8 +24,6 @@ type TenantErr struct{}
 
 func (e *TenantErr) Error() string { return "tenant required: missing x-gp-team-id header" }
 
-func errTenantRequired() error { return ErrTenantRequired }
-
 // AuditService 审计服务（审计哈希链写入）。
 type AuditService struct {
 	repo domain.AuditRepository

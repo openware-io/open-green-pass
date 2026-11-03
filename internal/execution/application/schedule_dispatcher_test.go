@@ -23,9 +23,11 @@ func (*scheduleQueueStub) Promote(context.Context, int) (int, error) { return 0,
 func (q *scheduleQueueStub) Claim(context.Context, string, int, time.Duration) ([]domain.ClaimedScheduleJob, error) {
 	return q.claimed, nil
 }
+
 func (*scheduleQueueStub) Recover(context.Context, string, int, time.Duration) ([]domain.ClaimedScheduleJob, error) {
 	return nil, nil
 }
+
 func (q *scheduleQueueStub) Ack(_ context.Context, jobs ...domain.ClaimedScheduleJob) error {
 	q.acked = append(q.acked, jobs...)
 	return nil

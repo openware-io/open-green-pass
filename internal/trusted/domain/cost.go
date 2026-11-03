@@ -14,12 +14,16 @@ var (
 
 // CostLineItem 成本明细行（append-only；UNIQUE(idempotency_key) 防重复落账）。
 type CostLineItem struct {
-	ID                 int64
-	RequestID          string // AI 网关 requestId（贯穿计量）
-	IdempotencyKey     string // 幂等键 = request_id + biz_point
-	TeamID             int64
-	TargetID           int64
-	RunID              int64
+	ID             int64
+	RequestID      string // AI 网关 requestId（贯穿计量）
+	IdempotencyKey string // 幂等键 = request_id + biz_point
+	TeamID         int64
+	TargetID       int64
+	RunID          int64
+	// BatchID is the generation batch this charge belongs to (case_generate).
+	// Historical rows written before migration 000065 keep it zero/null and are
+	// associated by request_id fallback.
+	BatchID            int64
 	CaseID             int64
 	Category           CostCategory // generate / execute（PRD 两大口径）
 	BizPoint           string       // case_generate / case_execute / gate_judge / analysis
@@ -51,6 +55,10 @@ type CostRepository interface {
 	Overview(ctx context.Context, teamID int64) (*CostOverview, error)
 	Items(ctx context.Context, teamID int64, category, point string, limit int) ([]*CostLineItem, error)
 	CompareHistory(ctx context.Context, teamID, caseID int64) ([]*CostLineItem, error)
+	// BatchCosts 按 batch_id 精确汇总 generation 成本（map[batch_id]amount）。
+	// 历史 batch_id IS NULL 的行已在 COST-CLEANUP 中删除，这里不再做
+	// request_id LIKE 兜底。
+	BatchCosts(ctx context.Context, teamID int64, batchIDs []int64) (map[int64]float64, error)
 }
 
 // CostPrice is one effective-dated model tariff. Prices are CNY per 1K tokens.

@@ -10,8 +10,10 @@ import (
 	"github.com/openware-io/open-green-pass/internal/governance/domain"
 )
 
-var ErrModelNotFound = errors.New("model not found")
-var ErrPriceNotFound = errors.New("price snapshot not found")
+var (
+	ErrModelNotFound = errors.New("model not found")
+	ErrPriceNotFound = errors.New("price snapshot not found")
+)
 
 type ModelStore struct {
 	db *DB

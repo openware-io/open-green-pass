@@ -6,6 +6,7 @@ import TargetPage from '@/pages/TargetPage/TargetPage';
 import TargetEnvPage from '@/pages/TargetEnvPage/TargetEnvPage';
 import TracePage from '@/pages/TracePage/TracePage';
 import GenerationPage from '@/pages/GenerationPage/GenerationPage';
+import GenerationHistoryPage from '@/pages/GenerationHistoryPage/GenerationHistoryPage';
 import CasesPage from '@/pages/CasesPage/CasesPage';
 import ExecPage from '@/pages/ExecPage/ExecPage';
 import GatePage from '@/pages/GatePage/GatePage';
@@ -42,17 +43,29 @@ function ProtectedLayout() {
   return user ? <Layout /> : <Navigate to="/login" replace />;
 }
 
+/**
+ * `/login` is public, but an already authenticated session must not render the
+ * login form again (refresh/deep-link after login). Wait for the session restore
+ * to finish, then send the user into the app.
+ */
+function LoginRoute() {
+  const user=useCurrentUser(); const ready=useLoginReady();
+  if (ready && user) return <Navigate to="/scenarios" replace />;
+  return <LoginPage />;
+}
+
 export default function App() {
   return (
     <>
       <Routes>
-      <Route path="login" element={<LoginPage />} />
+      <Route path="login" element={<LoginRoute />} />
       <Route element={<ProtectedLayout />}>
         <Route index element={<Navigate to="/scenarios" replace />} />
         <Route path="target" element={<TargetPage />} />
           <Route path="target-env" element={<TargetEnvPage />} />
         <Route path="trace" element={<TracePage />} />
         <Route path="generation" element={<GenerationPage />} />
+        <Route path="generation/history" element={<GenerationHistoryPage />} />
         <Route path="cases" element={<CasesPage />} />
 
         <Route path="exec" element={<ExecPage />} />

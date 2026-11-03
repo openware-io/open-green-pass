@@ -37,6 +37,7 @@ type costLineResponse struct {
 	TeamID             int64     `json:"team_id"`
 	TargetID           int64     `json:"target_id"`
 	RunID              int64     `json:"run_id"`
+	BatchID            int64     `json:"batch_id,omitempty"`
 	CaseID             int64     `json:"case_id"`
 	Category           string    `json:"category"`
 	BizPoint           string    `json:"biz_point"`
@@ -113,7 +114,7 @@ func toGateResultResponses(in []*domain.GateResult) []gateResultResponse {
 func toCostLineResponse(c *domain.CostLineItem) costLineResponse {
 	return costLineResponse{
 		ID: c.ID, RequestID: c.RequestID, IdempotencyKey: c.IdempotencyKey,
-		TeamID: c.TeamID, TargetID: c.TargetID, RunID: c.RunID, CaseID: c.CaseID,
+		TeamID: c.TeamID, TargetID: c.TargetID, RunID: c.RunID, BatchID: c.BatchID, CaseID: c.CaseID,
 		Category: string(c.Category), BizPoint: c.BizPoint, Model: c.Model,
 		TokensIn: c.TokensIn, TokensOut: c.TokensOut, CacheReadTokens: c.CacheReadTokens,
 		UnitPrice: c.UnitPrice, InputUnitPrice: c.InputUnitPrice, OutputUnitPrice: c.OutputUnitPrice,

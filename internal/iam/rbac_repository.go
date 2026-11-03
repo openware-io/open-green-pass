@@ -76,8 +76,10 @@ type AssetPermission struct {
 	UpdatedAt       time.Time
 }
 
-var ErrInvalidMemberStatus = domainError("iam: invalid member status")
-var ErrInvalidQuota = domainError("iam: quota must be non-negative")
+var (
+	ErrInvalidMemberStatus = domainError("iam: invalid member status")
+	ErrInvalidQuota        = domainError("iam: quota must be non-negative")
+)
 
 // Validate checks values that must hold independently of persistence.
 func (p AssetPermission) Validate() error {

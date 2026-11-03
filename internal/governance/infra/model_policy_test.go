@@ -15,6 +15,7 @@ func (r modelPolicyRepo) CreateModel(context.Context, *domain.ModelConfig) error
 func (r modelPolicyRepo) FindModel(context.Context, int64, int64) (*domain.ModelConfig, error) {
 	return nil, nil
 }
+
 func (r modelPolicyRepo) ListModels(_ context.Context, teamID int64) ([]*domain.ModelConfig, error) {
 	var out []*domain.ModelConfig
 	for _, model := range r.models {

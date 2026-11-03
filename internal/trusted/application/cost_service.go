@@ -22,12 +22,25 @@ func NewCostService(repo domain.CostRepository, audit *AuditService, gen *id.Gen
 	return &CostService{repo: repo, audit: audit, gen: gen}
 }
 
+// BatchCostReader is the provider-owned read contract for generation batch cost
+// aggregation. It is the explicit boundary AI adapters consume; the trusted
+// domain never imports AI, and the concrete implementation below owns tenant
+// scoping and exact-batch matching.
+type BatchCostReader interface {
+	BatchCosts(ctx context.Context, teamID int64, batchIDs []int64) (map[int64]float64, error)
+}
+
+var _ BatchCostReader = (*CostService)(nil)
+
 // RecordRequest 成本计量请求（P1 mock meter；真实 AI 网关 MeterPort 后续接入）。
 type RecordRequest struct {
-	RequestID          string  `json:"request_id"`
-	BizPoint           string  `json:"biz_point"` // case_generate / case_execute / gate_judge / analysis
-	TargetID           int64   `json:"target_id"`
-	RunID              int64   `json:"run_id"`
+	RequestID string `json:"request_id"`
+	BizPoint  string `json:"biz_point"` // case_generate / case_execute / gate_judge / analysis
+	TargetID  int64  `json:"target_id"`
+	RunID     int64  `json:"run_id"`
+	// BatchID attributes case_generate charges to one generation batch; zero for
+	// non-generation charges and for legacy callers.
+	BatchID            int64   `json:"batch_id"`
 	CaseID             int64   `json:"case_id"`
 	Model              string  `json:"model"`
 	TokensIn           int64   `json:"tokens_in"`
@@ -71,7 +84,7 @@ func (s *CostService) Record(ctx context.Context, req RecordRequest) (bool, erro
 	item := &domain.CostLineItem{
 		ID: s.gen.Next(), RequestID: req.RequestID,
 		IdempotencyKey: req.RequestID + ":" + req.BizPoint,
-		TeamID:         teamID, TargetID: req.TargetID, RunID: req.RunID, CaseID: req.CaseID,
+		TeamID:         teamID, TargetID: req.TargetID, RunID: req.RunID, BatchID: req.BatchID, CaseID: req.CaseID,
 		Category: category, BizPoint: req.BizPoint, Model: req.Model,
 		TokensIn: req.TokensIn, TokensOut: req.TokensOut, CacheReadTokens: req.CacheReadTokens,
 		UnitPrice: req.UnitPrice, InputUnitPrice: req.InputUnitPrice, OutputUnitPrice: req.OutputUnitPrice,
@@ -118,4 +131,19 @@ func (s *CostService) CompareHistory(ctx context.Context, caseID int64) ([]*doma
 		return nil, ErrTenantRequired
 	}
 	return s.repo.CompareHistory(ctx, teamID, caseID)
+}
+
+// BatchCosts is the stable trusted read API for generation run cost detail.
+// It returns case_generate cost per batch id and only counts exact batch_id
+// matches; historical batch_id IS NULL rows were removed by COST-CLEANUP, so
+// there is intentionally no request_id LIKE fallback. The tenant scope is
+// injected here so consumers cannot accidentally read another tenant's ledger.
+func (s *CostService) BatchCosts(ctx context.Context, teamID int64, batchIDs []int64) (map[int64]float64, error) {
+	if teamID <= 0 {
+		return nil, ErrTenantRequired
+	}
+	if len(batchIDs) == 0 {
+		return map[int64]float64{}, nil
+	}
+	return s.repo.BatchCosts(rls.WithTenant(ctx, teamID), teamID, batchIDs)
 }

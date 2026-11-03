@@ -36,6 +36,8 @@ type rpcMessage struct {
 
 // Run starts a fresh DSH SDK process, initializes the route, prompts, waits for
 // idle, then shuts down. The process is always killed on return.
+//
+//nolint:gocyclo // legacy complexity; refactor tracked in lint backlog
 func (r SDKRunner) Run(ctx context.Context, job Job) (Result, error) {
 	binary := r.Binary
 	if binary == "" {

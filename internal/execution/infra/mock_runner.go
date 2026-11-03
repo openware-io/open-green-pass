@@ -19,7 +19,7 @@ type MockRunner struct {
 func NewMockRunner(gen *id.Generator) *MockRunner { return &MockRunner{gen: gen} }
 
 // Execute 同步执行用例规格，构造结果（含成本计量占位：ai_tokens/cost_amount 由成本域单点回填）。
-func (r *MockRunner) Execute(ctx context.Context, spec []*domain.CaseSpec) ([]*domain.CaseResult, error) {
+func (r *MockRunner) Execute(_ context.Context, spec []*domain.CaseSpec) ([]*domain.CaseResult, error) {
 	results := make([]*domain.CaseResult, 0, len(spec))
 	for _, s := range spec {
 		if s.RequiresSandbox {
