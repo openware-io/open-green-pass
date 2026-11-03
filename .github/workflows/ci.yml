@@ -31,10 +31,9 @@ jobs:
           staticcheck ./cmd/... ./internal/... ./pkg/...
 
       - name: 依赖边界与代码规范 (golangci-lint)
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.64
-          args: run ./cmd/... ./internal/... ./pkg/...
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+          "$(go env GOPATH)/bin/golangci-lint" run ./cmd/... ./internal/... ./pkg/...
 
       - name: 单元测试 (race)
         run: go test -race ./cmd/... ./internal/... ./pkg/...

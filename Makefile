@@ -36,7 +36,7 @@ check: validate lint test build vuln migcheck api-contract
 tools:
 	go install mvdan.cc/gofumpt@latest
 	go install golang.org/x/tools/cmd/goimports@latest
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 	go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
 	go install honnef.co/go/tools/cmd/staticcheck@latest
 
