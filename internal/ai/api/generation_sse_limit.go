@@ -15,25 +15,25 @@ import (
 // api↔infra import cycle; the default in-process implementation is below.
 type GenerationSSELimiter = domain.GenerationSSELimiter
 
-// memoryGenerationSSELimiter is the per-process fallback/default lease store.
+// MemoryGenerationSSELimiter is the per-process fallback/default lease store.
 // Production wires a Redis-backed limiter so replicas share one tenant budget;
 // the memory implementation keeps tests/embedded deployments functional and is
 // also the degradation target when Redis is unavailable. Leases are keyed by ID
 // so mixed primary/fallback streams can be released independently.
-type memoryGenerationSSELimiter struct {
+type MemoryGenerationSSELimiter struct {
 	mu     sync.Mutex
 	active map[int64]map[string]struct{}
 	max    int
 }
 
-func NewMemoryGenerationSSELimiter(limit int) *memoryGenerationSSELimiter {
+func NewMemoryGenerationSSELimiter(limit int) *MemoryGenerationSSELimiter {
 	if limit <= 0 {
 		limit = generationSSEMaxFromEnv()
 	}
-	return &memoryGenerationSSELimiter{active: make(map[int64]map[string]struct{}), max: limit}
+	return &MemoryGenerationSSELimiter{active: make(map[int64]map[string]struct{}), max: limit}
 }
 
-func (l *memoryGenerationSSELimiter) Acquire(_ context.Context, teamID int64, leaseID string) (bool, error) {
+func (l *MemoryGenerationSSELimiter) Acquire(_ context.Context, teamID int64, leaseID string) (bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	leases := l.active[teamID]
@@ -48,7 +48,7 @@ func (l *memoryGenerationSSELimiter) Acquire(_ context.Context, teamID int64, le
 	return true, nil
 }
 
-func (l *memoryGenerationSSELimiter) Release(_ context.Context, teamID int64, leaseID string) error {
+func (l *MemoryGenerationSSELimiter) Release(_ context.Context, teamID int64, leaseID string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	leases := l.active[teamID]
@@ -61,16 +61,16 @@ func (l *memoryGenerationSSELimiter) Release(_ context.Context, teamID int64, le
 
 // Renew is a no-op for the process-local lease: the slot lifetime is the
 // process lifetime and there is no Redis TTL to extend.
-func (l *memoryGenerationSSELimiter) Renew(context.Context, int64, string) error { return nil }
+func (l *MemoryGenerationSSELimiter) Renew(context.Context, int64, string) error { return nil }
 
-func (l *memoryGenerationSSELimiter) count(teamID int64) int {
+func (l *MemoryGenerationSSELimiter) count(teamID int64) int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return len(l.active[teamID])
 }
 
 // MaxLiveStreams returns the configured per-tenant limit; useful for logs/tests.
-func (l *memoryGenerationSSELimiter) MaxLiveStreams() int { return l.max }
+func (l *MemoryGenerationSSELimiter) MaxLiveStreams() int { return l.max }
 
 // generationSSEMaxFromEnv is the shared default per-tenant SSE stream limit.
 func generationSSEMaxFromEnv() int {

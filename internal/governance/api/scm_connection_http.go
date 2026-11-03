@@ -47,7 +47,7 @@ type scmConnectionRotateInput struct {
 	Token string `json:"token"`
 }
 
-type githubAppConfig struct {
+type GitHubAppConfig struct {
 	AppID            string
 	ClientID         string
 	ClientSecret     string
@@ -69,8 +69,8 @@ var (
 	githubHTTPClient = &http.Client{Timeout: 15 * time.Second}
 )
 
-func GitHubAppConfigFromEnv() githubAppConfig {
-	return githubAppConfig{
+func GitHubAppConfigFromEnv() GitHubAppConfig {
+	return GitHubAppConfig{
 		AppID:            strings.TrimSpace(os.Getenv("GP_GITHUB_APP_ID")),
 		ClientID:         strings.TrimSpace(os.Getenv("GP_GITHUB_APP_CLIENT_ID")),
 		ClientSecret:     strings.TrimSpace(os.Getenv("GP_GITHUB_APP_CLIENT_SECRET")),
@@ -81,7 +81,7 @@ func GitHubAppConfigFromEnv() githubAppConfig {
 	}
 }
 
-func (c githubAppConfig) configured() bool {
+func (c GitHubAppConfig) configured() bool {
 	return c.AppID != "" && c.ClientID != "" && c.ClientSecret != "" && c.InstallURL != "" &&
 		c.PrivateKeyRef != "" && c.OAuthCallbackURL != "" && c.FrontendURL != ""
 }
@@ -92,11 +92,11 @@ func (c githubAppConfig) configured() bool {
 type scmHandlers struct {
 	store     *infra.SCMConnectionStore
 	namespace string
-	githubApp githubAppConfig
+	githubApp GitHubAppConfig
 	audit     SCMAuditFunc
 }
 
-func RegisterSCMConnections(mux *http.ServeMux, store *infra.SCMConnectionStore, namespace string, githubApp githubAppConfig, audit SCMAuditFunc) {
+func RegisterSCMConnections(mux *http.ServeMux, store *infra.SCMConnectionStore, namespace string, githubApp GitHubAppConfig, audit SCMAuditFunc) {
 	h := &scmHandlers{store: store, namespace: namespace, githubApp: githubApp, audit: audit}
 	mux.HandleFunc("GET /scm-connections/github-app", h.getGitHubApp)
 	mux.HandleFunc("POST /scm-connections/github-app/authorize", h.authorizeGitHubApp)

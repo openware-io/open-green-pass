@@ -100,7 +100,7 @@ func TestProbeGitHubReadTokenUsesInstallationEndpoint(t *testing.T) {
 }
 
 func TestGitHubAppConfiguredRequiresFrontendURL(t *testing.T) {
-	cfg := githubAppConfig{
+	cfg := GitHubAppConfig{
 		AppID: "1", ClientID: "Iv1.x", ClientSecret: "secret", InstallURL: "https://github.com/apps/x/installations/new",
 		PrivateKeyRef: "k8s://gp/gp-github-app#private-key", OAuthCallbackURL: "https://gp.example/api/scm-connections/github-app/oauth-callback",
 	}

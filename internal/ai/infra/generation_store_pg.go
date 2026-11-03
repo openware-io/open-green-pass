@@ -328,7 +328,7 @@ func (s *GenerationBatchStore) prepareSeedGeneration(ctx context.Context, teamID
 		}
 		out.token = token
 	}
-	snapshotID, files, normalized, err := s.ReadSourceSnapshot(ctx, teamID, batchID)
+	snapshotID, files, normalized, err := s.readSourceSnapshot(ctx, teamID, batchID)
 	if err != nil {
 		return seedGeneration{}, err
 	}
@@ -779,7 +779,7 @@ func (s *GenerationBatchStore) FreezeSource(ctx context.Context, teamID, batchID
 }
 
 func (s *GenerationBatchStore) NormalizeSourceSnapshot(ctx context.Context, teamID, batchID int64) error {
-	snapshotID, files, _, err := s.ReadSourceSnapshot(ctx, teamID, batchID)
+	snapshotID, files, _, err := s.readSourceSnapshot(ctx, teamID, batchID)
 	if err != nil {
 		return err
 	}
@@ -797,7 +797,7 @@ func (s *GenerationBatchStore) NormalizeSourceSnapshot(ctx context.Context, team
 	})
 }
 
-func (s *GenerationBatchStore) ReadSourceSnapshot(ctx context.Context, teamID, batchID int64) (int64, []sourceFile, *normalizedSource, error) {
+func (s *GenerationBatchStore) readSourceSnapshot(ctx context.Context, teamID, batchID int64) (int64, []sourceFile, *normalizedSource, error) {
 	var snapshotID int64
 	var rawFiles, rawNormalized []byte
 	err := s.db.WithTenant(ctx, func(tx pgx.Tx) error {
@@ -854,7 +854,7 @@ func (s *GenerationBatchStore) QualityCheckSeeds(ctx context.Context, teamID, ba
 }
 
 func (s *GenerationBatchStore) loadQualityAllowedSources(ctx context.Context, teamID, batchID int64) (map[string]struct{}, error) {
-	_, files, normalized, err := s.ReadSourceSnapshot(ctx, teamID, batchID)
+	_, files, normalized, err := s.readSourceSnapshot(ctx, teamID, batchID)
 	if err != nil {
 		return nil, fmt.Errorf("quality gate requires a frozen source snapshot: %w", err)
 	}
