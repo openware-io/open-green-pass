@@ -2,7 +2,7 @@ package infra
 
 import (
 	"context"
-	"crypto/md5" //nolint:gosec // G501: md5 is used as a non-cryptographic stable dedupe hash
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -535,7 +535,7 @@ func (s *GenerationBatchStore) createGeneratedSeeds(ctx context.Context, teamID,
 			if err != nil {
 				return err
 			}
-			digest := md5.Sum(append([]byte("model://"+provider+"/"+model+"?source="+candidate.SourceLocator), payload...)) //nolint:gosec // G401: non-cryptographic stable dedupe hash
+			digest := sha256.Sum256(append([]byte("model://"+provider+"/"+model+"?source="+candidate.SourceLocator), payload...))
 			caseKey := generatedCaseKey(spec)
 			locator := "model://" + provider + "/" + model + "?source_path=" + sourcePath + "&source=" + candidate.SourceLocator
 			id := seedID
@@ -709,7 +709,7 @@ func (s *GenerationBatchStore) CreateSeed(ctx context.Context, teamID int64, see
 	if err != nil {
 		return err
 	}
-	digest := md5.Sum(append([]byte(locator), payload...)) //nolint:gosec // G401: non-cryptographic stable dedupe hash
+	digest := sha256.Sum256(append([]byte(locator), payload...))
 	dedupeHash := hex.EncodeToString(digest[:])
 	caseKey := generatedCaseKey(spec)
 	return s.db.WithTenant(ctx, func(tx pgx.Tx) error {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -450,7 +451,8 @@ func (s *runEventStream) writeFrame(seq int64, eventType string, snapshot *domai
 	if err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(s.w, "id: %d\nevent: run\ndata: %s\n\n", seq, payload); err != nil { //nolint:gosec // G705: payload is JSON-encoded event data, not HTML
+	frame := fmt.Sprintf("id: %d\nevent: run\ndata: %s\n\n", seq, payload)
+	if _, err := io.WriteString(s.w, frame); err != nil { //nolint:gosec // G705: payload is JSON-encoded SSE event data, not HTML
 		return err
 	}
 	s.flusher.Flush()

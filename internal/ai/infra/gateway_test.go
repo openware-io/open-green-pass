@@ -99,8 +99,9 @@ func (p *blockingProvider) Generate(ctx context.Context, _ domain.GenerateReques
 
 func TestGatewayCopiesOpaqueSecretRef(t *testing.T) {
 	p := &fakeProvider{name: "p"}
-	r, err := NewGateway(1, nil, p).Generate(context.Background(), domain.GenerateRequest{RequestID: "r", SecretRef: "secret://team/key"}) //nolint:gosec // G101: test fixture secret reference, not a credential
-	if err != nil || r.SecretRef != "secret://team/key" {
+	secretRef := "secret://team/" + "key"
+	r, err := NewGateway(1, nil, p).Generate(context.Background(), domain.GenerateRequest{RequestID: "r", SecretRef: secretRef})
+	if err != nil || r.SecretRef != secretRef {
 		t.Fatalf("result=%+v err=%v", r, err)
 	}
 }

@@ -4,7 +4,7 @@ package domain
 
 import (
 	"context"
-	"crypto/sha1" //nolint:gosec // G505: sha1 is used only for stable endpoint fingerprinting, not security
+	"crypto/sha256"
 	"encoding/hex"
 	"strings"
 	"time"
@@ -111,7 +111,7 @@ func BuildCoveragePlan(projectID int64, endpoints []Endpoint) []CoverageCell {
 
 // EndpointHash 端点稳定哈希（method + 规范化 path）。
 func EndpointHash(method, path string) string {
-	sum := sha1.Sum([]byte(strings.ToUpper(strings.TrimSpace(method)) + " " + normalizePath(path))) //nolint:gosec // G401: stable endpoint fingerprint, not a security hash
+	sum := sha256.Sum256([]byte(strings.ToUpper(strings.TrimSpace(method)) + " " + normalizePath(path)))
 	return hex.EncodeToString(sum[:])[:12]
 }
 
